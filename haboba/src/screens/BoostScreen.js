@@ -1,0 +1,289 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors, Typography, FontFamily } from '../theme';
+import Button from '../components/Button';
+import PurchaseModal from '../components/PurchaseModal';
+import { useSubscription, PRODUCT_IDS } from '../payments';
+
+const PACKS = [
+  { count: 1, price: '$5.99', perUnit: '$5.99/each', save: null, productId: PRODUCT_IDS.SPOTLIGHT_1 },
+  { count: 5, price: '$19.99', perUnit: '$3.99/each', save: 'Save 33%', productId: PRODUCT_IDS.SPOTLIGHT_5 },
+  { count: 10, price: '$29.99', perUnit: '$2.99/each', save: null, productId: PRODUCT_IDS.SPOTLIGHT_10 },
+];
+
+export default function BoostScreen({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const [selected, setSelected] = useState(1);
+  const { purchase, spotlights, purchaseInProgress } = useSubscription();
+  const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
+
+  const selectedPack = PACKS[selected];
+
+  const handleBuy = async () => {
+    const pack = PACKS[selected];
+    setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Getting ${pack.count} Spotlight${pack.count > 1 ? 's' : ''}` });
+
+    const result = await purchase(pack.productId);
+
+    if (result.success) {
+      setModal({ visible: true, type: 'success', title: 'Spotlights Added!', message: `You now have ${spotlights + pack.count} spotlights.` });
+    } else {
+      setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
+    }
+  };
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Close button */}
+      <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
+        <View style={styles.closeBtnBg}>
+          <Ionicons name="close" size={24} color={Colors.white} />
+        </View>
+      </TouchableOpacity>
+
+      {/* Lightning icon with glow */}
+      <View style={styles.iconContainer}>
+        <View style={styles.iconGlow} />
+        <Ionicons name="flash" size={60} color={Colors.accent} />
+      </View>
+
+      <Text style={styles.title}>Get In The Spotlight</Text>
+      <Text style={styles.subtitle}>
+        Put your profile at the top of the stack — be the first person seen in your area!
+      </Text>
+
+      {/* Current count */}
+      <View style={styles.countBadge}>
+        <Ionicons name="flash" size={16} color={Colors.accent} />
+        <Text style={styles.countText}>{spotlights} spotlight{spotlights !== 1 ? 's' : ''} remaining</Text>
+      </View>
+
+      {/* Pack options */}
+      <View style={styles.packsRow}>
+        {PACKS.map((pack, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[styles.packCard, selected === index && styles.packSelected]}
+            onPress={() => setSelected(index)}
+            activeOpacity={0.7}
+          >
+            {pack.save && (
+              <View style={styles.saveBadge}>
+                <Text style={styles.saveText}>{pack.save}</Text>
+              </View>
+            )}
+            <Text style={[styles.packCount, selected === index && styles.packCountActive]}>
+              {pack.count}
+            </Text>
+            <Text style={[styles.packLabel, selected === index && styles.packLabelActive]}>
+              Pack
+            </Text>
+            <Text style={[styles.packPrice, selected === index && styles.packPriceActive]}>
+              {pack.perUnit}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Buy button */}
+      <View style={styles.btnSection}>
+        <Button
+          title={`Get ${selectedPack.count} Spotlight${selectedPack.count > 1 ? 's' : ''} for ${selectedPack.price}`}
+          variant="primary"
+          size="lg"
+          loading={purchaseInProgress}
+          onPress={handleBuy}
+        />
+      </View>
+
+      <View style={styles.divider}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>or upgrade</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      {/* Elite upsell */}
+      <Button
+        title="Go Royal"
+        subtitle="Get 1 Free Spotlight/Month and More"
+        variant="outline"
+        size="lg"
+        onPress={() => navigation.navigate('Elite')}
+      />
+
+      <View style={{ marginTop: 20 }}>
+        <Button
+          title="No Thanks"
+          variant="ghost"
+          size="md"
+          onPress={() => navigation.goBack()}
+        />
+      </View>
+
+      <PurchaseModal
+        visible={modal.visible}
+        type={modal.type}
+        title={modal.title}
+        message={modal.message}
+        onDismiss={() => {
+          setModal((m) => ({ ...m, visible: false }));
+          if (modal.type === 'success') navigation.goBack();
+        }}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.primaryDark,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  closeBtn: {
+    alignSelf: 'flex-start',
+    padding: 8,
+  },
+  closeBtnBg: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  iconContainer: {
+    marginTop: 24,
+    marginBottom: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  iconGlow: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(229, 107, 140, 0.15)',
+  },
+  title: {
+    ...Typography.h1,
+    color: Colors.white,
+    textAlign: 'center',
+  },
+  subtitle: {
+    ...Typography.bodySmall,
+    color: Colors.gray400,
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  countBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(229, 107, 140, 0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginBottom: 24,
+  },
+  countText: {
+    ...Typography.label,
+    color: Colors.accent,
+  },
+  packsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  packCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  packSelected: {
+    backgroundColor: Colors.white,
+    borderColor: Colors.accent,
+    borderWidth: 2,
+    shadowColor: Colors.accent,
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  },
+  saveBadge: {
+    backgroundColor: Colors.accent,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    position: 'absolute',
+    top: -12,
+  },
+  saveText: {
+    ...Typography.captionBold,
+    color: '#FFFFFF',
+    fontSize: 11,
+  },
+  packCount: {
+    fontSize: 36,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: Colors.white,
+    marginTop: 10,
+  },
+  packCountActive: {
+    color: Colors.accent,
+  },
+  packLabel: {
+    ...Typography.label,
+    color: Colors.gray400,
+    marginTop: -2,
+  },
+  packLabelActive: {
+    color: Colors.gray600,
+  },
+  packPrice: {
+    ...Typography.label,
+    color: Colors.gray400,
+    marginTop: 8,
+  },
+  packPriceActive: {
+    color: Colors.primaryDark,
+  },
+  btnSection: {
+    width: '100%',
+    marginTop: 28,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginVertical: 24,
+    gap: 10,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  dividerText: {
+    ...Typography.label,
+    color: Colors.gray400,
+  },
+});
