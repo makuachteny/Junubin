@@ -37,7 +37,7 @@ const INFO_PAGES = {
       },
       {
         heading: 'Can I undo a swipe?',
-        body: 'Rewind is available with paid tiers from Gold and above.',
+        body: 'Rewind is available with JuNubin+ and above.',
       },
     ],
   },

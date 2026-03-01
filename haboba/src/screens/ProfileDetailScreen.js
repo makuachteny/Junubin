@@ -1,7 +1,7 @@
-// Haboba — Profile Detail Screen
+// AnaJunubin — Profile Detail Screen
 // BLK-style layout with icon+text detail rows
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, FontFamily } from '../theme';
+import { useTheme, Typography, FontFamily } from '../theme';
 import { imageSource } from '../data/mockProfiles';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
@@ -28,12 +28,13 @@ const MIN_PROFILE_PHOTOS = 3;
 // Separate component for photo item to safely use hooks
 const PhotoItem = ({ uri, name, width }) => {
   const [hasError, setHasError] = useState(false);
+  const { colors } = useTheme();
 
   if (hasError || !uri) {
     return (
-      <View style={[photoStyles.container, { width }]}>
-        <View style={photoStyles.fallback}>
-          <Text style={photoStyles.initial}>
+      <View style={[{ width, height: PHOTO_HEIGHT, overflow: 'hidden' }]}>
+        <View style={{ width: '100%', height: '100%', backgroundColor: colors.gray300, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 80, fontWeight: '900', fontFamily: FontFamily.black, color: colors.accent, opacity: 0.4 }}>
             {name ? name.charAt(0).toUpperCase() : '?'}
           </Text>
         </View>
@@ -44,10 +45,10 @@ const PhotoItem = ({ uri, name, width }) => {
   const imgSource = imageSource(uri);
 
   return (
-    <View style={[photoStyles.container, { width }]}>
+    <View style={[{ width, height: PHOTO_HEIGHT, overflow: 'hidden' }]}>
       <Image
         source={imgSource}
-        style={photoStyles.image}
+        style={{ width: '100%', height: '100%', backgroundColor: colors.gray200 }}
         resizeMode="cover"
         onError={() => setHasError(true)}
       />
@@ -55,42 +56,17 @@ const PhotoItem = ({ uri, name, width }) => {
   );
 };
 
-const photoStyles = StyleSheet.create({
-  container: {
-    height: PHOTO_HEIGHT,
-    overflow: 'hidden',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.primaryDark,
-  },
-  fallback: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  initial: {
-    fontSize: 80,
-    fontWeight: '900',
-    fontFamily: FontFamily.black,
-    color: Colors.accent,
-    opacity: 0.4,
-  },
-});
-
 // BLK-style detail row item
-const DetailItem = ({ iconName, iconSet = 'ionicons', value, color = Colors.gray500 }) => {
+const DetailItem = ({ iconName, iconSet = 'ionicons', value, styles }) => {
+  const { colors } = useTheme();
   if (!value) return null;
   return (
     <View style={styles.detailItem}>
       <View style={styles.detailIconCircle}>
         {iconSet === 'material' ? (
-          <MaterialCommunityIcons name={iconName} size={18} color={color} />
+          <MaterialCommunityIcons name={iconName} size={18} color={colors.gray500} />
         ) : (
-          <Ionicons name={iconName} size={18} color={color} />
+          <Ionicons name={iconName} size={18} color={colors.gray500} />
         )}
       </View>
       <Text style={styles.detailItemText}>{value}</Text>
@@ -100,6 +76,8 @@ const DetailItem = ({ iconName, iconSet = 'ionicons', value, color = Colors.gray
 
 const ProfileDetailScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const profile = route.params?.profile || {};
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const { consumeSuperLike, superLikes } = useSubscription();
@@ -273,11 +251,11 @@ const ProfileDetailScreen = ({ navigation, route }) => {
             <View style={styles.nameGroup}>
               <Text style={styles.nameText}>{name}, {age}</Text>
               {verified && (
-                <Ionicons name="checkmark-circle" size={22} color="#D32F2F" style={{ marginLeft: 6 }} />
+                <Ionicons name="checkmark-circle" size={22} color={colors.accentDark} style={{ marginLeft: 6 }} />
               )}
             </View>
             <View style={styles.distancePill}>
-              <Ionicons name="location-sharp" size={14} color="#D32F2F" />
+              <Ionicons name="location-sharp" size={14} color={colors.accentDark} />
               <Text style={styles.distanceText}>{distance} mi</Text>
             </View>
           </View>
@@ -291,6 +269,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
                   iconName={item.iconName}
                   iconSet={item.iconSet}
                   value={item.value}
+                  styles={styles}
                 />
               ))}
             </View>
@@ -310,7 +289,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           {/* Prompt card */}
           <View style={styles.promptCard}>
             <View style={styles.promptTitleRow}>
-              <Ionicons name="chatbubble-ellipses-outline" size={17} color={Colors.gray400} />
+              <Ionicons name="chatbubble-ellipses-outline" size={17} color={colors.gray400} />
               <Text style={styles.promptQuestion}>{profilePromptQuestion}</Text>
             </View>
             <Text style={styles.promptAnswer}>{profilePromptAnswer}</Text>
@@ -387,17 +366,17 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           onPress={handleSuperLike}
           activeOpacity={0.7}
         >
-          <Ionicons name="sparkles" size={22} color={Colors.accent} />
+          <Ionicons name="sparkles" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
   },
   scrollView: {
     flex: 1,
@@ -407,7 +386,7 @@ const styles = StyleSheet.create({
   galleryWrap: {
     width: SCREEN_WIDTH,
     height: PHOTO_HEIGHT,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.gray200,
   },
   backBtn: {
     position: 'absolute',
@@ -451,8 +430,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   dotActive: {
-    backgroundColor: '#D32F2F',
-    shadowColor: '#D32F2F',
+    backgroundColor: colors.accentDark,
+    shadowColor: colors.accentDark,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
@@ -465,7 +444,7 @@ const styles = StyleSheet.create({
   infoSection: {
     paddingHorizontal: 22,
     paddingTop: 22,
-    backgroundColor: Colors.white,
+    backgroundColor: colors.white,
   },
   nameRow: {
     flexDirection: 'row',
@@ -482,22 +461,22 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
-    color: Colors.primary,
+    color: colors.black,
     letterSpacing: 0.2,
   },
   distancePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: Colors.cream,
+    backgroundColor: isDark ? colors.gray100 : colors.cream,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 0.5,
-    borderColor: Colors.gray200,
+    borderColor: colors.gray200,
   },
   distanceText: {
-    color: '#D32F2F',
+    color: colors.accentDark,
     fontSize: 13,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
@@ -514,7 +493,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.gray100,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 12,
@@ -523,7 +502,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#EBEBEB',
+    backgroundColor: colors.gray200,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -531,12 +510,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
-    color: Colors.primary,
+    color: colors.black,
   },
 
   divider: {
     height: 1,
-    backgroundColor: Colors.gray200,
+    backgroundColor: colors.separator,
     marginVertical: 18,
   },
 
@@ -548,17 +527,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: Colors.primary,
+    color: colors.black,
     marginBottom: 10,
     letterSpacing: 0.2,
   },
   sectionBody: {
     fontSize: 15,
     lineHeight: 23,
-    color: Colors.gray,
+    color: colors.gray500,
   },
   promptCard: {
-    backgroundColor: Colors.gray100,
+    backgroundColor: colors.gray100,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -571,13 +550,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   promptQuestion: {
-    color: Colors.gray500,
+    color: colors.gray500,
     fontSize: 14,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
   promptAnswer: {
-    color: Colors.primary,
+    color: colors.black,
     fontSize: 20,
     lineHeight: 30,
     fontWeight: '700',
@@ -592,11 +571,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#D32F2F',
+    backgroundColor: colors.accentDark,
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 20,
-    shadowColor: '#D32F2F',
+    shadowColor: colors.accentDark,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
@@ -609,13 +588,13 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
   },
   interestChip: {
-    backgroundColor: Colors.gray200,
+    backgroundColor: colors.gray200,
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 20,
   },
   interestText: {
-    color: Colors.royal,
+    color: colors.royal,
     fontSize: 14,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
@@ -624,18 +603,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.cream,
+    backgroundColor: isDark ? colors.gray100 : colors.cream,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 128, 171, 0.35)',
+    borderColor: colors.roseTint35,
   },
   stickerEmoji: {
     fontSize: 16,
   },
   stickerLabel: {
-    color: Colors.primary,
+    color: colors.black,
     fontSize: 13,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
@@ -647,7 +626,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(26, 22, 18, 0.95)',
+    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(26, 22, 18, 0.95)',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -655,7 +634,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 14,
     borderTopWidth: 0.5,
-    borderTopColor: 'rgba(255,255,255,0.08)',
+    borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.08)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.2,
@@ -675,13 +654,13 @@ const styles = StyleSheet.create({
   likeBtn: {
     flex: 1,
     height: 54,
-    backgroundColor: '#D32F2F',
+    backgroundColor: colors.accentDark,
     borderRadius: 27,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    shadowColor: '#D32F2F',
+    shadowColor: colors.accentDark,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -698,11 +677,11 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: 'rgba(255, 128, 171, 0.12)',
+    backgroundColor: colors.roseTint12,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: 'rgba(255, 128, 171, 0.20)',
+    borderColor: colors.roseTint20,
   },
 });
 

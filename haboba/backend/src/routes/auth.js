@@ -18,13 +18,20 @@ const registerSchema = z
     displayName: z.string().min(2),
     dateOfBirth: z.string().datetime(),
   })
-  .refine((data) => data.email || data.phone, { message: 'email or phone is required' });
+  .refine((data) => data.email || data.phone, { message: 'email or phone is required' })
+  .refine((data) => {
+    const dob = new Date(data.dateOfBirth);
+    const age = Math.floor((Date.now() - dob.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
+    return age >= 18;
+  }, { message: 'You must be at least 18 years old' });
 
-const loginSchema = z.object({
-  email: z.string().email().optional(),
-  phone: z.string().min(7).optional(),
-  password: z.string().min(8),
-});
+const loginSchema = z
+  .object({
+    email: z.string().email().optional(),
+    phone: z.string().min(7).optional(),
+    password: z.string().min(8),
+  })
+  .refine((data) => data.email || data.phone, { message: 'email or phone is required' });
 
 const otpStartSchema = z
   .object({
@@ -124,6 +131,7 @@ router.post(
     const user = await prisma.user.findFirst({
       where: {
         OR: [{ email: payload.email || undefined }, { phone: payload.phone || undefined }],
+        isActive: true,
       },
     });
 
@@ -154,8 +162,13 @@ router.post(
   asyncHandler(async (req, res) => {
     const payload = otpStartSchema.parse(req.body);
     const key = payload.email ? `email:${payload.email.toLowerCase()}` : `phone:${payload.phone}`;
-    const code = '123456';
+    const code = crypto.randomInt(100000, 999999).toString();
     otpStore.set(key, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+    // TODO: Send OTP via SMS/email provider (Twilio, SendGrid, etc.)
+    // For development, the code is logged to the server console
+    if (env.nodeEnv !== 'production') {
+      console.log(`[DEV OTP] ${key} → ${code}`);
+    }
     res.json({ ok: true, expiresInSeconds: 600 });
   })
 );
@@ -173,7 +186,8 @@ router.post(
     }
 
     const record = otpStore.get(key);
-    if (!record || record.expiresAt < Date.now() || payload.code !== record.code) {
+    const codeMatch = record ? crypto.timingSafeEqual(Buffer.from(payload.code), Buffer.from(record.code)) : false;
+    if (!record || record.expiresAt < Date.now() || !codeMatch) {
       // Track failed attempt
       const current = otpAttempts.get(key) || { count: 0, expiresAt: Date.now() + 10 * 60 * 1000 };
       current.count += 1;
@@ -245,7 +259,23 @@ router.get(
   asyncHandler(async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      include: { profile: true, photos: { orderBy: { sortOrder: 'asc' } } },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        displayName: true,
+        dateOfBirth: true,
+        gender: true,
+        countryCode: true,
+        city: true,
+        latitude: true,
+        longitude: true,
+        subscriptionTier: true,
+        isActive: true,
+        createdAt: true,
+        profile: true,
+        photos: { orderBy: { sortOrder: 'asc' } },
+      },
     });
     res.json({ user });
   })

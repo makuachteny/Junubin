@@ -1,4 +1,4 @@
-// Haboba — Professional Button Component
+// AnaJunubin — Professional Button Component
 // Animated press, consistent sizing, variant system
 
 import React, { useRef, useCallback } from 'react';

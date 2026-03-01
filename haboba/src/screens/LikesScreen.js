@@ -89,7 +89,7 @@ export default function LikesScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Likes</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-          <Image source={imageSource(currentUser.images[0])} style={styles.avatar} />
+          <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -146,7 +146,7 @@ export default function LikesScreen({ navigation }) {
           </Text>
         ) : (
           <Text style={styles.upgradeText}>
-            Upgrade to Royal to see people who already liked you!
+            Upgrade to Junub to see people who already liked you!
           </Text>
         )}
 
@@ -154,7 +154,7 @@ export default function LikesScreen({ navigation }) {
           {visibleLikes.map((like) => (
             <View key={like.id} style={styles.likeCard}>
               <Image
-                source={imageSource(like.images[0])}
+                source={imageSource(like.images?.[0])}
                 style={styles.likeImage}
                 blurRadius={unlocked ? 0 : 20}
               />

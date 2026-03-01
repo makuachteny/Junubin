@@ -14,12 +14,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import FilterBar from '../components/FilterBar';
 import ProfileCard from '../components/ProfileCard';
 import ActionButtons from '../components/ActionButtons';
+import MatchCelebrationOverlay from '../components/MatchCelebrationOverlay';
 import Button from '../components/Button';
 import { mockProfiles, currentUser, imageSource } from '../data/mockProfiles';
 import { useSubscription } from '../payments';
+import { hasUnlimitedLikes } from '../payments';
 import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
 
@@ -135,8 +138,21 @@ const HomeScreen = ({ navigation }) => {
   const [filterSelections, setFilterSelections] = useState({});
   const swipeProgress = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => getStyles(colors, insets, isDark), [colors, insets, isDark]);
-  const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier } = useSubscription();
-  const { accessToken } = useAuth();
+  const [matchData, setMatchData] = useState(null);
+  const [mode, setMode] = useState('Dating');
+
+  // Read persisted mode on mount and when screen regains focus
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem('@haboba_mode').then((stored) => {
+        if (stored === 'Social' || stored === 'Dating') setMode(stored);
+      });
+    }, [])
+  );
+
+  const [likeStatus, setLikeStatus] = useState(null); // { used, limit, remaining }
+  const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier, tier } = useSubscription();
+  const { accessToken, user: authUser } = useAuth();
   const profileCardRef = useRef(null);
   const topMotion = useRef(new Animated.Value(0)).current;
   const apiCursorRef = useRef(null);
@@ -145,10 +161,10 @@ const HomeScreen = ({ navigation }) => {
     swipeProgress.setValue(clamped);
   }, [swipeProgress]);
 
-  // Fetch profiles from API on mount
+  // Fetch profiles from API on mount and when mode changes
   useEffect(() => {
     if (!accessToken) return;
-    discoverService.getProfiles(accessToken).then(({ profiles: apiProfiles, nextCursor }) => {
+    discoverService.getProfiles(accessToken, { mode: mode.toLowerCase() }).then(({ profiles: apiProfiles, nextCursor }) => {
       // Only use profiles that have at least one image (mirrors buildDatingDeck filter)
       const withImages = apiProfiles.filter((p) => p.images && p.images.length > 0);
       if (withImages.length > 0) {
@@ -160,6 +176,12 @@ const HomeScreen = ({ navigation }) => {
       // Keep mock data on failure
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, mode]);
+
+  // Fetch daily like status
+  useEffect(() => {
+    if (!accessToken) return;
+    discoverService.getDailyLikeStatus(accessToken).then(setLikeStatus).catch(() => {});
   }, [accessToken]);
 
   useEffect(() => {
@@ -192,6 +214,16 @@ const HomeScreen = ({ navigation }) => {
 
   const handleSwipe = useCallback((direction) => {
     const swipedProfile = profiles[0];
+
+    // Check daily like limit for right-swipes (free users)
+    if (direction === 'right' && likeStatus && likeStatus.remaining <= 0 && !hasUnlimitedLikes(tier || 'free')) {
+      Alert.alert('Daily Limit Reached', 'You\'ve used all your likes for today.', [
+        { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
+        { text: 'OK', style: 'cancel' },
+      ]);
+      return;
+    }
+
     setProfiles((prev) => prev.slice(1));
     swipeProgress.setValue(0);
 
@@ -200,14 +232,26 @@ const HomeScreen = ({ navigation }) => {
       const type = direction === 'right' ? 'like' : 'pass';
       discoverService.recordSwipe(accessToken, swipedProfile.id, type).then((result) => {
         if (result?.match) {
-          Alert.alert('It\'s a Match!', `You and ${swipedProfile.name} liked each other!`);
+          setMatchData({
+            matchedUser: swipedProfile,
+            conversationId: result.match.conversation?.id,
+          });
         }
-      }).catch(() => {});
+        // Update like status after a swipe
+        if (direction === 'right') {
+          setLikeStatus((prev) => prev ? { ...prev, used: prev.used + 1, remaining: Math.max(0, prev.remaining - 1) } : prev);
+        }
+      }).catch((err) => {
+        // Handle 429 daily limit from backend
+        if (err?.status === 429) {
+          setLikeStatus((prev) => prev ? { ...prev, remaining: 0 } : { used: 25, limit: 25, remaining: 0 });
+        }
+      });
     }
 
     // Auto-fetch more when deck runs low
     if (profiles.length <= 3 && accessToken && apiCursorRef.current) {
-      discoverService.getProfiles(accessToken, { cursor: apiCursorRef.current }).then(({ profiles: more, nextCursor }) => {
+      discoverService.getProfiles(accessToken, { cursor: apiCursorRef.current, mode: mode.toLowerCase() }).then(({ profiles: more, nextCursor }) => {
         const withImages = more.filter((p) => p.images && p.images.length > 0);
         if (withImages.length > 0) {
           setProfiles((prev) => [...prev, ...withImages]);
@@ -215,7 +259,7 @@ const HomeScreen = ({ navigation }) => {
         }
       }).catch(() => {});
     }
-  }, [swipeProgress, profiles, accessToken]);
+  }, [swipeProgress, profiles, accessToken, likeStatus, tier, navigation, mode]);
 
   const currentProfile = profiles.length > 0 ? profiles[0] : null;
   const hasValidProfile = !!(currentProfile && currentProfile.name && currentProfile.images?.length);
@@ -241,8 +285,8 @@ const HomeScreen = ({ navigation }) => {
   };
 
   const handleRewind = () => {
-    if (!hasTier('gold')) {
-      Alert.alert('Gold Feature', 'Rewind requires Gold or higher.', [
+    if (!hasTier('plus')) {
+      Alert.alert('JuNubin+ Feature', 'Rewind requires JuNubin+ or higher.', [
         { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
         { text: 'Cancel', style: 'cancel' },
       ]);
@@ -385,8 +429,13 @@ const HomeScreen = ({ navigation }) => {
         style={[styles.topBar, { top: insets.top }]}
         pointerEvents="box-none"
       >
-        {/* Left — Crown Badge (SS flag colors, Instagram-style) */}
-        <View style={styles.headerSideSlot}>
+        {/* Left — Crown Badge (SS flag colors, Instagram-style) — tappable → Boost */}
+        <TouchableOpacity
+          onPress={() => navigation?.navigate?.('Boost')}
+          activeOpacity={0.8}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.headerSideSlot}
+        >
           <LinearGradient
             colors={['#0F47AF', '#CE1126', '#078930']}
             start={{ x: 0, y: 0 }}
@@ -395,7 +444,7 @@ const HomeScreen = ({ navigation }) => {
           >
             <FontAwesome5 name="crown" size={16} color="#FFFFFF" />
           </LinearGradient>
-        </View>
+        </TouchableOpacity>
 
         {/* Center — Brand title */}
         <Text style={styles.headerTitle}>AnaJunubin</Text>
@@ -407,7 +456,7 @@ const HomeScreen = ({ navigation }) => {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.headerSideSlot}
         >
-          <Image source={imageSource(currentUser.images[0])} style={styles.avatar} />
+          <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -438,6 +487,31 @@ const HomeScreen = ({ navigation }) => {
           onFilterSelect={handleFilterSelect}
         />
       </Animated.View>
+
+      {/* ─── LIKE COUNTER — subtle indicator near bottom ─── */}
+      {likeStatus && !hasUnlimitedLikes(tier || 'free') && likeStatus.remaining < likeStatus.limit && (
+        <View style={styles.likeCounter}>
+          <Ionicons name="heart" size={12} color={likeStatus.remaining <= 5 ? '#FF5252' : 'rgba(255,255,255,0.6)'} />
+          <Text style={[styles.likeCounterText, likeStatus.remaining <= 5 && { color: '#FF5252' }]}>
+            {likeStatus.remaining} likes left today
+          </Text>
+        </View>
+      )}
+
+      {/* ─── MATCH CELEBRATION OVERLAY ─── */}
+      <MatchCelebrationOverlay
+        visible={!!matchData}
+        currentUser={{ name: authUser?.displayName || currentUser.name, images: authUser?.photos?.map((p) => p.url) || currentUser.images }}
+        matchedUser={matchData?.matchedUser}
+        onSendMessage={() => {
+          const convId = matchData?.conversationId;
+          setMatchData(null);
+          if (convId) {
+            navigation?.navigate?.('Messages', { screen: 'Chat', params: { conversationId: convId } });
+          }
+        }}
+        onKeepSwiping={() => setMatchData(null)}
+      />
     </View>
   );
 };
@@ -450,7 +524,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   cardArea: {
     flex: 1,
     paddingHorizontal: 10,
-    paddingTop: insets.top + 108,
+    paddingTop: insets.top + 104,
     paddingBottom: 6,
     position: 'relative',
   },
@@ -513,7 +587,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    zIndex: 19,
+    zIndex: 18,
     paddingHorizontal: 4,
   },
 
@@ -579,6 +653,26 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     lineHeight: 22,
     marginBottom: 24,
     maxWidth: 320,
+  },
+
+  // ── Like counter ──
+  likeCounter: {
+    position: 'absolute',
+    bottom: 84,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    gap: 4,
+    zIndex: 16,
+  },
+  likeCounterText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
   },
 });
 

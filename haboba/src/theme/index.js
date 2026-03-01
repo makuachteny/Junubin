@@ -1,4 +1,4 @@
-// Haboba — Unified Theme
+// AnaJunubin — Unified Theme
 // Romantic Core (Red · Pink · Gray) + Energetic Accents (Orange · Gold · Green)
 // Crown-themed, culturally rooted
 // Primary typeface: DM Sans
@@ -9,7 +9,7 @@ import { FontFamily, fontForWeight, fontAssets } from './fonts';
 import { getShadow } from './shadows';
 import { wp, hp, ms, clamp, isSmallScreen, isLargeScreen, SCREEN_WIDTH, SCREEN_HEIGHT } from './responsive';
 
-// Backward compat — static Colors for screens that don't need theming (Splash, Boost, Elite)
+// Backward compat — static Colors for components that always render on dark surfaces (ProfileCard)
 const Colors = LightPalette;
 
 export { LightPalette, DarkPalette, ThemeProvider, useTheme, Colors, FontFamily, fontForWeight, fontAssets, getShadow };

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, FontFamily } from '../theme';
+import { useTheme, Typography, FontFamily } from '../theme';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,6 +20,8 @@ const OnboardingScreen = ({ navigation }) => {
   const [currentPage, setCurrentPage] = useState(0);
   const scrollViewRef = useRef(null);
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
 
   const pages = [
     {
@@ -148,7 +150,7 @@ const OnboardingScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   backgroundImage: {
     flex: 1,
     width: '100%',
@@ -222,12 +224,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 82, 82, 0.25)',
   },
   dotActive: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     width: 28,
     borderRadius: 4,
   },
   primaryButton: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -235,7 +237,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 28,
     marginBottom: 12,
-    shadowColor: Colors.accent,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -270,11 +272,11 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
-    shadowColor: Colors.accent,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
@@ -288,7 +290,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   termsLink: {
-    color: Colors.accent,
+    color: colors.accent,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },

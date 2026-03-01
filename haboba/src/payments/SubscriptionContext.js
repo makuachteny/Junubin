@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PaymentService from './PaymentService';
 import { PRODUCTS, TIER_RANK } from './products';
-import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, isSubscribed as checkSubscribed } from './entitlements';
+import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
 
 const STORAGE_KEY = '@haboba_subscription';
 
@@ -166,6 +166,7 @@ export function SubscriptionProvider({ children }) {
     canSeeWhoLikesYou: () => canSeeWhoLikesYou(state.tier),
     hasUnlimitedLikes: () => hasUnlimitedLikes(state.tier),
     canUseAdvancedFilters: () => canUseAdvancedFilters(state.tier),
+    canUseDiasporaConnect: () => canUseDiasporaConnect(state.tier),
   }), [state, purchaseInProgress, purchase, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, reset]);
 
   if (!loaded) {

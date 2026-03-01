@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# React Native
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Build
+npm-debug.*
+yarn-error.log
+
+# Claude Code
+.claude/
+
+# Personal documents - do not push
+TUFTS_GRANT_APPLICATION.md
+HABOBA_PITCH.md

@@ -13,6 +13,9 @@ const io = new SocketIO(httpServer, {
     origin: env.corsOrigin === '*' ? true : env.corsOrigin,
     credentials: true,
   },
+  maxHttpBufferSize: 1e6, // 1 MB max message size
+  pingInterval: 25000,
+  pingTimeout: 20000,
 });
 
 // Make io available to swipes route for match notifications
@@ -49,21 +52,37 @@ io.on('connection', (socket) => {
     socket.leave(`conv:${conversationId}`);
   });
 
+  // Sanitize HTML from message body
+  const stripHtml = (str) => str.replace(/<[^>]*>/g, '').trim();
+  const VALID_MSG_TYPES = ['text', 'image', 'audio'];
+
+  // Helper: verify conversation membership (reused across events)
+  const isMemberOf = async (conversationId, userId) => {
+    if (!conversationId || typeof conversationId !== 'string') return false;
+    const member = await prisma.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+    return !!member;
+  };
+
   socket.on('SEND_MESSAGE', async (data, ack) => {
     try {
       if (!data || typeof data !== 'object') return ack?.({ error: 'Invalid payload' });
       const { conversationId, body, type = 'text' } = data;
       if (!conversationId || typeof conversationId !== 'string') return ack?.({ error: 'Invalid conversationId' });
       if (!body || typeof body !== 'string' || body.length > 4000) return ack?.({ error: 'Invalid message body' });
+      if (!VALID_MSG_TYPES.includes(type)) return ack?.({ error: 'Invalid message type' });
 
       // Verify membership
-      const member = await prisma.conversationMember.findUnique({
-        where: { conversationId_userId: { conversationId, userId: socket.userId } },
-      });
-      if (!member) return ack?.({ error: 'Not a member' });
+      if (!(await isMemberOf(conversationId, socket.userId))) {
+        return ack?.({ error: 'Not a member' });
+      }
+
+      const sanitizedBody = stripHtml(body);
+      if (!sanitizedBody) return ack?.({ error: 'Message body cannot be empty' });
 
       const message = await prisma.message.create({
-        data: { conversationId, senderId: socket.userId, body, type },
+        data: { conversationId, senderId: socket.userId, body: sanitizedBody, type },
         include: { sender: { select: { id: true, displayName: true } } },
       });
 
@@ -75,31 +94,41 @@ io.on('connection', (socket) => {
       // Broadcast to all members in the conversation
       io.to(`conv:${conversationId}`).emit('NEW_MESSAGE', message);
       ack?.({ ok: true, message });
-    } catch (err) {
-      ack?.({ error: err.message });
+    } catch {
+      ack?.({ error: 'Failed to send message' });
     }
   });
 
-  socket.on('TYPING_START', ({ conversationId }) => {
-    socket.to(`conv:${conversationId}`).emit('TYPING_START', {
-      conversationId,
-      userId: socket.userId,
-    });
+  socket.on('TYPING_START', async (data) => {
+    const conversationId = data?.conversationId;
+    if (await isMemberOf(conversationId, socket.userId)) {
+      socket.to(`conv:${conversationId}`).emit('TYPING_START', {
+        conversationId,
+        userId: socket.userId,
+      });
+    }
   });
 
-  socket.on('TYPING_STOP', ({ conversationId }) => {
-    socket.to(`conv:${conversationId}`).emit('TYPING_STOP', {
-      conversationId,
-      userId: socket.userId,
-    });
+  socket.on('TYPING_STOP', async (data) => {
+    const conversationId = data?.conversationId;
+    if (await isMemberOf(conversationId, socket.userId)) {
+      socket.to(`conv:${conversationId}`).emit('TYPING_STOP', {
+        conversationId,
+        userId: socket.userId,
+      });
+    }
   });
 
-  socket.on('READ_RECEIPT', ({ conversationId, messageId }) => {
-    socket.to(`conv:${conversationId}`).emit('READ_RECEIPT', {
-      conversationId,
-      messageId,
-      userId: socket.userId,
-    });
+  socket.on('READ_RECEIPT', async (data) => {
+    const conversationId = data?.conversationId;
+    const messageId = data?.messageId;
+    if (await isMemberOf(conversationId, socket.userId)) {
+      socket.to(`conv:${conversationId}`).emit('READ_RECEIPT', {
+        conversationId,
+        messageId,
+        userId: socket.userId,
+      });
+    }
   });
 
   socket.on('disconnect', () => {

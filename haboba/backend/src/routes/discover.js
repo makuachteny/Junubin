@@ -3,19 +3,23 @@ import { z } from 'zod';
 import { prisma } from '../db/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { rankCandidates } from '../utils/scoring.js';
+import { getOrComputeVector } from '../utils/preferenceVector.js';
+import { getPopularityBatch, getCollaborativeBoosts } from '../utils/popularity.js';
 
 const router = Router();
 
 const querySchema = z.object({
   minAge: z.coerce.number().int().min(18).max(99).optional(),
   maxAge: z.coerce.number().int().min(18).max(99).optional(),
-  ethnicity: z.string().optional(),
-  minHeightCm: z.coerce.number().int().optional(),
-  maxHeightCm: z.coerce.number().int().optional(),
-  datingIntentions: z.string().optional(),
-  gender: z.string().optional(),
+  ethnicity: z.string().max(120).optional(),
+  minHeightCm: z.coerce.number().int().min(100).max(250).optional(),
+  maxHeightCm: z.coerce.number().int().min(100).max(250).optional(),
+  datingIntentions: z.string().max(120).optional(),
+  gender: z.enum(['man', 'woman', 'non_binary', 'other']).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional().default(20),
-  cursor: z.string().optional(),
+  cursor: z.string().max(50).optional(),
+  mode: z.enum(['dating', 'social']).optional().default('dating'),
 });
 
 router.get(
@@ -24,12 +28,19 @@ router.get(
   asyncHandler(async (req, res) => {
     const query = querySchema.parse(req.query);
     const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
     const minDob = query.maxAge
       ? new Date(now.getFullYear() - query.maxAge - 1, now.getMonth(), now.getDate())
       : undefined;
     const maxDob = query.minAge
       ? new Date(now.getFullYear() - query.minAge, now.getMonth(), now.getDate())
       : undefined;
+
+    // Fetch current user's profile + interests for scoring
+    const currentUserProfile = await prisma.profile.findUnique({
+      where: { userId: req.user.id },
+    });
 
     const swiped = await prisma.swipe.findMany({
       where: { fromUserId: req.user.id },
@@ -46,12 +57,23 @@ router.get(
     }
     if (query.datingIntentions) profileFilter.datingIntentions = query.datingIntentions;
 
+    // Social mode: relax gender filters, prefer friendship-oriented profiles
+    const isSocial = query.mode === 'social';
+    if (isSocial) {
+      profileFilter.lookingFor = { contains: 'friend', mode: 'insensitive' };
+    }
+
+    // Fetch limit * 3 candidates for scoring, then trim
+    const fetchLimit = query.limit * 3;
+
     const profiles = await prisma.user.findMany({
       where: {
         id: { not: req.user.id, notIn: excludedIds },
         isActive: true,
+        lastActiveAt: { gte: thirtyDaysAgo },
         profile: { showMe: true, ...profileFilter },
-        ...(query.gender ? { gender: query.gender } : {}),
+        // Social mode: don't filter by gender (friendship isn't gendered)
+        ...(!isSocial && query.gender ? { gender: query.gender } : {}),
         ...(minDob || maxDob
           ? {
               dateOfBirth: {
@@ -61,7 +83,7 @@ router.get(
             }
           : {}),
       },
-      take: query.limit + 1,
+      take: fetchLimit + 1,
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
       include: {
         profile: true,
@@ -70,11 +92,28 @@ router.get(
       orderBy: { lastActiveAt: 'desc' },
     });
 
-    const hasMore = profiles.length > query.limit;
-    const results = hasMore ? profiles.slice(0, query.limit) : profiles;
-    const nextCursor = hasMore ? results[results.length - 1].id : null;
+    // Score and rank candidates
+    const hasMore = profiles.length > fetchLimit;
+    const pool = hasMore ? profiles.slice(0, fetchLimit) : profiles;
 
-    res.json({ profiles: results, nextCursor });
+    // Phase 3: Behavioral learning — fetch preference vector
+    const preferenceVector = await getOrComputeVector(req.user.id);
+
+    // Phase 4: Community patterns — batch-fetch popularity + collaborative boosts
+    const candidateIds = pool.map((c) => c.id);
+    const popularityMap = await getPopularityBatch(candidateIds);
+    const collaborativeBoosts = preferenceVector?.swipesAnalyzed >= 30
+      ? await getCollaborativeBoosts(req.user.id, candidateIds)
+      : {};
+
+    const ranked = rankCandidates(pool, currentUserProfile, query.limit, 5, {
+      preferenceVector,
+      popularityMap,
+      collaborativeBoosts,
+    });
+    const nextCursor = hasMore ? pool[pool.length - 1].id : null;
+
+    res.json({ profiles: ranked, nextCursor });
   })
 );
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, FontFamily } from '../theme';
+import { useTheme, Typography, FontFamily } from '../theme';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import { useSubscription, PRODUCT_IDS } from '../payments';
@@ -20,6 +20,8 @@ const PACKS = [
 
 export default function BoostScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [selected, setSelected] = useState(1);
   const { purchase, spotlights, purchaseInProgress } = useSubscription();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
@@ -44,14 +46,14 @@ export default function BoostScreen({ navigation }) {
       {/* Close button */}
       <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
         <View style={styles.closeBtnBg}>
-          <Ionicons name="close" size={24} color={Colors.white} />
+          <Ionicons name="close" size={24} color={colors.black} />
         </View>
       </TouchableOpacity>
 
       {/* Lightning icon with glow */}
       <View style={styles.iconContainer}>
         <View style={styles.iconGlow} />
-        <Ionicons name="flash" size={60} color={Colors.accent} />
+        <Ionicons name="flash" size={60} color={colors.accent} />
       </View>
 
       <Text style={styles.title}>Get In The Spotlight</Text>
@@ -61,7 +63,7 @@ export default function BoostScreen({ navigation }) {
 
       {/* Current count */}
       <View style={styles.countBadge}>
-        <Ionicons name="flash" size={16} color={Colors.accent} />
+        <Ionicons name="flash" size={16} color={colors.accent} />
         <Text style={styles.countText}>{spotlights} spotlight{spotlights !== 1 ? 's' : ''} remaining</Text>
       </View>
 
@@ -109,9 +111,9 @@ export default function BoostScreen({ navigation }) {
         <View style={styles.dividerLine} />
       </View>
 
-      {/* Elite upsell */}
+      {/* Junub upsell */}
       <Button
-        title="Go Royal"
+        title="Go Junub"
         subtitle="Get 1 Free Spotlight/Month and More"
         variant="outline"
         size="lg"
@@ -141,10 +143,10 @@ export default function BoostScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.white,
     alignItems: 'center',
     paddingHorizontal: 20,
   },
@@ -156,11 +158,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
   },
   iconContainer: {
     marginTop: 24,
@@ -174,16 +176,16 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(255, 82, 82, 0.15)',
+    backgroundColor: colors.accentTint15,
   },
   title: {
     ...Typography.h1,
-    color: Colors.white,
+    color: colors.black,
     textAlign: 'center',
   },
   subtitle: {
     ...Typography.bodySmall,
-    color: Colors.gray400,
+    color: colors.gray500,
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 16,
@@ -193,7 +195,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 82, 82, 0.12)',
+    backgroundColor: colors.accentTint12,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,
@@ -201,7 +203,7 @@ const styles = StyleSheet.create({
   },
   countText: {
     ...Typography.label,
-    color: Colors.accent,
+    color: colors.accent,
   },
   packsRow: {
     flexDirection: 'row',
@@ -210,25 +212,25 @@ const styles = StyleSheet.create({
   },
   packCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray100,
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.gray200,
   },
   packSelected: {
-    backgroundColor: Colors.white,
-    borderColor: Colors.accent,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : colors.cardBg,
+    borderColor: colors.accent,
     borderWidth: 2,
-    shadowColor: Colors.accent,
+    shadowColor: colors.accent,
     shadowOpacity: 0.3,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
   },
   saveBadge: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -244,27 +246,27 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
-    color: Colors.white,
+    color: colors.gray500,
     marginTop: 10,
   },
   packCountActive: {
-    color: Colors.accent,
+    color: colors.accent,
   },
   packLabel: {
     ...Typography.label,
-    color: Colors.gray400,
+    color: colors.gray400,
     marginTop: -2,
   },
   packLabelActive: {
-    color: Colors.gray600,
+    color: colors.gray600,
   },
   packPrice: {
     ...Typography.label,
-    color: Colors.gray400,
+    color: colors.gray400,
     marginTop: 8,
   },
   packPriceActive: {
-    color: Colors.primaryDark,
+    color: colors.black,
   },
   btnSection: {
     width: '100%',
@@ -280,10 +282,10 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: colors.separator,
   },
   dividerText: {
     ...Typography.label,
-    color: Colors.gray400,
+    color: colors.gray400,
   },
 });

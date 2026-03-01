@@ -12,6 +12,7 @@ import matchRoutes from './routes/matches.js';
 import conversationRoutes from './routes/conversations.js';
 import userRoutes from './routes/users.js';
 import photoRoutes from './routes/photos.js';
+import currentlyIntoRoutes from './routes/currentlyInto.js';
 
 const app = express();
 
@@ -19,7 +20,9 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(',').map((s) => s.trim()),
+    origin: env.corsOrigin === '*'
+      ? ['http://localhost:8081', 'http://localhost:19006']
+      : env.corsOrigin.split(',').map((s) => s.trim()),
     credentials: true,
   })
 );
@@ -43,6 +46,31 @@ const authLimiter = rateLimit({
   message: { error: 'Too many auth attempts, please try again later' },
 });
 
+// Per-endpoint rate limits for abuse-prone routes
+const swipeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Swipe limit reached, slow down' },
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many uploads, please try again later' },
+});
+
+const discoverLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many discover requests, please try again later' },
+});
+
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
 
@@ -55,12 +83,13 @@ app.get('/', (_req, res) => {
 
 app.use('/v1/health', healthRoutes);
 app.use('/v1/auth', authLimiter, authRoutes);
-app.use('/v1/discover', discoverRoutes);
-app.use('/v1/swipes', swipeRoutes);
+app.use('/v1/discover', discoverLimiter, discoverRoutes);
+app.use('/v1/swipes', swipeLimiter, swipeRoutes);
 app.use('/v1/matches', matchRoutes);
 app.use('/v1/conversations', conversationRoutes);
 app.use('/v1/users', userRoutes);
-app.use('/v1/users/me/photos', photoRoutes);
+app.use('/v1/users/me/photos', uploadLimiter, photoRoutes);
+app.use('/v1/currently-into', currentlyIntoRoutes);
 
 // 404 handler
 app.use((_req, res) => {

@@ -132,8 +132,8 @@ export default function ChatScreen({ navigation, route }) {
   };
 
   const handleVideoCall = () => {
-    if (!hasTier('gold')) {
-      Alert.alert('Gold Feature', 'Video calls require Gold or higher.', [
+    if (!hasTier('plus')) {
+      Alert.alert('JuNubin+ Feature', 'Video calls require JuNubin+ or higher.', [
         { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
         { text: 'Cancel', style: 'cancel' },
       ]);

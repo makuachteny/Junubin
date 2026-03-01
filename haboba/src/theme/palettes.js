@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════
-// Haboba — Romantic Core + Energetic Accents Palette
+// AnaJunubin — Romantic Core + Energetic Accents Palette
 // Red & pink define the personality. Orange/yellow/green
 // accent specific functions only.
 // ═══════════════════════════════════════════════════════════
