@@ -57,8 +57,8 @@ function getVariant(variant, colors, isDark) {
       return {
         container: {
           backgroundColor: isDark
-            ? 'rgba(229, 107, 140, 0.15)'
-            : 'rgba(229, 107, 140, 0.08)',
+            ? 'rgba(255, 82, 82, 0.15)'
+            : 'rgba(255, 82, 82, 0.08)',
         },
         textColor: colors.accent,
       };

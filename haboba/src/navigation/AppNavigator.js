@@ -228,7 +228,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: 19,
   },
   tabIconFocused: {
-    backgroundColor: 'rgba(229, 107, 140, 0.1)',
+    backgroundColor: 'rgba(255, 82, 82, 0.1)',
   },
   activeDot: {
     width: 4,

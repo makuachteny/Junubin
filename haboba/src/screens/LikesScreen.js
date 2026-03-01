@@ -45,7 +45,7 @@ export default function LikesScreen({ navigation }) {
   }, [contentAnim]);
 
   const unlocked = canSeeWhoLikesYou();
-  const likesAccent = '#E56B8C';
+  const likesAccent = '#FF80AB';
   const visibleLikes = useMemo(() => {
     switch (activeTab) {
       case 'Notes':

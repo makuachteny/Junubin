@@ -19,7 +19,6 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withTiming,
   interpolate,
   Extrapolation,
   runOnJS,
@@ -38,6 +37,16 @@ const SNAP_BACK_SPRING = {
   overshootClamping: false,
   restDisplacementThreshold: 0.5,
   restSpeedThreshold: 0.5,
+};
+
+// Carries the finger's velocity into exit — no speed discontinuity
+const EXIT_SPRING = {
+  damping: 50,
+  stiffness: 400,
+  mass: 0.8,
+  overshootClamping: true,
+  restDisplacementThreshold: 50,
+  restSpeedThreshold: 50,
 };
 
 const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, style }, ref) => {
@@ -89,18 +98,27 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
           : (e.velocityX > SWIPE_VELOCITY_THRESHOLD ? 'right' : 'left');
 
         const targetX = direction === 'right' ? EXIT_X : -EXIT_X;
-        const velocity = Math.abs(e.velocityX);
-        const remaining = Math.abs(targetX - e.translationX);
-        const duration = velocity > 100
-          ? Math.max(120, Math.min(350, (remaining / velocity) * 1000))
-          : 280;
 
-        translateX.value = withTiming(targetX, { duration }, (finished) => {
+        // Spring with finger velocity — card continues at the pace of the swipe
+        translateX.value = withSpring(targetX, {
+          ...EXIT_SPRING,
+          velocity: e.velocityX,
+        }, (finished) => {
           if (finished) {
             runOnJS(completeSwipe)(direction);
           }
         });
-        translateY.value = withTiming(e.translationY * 0.25, { duration });
+
+        // Y carries finger momentum naturally then settles
+        translateY.value = withSpring(0, {
+          ...EXIT_SPRING,
+          velocity: e.velocityY * 0.3,
+        });
+
+        // Immediately reveal background for seamless transition
+        if (onSwipeProgress) {
+          runOnJS(onSwipeProgress)(1);
+        }
       } else {
         translateX.value = withSpring(0, SNAP_BACK_SPRING);
         translateY.value = withSpring(0, SNAP_BACK_SPRING);
@@ -135,26 +153,13 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
     const rotate = interpolate(
       translateX.value,
       [-screenWidth, 0, screenWidth],
-      [-10, 0, 10],
-    );
-    const scale = interpolate(
-      Math.abs(translateX.value),
-      [0, EXIT_X],
-      [1, 0.92],
-      Extrapolation.CLAMP,
-    );
-    const exitLift = interpolate(
-      Math.abs(translateX.value),
-      [0, EXIT_X * 0.5, EXIT_X],
-      [0, -18, -40],
-      Extrapolation.CLAMP,
+      [-12, 0, 12],
     );
     return {
       transform: [
         { translateX: translateX.value },
-        { translateY: translateY.value + exitLift },
+        { translateY: translateY.value },
         { rotate: `${rotate}deg` },
-        { scale },
       ],
     };
   });
@@ -179,28 +184,18 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
     };
   });
 
-  const likeStampStyle = useAnimatedStyle(() => {
-    'worklet';
-    return {
-      opacity: interpolate(translateX.value, [0, 80], [0, 1], Extrapolation.CLAMP),
-    };
-  });
-
-  const nopeStampStyle = useAnimatedStyle(() => {
-    'worklet';
-    return {
-      opacity: interpolate(translateX.value, [-80, 0], [1, 0], Extrapolation.CLAMP),
-    };
-  });
-
   const triggerSwipe = useCallback((direction) => {
     const targetX = direction === 'right' ? EXIT_X : -EXIT_X;
-    translateX.value = withTiming(targetX, { duration: 300 }, (finished) => {
+    const kickVelocity = direction === 'right' ? 1200 : -1200;
+    translateX.value = withSpring(targetX, {
+      ...EXIT_SPRING,
+      velocity: kickVelocity,
+    }, (finished) => {
       if (finished) {
         runOnJS(completeSwipe)(direction);
       }
     });
-    translateY.value = withTiming(0, { duration: 300 });
+    translateY.value = withSpring(0, EXIT_SPRING);
     if (onSwipeProgress) {
       runOnJS(onSwipeProgress)(1);
     }
@@ -251,12 +246,6 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
               ))}
             </Animated.View>
           )}
-          <Animated.View style={[styles.stamp, styles.stampLike, likeStampStyle]}>
-            <Text style={styles.stampLikeText}>LIKE</Text>
-          </Animated.View>
-          <Animated.View style={[styles.stamp, styles.stampNope, nopeStampStyle]}>
-            <Text style={styles.stampNopeText}>NOPE</Text>
-          </Animated.View>
           {profile.verified && (
             <View style={styles.verifiedChip}>
               <Ionicons name="checkmark-circle" size={14} color={Colors.accent} />
@@ -341,40 +330,6 @@ const styles = StyleSheet.create({
   progressSegmentActive: {
     backgroundColor: '#FFFFFF',
   },
-  stamp: {
-    position: 'absolute',
-    top: 80,
-    zIndex: 5,
-    borderWidth: 3,
-    borderRadius: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: 'transparent',
-  },
-  stampLike: {
-    left: 24,
-    borderColor: '#34D399',
-    transform: [{ rotate: '-15deg' }],
-  },
-  stampLikeText: {
-    fontSize: 28,
-    fontWeight: '900',
-    fontFamily: FontFamily.black,
-    color: '#34D399',
-    letterSpacing: 4,
-  },
-  stampNope: {
-    right: 24,
-    borderColor: '#EF4444',
-    transform: [{ rotate: '15deg' }],
-  },
-  stampNopeText: {
-    fontSize: 28,
-    fontWeight: '900',
-    fontFamily: FontFamily.black,
-    color: '#EF4444',
-    letterSpacing: 4,
-  },
   verifiedChip: {
     position: 'absolute',
     top: 104,
@@ -405,7 +360,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 16,
     right: 16,
-    bottom: 38,
+    bottom: 80,
     zIndex: 5,
   },
   distanceText: {
@@ -427,6 +382,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
   },
   statusText: {

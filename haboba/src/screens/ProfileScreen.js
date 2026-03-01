@@ -286,7 +286,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(229, 107, 140, 0.05)',
+    backgroundColor: 'rgba(255, 82, 82, 0.05)',
   },
   stickerText: {
     ...Typography.bodySemibold,

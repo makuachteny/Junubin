@@ -363,7 +363,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     gap: 6,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -519,7 +519,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   radioActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(229, 107, 140, 0.1)',
+    backgroundColor: 'rgba(255, 82, 82, 0.1)',
   },
   radioInner: {
     width: 12,

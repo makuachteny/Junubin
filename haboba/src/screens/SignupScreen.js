@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   countryCodeActive: {
     borderColor: Colors.accent,
-    backgroundColor: 'rgba(229, 107, 140, 0.1)',
+    backgroundColor: 'rgba(255, 82, 82, 0.1)',
   },
   countryCodeText: {
     ...Typography.bodySemibold,
@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
   },
   inputActive: {
     borderColor: Colors.accent,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
   },
 
   // Terms
@@ -519,11 +519,11 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(229, 107, 140, 0.15)',
+    borderColor: 'rgba(255, 82, 82, 0.15)',
   },
   verifyTitle: {
     fontSize: 28,
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
   },
   codeInputFilled: {
     borderColor: Colors.accent,
-    backgroundColor: 'rgba(229, 107, 140, 0.04)',
+    backgroundColor: 'rgba(255, 82, 82, 0.04)',
   },
   resendBtn: {
     flexDirection: 'row',

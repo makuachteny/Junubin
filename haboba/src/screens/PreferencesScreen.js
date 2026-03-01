@@ -477,7 +477,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: 'rgba(229, 107, 140, 0.25)',
+    borderColor: 'rgba(255, 82, 82, 0.25)',
     borderStyle: 'dashed',
     ...getShadow('sm', isDark),
   },

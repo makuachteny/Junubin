@@ -1,6 +1,6 @@
 // Haboba — Unified Theme
-// Cream & Light Royal — Champagne Gold + Dusty Rose
-// Cross-gender, universally appealing
+// Romantic Core (Red · Pink · Gray) + Energetic Accents (Orange · Gold · Green)
+// Crown-themed, culturally rooted
 // Primary typeface: DM Sans
 
 import { LightPalette, DarkPalette } from './palettes';
@@ -69,9 +69,9 @@ export const BorderRadius = {
 
 export const Gradients = {
   primary: ['#2D2319', '#1A1008'],
-  accent: ['#E56B8C', '#CF4E73'],
-  rose: ['#D4687A', '#B8506A'],
-  royal: ['#E56B8C', '#CF4E73'],
+  accent: ['#FF5252', '#D32F2F'],
+  rose: ['#FF80AB', '#F06292'],
+  royal: ['#FF7854', '#E64A19'],
   splash: ['#1A1612', '#12100D', '#0A0806'],
   card: ['transparent', 'rgba(45, 35, 25, 0.75)'],
 };

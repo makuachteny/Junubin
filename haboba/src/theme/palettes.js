@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
-// Haboba — Cream & Royal Palette
-// Cross-gender, universally appealing
-// Champagne gold accent · Dusty rose for love actions
+// Haboba — Romantic Core + Energetic Accents Palette
+// Red & pink define the personality. Orange/yellow/green
+// accent specific functions only.
 // ═══════════════════════════════════════════════════════════
 
 export const LightPalette = {
@@ -15,28 +15,28 @@ export const LightPalette = {
   creamDark: '#FFFFFF',        // Pure white
   creamLight: '#FFFFFF',        // Pure white
 
-  // ── Accent — Rose Pink ──
-  accent: '#E56B8C',           // Main pink accent
-  accentDark: '#CF4E73',       // Deep pink
-  accentLight: '#F5A9BF',      // Light pink
+  // ── Accent — Passionate Red ──
+  accent: '#FF5252',            // Main CTA buttons, tabs, active states
+  accentDark: '#D32F2F',        // Red text on white backgrounds
+  accentLight: '#FFCDD2',       // Light red tint backgrounds
 
-  // ── Rose — Love actions only ──
-  rose: '#D4687A',             // Dusty rose (likes, hearts)
-  roseDark: '#B8506A',         // Deep rose
-  roseLight: '#F0B8C4',        // Blush pink
+  // ── Rose — Love actions (playful pink) ──
+  rose: '#FF80AB',              // Hearts, likes, playful accents
+  roseDark: '#F06292',          // Pink text on white (large text only)
+  roseLight: '#FCE4EC',         // Soft pink tint backgrounds
 
   // ── Functional ──
-  success: '#49A26E',
-  warning: '#D19B4E',
-  error: '#D35C5C',
-  info: '#5F8CC7',
+  success: '#4CAF50',            // Verified, success states
+  warning: '#F9A825',
+  error: '#D32F2F',
+  info: '#FF7854',
 
   // ── Core neutrals ──
   white: '#FFFFFF',
   black: '#1F1F1F',
 
   // ── Neutral grays ──
-  gray: '#7A7A7A',
+  gray: '#757575',
   grayLight: '#E5E5E5',
   grayLighter: '#EFEFEF',
   grayLightest: '#F7F7F7',
@@ -59,21 +59,36 @@ export const LightPalette = {
   cardBorder: '#E8E8E8',
 
   // ── Tab bar ──
-  tabActive: '#E56B8C',
+  tabActive: '#FF5252',
   tabInactive: '#9A9A9A',
 
-  // ── Gold ──
-  gold: '#E56B8C',
-  goldDark: '#CF4E73',
-  goldLight: '#F5A9BF',
+  // ── Gold — Premium features ──
+  gold: '#FFC107',
+  goldDark: '#F9A825',
+  goldLight: '#FFF9C4',
 
-  // ── Royal ──
-  royal: '#E56B8C',
-  royalDark: '#CF4E73',
-  royalLight: '#F5A9BF',
+  // ── Royal — Energy accent ──
+  royal: '#FF7854',
+  royalDark: '#E64A19',
+  royalLight: '#FFCCBC',
 
   // ── Separator ──
   separator: 'rgba(0, 0, 0, 0.08)',
+
+  // ── Accent tints (derived from accent #FF5252) ──
+  accentTint04: 'rgba(255, 82, 82, 0.04)',
+  accentTint05: 'rgba(255, 82, 82, 0.05)',
+  accentTint06: 'rgba(255, 82, 82, 0.06)',
+  accentTint08: 'rgba(255, 82, 82, 0.08)',
+  accentTint10: 'rgba(255, 82, 82, 0.10)',
+  accentTint12: 'rgba(255, 82, 82, 0.12)',
+  accentTint15: 'rgba(255, 82, 82, 0.15)',
+  accentTint25: 'rgba(255, 82, 82, 0.25)',
+
+  // ── Rose tints ──
+  roseTint12: 'rgba(255, 128, 171, 0.12)',
+  roseTint20: 'rgba(255, 128, 171, 0.20)',
+  roseTint35: 'rgba(255, 128, 171, 0.35)',
 };
 
 export const DarkPalette = {
@@ -87,21 +102,21 @@ export const DarkPalette = {
   creamDark: '#000000',        // Pure black
   creamLight: '#000000',       // Pure black
 
-  // ── Accent — Rose Pink (brighter for dark bg) ──
-  accent: '#F08CAA',           // Bright pink
-  accentDark: '#E56B8C',       // Main pink
-  accentLight: '#FFC0D2',      // Pale pink
+  // ── Accent — Passionate Red (brighter for dark bg) ──
+  accent: '#FF8A80',
+  accentDark: '#FF5252',
+  accentLight: '#FFCDD2',
 
   // ── Rose — Love actions (brighter for dark bg) ──
-  rose: '#E07A8C',             // Brighter dusty rose
-  roseDark: '#D4687A',         // Standard
-  roseLight: '#F0A0B0',        // Light blush
+  rose: '#FF80AB',
+  roseDark: '#FF5252',
+  roseLight: '#F8BBD0',
 
   // ── Functional ──
-  success: '#5EBC84',
-  warning: '#E0B36B',
-  error: '#E07676',
-  info: '#7FA8DD',
+  success: '#66BB6A',
+  warning: '#FFD54F',
+  error: '#FF5252',
+  info: '#FF8A65',
 
   // ── Core neutrals (flipped) ──
   white: '#000000',
@@ -131,19 +146,34 @@ export const DarkPalette = {
   cardBorder: '#242424',
 
   // ── Tab bar ──
-  tabActive: '#F08CAA',
+  tabActive: '#FF8A80',
   tabInactive: '#8A8A8A',
 
-  // ── Gold ──
-  gold: '#F08CAA',
-  goldDark: '#E56B8C',
-  goldLight: '#FFC0D2',
+  // ── Gold — Premium features ──
+  gold: '#FFD54F',
+  goldDark: '#FFC107',
+  goldLight: '#FFF9C4',
 
-  // ── Royal ──
-  royal: '#F08CAA',
-  royalDark: '#E56B8C',
-  royalLight: '#FFC0D2',
+  // ── Royal — Energy accent ──
+  royal: '#FF8A65',
+  royalDark: '#FF7854',
+  royalLight: '#FFCCBC',
 
   // ── Separator ──
   separator: 'rgba(255, 255, 255, 0.12)',
+
+  // ── Accent tints (derived from dark accent #FF8A80) ──
+  accentTint04: 'rgba(255, 138, 128, 0.04)',
+  accentTint05: 'rgba(255, 138, 128, 0.05)',
+  accentTint06: 'rgba(255, 138, 128, 0.06)',
+  accentTint08: 'rgba(255, 138, 128, 0.08)',
+  accentTint10: 'rgba(255, 138, 128, 0.10)',
+  accentTint12: 'rgba(255, 138, 128, 0.12)',
+  accentTint15: 'rgba(255, 138, 128, 0.15)',
+  accentTint25: 'rgba(255, 138, 128, 0.25)',
+
+  // ── Rose tints ──
+  roseTint12: 'rgba(255, 128, 171, 0.12)',
+  roseTint20: 'rgba(255, 128, 171, 0.20)',
+  roseTint35: 'rgba(255, 128, 171, 0.35)',
 };

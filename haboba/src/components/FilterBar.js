@@ -212,12 +212,14 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
   const insets = useSafeAreaInsets();
   const styles = getStyles(colors, isDark, insets);
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [pendingSelection, setPendingSelection] = useState(null);
   const [dealbreaker, setDealbreaker] = useState({});
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const isFilterActive = (filterLabel) => activeFilters.includes(filterLabel);
 
   const openSheet = (filterLabel) => {
+    setPendingSelection(filterSelections[filterLabel] || null);
     setOpenDropdown(filterLabel);
     slideAnim.setValue(0);
     Animated.spring(slideAnim, {
@@ -233,7 +235,10 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
       toValue: 0,
       duration: 200,
       useNativeDriver: true,
-    }).start(() => setOpenDropdown(null));
+    }).start(() => {
+      setOpenDropdown(null);
+      setPendingSelection(null);
+    });
   };
 
   const handlePillPress = (filter) => {
@@ -248,12 +253,36 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
     }
   };
 
-  const handleWheelSelect = (filterLabel, option) => {
-    onFilterSelect && onFilterSelect(filterLabel, option.value);
+  const handleWheelSelect = (_filterLabel, option) => {
+    setPendingSelection(option.value);
   };
 
   const handleApply = () => {
-    closeSheet();
+    if (openDropdown) {
+      onFilterSelect && onFilterSelect(openDropdown, pendingSelection);
+    }
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setOpenDropdown(null);
+      setPendingSelection(null);
+    });
+  };
+
+  const handleClear = () => {
+    if (openDropdown) {
+      onFilterSelect && onFilterSelect(openDropdown, null);
+    }
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      setOpenDropdown(null);
+      setPendingSelection(null);
+    });
   };
 
   const getDisplayLabel = (filterLabel) => {
@@ -372,7 +401,7 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
             <View style={styles.pickerWrap}>
               <WheelPicker
                 options={FILTER_OPTIONS[openDropdown] || []}
-                selectedValue={filterSelections[openDropdown] || null}
+                selectedValue={pendingSelection}
                 onSelect={(opt) => handleWheelSelect(openDropdown, opt)}
                 colors={colors}
                 isDark={isDark}
@@ -401,14 +430,26 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
               </View>
             </TouchableOpacity>
 
-            {/* Apply button */}
-            <TouchableOpacity
-              style={styles.applyBtn}
-              onPress={handleApply}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.applyText}>Apply</Text>
-            </TouchableOpacity>
+            {/* Apply / Clear buttons */}
+            <View style={styles.sheetActions}>
+              {filterSelections[openDropdown] && (
+                <TouchableOpacity
+                  style={styles.clearBtn}
+                  onPress={handleClear}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.clearText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[styles.applyBtn, !pendingSelection && styles.applyBtnDisabled]}
+                onPress={handleApply}
+                activeOpacity={0.8}
+                disabled={!pendingSelection}
+              >
+                <Text style={styles.applyText}>Apply</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Bottom safe area padding */}
             <View style={{ height: insets.bottom }} />
@@ -584,10 +625,32 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     marginTop: 2,
   },
 
-  // ─── Apply Button ───
-  applyBtn: {
+  // ─── Sheet Actions ───
+  sheetActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     marginTop: 24,
     marginBottom: 12,
+  },
+  clearBtn: {
+    paddingVertical: 18,
+    paddingHorizontal: 24,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: isDark ? 'rgba(255,255,255,0.2)' : colors.gray300,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearText: {
+    fontSize: 17,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: isDark ? 'rgba(255,255,255,0.7)' : colors.gray600,
+    letterSpacing: 0.3,
+  },
+  applyBtn: {
+    flex: 1,
     backgroundColor: isDark ? '#FFFFFF' : '#1A1612',
     borderRadius: 999,
     paddingVertical: 18,
@@ -598,6 +661,9 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 12,
     elevation: 6,
+  },
+  applyBtnDisabled: {
+    opacity: 0.4,
   },
   applyText: {
     fontSize: 17,

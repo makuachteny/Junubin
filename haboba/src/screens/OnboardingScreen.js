@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: 'rgba(229, 107, 140, 0.25)',
+    backgroundColor: 'rgba(255, 82, 82, 0.25)',
   },
   dotActive: {
     backgroundColor: Colors.accent,

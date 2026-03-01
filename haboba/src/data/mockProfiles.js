@@ -399,10 +399,10 @@ export const mockMatches = [
 
 // ── Post card theme presets ─────────────────────────────────
 export const POST_THEMES = {
-  default: { bg: '#FFFFFF', text: '#2D2319', accent: '#E56B8C', name: 'Classic' },
-  midnight: { bg: '#1A1612', text: '#FFFFFF', accent: '#D4687A', name: 'Midnight' },
-  rose: { bg: '#D4687A', text: '#FFFFFF', accent: '#1A1612', name: 'Rose' },
-  blush: { bg: '#FBE8E2', text: '#6B3D35', accent: '#E56B8C', name: 'Blush' },
+  default: { bg: '#FFFFFF', text: '#2D2319', accent: '#FF5252', name: 'Classic' },
+  midnight: { bg: '#1A1612', text: '#FFFFFF', accent: '#FF80AB', name: 'Midnight' },
+  rose: { bg: '#FF5252', text: '#FFFFFF', accent: '#1A1612', name: 'Rose' },
+  blush: { bg: '#FCE4EC', text: '#D32F2F', accent: '#FF5252', name: 'Blush' },
   ocean: { bg: '#0C4A6E', text: '#FFFFFF', accent: '#38BDF8', name: 'Ocean' },
   forest: { bg: '#14532D', text: '#FFFFFF', accent: '#4ADE80', name: 'Forest' },
   sunset: { bg: '#7C2D12', text: '#FFFFFF', accent: '#FB923C', name: 'Sunset' },

@@ -644,11 +644,11 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(229, 107, 140, 0.15)',
+    borderColor: 'rgba(255, 82, 82, 0.15)',
   },
 
   // ─── Title ───
@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
   },
   radioRowActive: {
     borderColor: Colors.accent,
-    backgroundColor: 'rgba(229, 107, 140, 0.04)',
+    backgroundColor: 'rgba(255, 82, 82, 0.04)',
   },
   radioText: {
     fontSize: 16,
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -859,12 +859,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(229, 107, 140, 0.06)',
+    backgroundColor: 'rgba(255, 82, 82, 0.06)',
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(229, 107, 140, 0.15)',
+    borderColor: 'rgba(255, 82, 82, 0.15)',
   },
   selectedPromptText: {
     fontSize: 15,
