@@ -474,9 +474,9 @@ export const CULTURAL_STICKERS = [
 
 // ── Spotlight (boost) packs ─────────────────────────────────
 export const SPOTLIGHT_PACKS = [
-  { id: 'sp1', count: 1, price: '$4.99', label: '1 Spotlight' },
-  { id: 'sp2', count: 5, price: '$14.99', label: '5 Spotlights', badge: 'POPULAR' },
-  { id: 'sp3', count: 10, price: '$24.99', label: '10 Spotlights', badge: 'BEST VALUE' },
+  { id: 'sp1', count: 1, price: '$5.99', label: '1 Spotlight' },
+  { id: 'sp2', count: 5, price: '$19.99', label: '5 Spotlights', badge: 'POPULAR' },
+  { id: 'sp3', count: 10, price: '$29.99', label: '10 Spotlights', badge: 'BEST VALUE' },
 ];
 
 // ── Super Like packs ────────────────────────────────────────
@@ -488,9 +488,8 @@ export const SUPER_LIKE_PACKS = [
 
 // ── Subscription tiers ──────────────────────────────────────
 export const SUBSCRIPTION_TIERS = {
-  gold: { name: 'Gold', monthlyPrice: '$9.99', features: ['Unlimited Likes', 'See Who Likes You', '5 Super Likes/week'] },
-  royal: { name: 'Royal', monthlyPrice: '$19.99', features: ['All Gold features', 'Priority Likes', '1 Free Spotlight/month', 'Advanced Filters'] },
-  crown: { name: 'Crown', monthlyPrice: '$29.99', features: ['All Royal features', 'Free Whispers', 'Top Picks', 'Incognito Mode', 'VIP Badge'] },
+  plus: { name: 'JuNubin+', monthlyPrice: '$9.99', features: ['Unlimited Likes', 'Unlimited Rewinds', 'Read Receipts'] },
+  junub: { name: 'Junub', monthlyPrice: '$19.99', features: ['All JuNubin+ features', 'See Who Likes You', '1 Free Spotlight/month', 'Diaspora Connect', 'Advanced Filters', 'Incognito Mode'] },
 };
 
 // ── Chat messages per match ─────────────────────────────────

@@ -1,4 +1,4 @@
-// Haboba — Profile Card
+// AnaJunubin — Profile Card
 // Full-bleed image with gradient overlay, BLK-style layout.
 // Uses react-native-reanimated + gesture-handler for native-thread swiping.
 
@@ -271,6 +271,18 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
                 <Text style={styles.statusText}>{statusText}</Text>
               </View>
             )}
+            {profile.currentlyInto?.length > 0 && (
+              <View style={styles.currentlyIntoRow}>
+                <Text style={styles.currentlyIntoLabel}>Currently into</Text>
+                <View style={styles.currentlyIntoPills}>
+                  {profile.currentlyInto.map((item, idx) => (
+                    <View key={idx} style={styles.currentlyIntoPill}>
+                      <Text style={styles.currentlyIntoPillText}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </Animated.View>
@@ -391,6 +403,37 @@ const styles = StyleSheet.create({
   },
   statusEmoji: {
     fontSize: 14,
+  },
+  currentlyIntoRow: {
+    marginTop: 8,
+  },
+  currentlyIntoLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  currentlyIntoPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  currentlyIntoPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    backgroundColor: 'rgba(255, 82, 82, 0.2)',
+  },
+  currentlyIntoPillText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
   },
 });
 

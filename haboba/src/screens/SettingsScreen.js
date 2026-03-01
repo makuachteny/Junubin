@@ -12,7 +12,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import HabobaLogo from '../components/HabobaLogo';
+import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import { currentUser } from '../data/mockProfiles';
@@ -21,7 +21,7 @@ import { CommonActions } from '@react-navigation/native';
 import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
 
-const TIER_LABELS = { free: 'Free', gold: 'Gold', royal: 'Royal', crown: 'Crown' };
+const TIER_LABELS = { free: 'Free', plus: 'JuNubin+', junub: 'Junub' };
 
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -175,24 +175,11 @@ export default function SettingsScreen({ navigation }) {
 
         {/* Upgrade buttons — hide based on current tier */}
         <View style={styles.upgradeSection}>
-          {!hasTier('crown') && (
-            <Button
-              title="UNLOCK CROWN"
-              subtitle="Free Whispers, Advanced Filters and more!"
-              variant="dark"
-              size="lg"
-              onPress={() => navigation.navigate('Elite')}
-              textStyle={{ letterSpacing: 1 }}
-            />
-          )}
-
-          {!hasTier('crown') && <View style={{ height: 12 }} />}
-
-          {!hasTier('royal') && (
+          {!hasTier('junub') && (
             <>
               <Button
-                title="GO ROYAL"
-                subtitle="See Who Likes You and More!"
+                title="GO JUNUB"
+                subtitle="See Who Likes You, Diaspora Connect, and more!"
                 variant="primary"
                 size="lg"
                 onPress={() => navigation.navigate('Elite')}
@@ -202,9 +189,10 @@ export default function SettingsScreen({ navigation }) {
             </>
           )}
 
-          {!hasTier('gold') && (
+          {!hasTier('plus') && (
             <Button
-              title="GO GOLD"
+              title="GET HABOBA+"
+              subtitle="Unlimited Likes and Rewinds"
               variant="outline"
               size="md"
               textStyle={{ letterSpacing: 1 }}
@@ -315,7 +303,7 @@ export default function SettingsScreen({ navigation }) {
 
         {/* Footer */}
         <View style={styles.footer}>
-          <HabobaLogo size="small" />
+          <BrandLogo size="small" />
           <Text style={styles.footerVersion}>Version 1.0.0 (build: 1)</Text>
         </View>
       </Animated.ScrollView>

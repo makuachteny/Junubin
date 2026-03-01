@@ -1,4 +1,4 @@
-// Haboba — Filter Bar
+// AnaJunubin — Filter Bar
 // Scrollable filter pills with bottom-sheet wheel-picker dropdowns
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';

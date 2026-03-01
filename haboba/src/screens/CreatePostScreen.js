@@ -62,7 +62,7 @@ export default function CreatePostScreen({ navigation }) {
       <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
         {/* User info */}
         <View style={styles.userRow}>
-          <Image source={imageSource(currentUser.images[0])} style={styles.avatar} />
+          <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
           <View>
             <Text style={styles.userName}>{currentUser.name}</Text>
             <Text style={styles.userSub}>Posting to Community</Text>

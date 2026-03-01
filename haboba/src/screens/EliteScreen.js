@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,88 +6,189 @@ import {
   TouchableOpacity,
   ScrollView,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, FontFamily } from '../theme';
+import { useTheme, Typography, FontFamily } from '../theme';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import { useSubscription, PRODUCT_IDS } from '../payments';
 
 const { width } = Dimensions.get('window');
 
-const FEATURES = [
-  { icon: 'heart', title: 'Like Without Limits', desc: 'Increase your chances of matching by liking as many people as you want!' },
-  { icon: 'eye', title: 'See Who Likes You', desc: 'Don\'t wait to be found — see everyone who\'s already interested!' },
-  { icon: 'flash', title: '1 Free Spotlight/Month', desc: 'Get your profile to the top of the stack every month.' },
-  { icon: 'star', title: 'Unlimited Rewinds', desc: 'Accidentally swiped left? Go back and fix it!' },
-  { icon: 'shield-checkmark', title: 'Advanced Filters', desc: 'Filter by recently active, subscribers, and new members.' },
-  { icon: 'eye-off', title: 'Incognito Mode', desc: 'Browse profiles without being seen. Like someone? They\'ll know then.' },
+// ── Two tiers, each with distinct value props ──
+
+const PLUS_FEATURES = [
+  { icon: 'heart', title: 'Like Without Limits', desc: 'Swipe right as much as you want — no daily cap holding you back.' },
+  { icon: 'refresh', title: 'Unlimited Rewinds', desc: 'Accidentally passed on someone? Bring them back instantly.' },
+  { icon: 'chatbubble', title: 'Read Receipts', desc: 'Know when your messages have been seen.' },
+  { icon: 'shield-checkmark', title: 'No Ads. Ever.', desc: 'Your experience is yours — clean, focused, respectful.' },
 ];
 
-const PLANS = [
-  { duration: '1', unit: 'Week', price: '$21.99', perMonth: null, save: null, productId: PRODUCT_IDS.ROYAL_WEEKLY },
-  { duration: '1', unit: 'Month', price: '$29.99', perMonth: '$29.99/mo', save: 'Save 66%', productId: PRODUCT_IDS.ROYAL_MONTHLY },
-  { duration: '3', unit: 'Months', price: '$59.99', perMonth: '$19.99/mo', save: 'Save 77%', productId: PRODUCT_IDS.ROYAL_3MONTH },
-  { duration: '6', unit: 'Months', price: '$71.99', perMonth: '$11.99/mo', save: 'Save 86%', productId: PRODUCT_IDS.ROYAL_6MONTH },
+const JUNUB_FEATURES = [
+  { icon: 'eye', title: 'See Who Likes You', desc: 'Don\'t wait to be found — see everyone who\'s already interested.' },
+  { icon: 'flash', title: '1 Free Spotlight/Month', desc: 'Jump to the top of the stack every month, on us.' },
+  { icon: 'globe', title: 'Diaspora Connect', desc: 'Match across cities and countries — connect the South Sudanese diaspora worldwide.' },
+  { icon: 'options', title: 'Advanced Filters', desc: 'Filter by ethnicity, religion, intentions, and more.' },
+  { icon: 'eye-off', title: 'Incognito Mode', desc: 'Browse invisibly. Only people you like will know you exist.' },
+  { icon: 'star', title: 'Everything in JuNubin+', desc: 'Unlimited likes, rewinds, read receipts — all included.' },
+];
+
+const PLUS_PLANS = [
+  { duration: '1', unit: 'Month', price: '$9.99', perMonth: '$9.99/mo', save: null, productId: PRODUCT_IDS.PLUS_MONTHLY },
+  { duration: '6', unit: 'Months', price: '$39.99', perMonth: '$6.66/mo', save: 'Save 33%', productId: PRODUCT_IDS.PLUS_6MONTH },
+];
+
+const JUNUB_PLANS = [
+  { duration: '1', unit: 'Month', price: '$19.99', perMonth: '$19.99/mo', save: null, productId: PRODUCT_IDS.JUNUB_MONTHLY },
+  { duration: '6', unit: 'Months', price: '$79.99', perMonth: '$13.33/mo', save: 'Save 33%', productId: PRODUCT_IDS.JUNUB_6MONTH },
 ];
 
 export default function EliteScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const [selectedPlan, setSelectedPlan] = useState(2);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const [selectedTier, setSelectedTier] = useState('junub');
+  const [selectedPlan, setSelectedPlan] = useState(1);
   const scrollRef = useRef(null);
   const [featureIndex, setFeatureIndex] = useState(0);
   const { purchase, tier, hasTier, purchaseInProgress } = useSubscription();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
+  const tierSlide = useRef(new Animated.Value(1)).current;
+  const [tierTabWidth, setTierTabWidth] = useState(0);
+
+  const features = selectedTier === 'junub' ? JUNUB_FEATURES : PLUS_FEATURES;
+  const plans = selectedTier === 'junub' ? JUNUB_PLANS : PLUS_PLANS;
+  const tierLabel = selectedTier === 'junub' ? 'Junub' : 'JuNubin+';
+
+  const inactiveColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)';
 
   const handleScroll = (event) => {
     const index = Math.round(event.nativeEvent.contentOffset.x / (width - 40));
     setFeatureIndex(index);
   };
 
+  const handleTierSwitch = useCallback((newTier) => {
+    Animated.spring(tierSlide, {
+      toValue: newTier === 'junub' ? 1 : 0,
+      useNativeDriver: false,
+      tension: 68,
+      friction: 12,
+    }).start();
+    setSelectedTier(newTier);
+    setSelectedPlan(1);
+    setFeatureIndex(0);
+    scrollRef.current?.scrollTo({ x: 0, animated: false });
+  }, [tierSlide]);
+
   const handleSubscribe = async () => {
-    const plan = PLANS[selectedPlan];
-    setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Subscribing to Royal ${plan.duration} ${plan.unit}` });
+    const plan = plans[selectedPlan];
+    setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Subscribing to ${tierLabel}` });
 
     const result = await purchase(plan.productId);
 
     if (result.success) {
-      setModal({ visible: true, type: 'success', title: 'Welcome to Royal!', message: `You're now a Royal member. Enjoy all premium features!` });
+      setModal({
+        visible: true,
+        type: 'success',
+        title: selectedTier === 'junub' ? 'Welcome to Junub!' : 'Welcome to JuNubin+!',
+        message: `You're in. Enjoy your new features.`,
+      });
     } else {
       setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
     }
   };
 
-  const alreadyRoyal = hasTier('royal');
+  const alreadyHasTier = hasTier(selectedTier);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Close Button - Glass Circle */}
-      <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
+      {/* Close */}
+      <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 8 }]} onPress={() => navigation.goBack()}>
         <View style={styles.closeBtnGlass}>
-          <Ionicons name="close" size={28} color={Colors.white} />
+          <Ionicons name="close" size={28} color={colors.black} />
         </View>
       </TouchableOpacity>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Header - UNLOCK Label */}
-        <Text style={styles.becomeLabel}>{alreadyRoyal ? 'YOU ARE' : 'UNLOCK'}</Text>
-
-        {/* ROYAL Text with Decorative Lines */}
-        <View style={styles.eliteRow}>
-          <View style={styles.eliteLine} />
-          <Text style={styles.eliteText}>ROYAL</Text>
-          <View style={styles.eliteLine} />
+        {/* No-ads badge */}
+        <View style={styles.noAdsBadge}>
+          <Ionicons name="shield-checkmark" size={14} color={colors.accent} />
+          <Text style={styles.noAdsText}>No ads. Ever.</Text>
         </View>
 
-        {alreadyRoyal && (
+        {/* Tier tab switcher — compact pill */}
+        <View
+          style={styles.tierTabs}
+          onLayout={(e) => setTierTabWidth(e.nativeEvent.layout.width - 4)}
+        >
+          {tierTabWidth > 0 && (
+            <Animated.View
+              style={[
+                styles.tierPill,
+                {
+                  width: tierTabWidth / 2,
+                  transform: [{
+                    translateX: tierSlide.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, tierTabWidth / 2],
+                    }),
+                  }],
+                },
+              ]}
+            />
+          )}
+          {[
+            { key: 'plus', label: 'JuNubin+' },
+            { key: 'junub', label: 'Junub' },
+          ].map((t) => (
+            <TouchableOpacity
+              key={t.key}
+              style={styles.tierTab}
+              onPress={() => handleTierSwitch(t.key)}
+              activeOpacity={0.7}
+            >
+              <Animated.Text
+                style={[
+                  styles.tierTabText,
+                  {
+                    color: tierSlide.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: t.key === 'plus'
+                        ? ['#FFFFFF', inactiveColor]
+                        : [inactiveColor, '#FFFFFF'],
+                    }),
+                  },
+                ]}
+              >
+                {t.label}
+              </Animated.Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Tier branding */}
+        <View style={styles.brandRow}>
+          <View style={styles.brandLine} />
+          <Text style={styles.brandText}>{tierLabel}</Text>
+          <View style={styles.brandLine} />
+        </View>
+
+        {selectedTier === 'junub' && (
+          <Text style={styles.junubMeaning}>
+            "South" — connecting South Sudanese everywhere
+          </Text>
+        )}
+
+        {alreadyHasTier && (
           <View style={styles.currentBadge}>
-            <Ionicons name="checkmark-circle" size={20} color={Colors.accent} />
+            <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
             <Text style={styles.currentBadgeText}>Current Plan</Text>
           </View>
         )}
 
-        {/* Feature Carousel */}
+        {/* Feature carousel */}
         <ScrollView
           ref={scrollRef}
           horizontal
@@ -96,10 +197,10 @@ export default function EliteScreen({ navigation }) {
           onMomentumScrollEnd={handleScroll}
           style={styles.carousel}
         >
-          {FEATURES.map((feature, index) => (
+          {features.map((feature, index) => (
             <View key={index} style={styles.featureSlide}>
               <View style={styles.featureIconContainer}>
-                <Ionicons name={feature.icon} size={52} color={Colors.accent} />
+                <Ionicons name={feature.icon} size={52} color={colors.accent} />
               </View>
               <Text style={styles.featureTitle}>{feature.title}</Text>
               <Text style={styles.featureDesc}>{feature.desc}</Text>
@@ -107,30 +208,30 @@ export default function EliteScreen({ navigation }) {
           ))}
         </ScrollView>
 
-        {/* Pagination Dots */}
+        {/* Pagination dots */}
         <View style={styles.dots}>
-          {FEATURES.map((_, index) => (
+          {features.map((_, index) => (
             <View
               key={index}
-              style={[
-                styles.dot,
-                featureIndex === index && styles.dotActive
-              ]}
+              style={[styles.dot, featureIndex === index && styles.dotActive]}
             />
           ))}
         </View>
 
-        {/* Plans Section */}
-        {!alreadyRoyal && (
+        {/* Social mode callout */}
+        <View style={styles.socialCallout}>
+          <Ionicons name="people" size={18} color={colors.accent} />
+          <Text style={styles.socialCalloutText}>Social mode is always free for everyone</Text>
+        </View>
+
+        {/* Plan cards */}
+        {!alreadyHasTier && (
           <>
             <View style={styles.plansRow}>
-              {PLANS.map((plan, index) => (
+              {plans.map((plan, index) => (
                 <TouchableOpacity
                   key={index}
-                  style={[
-                    styles.planCard,
-                    selectedPlan === index && styles.planSelected
-                  ]}
+                  style={[styles.planCard, selectedPlan === index && styles.planSelected]}
                   onPress={() => setSelectedPlan(index)}
                   activeOpacity={0.7}
                 >
@@ -139,41 +240,30 @@ export default function EliteScreen({ navigation }) {
                       <Text style={styles.saveText}>{plan.save}</Text>
                     </View>
                   )}
-                  <Text style={[
-                    styles.planDuration,
-                    selectedPlan === index && styles.planDurationActive
-                  ]}>
+                  <Text style={[styles.planDuration, selectedPlan === index && styles.planDurationActive]}>
                     {plan.duration}
                   </Text>
-                  <Text style={[
-                    styles.planUnit,
-                    selectedPlan === index && styles.planUnitActive
-                  ]}>
+                  <Text style={[styles.planUnit, selectedPlan === index && styles.planUnitActive]}>
                     {plan.unit}
                   </Text>
-                  <Text style={[
-                    styles.planPrice,
-                    selectedPlan === index && styles.planPriceActive
-                  ]}>
-                    {plan.perMonth || plan.price}
+                  <Text style={[styles.planPrice, selectedPlan === index && styles.planPriceActive]}>
+                    {plan.perMonth}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Terms Text */}
+            {/* Terms */}
             <Text style={styles.terms}>
-              By tapping "Get" or{' '}
-              <Text style={styles.appStoreLink}>Subscribe with App Store</Text>
-              {' '}below, you agree to our{' '}
-              <Text style={styles.termsLink}>TERMS</Text>, and your subscription will auto-renew
-              for the same price and plan length until you cancel via Account Settings.
+              By tapping below, you agree to our{' '}
+              <Text style={styles.termsLink}>TERMS</Text>. Your subscription auto-renews
+              at the same price until you cancel via Account Settings.
             </Text>
 
-            {/* Subscribe Button */}
+            {/* Subscribe button */}
             <View style={styles.btnSection}>
               <Button
-                title={`Get ${PLANS[selectedPlan].duration} ${PLANS[selectedPlan].unit} for ${PLANS[selectedPlan].price}`}
+                title={`Get ${tierLabel} for ${plans[selectedPlan].price}`}
                 variant="primary"
                 size="lg"
                 loading={purchaseInProgress}
@@ -181,7 +271,7 @@ export default function EliteScreen({ navigation }) {
               />
             </View>
 
-            {/* App Store Link */}
+            {/* App Store link */}
             <TouchableOpacity style={styles.appStoreBtn} onPress={handleSubscribe}>
               <Text style={styles.appStoreTextLink}>Subscribe with App Store</Text>
             </TouchableOpacity>
@@ -203,10 +293,10 @@ export default function EliteScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.white,
   },
   closeBtn: {
     position: 'absolute',
@@ -218,11 +308,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: isDark ? 'rgba(255,255,255,0.12)' : colors.separator,
   },
   content: {
     alignItems: 'center',
@@ -230,34 +320,87 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingTop: 20,
   },
-  becomeLabel: {
-    ...Typography.label,
-    color: Colors.accent,
-    letterSpacing: 3,
-    marginBottom: 12,
+
+  // No-ads badge
+  noAdsBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: isDark ? 'rgba(255, 82, 82, 0.1)' : 'rgba(255, 82, 82, 0.08)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255, 82, 82, 0.2)' : 'rgba(255, 82, 82, 0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 20,
   },
-  eliteRow: {
+  noAdsText: {
+    ...Typography.label,
+    color: colors.accent,
+    fontSize: 12,
+    letterSpacing: 1,
+  },
+
+  // Tier tab switcher — compact
+  tierTabs: {
+    flexDirection: 'row',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    borderRadius: 20,
+    padding: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
+    position: 'relative',
+  },
+  tierPill: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    bottom: 2,
+    borderRadius: 18,
+    backgroundColor: colors.accent,
+  },
+  tierTab: {
+    paddingVertical: 7,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  tierTabText: {
+    fontSize: 16,
+    fontFamily: FontFamily.script,
+  },
+
+  // Brand
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    marginBottom: 32,
+    marginBottom: 8,
   },
-  eliteLine: {
+  brandLine: {
     height: 2,
     flex: 1,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
   },
-  eliteText: {
-    ...Typography.display,
-    fontSize: 40,
-    color: Colors.accent,
-    letterSpacing: 4,
+  brandText: {
+    fontFamily: FontFamily.script,
+    fontSize: 42,
+    color: colors.accent,
+    letterSpacing: 0.5,
+  },
+  junubMeaning: {
+    ...Typography.caption,
+    color: colors.gray500,
+    fontStyle: 'italic',
+    marginBottom: 16,
+    textAlign: 'center',
   },
   currentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(255, 82, 82, 0.15)',
+    backgroundColor: isDark ? 'rgba(255, 82, 82, 0.15)' : 'rgba(255, 82, 82, 0.08)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -265,8 +408,10 @@ const styles = StyleSheet.create({
   },
   currentBadgeText: {
     ...Typography.label,
-    color: Colors.accent,
+    color: colors.accent,
   },
+
+  // Carousel
   carousel: {
     width: width,
   },
@@ -280,20 +425,20 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: isDark ? 'rgba(255, 82, 82, 0.08)' : 'rgba(255, 82, 82, 0.06)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
   featureTitle: {
     ...Typography.h2,
-    color: Colors.white,
+    color: colors.black,
     marginTop: 8,
     textAlign: 'center',
   },
   featureDesc: {
     ...Typography.bodySmall,
-    color: Colors.gray400,
+    color: colors.gray500,
     marginTop: 10,
     textAlign: 'center',
     lineHeight: 22,
@@ -307,44 +452,66 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.gray600,
+    backgroundColor: colors.gray300,
   },
   dotActive: {
     width: 24,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
   },
+
+  // Social callout
+  socialCallout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.cream,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.separator,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginBottom: 24,
+    width: '100%',
+  },
+  socialCalloutText: {
+    ...Typography.bodySmall,
+    color: colors.gray500,
+    flex: 1,
+  },
+
+  // Plans
   plansRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 12,
     width: '100%',
-    marginTop: 20,
+    marginTop: 4,
   },
   planCard: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.cardBg,
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.separator,
     position: 'relative',
   },
   planSelected: {
-    backgroundColor: Colors.white,
+    backgroundColor: isDark ? colors.white : '#FFFFFF',
     borderWidth: 2,
-    borderColor: Colors.accent,
-    shadowColor: Colors.accent,
+    borderColor: colors.accent,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 12,
   },
   saveBadge: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     borderRadius: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 3,
     position: 'absolute',
     top: -10,
@@ -355,45 +522,41 @@ const styles = StyleSheet.create({
     fontSize: 10,
   },
   planDuration: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
-    color: Colors.white,
+    color: colors.gray400,
     marginTop: 8,
   },
   planDurationActive: {
-    color: Colors.accent,
+    color: colors.accent,
   },
   planUnit: {
     ...Typography.caption,
-    color: Colors.gray400,
+    color: colors.gray400,
     marginTop: 2,
   },
   planUnitActive: {
-    color: Colors.gray600,
+    color: colors.gray600,
   },
   planPrice: {
     ...Typography.label,
-    color: Colors.gray400,
+    color: colors.gray400,
     marginTop: 10,
   },
   planPriceActive: {
-    color: Colors.accent,
+    color: colors.accent,
   },
   terms: {
     ...Typography.caption,
-    color: Colors.gray500,
+    color: colors.gray500,
     textAlign: 'center',
     marginTop: 28,
     lineHeight: 18,
     paddingHorizontal: 10,
   },
-  appStoreLink: {
-    color: Colors.white,
-    textDecorationLine: 'underline',
-  },
   termsLink: {
-    color: Colors.accent,
+    color: colors.accent,
     fontWeight: '700',
   },
   btnSection: {
@@ -405,7 +568,7 @@ const styles = StyleSheet.create({
   },
   appStoreTextLink: {
     ...Typography.bodySemibold,
-    color: Colors.white,
+    color: colors.black,
     fontSize: 15,
     textDecorationLine: 'underline',
   },

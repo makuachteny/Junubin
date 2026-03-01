@@ -1,123 +1,23 @@
-// JuNubin — JB Crown Logo Mark (SVG)
-// Instagram-style flowing script "JB" with royal crown.
-// Crown jewels use South Sudanese flag colours (blue, red, green).
+// JuNubin — JB Logo Mark (SVG)
+// Instagram-style flowing script "JB".
 
 import React from 'react';
-import Svg, {
-  Path, Circle, G, Text as SvgText,
-  Defs, LinearGradient, Stop, Rect,
-} from 'react-native-svg';
-import { View, Text, StyleSheet } from 'react-native';
+import Svg, { Path, G, Text as SvgText } from 'react-native-svg';
+import { View } from 'react-native';
 import { useTheme, FontFamily } from '../theme';
 
 export default function LogoMark({ size = 120, light = false }) {
   const { colors, isDark } = useTheme();
   const fill = light ? '#FFFFFF' : isDark ? '#FFFFFF' : colors.primary;
-  const crownGold = light ? '#FFD700' : isDark ? '#FFD369' : '#F8D45F';
-  const crownTip = light ? '#FFF8DC' : isDark ? '#FFE599' : '#FFECB3';
-  const crownBase = light ? '#DAA520' : isDark ? '#C8963E' : '#D4A017';
   const showSub = size >= 80;
-  const totalH = showSub ? size * 1.35 : size * 1.15;
-
-  // The crown occupies the top ~40% of the mark, JB fills the rest.
-  // Using a single SVG keeps everything vector-crisp at any size.
   const vbW = 220;
-  const vbH = showSub ? 290 : 240;
+  const vbH = showSub ? 170 : 115;
+  const totalH = size * (vbH / vbW);
 
   return (
     <View style={{ width: size, height: totalH, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={totalH} viewBox={`0 0 ${vbW} ${vbH}`}>
-        <Defs>
-          <LinearGradient id="crownGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={crownTip} />
-            <Stop offset="0.45" stopColor={crownGold} />
-            <Stop offset="1" stopColor={crownBase} />
-          </LinearGradient>
-          <LinearGradient id="gemRed" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#E8313E" />
-            <Stop offset="1" stopColor="#B80E1E" />
-          </LinearGradient>
-          <LinearGradient id="gemBlue" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#2966CF" />
-            <Stop offset="1" stopColor="#0A3280" />
-          </LinearGradient>
-          <LinearGradient id="gemGreen" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor="#1AB050" />
-            <Stop offset="1" stopColor="#056B24" />
-          </LinearGradient>
-        </Defs>
-
-        {/* ═══ CROWN ═══ */}
-        <G>
-          {/* Main crown body — 5 peaks (3 tall + 2 short) */}
-          <Path
-            d={`
-              M 56,100
-              C 56,92 58,86 62,78
-              L 76,88
-              C 80,72 85,48 90,34
-              L 97,72
-              C 100,52 106,24 110,8
-              C 114,24 120,52 123,72
-              L 130,34
-              C 135,48 140,72 144,88
-              L 158,78
-              C 162,86 164,92 164,100
-              Z
-            `}
-            fill="url(#crownGrad)"
-          />
-
-          {/* Crown base band — a rounded strip at the bottom */}
-          <Rect x="52" y="100" width="116" height="14" rx="4" ry="4" fill="url(#crownGrad)" />
-
-          {/* Inner arch detail lines for depth */}
-          <Path
-            d="M 70,100 Q 80,90 90,100"
-            fill="none"
-            stroke={crownBase}
-            strokeWidth="1.5"
-            opacity="0.35"
-          />
-          <Path
-            d="M 98,100 Q 110,88 122,100"
-            fill="none"
-            stroke={crownBase}
-            strokeWidth="1.5"
-            opacity="0.35"
-          />
-          <Path
-            d="M 130,100 Q 140,90 150,100"
-            fill="none"
-            stroke={crownBase}
-            strokeWidth="1.5"
-            opacity="0.35"
-          />
-
-          {/* Jewels — SS flag colours */}
-          {/* Center jewel (red) — largest, at tallest peak */}
-          <Circle cx="110" cy="18" r="6" fill="url(#gemRed)" />
-          <Circle cx="110" cy="16.5" r="2" fill="#FF8A94" opacity="0.6" />
-
-          {/* Left jewel (blue) */}
-          <Circle cx="90" cy="40" r="5" fill="url(#gemBlue)" />
-          <Circle cx="90" cy="38.5" r="1.8" fill="#6EA4F4" opacity="0.55" />
-
-          {/* Right jewel (green) */}
-          <Circle cx="130" cy="40" r="5" fill="url(#gemGreen)" />
-          <Circle cx="130" cy="38.5" r="1.8" fill="#5FE08C" opacity="0.55" />
-
-          {/* Small gold dots at outer peaks */}
-          <Circle cx="66" cy="80" r="3" fill={crownTip} opacity="0.8" />
-          <Circle cx="154" cy="80" r="3" fill={crownTip} opacity="0.8" />
-
-          {/* Tiny highlights on band */}
-          <Rect x="68" y="103" width="18" height="3" rx="1.5" fill={crownTip} opacity="0.25" />
-          <Rect x="134" y="103" width="18" height="3" rx="1.5" fill={crownTip} opacity="0.25" />
-        </G>
-
+      <Svg width={size} height={totalH} viewBox={`0 115 ${vbW} ${vbH}`}>
         {/* ═══ "JB" SCRIPT — Instagram / Billabong style ═══ */}
-        {/* Rendered as filled calligraphic outlines for reliability */}
         <G>
           {/* ── J ── */}
           {/* Crossbar dot / flourish */}

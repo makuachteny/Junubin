@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Image,
   Alert,
@@ -11,7 +10,7 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
-import HabobaLogo from '../components/HabobaLogo';
+import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
 import { currentUser, imageSource } from '../data/mockProfiles';
 import { useSubscription } from '../payments';
@@ -42,7 +41,7 @@ export default function ProfileScreen({ navigation }) {
     { icon: 'send', iconColor: colors.accent, label: `${whispers} Whispers`, screen: null },
   ];
 
-  const showRoyalCTA = !hasTier('royal');
+  const showJunubCTA = !hasTier('junub');
 
   const handleEdit = () => {
     navigation.navigate('EditProfile');
@@ -67,26 +66,27 @@ export default function ProfileScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showJunubCTA ? 0 : insets.bottom }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={28} color={colors.black} />
         </TouchableOpacity>
-        <HabobaLogo size="small" />
+        <BrandLogo size="small" />
         <View style={{ width: 28 }} />
       </View>
 
-      <ScrollView bounces={false} overScrollMode="never" contentContainerStyle={styles.content}>
+      {/* Upper content — flex fills available space */}
+      <View style={styles.content}>
         {/* Profile photo with border ring */}
         <View style={styles.photoSection}>
           <View style={styles.photoBorderContainer}>
-            <Image source={imageSource(displayUser.images?.[0]) || imageSource(currentUser.images[0])} style={styles.profilePhoto} />
+            <Image source={imageSource(displayUser.images?.[0]) || imageSource(currentUser.images?.[0])} style={styles.profilePhoto} />
           </View>
 
           {/* Edit button */}
           <TouchableOpacity style={[styles.editBtn, styles.editBtnLeft]} onPress={handleEdit}>
-            <Ionicons name="pencil" size={18} color="#FFFFFF" />
+            <Ionicons name="pencil" size={16} color="#FFFFFF" />
           </TouchableOpacity>
 
           {/* Settings button */}
@@ -94,7 +94,7 @@ export default function ProfileScreen({ navigation }) {
             style={[styles.editBtn, styles.editBtnRight]}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Ionicons name="settings" size={18} color="#FFFFFF" />
+            <Ionicons name="settings" size={16} color="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
@@ -103,7 +103,7 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Verification row */}
         <TouchableOpacity style={styles.verifyBtn} onPress={handleVerify}>
-          <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+          <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
           <Text style={styles.verifyText}>Get verified</Text>
         </TouchableOpacity>
 
@@ -116,9 +116,9 @@ export default function ProfileScreen({ navigation }) {
               onPress={() => item.screen && navigation.navigate(item.screen)}
             >
               {item.icon === 'crown' ? (
-                <MaterialCommunityIcons name={item.icon} size={24} color={item.iconColor} />
+                <MaterialCommunityIcons name={item.icon} size={20} color={item.iconColor} />
               ) : (
-                <Ionicons name={item.icon} size={24} color={item.iconColor} />
+                <Ionicons name={item.icon} size={20} color={item.iconColor} />
               )}
               <Text style={styles.statText}>{item.label}</Text>
             </TouchableOpacity>
@@ -128,32 +128,32 @@ export default function ProfileScreen({ navigation }) {
         {/* Sticker button */}
         <TouchableOpacity style={styles.stickerBtn} onPress={handleSticker}>
           <View style={styles.stickerCircle}>
-            <Ionicons name="add" size={36} color={colors.accent} />
+            <Ionicons name="add" size={28} color={colors.accent} />
           </View>
           <Text style={styles.stickerText}>Sticker</Text>
         </TouchableOpacity>
+      </View>
 
-        {/* Match More CTA section — only show if not royal+ */}
-        {showRoyalCTA && (
-          <View style={styles.matchMore}>
-            <Text style={styles.matchMoreTitle}>Match More</Text>
-            <Text style={styles.matchMoreDesc}>
-              Increase your chances to match with See Who Likes You and access to all Royal Features.
-            </Text>
-            <View style={styles.matchMoreBtn}>
-              <Button
-                title="GO ROYAL"
-                variant="primary"
-                size="lg"
-                onPress={() => navigation.navigate('Elite')}
-                textStyle={{ letterSpacing: 1.2 }}
-                fullWidth={false}
-                style={{ paddingHorizontal: 56 }}
-              />
-            </View>
+      {/* Match More CTA section — anchored at bottom */}
+      {showJunubCTA && (
+        <View style={[styles.matchMore, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <Text style={styles.matchMoreTitle}>Match More</Text>
+          <Text style={styles.matchMoreDesc}>
+            See Who Likes You, connect the diaspora, and unlock advanced filters with Junub.
+          </Text>
+          <View style={styles.matchMoreBtn}>
+            <Button
+              title="GO JUNUB"
+              variant="primary"
+              size="md"
+              onPress={() => navigation.navigate('Elite')}
+              textStyle={{ letterSpacing: 1.2, fontSize: 14 }}
+              fullWidth={false}
+              style={{ paddingHorizontal: 44, paddingVertical: 12 }}
+            />
           </View>
-        )}
-      </ScrollView>
+        </View>
+      )}
     </View>
   );
 }
@@ -168,105 +168,107 @@ const getStyles = (colors) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 8,
     backgroundColor: colors.white,
   },
   content: {
+    flex: 1,
     alignItems: 'center',
-    paddingBottom: 0,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
     backgroundColor: colors.white,
   },
   photoSection: {
-    marginTop: 16,
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
   photoBorderContainer: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     borderWidth: 3,
     borderColor: colors.accent,
-    padding: 0,
     shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   profilePhoto: {
-    width: 174,
-    height: 174,
-    borderRadius: 87,
+    width: 134,
+    height: 134,
+    borderRadius: 67,
     backgroundColor: colors.gray300,
   },
   editBtn: {
     position: 'absolute',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
   },
   editBtnLeft: {
-    bottom: 0,
-    left: -10,
+    bottom: -2,
+    left: -6,
   },
   editBtnRight: {
-    bottom: 0,
-    right: -10,
+    bottom: -2,
+    right: -6,
   },
   name: {
-    ...Typography.h1,
+    ...Typography.h2,
     color: colors.black,
-    marginTop: 20,
-    letterSpacing: 0.5,
+    marginTop: 12,
+    letterSpacing: 0.3,
   },
   verifyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    gap: 5,
+    marginTop: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
   verifyText: {
     ...Typography.bodySmallMedium,
+    fontSize: 13,
     color: colors.black,
   },
   statsRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-    paddingHorizontal: 16,
+    gap: 10,
+    marginTop: 16,
+    width: '100%',
   },
   statCard: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 18,
-    paddingHorizontal: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRadius: 14,
+    borderRadius: 12,
     backgroundColor: colors.cardBg,
-    gap: 8,
+    gap: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
   },
   statText: {
     ...Typography.captionBold,
+    fontSize: 11,
     color: colors.black,
     textAlign: 'center',
     fontWeight: '700',
@@ -274,23 +276,23 @@ const getStyles = (colors) => StyleSheet.create({
   },
   stickerBtn: {
     alignItems: 'center',
-    marginTop: 32,
-    gap: 10,
+    marginTop: 18,
+    gap: 6,
   },
   stickerCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     borderWidth: 2,
     borderColor: colors.accent,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 82, 82, 0.05)',
+    backgroundColor: 'rgba(255, 82, 82, 0.04)',
   },
   stickerText: {
-    ...Typography.bodySemibold,
-    fontSize: 14,
+    ...Typography.caption,
+    fontSize: 12,
     color: colors.black,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
@@ -298,30 +300,29 @@ const getStyles = (colors) => StyleSheet.create({
   matchMore: {
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 36,
-    marginTop: 32,
+    paddingHorizontal: 24,
+    paddingTop: 22,
     backgroundColor: '#1A1612',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   matchMoreTitle: {
-    ...Typography.h2,
-    fontSize: 24,
-    fontWeight: '900',
-    fontFamily: FontFamily.black,
+    ...Typography.h3,
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
     color: colors.accent,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   matchMoreDesc: {
     ...Typography.bodySmall,
-    fontSize: 15,
-    color: '#FFFFFF',
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.85)',
     textAlign: 'center',
-    marginTop: 10,
-    lineHeight: 24,
+    marginTop: 6,
+    lineHeight: 20,
   },
   matchMoreBtn: {
-    marginTop: 24,
+    marginTop: 16,
   },
 });

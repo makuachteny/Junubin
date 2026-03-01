@@ -1,18 +1,26 @@
-// Haboba — Dating Preferences
+// AnaJunubin — Dating Preferences
 // BLK-style layout: Member Preferences + Subscriber Preferences (locked)
 // Each row navigates to a selection screen
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Switch,
+  Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import Button from '../components/Button';
 import { currentUser } from '../data/mockProfiles';
@@ -43,6 +51,17 @@ const SUBSCRIBER_PREFS = [
   { key: 'drinking', label: 'Drinking', icon: 'wine-outline' },
   { key: 'politics', label: 'Politics', icon: 'business-outline' },
   { key: 'educationLevel', label: 'Education Level', icon: 'school-outline' },
+];
+
+// ── Social preferences ──────────────────────────────────────
+const SOCIAL_PREFS = [
+  { key: 'activityType', label: 'Activity type', value: 'Open to all', icon: 'sparkles-outline' },
+  { key: 'hangoutSize', label: 'Group size', value: 'Any size', icon: 'people-outline' },
+  { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline' },
+  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline' },
+  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline' },
+  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline' },
+  { key: 'vibe', label: 'Vibe', value: 'Open to all', icon: 'musical-notes-outline' },
 ];
 
 // ── Options for each preference ─────────────────────────────
@@ -163,21 +182,70 @@ const PREF_OPTIONS = {
     { label: 'Doctorate', value: 'Doctorate' },
     { label: 'Open to all', value: 'Open to all' },
   ],
+  activityType: [
+    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
+    { label: 'Coffee & conversation', value: 'Coffee & conversation', icon: 'cafe-outline' },
+    { label: 'Sports & fitness', value: 'Sports & fitness', icon: 'fitness-outline' },
+    { label: 'Cultural events', value: 'Cultural events', icon: 'color-palette-outline' },
+    { label: 'Food & dining', value: 'Food & dining', icon: 'restaurant-outline' },
+    { label: 'Outdoors & nature', value: 'Outdoors & nature', icon: 'leaf-outline' },
+  ],
+  hangoutSize: [
+    { label: 'Any size', value: 'Any size', icon: 'globe-outline' },
+    { label: 'One-on-one', value: 'One-on-one', icon: 'person-outline' },
+    { label: 'Small group (3-5)', value: 'Small group (3-5)', icon: 'people-outline' },
+    { label: 'Larger group', value: 'Larger group', icon: 'people-circle-outline' },
+  ],
+  vibe: [
+    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
+    { label: 'Chill & lowkey', value: 'Chill & lowkey', icon: 'cafe-outline' },
+    { label: 'Adventurous', value: 'Adventurous', icon: 'compass-outline' },
+    { label: 'Intellectual', value: 'Intellectual', icon: 'book-outline' },
+    { label: 'Party & nightlife', value: 'Party & nightlife', icon: 'musical-notes-outline' },
+  ],
 };
 
 export default function PreferencesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const [datingEnabled, setDatingEnabled] = useState(true);
+  const [mode, setMode] = useState('Dating');
+  const slideAnim = useRef(new Animated.Value(0)).current; // 0 = Dating, 1 = Social
+  const [segmentWidth, setSegmentWidth] = useState(0);
   const [memberPrefValues, setMemberPrefValues] = useState(() =>
     MEMBER_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: pref.value }), {})
   );
   const [subscriberPrefValues, setSubscriberPrefValues] = useState(() =>
     SUBSCRIBER_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: 'Open to all' }), {})
   );
+  const [socialPrefValues, setSocialPrefValues] = useState(() =>
+    SOCIAL_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: pref.value }), {})
+  );
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { hasTier } = useSubscription();
-  const isSubscriber = hasTier('gold');
+  const isSubscriber = hasTier('plus');
+
+  // Read persisted mode on mount
+  useEffect(() => {
+    AsyncStorage.getItem('@haboba_mode').then((stored) => {
+      if (stored === 'Social' || stored === 'Dating') {
+        setMode(stored);
+        slideAnim.setValue(stored === 'Social' ? 1 : 0);
+      }
+    });
+  }, [slideAnim]);
+
+  const handleModeToggle = useCallback((newMode) => {
+    const toValue = newMode === 'Social' ? 1 : 0;
+    Animated.spring(slideAnim, {
+      toValue,
+      useNativeDriver: false,
+      tension: 68,
+      friction: 12,
+    }).start();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setMode(newMode);
+    AsyncStorage.setItem('@haboba_mode', newMode);
+  }, [slideAnim]);
 
   // Listen for returned selection from PreferenceSelectScreen
   useEffect(() => {
@@ -186,6 +254,8 @@ export default function PreferencesScreen({ navigation, route }) {
 
     if (updated.type === 'subscriber') {
       setSubscriberPrefValues((prev) => ({ ...prev, [updated.key]: updated.value }));
+    } else if (updated.type === 'social') {
+      setSocialPrefValues((prev) => ({ ...prev, [updated.key]: updated.value }));
     } else {
       setMemberPrefValues((prev) => ({ ...prev, [updated.key]: updated.value }));
     }
@@ -197,10 +267,11 @@ export default function PreferencesScreen({ navigation, route }) {
   const { accessToken } = useAuth();
 
   const handleDone = async () => {
-    const [minAge, maxAge] = (memberPrefValues.ageRange || '21 – 35')
+    const prefSource = mode === 'Social' ? socialPrefValues : memberPrefValues;
+    const [minAge, maxAge] = (prefSource.ageRange || '21 – 35')
       .split('–')
       .map((n) => Number(String(n).trim()));
-    const parsedDistance = Number((memberPrefValues.distance || '25 miles').split(' ')[0]);
+    const parsedDistance = Number((prefSource.distance || '25 miles').split(' ')[0]);
 
     if (!Number.isNaN(minAge) && !Number.isNaN(maxAge)) {
       currentUser.preferences.ageRange = [minAge, maxAge];
@@ -208,7 +279,9 @@ export default function PreferencesScreen({ navigation, route }) {
     if (!Number.isNaN(parsedDistance)) {
       currentUser.preferences.distance = parsedDistance;
     }
-    currentUser.preferences.lookingFor = memberPrefValues.interestedIn || currentUser.preferences.lookingFor;
+    if (mode === 'Dating') {
+      currentUser.preferences.lookingFor = memberPrefValues.interestedIn || currentUser.preferences.lookingFor;
+    }
 
     // Save to API
     if (accessToken) {
@@ -216,7 +289,7 @@ export default function PreferencesScreen({ navigation, route }) {
       if (!Number.isNaN(minAge)) updates.minPreferredAge = minAge;
       if (!Number.isNaN(maxAge)) updates.maxPreferredAge = maxAge;
       if (!Number.isNaN(parsedDistance)) updates.maxDistanceKm = Math.round(parsedDistance * 1.6);
-      if (memberPrefValues.interestedIn) updates.lookingForGender = memberPrefValues.interestedIn;
+      if (mode === 'Dating' && memberPrefValues.interestedIn) updates.lookingForGender = memberPrefValues.interestedIn;
       profileService.updateProfile(accessToken, updates).catch(() => {});
     }
 
@@ -251,6 +324,20 @@ export default function PreferencesScreen({ navigation, route }) {
     });
   };
 
+  const openSocialPref = (pref) => {
+    const options = PREF_OPTIONS[pref.key];
+    if (!options) return;
+    navigation.navigate('PreferenceSelect', {
+      prefKey: pref.key,
+      title: pref.label,
+      options,
+      currentValue: socialPrefValues[pref.key] || pref.value,
+      prefType: 'social',
+    });
+  };
+
+  const isSocial = mode === 'Social';
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -261,119 +348,186 @@ export default function PreferencesScreen({ navigation, route }) {
         >
           <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Dating Preferences</Text>
+        <Text style={styles.headerTitle}>
+          {isSocial ? 'Social Preferences' : 'Dating Preferences'}
+        </Text>
         <TouchableOpacity onPress={handleDone}>
           <Text style={styles.doneText}>Done</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Dating toggle */}
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleInfo}>
-            <Text style={styles.toggleLabel}>Dating Mode</Text>
-            <Text style={styles.toggleDesc}>
-              Discover members in your area that are open to dates
-            </Text>
-          </View>
-          <Switch
-            value={datingEnabled}
-            onValueChange={setDatingEnabled}
-            trackColor={{ false: colors.gray300, true: colors.accent }}
-            thumbColor="#FFFFFF"
-          />
-        </View>
-
-        {/* ── MEMBER PREFERENCES ── */}
-        <Text style={styles.sectionHeader}>Member Preferences</Text>
-        <View style={styles.card}>
-          {MEMBER_PREFS.map((pref, index) => (
-            <TouchableOpacity
-              key={pref.key}
+        {/* ── MODE SEGMENTED CONTROL ── */}
+        <View
+          style={styles.segmentedContainer}
+          onLayout={(e) => setSegmentWidth(e.nativeEvent.layout.width - 6)}
+        >
+          {/* Animated sliding pill */}
+          {segmentWidth > 0 && (
+            <Animated.View
               style={[
-                styles.prefRow,
-                index < MEMBER_PREFS.length - 1 && styles.prefRowBorder,
+                styles.segmentPill,
+                {
+                  width: segmentWidth / 2,
+                  transform: [{
+                    translateX: slideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, segmentWidth / 2],
+                    }),
+                  }],
+                },
               ]}
-              activeOpacity={0.6}
-              onPress={() => openMemberPref(pref)}
-            >
-              <View style={styles.prefLeft}>
-                <View style={styles.prefIconWrap}>
-                  <Ionicons name={pref.icon} size={18} color={colors.gray500} />
-                </View>
-                <Text style={styles.prefLabel}>{pref.label}</Text>
-              </View>
-              <View style={styles.prefRight}>
-                <Text style={styles.prefValue}>{memberPrefValues[pref.key] || pref.value}</Text>
-                <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* ── SUBSCRIBER PREFERENCES ── */}
-        <View style={styles.subscriberHeaderRow}>
-          <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
-          {!isSubscriber && (
-            <View style={styles.lockBadge}>
-              <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
-            </View>
-          )}
-        </View>
-
-        {!isSubscriber && (
-          <View style={styles.unlockBanner}>
-            <Text style={styles.unlockText}>
-              Complete your profile to unlock advanced filters
-            </Text>
-            <Button
-              title="Upgrade"
-              variant="primary"
-              size="sm"
-              fullWidth={false}
-              onPress={() => navigation?.navigate?.('Elite')}
-              style={{ marginTop: 10, paddingHorizontal: 40, alignSelf: 'center' }}
             />
-          </View>
-        )}
-
-        <View style={styles.card}>
-          {SUBSCRIBER_PREFS.map((pref, index) => (
+          )}
+          {['Dating', 'Social'].map((seg) => (
             <TouchableOpacity
-              key={pref.key}
-              style={[
-                styles.prefRow,
-                index < SUBSCRIBER_PREFS.length - 1 && styles.prefRowBorder,
-                !isSubscriber && styles.prefRowLocked,
-              ]}
-              activeOpacity={isSubscriber ? 0.6 : 1}
-              onPress={() => openSubscriberPref(pref)}
+              key={seg}
+              style={styles.segmentButton}
+              activeOpacity={0.7}
+              onPress={() => handleModeToggle(seg)}
             >
-              <View style={styles.prefLeft}>
-                <View style={[styles.prefIconWrap, !isSubscriber && styles.prefIconLocked]}>
-                  <Ionicons
-                    name={pref.icon}
-                    size={18}
-                    color={isSubscriber ? colors.gray500 : colors.gray400}
-                  />
-                </View>
-                <Text style={[styles.prefLabel, !isSubscriber && styles.prefLabelLocked]}>
-                  {pref.label}
-                </Text>
-              </View>
-              <View style={styles.prefRight}>
-                {!isSubscriber ? (
-                  <Ionicons name="lock-closed" size={14} color={colors.gray400} />
-                ) : (
-                  <>
-                    <Text style={styles.prefValue}>{subscriberPrefValues[pref.key]}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
-                  </>
-                )}
-              </View>
+              <Animated.Text
+                style={[
+                  styles.segmentText,
+                  {
+                    color: slideAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: seg === 'Dating'
+                        ? ['#FFFFFF', colors.gray600]
+                        : [colors.gray600, '#FFFFFF'],
+                    }),
+                  },
+                ]}
+              >
+                {seg}
+              </Animated.Text>
             </TouchableOpacity>
           ))}
         </View>
+
+        {isSocial ? (
+          <>
+            {/* ── SOCIAL PREFERENCES ── */}
+            <Text style={styles.sectionHeader}>Social Preferences</Text>
+            <View style={styles.card}>
+              {SOCIAL_PREFS.map((pref, index) => (
+                <TouchableOpacity
+                  key={pref.key}
+                  style={[
+                    styles.prefRow,
+                    index < SOCIAL_PREFS.length - 1 && styles.prefRowBorder,
+                  ]}
+                  activeOpacity={0.6}
+                  onPress={() => openSocialPref(pref)}
+                >
+                  <View style={styles.prefLeft}>
+                    <View style={styles.prefIconWrap}>
+                      <Ionicons name={pref.icon} size={18} color={colors.gray500} />
+                    </View>
+                    <Text style={styles.prefLabel}>{pref.label}</Text>
+                  </View>
+                  <View style={styles.prefRight}>
+                    <Text style={styles.prefValue}>{socialPrefValues[pref.key] || pref.value}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
+            {/* ── MEMBER PREFERENCES ── */}
+            <Text style={styles.sectionHeader}>Member Preferences</Text>
+            <View style={styles.card}>
+              {MEMBER_PREFS.map((pref, index) => (
+                <TouchableOpacity
+                  key={pref.key}
+                  style={[
+                    styles.prefRow,
+                    index < MEMBER_PREFS.length - 1 && styles.prefRowBorder,
+                  ]}
+                  activeOpacity={0.6}
+                  onPress={() => openMemberPref(pref)}
+                >
+                  <View style={styles.prefLeft}>
+                    <View style={styles.prefIconWrap}>
+                      <Ionicons name={pref.icon} size={18} color={colors.gray500} />
+                    </View>
+                    <Text style={styles.prefLabel}>{pref.label}</Text>
+                  </View>
+                  <View style={styles.prefRight}>
+                    <Text style={styles.prefValue}>{memberPrefValues[pref.key] || pref.value}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* ── SUBSCRIBER PREFERENCES ── */}
+            <View style={styles.subscriberHeaderRow}>
+              <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
+              {!isSubscriber && (
+                <View style={styles.lockBadge}>
+                  <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                </View>
+              )}
+            </View>
+
+            {!isSubscriber && (
+              <View style={styles.unlockBanner}>
+                <Text style={styles.unlockText}>
+                  Complete your profile to unlock advanced filters
+                </Text>
+                <Button
+                  title="Upgrade"
+                  variant="primary"
+                  size="sm"
+                  fullWidth={false}
+                  onPress={() => navigation?.navigate?.('Elite')}
+                  style={{ marginTop: 10, paddingHorizontal: 40, alignSelf: 'center' }}
+                />
+              </View>
+            )}
+
+            <View style={styles.card}>
+              {SUBSCRIBER_PREFS.map((pref, index) => (
+                <TouchableOpacity
+                  key={pref.key}
+                  style={[
+                    styles.prefRow,
+                    index < SUBSCRIBER_PREFS.length - 1 && styles.prefRowBorder,
+                    !isSubscriber && styles.prefRowLocked,
+                  ]}
+                  activeOpacity={isSubscriber ? 0.6 : 1}
+                  onPress={() => openSubscriberPref(pref)}
+                >
+                  <View style={styles.prefLeft}>
+                    <View style={[styles.prefIconWrap, !isSubscriber && styles.prefIconLocked]}>
+                      <Ionicons
+                        name={pref.icon}
+                        size={18}
+                        color={isSubscriber ? colors.gray500 : colors.gray400}
+                      />
+                    </View>
+                    <Text style={[styles.prefLabel, !isSubscriber && styles.prefLabelLocked]}>
+                      {pref.label}
+                    </Text>
+                  </View>
+                  <View style={styles.prefRight}>
+                    {!isSubscriber ? (
+                      <Ionicons name="lock-closed" size={14} color={colors.gray400} />
+                    ) : (
+                      <>
+                        <Text style={styles.prefValue}>{subscriberPrefValues[pref.key]}</Text>
+                        <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
+                      </>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -409,35 +563,36 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Toggle row
-  toggleRow: {
+  // Segmented control
+  segmentedContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.cardBg,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    backgroundColor: colors.gray100,
+    borderRadius: 14,
+    padding: 3,
     marginBottom: 24,
+    position: 'relative',
+  },
+  segmentPill: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    bottom: 3,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
     ...getShadow('sm', isDark),
   },
-  toggleInfo: {
+  segmentButton: {
     flex: 1,
-    marginRight: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
   },
-  toggleLabel: {
-    fontSize: 16,
+  segmentText: {
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.black,
-    marginBottom: 4,
-  },
-  toggleDesc: {
-    fontSize: 13,
-    fontWeight: '400',
-    fontFamily: FontFamily.regular,
-    color: colors.gray500,
-    lineHeight: 18,
   },
 
   // Section headers

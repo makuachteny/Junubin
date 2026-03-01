@@ -5,62 +5,67 @@ import {
   canUseAdvancedFilters,
   canUseIncognito,
   hasUnlimitedRewinds,
+  canUseDiasporaConnect,
   isSubscribed,
 } from '../entitlements';
 
 describe('entitlements', () => {
   describe('hasTierAccess', () => {
-    it('free cannot access gold features', () => {
-      expect(hasTierAccess('free', 'gold')).toBe(false);
+    it('free cannot access plus features', () => {
+      expect(hasTierAccess('free', 'plus')).toBe(false);
     });
 
-    it('gold can access gold features', () => {
-      expect(hasTierAccess('gold', 'gold')).toBe(true);
+    it('plus can access plus features', () => {
+      expect(hasTierAccess('plus', 'plus')).toBe(true);
     });
 
-    it('royal can access gold features', () => {
-      expect(hasTierAccess('royal', 'gold')).toBe(true);
+    it('junub can access plus features', () => {
+      expect(hasTierAccess('junub', 'plus')).toBe(true);
     });
 
-    it('crown can access any tier', () => {
-      expect(hasTierAccess('crown', 'gold')).toBe(true);
-      expect(hasTierAccess('crown', 'royal')).toBe(true);
-      expect(hasTierAccess('crown', 'crown')).toBe(true);
+    it('junub can access any tier', () => {
+      expect(hasTierAccess('junub', 'plus')).toBe(true);
+      expect(hasTierAccess('junub', 'junub')).toBe(true);
     });
   });
 
   describe('feature checks', () => {
-    it('canSeeWhoLikesYou requires royal', () => {
+    it('canSeeWhoLikesYou requires junub', () => {
       expect(canSeeWhoLikesYou('free')).toBe(false);
-      expect(canSeeWhoLikesYou('gold')).toBe(false);
-      expect(canSeeWhoLikesYou('royal')).toBe(true);
-      expect(canSeeWhoLikesYou('crown')).toBe(true);
+      expect(canSeeWhoLikesYou('plus')).toBe(false);
+      expect(canSeeWhoLikesYou('junub')).toBe(true);
     });
 
-    it('hasUnlimitedLikes requires gold', () => {
+    it('hasUnlimitedLikes requires plus', () => {
       expect(hasUnlimitedLikes('free')).toBe(false);
-      expect(hasUnlimitedLikes('gold')).toBe(true);
+      expect(hasUnlimitedLikes('plus')).toBe(true);
     });
 
-    it('canUseAdvancedFilters requires crown', () => {
-      expect(canUseAdvancedFilters('royal')).toBe(false);
-      expect(canUseAdvancedFilters('crown')).toBe(true);
+    it('canUseAdvancedFilters requires junub', () => {
+      expect(canUseAdvancedFilters('plus')).toBe(false);
+      expect(canUseAdvancedFilters('junub')).toBe(true);
     });
 
-    it('canUseIncognito requires crown', () => {
-      expect(canUseIncognito('royal')).toBe(false);
-      expect(canUseIncognito('crown')).toBe(true);
+    it('canUseIncognito requires junub', () => {
+      expect(canUseIncognito('plus')).toBe(false);
+      expect(canUseIncognito('junub')).toBe(true);
     });
 
-    it('hasUnlimitedRewinds requires gold', () => {
+    it('canUseDiasporaConnect requires junub', () => {
+      expect(canUseDiasporaConnect('free')).toBe(false);
+      expect(canUseDiasporaConnect('plus')).toBe(false);
+      expect(canUseDiasporaConnect('junub')).toBe(true);
+    });
+
+    it('hasUnlimitedRewinds requires plus', () => {
       expect(hasUnlimitedRewinds('free')).toBe(false);
-      expect(hasUnlimitedRewinds('gold')).toBe(true);
+      expect(hasUnlimitedRewinds('plus')).toBe(true);
     });
 
     it('isSubscribed checks for non-free tier', () => {
       expect(isSubscribed('free')).toBe(false);
-      expect(isSubscribed('gold')).toBe(true);
-      expect(isSubscribed('royal')).toBe(true);
+      expect(isSubscribed('plus')).toBe(true);
+      expect(isSubscribed('junub')).toBe(true);
     });
   });
 });

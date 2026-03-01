@@ -16,8 +16,8 @@ const updateProfileSchema = z.object({
   showMe: z.boolean().optional(),
   countryCode: z.string().max(8).optional(),
   city: z.string().max(120).optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   dateOfBirth: z.string().datetime().optional(),
   gender: z.enum(['man', 'woman', 'non_binary', 'other']).optional(),
   ethnicity: z.string().max(120).optional(),
@@ -27,16 +27,22 @@ const updateProfileSchema = z.object({
   children: z.string().max(120).optional(),
   job: z.string().max(120).optional(),
   school: z.string().max(200).optional(),
-  interests: z.array(z.string()).optional(),
-  stickers: z.array(z.object({ emoji: z.string(), label: z.string() })).optional(),
+  interests: z.array(z.string().max(60)).max(20).optional(),
+  stickers: z.array(z.object({ emoji: z.string(), label: z.string() })).max(10).optional(),
   promptQuestion: z.string().max(200).optional(),
   promptAnswer: z.string().max(500).optional(),
   sexuality: z.string().max(60).optional(),
   lookingForGender: z.string().max(60).optional(),
   datingIntentions: z.string().max(120).optional(),
   relationshipType: z.string().max(120).optional(),
+  currentlyInto: z.array(z.string().max(60)).max(3).optional(),
   profileComplete: z.boolean().optional(),
-});
+}).refine((data) => {
+  if (data.minPreferredAge != null && data.maxPreferredAge != null) {
+    return data.minPreferredAge <= data.maxPreferredAge;
+  }
+  return true;
+}, { message: 'minPreferredAge must be less than or equal to maxPreferredAge' });
 
 router.patch(
   '/me',
@@ -49,7 +55,8 @@ router.patch(
       'bio', 'lookingFor', 'minPreferredAge', 'maxPreferredAge', 'maxDistanceKm',
       'showMe', 'ethnicity', 'heightCm', 'pronouns', 'education', 'children',
       'job', 'school', 'interests', 'stickers', 'promptQuestion', 'promptAnswer',
-      'sexuality', 'lookingForGender', 'datingIntentions', 'relationshipType', 'profileComplete',
+      'sexuality', 'lookingForGender', 'datingIntentions', 'relationshipType',
+      'currentlyInto', 'profileComplete',
     ];
     const profileUpdate = {};
     const profileCreate = {};
@@ -58,6 +65,11 @@ router.patch(
         profileUpdate[key] = payload[key];
         profileCreate[key] = payload[key];
       }
+    }
+    // Auto-set currentlyIntoSetAt when currentlyInto is updated
+    if (payload.currentlyInto != null) {
+      profileUpdate.currentlyIntoSetAt = new Date();
+      profileCreate.currentlyIntoSetAt = new Date();
     }
     if (!('showMe' in profileCreate)) profileCreate.showMe = true;
 
@@ -78,7 +90,23 @@ router.patch(
           },
         },
       },
-      include: { profile: true, photos: { orderBy: { sortOrder: 'asc' } } },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        displayName: true,
+        dateOfBirth: true,
+        gender: true,
+        countryCode: true,
+        city: true,
+        latitude: true,
+        longitude: true,
+        subscriptionTier: true,
+        isActive: true,
+        createdAt: true,
+        profile: true,
+        photos: { orderBy: { sortOrder: 'asc' } },
+      },
     });
 
     res.json({ user });

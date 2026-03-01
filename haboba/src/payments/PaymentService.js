@@ -1,4 +1,4 @@
-// Haboba — Payment Service (Demo Implementation)
+// AnaJunubin — Payment Service (Demo Implementation)
 // This is the ONLY file that changes for real IAP integration.
 // Replace internals with RevenueCat / StoreKit while keeping the same function signatures.
 

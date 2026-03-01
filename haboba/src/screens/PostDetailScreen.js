@@ -52,7 +52,7 @@ export default function PostDetailScreen({ navigation, route }) {
     if (!commentText.trim()) return;
     const newComment = {
       id: `c-${Date.now()}`,
-      user: { name: currentUser.name, avatar: currentUser.images[0] },
+      user: { name: currentUser.name, avatar: currentUser.images?.[0] },
       text: commentText.trim(),
       time: 'Just now',
       likes: 0,
@@ -178,7 +178,7 @@ export default function PostDetailScreen({ navigation, route }) {
 
       {/* Comment input */}
       <View style={[styles.commentInput, { paddingBottom: insets.bottom + 8 }]}>
-        <Image source={imageSource(currentUser.images[0])} style={styles.inputAvatar} />
+        <Image source={imageSource(currentUser.images?.[0])} style={styles.inputAvatar} />
         <View style={styles.inputWrap}>
           <TextInput
             style={styles.textInput}

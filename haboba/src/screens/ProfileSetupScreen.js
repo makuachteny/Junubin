@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, FontFamily } from '../theme';
+import { useTheme, Typography, FontFamily } from '../theme';
 import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
 import * as ImagePicker from 'expo-image-picker';
@@ -72,6 +72,8 @@ const ProfileSetupScreen = ({ navigation }) => {
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
   const { accessToken, updateUser } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   // Form state
   const [firstName, setFirstName] = useState('');
@@ -282,9 +284,9 @@ const ProfileSetupScreen = ({ navigation }) => {
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: '#E8E2DA', true: Colors.accent }}
+        trackColor={{ false: colors.gray200, true: colors.accent }}
         thumbColor="#FFFFFF"
-        ios_backgroundColor="#E8E2DA"
+        ios_backgroundColor={colors.gray200}
       />
     </View>
   );
@@ -298,7 +300,7 @@ const ProfileSetupScreen = ({ navigation }) => {
             <TextInput
               style={styles.textInput}
               placeholder="Your first name"
-              placeholderTextColor="#A69B8E"
+              placeholderTextColor={colors.gray400}
               value={firstName}
               onChangeText={setFirstName}
               returnKeyType="done"
@@ -315,7 +317,7 @@ const ProfileSetupScreen = ({ navigation }) => {
             <TextInput
               style={styles.textInput}
               placeholder="MM/DD/YYYY"
-              placeholderTextColor="#A69B8E"
+              placeholderTextColor={colors.gray400}
               value={birthDate}
               onChangeText={handleDateChange}
               keyboardType="number-pad"
@@ -402,7 +404,7 @@ const ProfileSetupScreen = ({ navigation }) => {
                     <Image source={{ uri: photo }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
                   ) : (
                     <View style={styles.photoAddCircle}>
-                      <Ionicons name="add" size={28} color={Colors.accent} />
+                      <Ionicons name="add" size={28} color={colors.accent} />
                     </View>
                   )}
                   {index === 0 && (
@@ -433,7 +435,7 @@ const ProfileSetupScreen = ({ navigation }) => {
                     activeOpacity={0.7}
                   >
                     <Text style={styles.promptOptionText}>{prompt}</Text>
-                    <Ionicons name="chevron-forward" size={18} color="#A69B8E" />
+                    <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
                   </TouchableOpacity>
                 ))}
               </>
@@ -444,12 +446,12 @@ const ProfileSetupScreen = ({ navigation }) => {
                   onPress={() => { setSelectedPrompt(''); setPromptAnswer(''); }}
                 >
                   <Text style={styles.selectedPromptText}>{selectedPrompt}</Text>
-                  <Ionicons name="close-circle" size={20} color="#A69B8E" />
+                  <Ionicons name="close-circle" size={20} color={colors.gray400} />
                 </TouchableOpacity>
                 <TextInput
                   style={styles.promptInput}
                   placeholder="Write your answer..."
-                  placeholderTextColor="#A69B8E"
+                  placeholderTextColor={colors.gray400}
                   value={promptAnswer}
                   onChangeText={setPromptAnswer}
                   multiline
@@ -504,7 +506,7 @@ const ProfileSetupScreen = ({ navigation }) => {
           {/* ── Header ── */}
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backBtn}>
-              <Ionicons name="chevron-back" size={24} color="#2D2319" />
+              <Ionicons name="chevron-back" size={24} color={colors.black} />
             </TouchableOpacity>
 
             {/* Progress Dots (BLK style) */}
@@ -533,7 +535,7 @@ const ProfileSetupScreen = ({ navigation }) => {
           {/* ── Step Icon ── */}
           <View style={styles.stepIconWrap}>
             <View style={styles.stepIconCircle}>
-              <Ionicons name={step.icon} size={28} color={Colors.accent} />
+              <Ionicons name={step.icon} size={28} color={colors.accent} />
             </View>
           </View>
 
@@ -583,10 +585,10 @@ const ProfileSetupScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.white,
   },
 
   // ─── Header ───
@@ -601,7 +603,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#EDE7DF',
+    backgroundColor: colors.gray100,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -617,19 +619,19 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: '#E8E2DA',
+    backgroundColor: colors.gray200,
     maxWidth: 24,
   },
   progressDotActive: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
   },
   progressDotCurrent: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     height: 4,
   },
   skipBtn: {
     ...Typography.label,
-    color: Colors.accent,
+    color: colors.accent,
     width: 40,
     textAlign: 'right',
   },
@@ -644,11 +646,11 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.15)',
+    borderColor: colors.accentTint15,
   },
 
   // ─── Title ───
@@ -660,13 +662,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
-    color: '#2D2319',
+    color: colors.black,
     letterSpacing: -0.3,
     marginBottom: 8,
   },
   stepSubtitle: {
     ...Typography.bodySmall,
-    color: '#8A7D70',
+    color: colors.gray500,
     lineHeight: 22,
   },
 
@@ -684,26 +686,26 @@ const styles = StyleSheet.create({
 
   // ─── Text Input ───
   textInput: {
-    backgroundColor: '#F5F0EA',
+    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
     borderWidth: 1.5,
-    borderColor: '#E8E2DA',
+    borderColor: isDark ? colors.gray300 : '#E8E2DA',
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 18,
     fontSize: 18,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
-    color: '#2D2319',
+    color: colors.black,
   },
   helperText: {
     ...Typography.caption,
-    color: '#A69B8E',
+    color: colors.gray400,
     marginTop: 12,
     paddingHorizontal: 4,
   },
   selectHint: {
     ...Typography.caption,
-    color: Colors.accent,
+    color: colors.accent,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     marginBottom: 12,
@@ -716,25 +718,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: '#F5F0EA',
+    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1.5,
-    borderColor: '#EDE7DF',
+    borderColor: isDark ? colors.gray300 : '#EDE7DF',
   },
   radioRowActive: {
-    borderColor: Colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.04)',
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint04,
   },
   radioText: {
     fontSize: 16,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
-    color: '#4A3D2F',
+    color: colors.gray600,
     flex: 1,
   },
   radioTextActive: {
-    color: '#2D2319',
+    color: colors.black,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -743,18 +745,18 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#D6CEC5',
+    borderColor: colors.gray300,
     justifyContent: 'center',
     alignItems: 'center',
   },
   radioCircleActive: {
-    borderColor: Colors.accent,
+    borderColor: colors.accent,
   },
   radioCircleInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
   },
 
   // ─── Checkbox ───
@@ -763,13 +765,13 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#D6CEC5',
+    borderColor: colors.gray300,
     justifyContent: 'center',
     alignItems: 'center',
   },
   checkboxActive: {
-    backgroundColor: Colors.accent,
-    borderColor: Colors.accent,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
 
   // ─── Visibility Toggle ───
@@ -781,11 +783,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#EDE7DF',
+    borderTopColor: colors.separator,
   },
   visibilityLabel: {
     ...Typography.bodySmallMedium,
-    color: '#8A7D70',
+    color: colors.gray500,
   },
 
   // ─── Photo Grid ───
@@ -797,24 +799,24 @@ const styles = StyleSheet.create({
   photoSlot: {
     width: (width - 48 - 24) / 3,
     aspectRatio: 3 / 4,
-    backgroundColor: '#F5F0EA',
+    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#E8E2DA',
+    borderColor: isDark ? colors.gray300 : '#E8E2DA',
     borderStyle: 'dashed',
   },
   photoSlotPrimary: {
     width: (width - 48 - 12) / 2,
-    borderColor: Colors.accent,
+    borderColor: colors.accent,
     borderWidth: 2,
   },
   photoAddCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -822,7 +824,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 8,
     left: 8,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
@@ -841,17 +843,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: '#F5F0EA',
+    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#EDE7DF',
+    borderColor: isDark ? colors.gray300 : '#EDE7DF',
   },
   promptOptionText: {
     fontSize: 15,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
-    color: '#4A3D2F',
+    color: colors.gray600,
     flex: 1,
     marginRight: 8,
   },
@@ -859,36 +861,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(255, 82, 82, 0.06)',
+    backgroundColor: colors.accentTint06,
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.15)',
+    borderColor: colors.accentTint15,
   },
   selectedPromptText: {
     fontSize: 15,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: Colors.accent,
+    color: colors.accent,
     flex: 1,
   },
   promptInput: {
-    backgroundColor: '#F5F0EA',
+    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
     borderWidth: 1.5,
-    borderColor: '#E8E2DA',
+    borderColor: isDark ? colors.gray300 : '#E8E2DA',
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 16,
     fontSize: 16,
-    color: '#2D2319',
+    color: colors.black,
     minHeight: 120,
     lineHeight: 24,
   },
   charCount: {
     ...Typography.caption,
-    color: '#A69B8E',
+    color: colors.gray400,
     textAlign: 'right',
     marginTop: 8,
   },
@@ -904,21 +906,21 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: '#E8E2DA',
-    backgroundColor: '#FFFFFF',
+    borderColor: isDark ? colors.gray300 : '#E8E2DA',
+    backgroundColor: colors.white,
   },
   chipActive: {
-    backgroundColor: '#2D2319',
-    borderColor: '#2D2319',
+    backgroundColor: colors.black,
+    borderColor: colors.black,
   },
   chipText: {
     fontSize: 14,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
-    color: '#8A7D70',
+    color: colors.gray500,
   },
   chipTextActive: {
-    color: '#FFFFFF',
+    color: isDark ? colors.gray900 : '#FFFFFF',
   },
 
   // ─── Footer ───
@@ -929,24 +931,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#EDE7DF',
+    borderTopColor: colors.separator,
   },
   footerLeft: {
     flex: 1,
   },
   stepCounter: {
     ...Typography.caption,
-    color: '#A69B8E',
+    color: colors.gray400,
     fontWeight: '600',
   },
   nextCircle: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.accent,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 12,

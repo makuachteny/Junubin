@@ -1,91 +1,77 @@
-// Haboba — Product Catalog
-// Store-ready IDs compatible with App Store / Google Play
+// AnaJunubin — Product Catalog
+// Two paid tiers: JuNubin+ (plus) and Junub (premium)
+// No ads ever. Social mode always free. Community-first.
 
 export const PRODUCT_IDS = {
-  // Subscriptions
-  GOLD_MONTHLY: 'com.haboba.sub.gold.monthly',
-  ROYAL_WEEKLY: 'com.haboba.sub.royal.weekly',
-  ROYAL_MONTHLY: 'com.haboba.sub.royal.monthly',
-  ROYAL_3MONTH: 'com.haboba.sub.royal.3month',
-  ROYAL_6MONTH: 'com.haboba.sub.royal.6month',
-  CROWN_MONTHLY: 'com.haboba.sub.crown.monthly',
+  // ── JuNubin+ Subscriptions ──
+  PLUS_MONTHLY: 'com.haboba.sub.plus.monthly',
+  PLUS_6MONTH: 'com.haboba.sub.plus.6month',
 
-  // Consumables — Spotlights
+  // ── Junub Subscriptions ──
+  JUNUB_MONTHLY: 'com.haboba.sub.junub.monthly',
+  JUNUB_6MONTH: 'com.haboba.sub.junub.6month',
+
+  // ── Consumables — Spotlights ──
   SPOTLIGHT_1: 'com.haboba.spotlight.1',
   SPOTLIGHT_5: 'com.haboba.spotlight.5',
   SPOTLIGHT_10: 'com.haboba.spotlight.10',
 
-  // Consumables — Super Likes
+  // ── Consumables — Super Likes ──
   SUPERLIKE_5: 'com.haboba.superlike.5',
   SUPERLIKE_15: 'com.haboba.superlike.15',
   SUPERLIKE_30: 'com.haboba.superlike.30',
 };
 
-// Tier hierarchy for comparison (higher = more premium)
+// Tier hierarchy: free → plus → junub
 export const TIER_RANK = {
   free: 0,
-  gold: 1,
-  royal: 2,
-  crown: 3,
+  plus: 1,
+  junub: 2,
 };
 
 // Full product catalog with metadata
 export const PRODUCTS = {
-  // Gold
-  [PRODUCT_IDS.GOLD_MONTHLY]: {
-    id: PRODUCT_IDS.GOLD_MONTHLY,
+  // ── JuNubin+ ──
+  [PRODUCT_IDS.PLUS_MONTHLY]: {
+    id: PRODUCT_IDS.PLUS_MONTHLY,
     type: 'subscription',
-    tier: 'gold',
-    label: 'Gold Monthly',
+    tier: 'plus',
+    label: 'JuNubin+ Monthly',
     price: '$9.99',
     period: 'month',
+    perMonth: '$9.99/mo',
   },
-
-  // Royal
-  [PRODUCT_IDS.ROYAL_WEEKLY]: {
-    id: PRODUCT_IDS.ROYAL_WEEKLY,
+  [PRODUCT_IDS.PLUS_6MONTH]: {
+    id: PRODUCT_IDS.PLUS_6MONTH,
     type: 'subscription',
-    tier: 'royal',
-    label: 'Royal Weekly',
-    price: '$21.99',
-    period: 'week',
-  },
-  [PRODUCT_IDS.ROYAL_MONTHLY]: {
-    id: PRODUCT_IDS.ROYAL_MONTHLY,
-    type: 'subscription',
-    tier: 'royal',
-    label: 'Royal Monthly',
-    price: '$29.99',
-    period: 'month',
-  },
-  [PRODUCT_IDS.ROYAL_3MONTH]: {
-    id: PRODUCT_IDS.ROYAL_3MONTH,
-    type: 'subscription',
-    tier: 'royal',
-    label: 'Royal 3 Months',
-    price: '$59.99',
-    period: '3 months',
-  },
-  [PRODUCT_IDS.ROYAL_6MONTH]: {
-    id: PRODUCT_IDS.ROYAL_6MONTH,
-    type: 'subscription',
-    tier: 'royal',
-    label: 'Royal 6 Months',
-    price: '$71.99',
+    tier: 'plus',
+    label: 'JuNubin+ 6 Months',
+    price: '$39.99',
     period: '6 months',
+    perMonth: '$6.66/mo',
   },
 
-  // Crown
-  [PRODUCT_IDS.CROWN_MONTHLY]: {
-    id: PRODUCT_IDS.CROWN_MONTHLY,
+  // ── Junub ──
+  [PRODUCT_IDS.JUNUB_MONTHLY]: {
+    id: PRODUCT_IDS.JUNUB_MONTHLY,
     type: 'subscription',
-    tier: 'crown',
-    label: 'Crown Monthly',
-    price: '$29.99',
+    tier: 'junub',
+    label: 'Junub Monthly',
+    price: '$19.99',
     period: 'month',
+    perMonth: '$19.99/mo',
+  },
+  [PRODUCT_IDS.JUNUB_6MONTH]: {
+    id: PRODUCT_IDS.JUNUB_6MONTH,
+    type: 'subscription',
+    tier: 'junub',
+    label: 'Junub 6 Months',
+    price: '$79.99',
+    period: '6 months',
+    perMonth: '$13.33/mo',
   },
 
-  // Spotlights
+  // ── Spotlights ──
   [PRODUCT_IDS.SPOTLIGHT_1]: {
     id: PRODUCT_IDS.SPOTLIGHT_1,
     type: 'consumable',
@@ -108,7 +94,7 @@ export const PRODUCTS = {
     price: '$29.99',
   },
 
-  // Super Likes
+  // ── Super Likes ──
   [PRODUCT_IDS.SUPERLIKE_5]: {
     id: PRODUCT_IDS.SUPERLIKE_5,
     type: 'consumable',

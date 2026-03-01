@@ -37,6 +37,19 @@ export async function deletePhoto(token, photoId) {
   });
 }
 
+export async function getTrendingCurrentlyInto(token) {
+  return apiRequest('/currently-into', { token });
+}
+
+export async function updateCurrentlyInto(token, items) {
+  const data = await apiRequest('/users/me', {
+    method: 'PATCH',
+    token,
+    body: { currentlyInto: items },
+  });
+  return data.user;
+}
+
 /**
  * Converts an API user/profile response into the mock data shape
  * used by existing UI screens.
@@ -80,6 +93,7 @@ export function normalizeProfile(apiUser) {
     images: photos,
     interests: profile.interests || [],
     stickers: profile.stickers || [],
+    currentlyInto: profile.currentlyInto || [],
     height,
     ethnicity: profile.ethnicity || '',
     intention: profile.datingIntentions || '',

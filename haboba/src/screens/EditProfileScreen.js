@@ -17,6 +17,7 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import { currentUser, CULTURAL_STICKERS, imageSource } from '../data/mockProfiles';
 import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
+import CurrentlyIntoSelector from '../components/CurrentlyIntoSelector';
 
 export default function EditProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -31,6 +32,7 @@ export default function EditProfileScreen({ navigation }) {
   const [school, setSchool] = useState('');
   const [lookingFor, setLookingFor] = useState('Something serious');
   const [selectedStickers, setSelectedStickers] = useState([0, 4]); // Dinka, Junub
+  const [currentlyInto, setCurrentlyInto] = useState([]);
 
   const lookingForOptions = ['Something serious', "Let's see where it goes", 'Marriage-minded', 'Friendship', 'Networking'];
 
@@ -62,6 +64,7 @@ export default function EditProfileScreen({ navigation }) {
         school: school.trim(),
         lookingFor,
         stickers,
+        currentlyInto,
       });
       updateUser(user);
       Alert.alert('Profile Updated!', 'Your changes have been saved.', [
@@ -180,6 +183,11 @@ export default function EditProfileScreen({ navigation }) {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Currently Into */}
+        <Text style={styles.sectionTitle}>Currently Into</Text>
+        <Text style={styles.sectionSub}>What are you vibing with right now?</Text>
+        <CurrentlyIntoSelector value={currentlyInto} onChange={setCurrentlyInto} />
 
         {/* Identity Stickers */}
         <Text style={styles.sectionTitle}>Identity Stickers</Text>

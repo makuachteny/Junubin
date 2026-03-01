@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme, getShadow } from '../theme';
 import { imageSource } from '../data/mockProfiles';
-import HabobaLogo from './HabobaLogo';
+import BrandLogo from './BrandLogo';
 
 export default function ScreenHeader({
   left,
@@ -29,7 +29,7 @@ export default function ScreenHeader({
 
   return (
     <View style={[styles.header, style]}>
-      <View style={styles.leftSlot}>{left || (showLogo ? <HabobaLogo size="small" /> : null)}</View>
+      <View style={styles.leftSlot}>{left || (showLogo ? <BrandLogo size="small" /> : null)}</View>
       <View style={styles.rightSlot}>{rightNode}</View>
     </View>
   );

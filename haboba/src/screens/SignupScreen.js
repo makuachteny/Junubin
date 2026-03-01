@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, FontFamily } from '../theme';
-import HabobaLogo from '../components/HabobaLogo';
+import { useTheme, Typography, FontFamily } from '../theme';
+import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../auth';
 
 const { width } = Dimensions.get('window');
@@ -34,6 +34,8 @@ const SignupScreen = ({ navigation }) => {
   const [emailActive, setEmailActive] = useState(false);
   const insets = useSafeAreaInsets();
   const { startOtp, loginWithOtp } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   // Refs for verification code inputs
   const codeRefs = useRef([]);
@@ -129,21 +131,21 @@ const SignupScreen = ({ navigation }) => {
     ? phone
     : email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
 
-  // ─── Verification Code Screen (white bg, no image) ───
+  // ─── Verification Code Screen ───
   if (step === 'verify') {
     return (
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: '#FFFFFF' }}
+        style={{ flex: 1, backgroundColor: colors.white }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={[styles.container, styles.containerLight, { paddingTop: insets.top }]}>
+          <View style={[styles.container, styles.containerVerify, { paddingTop: insets.top }]}>
             {/* Back */}
             <TouchableOpacity
-              style={styles.backButtonLight}
+              style={styles.backButtonVerify}
               onPress={() => { setStep('input'); setVerificationCode(['', '', '', '', '', '']); }}
             >
-              <Ionicons name="chevron-back" size={24} color="#2D2319" />
+              <Ionicons name="chevron-back" size={24} color={colors.black} />
             </TouchableOpacity>
 
             {/* Icon */}
@@ -152,7 +154,7 @@ const SignupScreen = ({ navigation }) => {
                 <Ionicons
                   name={selectedMethod === 'phone' ? 'phone-portrait' : 'mail'}
                   size={32}
-                  color={Colors.accent}
+                  color={colors.accent}
                 />
               </View>
             </View>
@@ -233,7 +235,7 @@ const SignupScreen = ({ navigation }) => {
 
             {/* Logo */}
             <View style={styles.logoContainer}>
-              <HabobaLogo size="medium" light />
+              <BrandLogo size="medium" light />
             </View>
 
             {/* Heading */}
@@ -334,7 +336,7 @@ const SignupScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   backgroundImage: {
     flex: 1,
     width: '100%',
@@ -348,8 +350,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
   },
-  containerLight: {
-    backgroundColor: '#FFFFFF',
+  containerVerify: {
+    backgroundColor: colors.white,
   },
   backButton: {
     width: 44,
@@ -364,11 +366,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
   },
-  backButtonLight: {
+  backButtonVerify: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#EDE7DF',
+    backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'flex-start',
@@ -421,7 +423,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   methodTabActive: {
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
   },
   methodTabText: {
     fontSize: 14,
@@ -448,12 +450,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   countryCodeActive: {
-    borderColor: Colors.accent,
+    borderColor: colors.accent,
     backgroundColor: 'rgba(255, 82, 82, 0.1)',
   },
   countryCodeText: {
     ...Typography.bodySemibold,
-    color: Colors.accent,
+    color: colors.accent,
   },
   input: {
     flex: 1,
@@ -470,7 +472,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputActive: {
-    borderColor: Colors.accent,
+    borderColor: colors.accent,
     backgroundColor: 'rgba(255, 82, 82, 0.08)',
   },
 
@@ -483,7 +485,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   termsLink: {
-    color: Colors.accent,
+    color: colors.accent,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -496,10 +498,10 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: Colors.accent,
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: Colors.accent,
+    shadowColor: colors.accent,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
@@ -519,24 +521,24 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.15)',
+    borderColor: colors.accentTint15,
   },
   verifyTitle: {
     fontSize: 28,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
-    color: '#2D2319',
+    color: colors.black,
     textAlign: 'center',
     marginBottom: 12,
     letterSpacing: -0.3,
   },
   verifySubtitle: {
     ...Typography.bodySmall,
-    color: '#8A7D70',
+    color: colors.gray500,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 40,
@@ -544,7 +546,7 @@ const styles = StyleSheet.create({
   verifyContact: {
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: '#2D2319',
+    color: colors.black,
   },
   codeRow: {
     flexDirection: 'row',
@@ -557,17 +559,17 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#E8E2DA',
-    backgroundColor: '#F5F0EA',
+    borderColor: isDark ? colors.gray300 : '#E8E2DA',
+    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
     fontSize: 22,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: '#2D2319',
+    color: colors.black,
     textAlign: 'center',
   },
   codeInputFilled: {
-    borderColor: Colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.04)',
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint04,
   },
   resendBtn: {
     flexDirection: 'row',
@@ -576,11 +578,11 @@ const styles = StyleSheet.create({
   },
   resendText: {
     ...Typography.bodySmall,
-    color: '#8A7D70',
+    color: colors.gray500,
   },
   resendLink: {
     ...Typography.bodySmallMedium,
-    color: Colors.accent,
+    color: colors.accent,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
   },

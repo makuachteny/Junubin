@@ -47,8 +47,8 @@ export default function MessagesScreen({ navigation }) {
   };
 
   const handleLikePress = (like) => {
-    if (!hasTier('royal')) {
-      Alert.alert('Royal Feature', 'Upgrade to Royal to message people who liked you.', [
+    if (!hasTier('junub')) {
+      Alert.alert('Junub Feature', 'Upgrade to Junub to message people who liked you.', [
         { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
         { text: 'Cancel', style: 'cancel' },
       ]);
@@ -85,7 +85,7 @@ export default function MessagesScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>AnaJunubin</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-          <Image source={imageSource(currentUser.images[0])} style={styles.headerAvatar} />
+          <Image source={imageSource(currentUser.images?.[0])} style={styles.headerAvatar} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -130,7 +130,7 @@ export default function MessagesScreen({ navigation }) {
               style={styles.matchCircle}
               onPress={() => handleMatchPress(match)}
             >
-              <Image source={imageSource(match.images[0])} style={styles.matchAvatar} />
+              <Image source={imageSource(match.images?.[0])} style={styles.matchAvatar} />
               {match.unread && <View style={styles.onlineDot} />}
               <Text style={styles.matchName} numberOfLines={1}>
                 {match.name}
@@ -161,7 +161,7 @@ export default function MessagesScreen({ navigation }) {
                 activeOpacity={0.7}
               >
                 <View style={styles.avatarContainer}>
-                  <Image source={imageSource(like.images[0])} style={styles.msgAvatar} />
+                  <Image source={imageSource(like.images?.[0])} style={styles.msgAvatar} />
                 </View>
                 <View style={styles.msgInfo}>
                   <View style={styles.msgNameInline}>
@@ -183,7 +183,7 @@ export default function MessagesScreen({ navigation }) {
                 activeOpacity={0.7}
               >
                 <View style={styles.avatarContainer}>
-                  <Image source={imageSource(match.images[0])} style={styles.msgAvatar} />
+                  <Image source={imageSource(match.images?.[0])} style={styles.msgAvatar} />
                   {match.unread && <View style={styles.unreadDot} />}
                 </View>
                 <View style={styles.msgInfo}>

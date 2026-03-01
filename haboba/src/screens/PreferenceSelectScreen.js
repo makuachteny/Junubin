@@ -1,4 +1,4 @@
-// Haboba — Preference Selection Screen
+// AnaJunubin — Preference Selection Screen
 // Full-screen picker for a single dating preference
 
 import React, { useMemo } from 'react';

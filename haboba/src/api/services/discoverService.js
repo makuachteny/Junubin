@@ -12,6 +12,7 @@ export async function getProfiles(token, filters = {}) {
   if (filters.gender) params.set('gender', filters.gender);
   if (filters.cursor) params.set('cursor', filters.cursor);
   if (filters.limit) params.set('limit', filters.limit);
+  if (filters.mode) params.set('mode', filters.mode);
 
   const qs = params.toString();
   const data = await apiRequest(`/discover${qs ? `?${qs}` : ''}`, { token });
@@ -27,4 +28,8 @@ export async function recordSwipe(token, toUserId, type) {
     token,
     body: { toUserId, type },
   });
+}
+
+export async function getDailyLikeStatus(token) {
+  return apiRequest('/swipes/daily-status', { token });
 }
