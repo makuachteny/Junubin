@@ -306,7 +306,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(229, 107, 140, 0.05)',
+    backgroundColor: 'rgba(255, 82, 82, 0.05)',
     gap: 4,
   },
   addPhotoText: {
@@ -364,7 +364,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   optionChipActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
   },
   optionText: {
     ...Typography.bodySmallMedium,
@@ -393,7 +393,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   stickerChipActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
   },
   stickerEmoji: {
     fontSize: 16,

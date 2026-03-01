@@ -13,13 +13,13 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import { mockNotifications, imageSource } from '../data/mockProfiles';
 
 const ICON_MAP = {
-  like: { name: 'heart', color: '#D4687A' },
-  match: { name: 'heart-circle', color: '#D4687A' },
+  like: { name: 'heart', color: '#FF80AB' },
+  match: { name: 'heart-circle', color: '#FF80AB' },
   comment: { name: 'chatbubble', color: '#6B8DB5' },
   follow: { name: 'person-add', color: '#6B9E5B' },
-  like_post: { name: 'thumbs-up', color: '#E56B8C' },
+  like_post: { name: 'thumbs-up', color: '#FF5252' },
   group: { name: 'people', color: '#8B5CF6' },
-  superlike: { name: 'star', color: '#E56B8C' },
+  superlike: { name: 'star', color: '#FFC107' },
 };
 
 export default function NotificationsScreen({ navigation }) {
@@ -140,7 +140,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   notifUnread: {
-    backgroundColor: 'rgba(229, 107, 140, 0.04)',
+    backgroundColor: 'rgba(255, 82, 82, 0.04)',
   },
   avatarWrap: {
     position: 'relative',

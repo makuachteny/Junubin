@@ -8,7 +8,6 @@ import {
   StatusBar,
   Alert,
   Animated,
-  Dimensions,
 } from 'react-native';
 import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,15 +22,6 @@ import { mockProfiles, currentUser, imageSource } from '../data/mockProfiles';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
-import RAnimated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  interpolate,
-  Extrapolation,
-} from 'react-native-reanimated';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const MIN_DATING_CARDS = 10;
 
@@ -148,8 +138,6 @@ const HomeScreen = ({ navigation }) => {
   const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier } = useSubscription();
   const { accessToken } = useAuth();
   const profileCardRef = useRef(null);
-  const lastSwipeDir = useRef(null);
-  const entryX = useSharedValue(0);
   const topMotion = useRef(new Animated.Value(0)).current;
   const apiCursorRef = useRef(null);
   const handleSwipeProgress = useCallback((value) => {
@@ -203,10 +191,7 @@ const HomeScreen = ({ navigation }) => {
   }, [profiles.length, swipeProgress]);
 
   const handleSwipe = useCallback((direction) => {
-    lastSwipeDir.current = direction;
     const swipedProfile = profiles[0];
-    // Position new card off-screen on opposite side before it renders
-    entryX.value = direction === 'right' ? -SCREEN_WIDTH * 0.45 : SCREEN_WIDTH * 0.45;
     setProfiles((prev) => prev.slice(1));
     swipeProgress.setValue(0);
 
@@ -230,38 +215,10 @@ const HomeScreen = ({ navigation }) => {
         }
       }).catch(() => {});
     }
-  }, [entryX, swipeProgress, profiles, accessToken]);
+  }, [swipeProgress, profiles, accessToken]);
 
   const currentProfile = profiles.length > 0 ? profiles[0] : null;
   const hasValidProfile = !!(currentProfile && currentProfile.name && currentProfile.images?.length);
-
-  // Animate new card sliding in after swipe
-  useEffect(() => {
-    if (lastSwipeDir.current && currentProfile) {
-      entryX.value = withSpring(0, {
-        damping: 22,
-        stiffness: 180,
-        mass: 0.9,
-        overshootClamping: false,
-      });
-      lastSwipeDir.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentProfile?.id]);
-
-  const entryStyle = useAnimatedStyle(() => {
-    'worklet';
-    const opacity = interpolate(
-      Math.abs(entryX.value),
-      [0, SCREEN_WIDTH * 0.45],
-      [1, 0.6],
-      Extrapolation.CLAMP,
-    );
-    return {
-      transform: [{ translateX: entryX.value }],
-      opacity,
-    };
-  });
 
   const handleExpand = (profile) => {
     navigation?.navigate?.('ProfileDetail', { profile });
@@ -334,17 +291,17 @@ const HomeScreen = ({ navigation }) => {
     });
   };
 
-  const nextThumbnail = profiles.length > 1 ? profiles[1] : currentProfile;
-  const backgroundImage = nextThumbnail?.images?.[0] || currentUser.images?.[0];
-  const backgroundSource = imageSource(backgroundImage);
-  const backgroundOpacity = swipeProgress.interpolate({
-    inputRange: [0, 0.02, 1],
-    outputRange: [0, 0.35, 1],
+  // Next card in the stack (pre-rendered so its image is already decoded)
+  const nextProfile = profiles.length > 1 ? profiles[1] : null;
+  const hasNextProfile = !!(nextProfile && nextProfile.name && nextProfile.images?.length);
+  const nextCardScale = swipeProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.95, 1],
     extrapolate: 'clamp',
   });
-  const overlayOpacity = swipeProgress.interpolate({
-    inputRange: [0, 0.02, 1],
-    outputRange: [0, 0.85, 0.3],
+  const nextCardOpacity = swipeProgress.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0.5, 0.85, 1],
     extrapolate: 'clamp',
   });
 
@@ -359,21 +316,25 @@ const HomeScreen = ({ navigation }) => {
             {/* Card with directional entry animation */}
             <View style={styles.cardArea}>
               <View style={styles.cardLayer}>
-                {backgroundSource && (
-                  <Animated.Image
+                {/* Next card — pre-rendered underneath, image already decoded */}
+                {hasNextProfile && (
+                  <Animated.View
+                    style={[styles.nextCard, {
+                      transform: [{ scale: nextCardScale }],
+                      opacity: nextCardOpacity,
+                    }]}
                     pointerEvents="none"
-                    source={backgroundSource}
-                    style={[styles.cardLayerBackground, { opacity: backgroundOpacity }]}
-                    resizeMode="cover"
-                    blurRadius={12}
-                  />
+                  >
+                    <ProfileCard
+                      profile={nextProfile}
+                      style={styles.fullCard}
+                    />
+                  </Animated.View>
                 )}
-                <Animated.View
-                  pointerEvents="none"
-                  style={[styles.cardLayerOverlay, { opacity: overlayOpacity }]}
-                />
-                <RAnimated.View style={[styles.fullCard, entryStyle]}>
+                {/* Current card — swipeable, on top */}
+                <View style={styles.fullCard}>
                   <ProfileCard
+                    key={currentProfile.id}
                     ref={profileCardRef}
                     profile={currentProfile}
                     onSwipe={handleSwipe}
@@ -381,7 +342,7 @@ const HomeScreen = ({ navigation }) => {
                     onSwipeProgress={handleSwipeProgress}
                     style={styles.fullCard}
                   />
-                </RAnimated.View>
+                </View>
               </View>
             </View>
 
@@ -495,17 +456,13 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   cardLayer: {
     flex: 1,
-    borderRadius: 24,
-    overflow: 'hidden',
     marginHorizontal: 6,
     marginTop: 8,
   },
-  cardLayerBackground: {
+  nextCard: {
     ...StyleSheet.absoluteFillObject,
-  },
-  cardLayerOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.85)',
+    borderRadius: 24,
+    overflow: 'hidden',
   },
 
   // ── Top bar — floats over card ──
@@ -602,12 +559,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(229, 107, 140, 0.08)',
+    backgroundColor: 'rgba(255, 82, 82, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(229, 107, 140, 0.15)',
+    borderColor: 'rgba(255, 82, 82, 0.15)',
   },
   emptyTitle: {
     ...Typography.h2,

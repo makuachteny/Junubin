@@ -273,11 +273,11 @@ const ProfileDetailScreen = ({ navigation, route }) => {
             <View style={styles.nameGroup}>
               <Text style={styles.nameText}>{name}, {age}</Text>
               {verified && (
-                <Ionicons name="checkmark-circle" size={22} color="#E56B8C" style={{ marginLeft: 6 }} />
+                <Ionicons name="checkmark-circle" size={22} color="#D32F2F" style={{ marginLeft: 6 }} />
               )}
             </View>
             <View style={styles.distancePill}>
-              <Ionicons name="location-sharp" size={14} color="#E56B8C" />
+              <Ionicons name="location-sharp" size={14} color="#D32F2F" />
               <Text style={styles.distanceText}>{distance} mi</Text>
             </View>
           </View>
@@ -451,8 +451,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   dotActive: {
-    backgroundColor: '#E56B8C',
-    shadowColor: '#E56B8C',
+    backgroundColor: '#D32F2F',
+    shadowColor: '#D32F2F',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.gray200,
   },
   distanceText: {
-    color: '#E56B8C',
+    color: '#D32F2F',
     fontSize: 13,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
@@ -592,11 +592,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#E56B8C',
+    backgroundColor: '#D32F2F',
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 20,
-    shadowColor: '#E56B8C',
+    shadowColor: '#D32F2F',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(212, 104, 122, 0.35)',
+    borderColor: 'rgba(255, 128, 171, 0.35)',
   },
   stickerEmoji: {
     fontSize: 16,
@@ -675,13 +675,13 @@ const styles = StyleSheet.create({
   likeBtn: {
     flex: 1,
     height: 54,
-    backgroundColor: '#E56B8C',
+    backgroundColor: '#D32F2F',
     borderRadius: 27,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-    shadowColor: '#E56B8C',
+    shadowColor: '#D32F2F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
@@ -698,11 +698,11 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
     borderRadius: 27,
-    backgroundColor: 'rgba(212, 104, 122, 0.12)',
+    backgroundColor: 'rgba(255, 128, 171, 0.12)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 0.5,
-    borderColor: 'rgba(212, 104, 122, 0.2)',
+    borderColor: 'rgba(255, 128, 171, 0.20)',
   },
 });
 

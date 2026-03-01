@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: 'rgba(229, 107, 140, 0.15)',
+    backgroundColor: 'rgba(255, 82, 82, 0.15)',
   },
   title: {
     ...Typography.h1,
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(229, 107, 140, 0.12)',
+    backgroundColor: 'rgba(255, 82, 82, 0.12)',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,

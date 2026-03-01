@@ -147,7 +147,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   optionSelected: {
-    backgroundColor: isDark ? 'rgba(229,107,140,0.08)' : 'rgba(229,107,140,0.05)',
+    backgroundColor: isDark ? 'rgba(255,82,82,0.08)' : 'rgba(255,82,82,0.05)',
   },
   optionLeft: {
     flexDirection: 'row',
@@ -164,7 +164,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginRight: 14,
   },
   optionIconSelected: {
-    backgroundColor: isDark ? 'rgba(229,107,140,0.15)' : 'rgba(229,107,140,0.1)',
+    backgroundColor: isDark ? 'rgba(255,82,82,0.15)' : 'rgba(255,82,82,0.1)',
   },
   optionTextWrap: {
     flex: 1,
