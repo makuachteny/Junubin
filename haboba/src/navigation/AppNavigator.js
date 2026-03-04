@@ -1,34 +1,49 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Platform, ActivityIndicator, Animated, Dimensions } from 'react-native';
 import { useTheme, FontFamily } from '../theme';
 import { useAuth } from '../auth';
 
-// Screens - Onboarding flow
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const TAB_COUNT = 3;
+
+// Screens - Onboarding flow (eager — auth flow)
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SignupScreen from '../screens/SignupScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
-// Screens - Main app
+// Screens - Tab bar (eager — initial render)
 import HomeScreen from '../screens/HomeScreen';
 import LikesScreen from '../screens/LikesScreen';
 import MessagesScreen from '../screens/MessagesScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import ProfileDetailScreen from '../screens/ProfileDetailScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import PreferencesScreen from '../screens/PreferencesScreen';
-import BoostScreen from '../screens/BoostScreen';
-import EliteScreen from '../screens/EliteScreen';
-// New screens
-import ChatScreen from '../screens/ChatScreen';
-import CreatePostScreen from '../screens/CreatePostScreen';
-import PostDetailScreen from '../screens/PostDetailScreen';
-import GroupDetailScreen from '../screens/GroupDetailScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
-import SettingsInfoScreen from '../screens/SettingsInfoScreen';
-import PreferenceSelectScreen from '../screens/PreferenceSelectScreen';
+
+// Lazy-loaded screens (behind navigation.navigate)
+function lazify(importFn) {
+  const LazyComponent = React.lazy(importFn);
+  return function LazyScreen(props) {
+    return (
+      <React.Suspense fallback={<View style={styles.bootLoading}><ActivityIndicator size="large" color="#C4956A" /></View>}>
+        <LazyComponent {...props} />
+      </React.Suspense>
+    );
+  };
+}
+
+const ProfileScreen = lazify(() => import('../screens/ProfileScreen'));
+const ProfileDetailScreen = lazify(() => import('../screens/ProfileDetailScreen'));
+const SettingsScreen = lazify(() => import('../screens/SettingsScreen'));
+const PreferencesScreen = lazify(() => import('../screens/PreferencesScreen'));
+const BoostScreen = lazify(() => import('../screens/BoostScreen'));
+const EliteScreen = lazify(() => import('../screens/EliteScreen'));
+const ChatScreen = lazify(() => import('../screens/ChatScreen'));
+const CreatePostScreen = lazify(() => import('../screens/CreatePostScreen'));
+const PostDetailScreen = lazify(() => import('../screens/PostDetailScreen'));
+const GroupDetailScreen = lazify(() => import('../screens/GroupDetailScreen'));
+const EditProfileScreen = lazify(() => import('../screens/EditProfileScreen'));
+const NotificationsScreen = lazify(() => import('../screens/NotificationsScreen'));
+const SettingsInfoScreen = lazify(() => import('../screens/SettingsInfoScreen'));
+const PreferenceSelectScreen = lazify(() => import('../screens/PreferenceSelectScreen'));
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -37,6 +52,8 @@ function HomeTabs() {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const likesPink = colors.accent;
+  const tabIndicatorAnim = useRef(new Animated.Value(1)).current; // Start on HomeTab (index 1)
+  const TAB_NAMES = ['LikesTab', 'HomeTab', 'MessagesTab'];
 
   return (
     <Tab.Navigator
@@ -53,12 +70,13 @@ function HomeTabs() {
         tabBarActiveTintColor: route.name === 'LikesTab' ? likesPink : colors.tabActive,
         tabBarInactiveTintColor: colors.tabInactive,
         tabBarStyle: {
-          backgroundColor: colors.white,
-          borderTopWidth: 0,
+          backgroundColor: colors.surface,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.separator,
           height: Platform.OS === 'ios' ? 92 : 68,
           paddingBottom: Platform.OS === 'ios' ? 28 : 8,
           paddingTop: 8,
-          shadowColor: '#000',
+          shadowColor: colors.gray700,
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.08,
           shadowRadius: 12,
@@ -76,7 +94,7 @@ function HomeTabs() {
                 <View style={[styles.centerBtn, { backgroundColor: focused ? colors.accent : colors.gray200 }]}>
                   <Ionicons
                     name={focused ? 'location' : 'location-outline'}
-                    size={21}
+                    size={24}
                     color={focused ? '#FFF' : colors.gray500}
                   />
                 </View>
@@ -95,10 +113,23 @@ function HomeTabs() {
 
           return (
             <View style={[styles.tabIcon, focused && styles.tabIconFocused]}>
-              <Ionicons name={iconName} size={22} color={iconColor} />
+              <Ionicons name={iconName} size={26} color={iconColor} />
               {focused && <View style={[styles.activeDot, { backgroundColor: activeColor }]} />}
             </View>
           );
+        },
+      })}
+      screenListeners={({ route }) => ({
+        focus: () => {
+          const idx = TAB_NAMES.indexOf(route.name);
+          if (idx >= 0) {
+            Animated.spring(tabIndicatorAnim, {
+              toValue: idx,
+              tension: 68,
+              friction: 10,
+              useNativeDriver: true,
+            }).start();
+          }
         },
       })}
     >
@@ -214,6 +245,7 @@ export default function AppNavigator() {
       <Stack.Screen
         name="PreferenceSelect"
         component={PreferenceSelectScreen}
+        options={{ gestureEnabled: true }}
       />
     </Stack.Navigator>
   );
@@ -223,12 +255,12 @@ const getStyles = (colors) => StyleSheet.create({
   tabIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   tabIconFocused: {
-    backgroundColor: 'rgba(255, 82, 82, 0.1)',
+    backgroundColor: colors.accentTint10,
   },
   activeDot: {
     width: 4,
@@ -243,9 +275,9 @@ const getStyles = (colors) => StyleSheet.create({
     marginTop: -18,
   },
   centerBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: colors.accent,
@@ -254,7 +286,7 @@ const getStyles = (colors) => StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
     borderWidth: 2.5,
-    borderColor: colors.white,
+    borderColor: colors.surface,
   },
 });
 

@@ -231,6 +231,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
               style={styles.image}
               resizeMode="cover"
               onError={handleImageError}
+              fadeDuration={0}
             />
           )}
           {totalImages > 1 && (
@@ -437,4 +438,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ProfileCard;
+export default React.memo(ProfileCard);

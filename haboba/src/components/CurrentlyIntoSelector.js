@@ -14,10 +14,10 @@ import * as profileService from '../api/services/profileService';
 
 const MAX_SELECTIONS = 3;
 
-export default function CurrentlyIntoSelector({ value = [], onChange }) {
+function CurrentlyIntoSelector({ value = [], onChange }) {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
-  const { accessToken } = useAuth();
+  const { session } = useAuth();
   const [trending, setTrending] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,16 +26,16 @@ export default function CurrentlyIntoSelector({ value = [], onChange }) {
   const selected = useMemo(() => new Set(value.map((s) => s.toLowerCase())), [value]);
 
   useEffect(() => {
-    if (!accessToken) return;
+    if (!session) return;
     profileService
-      .getTrendingCurrentlyInto(accessToken)
+      .getTrendingCurrentlyInto()
       .then((data) => {
         setTrending((data.trending || []).map((t) => t.item));
         setSuggestions(data.suggestions || []);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [accessToken]);
+  }, [session]);
 
   const allOptions = useMemo(() => {
     const seen = new Set();
@@ -68,16 +68,16 @@ export default function CurrentlyIntoSelector({ value = [], onChange }) {
   );
 
   const handleSave = useCallback(async () => {
-    if (!accessToken) return;
+    if (!session) return;
     setSaving(true);
     try {
-      await profileService.updateCurrentlyInto(accessToken, value);
+      await profileService.updateCurrentlyInto(value);
     } catch {
       Alert.alert('Error', 'Failed to save. Please try again.');
     } finally {
       setSaving(false);
     }
-  }, [accessToken, value]);
+  }, [session, value]);
 
   if (loading) {
     return (
@@ -139,7 +139,7 @@ const getStyles = (colors) =>
     },
     chipActive: {
       borderColor: colors.accent,
-      backgroundColor: 'rgba(255, 82, 82, 0.08)',
+      backgroundColor: colors.accentTint08,
     },
     chipText: {
       ...Typography.bodySmallMedium,
@@ -166,3 +166,5 @@ const getStyles = (colors) =>
       fontFamily: FontFamily.bold,
     },
   });
+
+export default React.memo(CurrentlyIntoSelector);

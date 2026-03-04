@@ -1,17 +1,68 @@
-import { apiRequest } from '../client';
+import { supabase } from '../../config/supabase';
 import { formatTimestamp } from '../../utils/formatTime';
 
-export async function getMatches(token) {
-  const data = await apiRequest('/matches', { token });
-  return (data.matches || []).map((m) => ({
-    id: m.id,
-    conversationId: m.conversationId,
-    name: m.user.displayName,
-    images: (m.user.photos || []).map((p) => p.url),
-    verified: m.user.isVerified || false,
-    lastMessage: m.lastMessage?.body || '',
-    timestamp: m.lastMessage ? formatTimestamp(m.lastMessage.createdAt) : formatTimestamp(m.createdAt),
-    unread: false,
-    userId: m.user.id,
-  }));
+export async function getMatches() {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Not authenticated');
+
+  const { data: appUser } = await supabase
+    .from('User')
+    .select('id')
+    .eq('auth_id', authUser.id)
+    .single();
+
+  if (!appUser) throw new Error('User not found');
+  const userId = appUser.id;
+
+  const { data: matches, error } = await supabase
+    .from('Match')
+    .select(`
+      id,
+      userAId,
+      userBId,
+      status,
+      createdAt,
+      updatedAt,
+      conversation:Conversation(
+        id,
+        messages:Message(
+          id, body, senderId, createdAt,
+          sender:User!senderId(id, displayName)
+        )
+      ),
+      userA:User!userAId(id, displayName, isVerified, photos:Photo(url, sortOrder)),
+      userB:User!userBId(id, displayName, isVerified, photos:Photo(url, sortOrder))
+    `)
+    .eq('status', 'active')
+    .or(`userAId.eq.${userId},userBId.eq.${userId}`)
+    .order('updatedAt', { ascending: false });
+
+  if (error) throw error;
+
+  return (matches || []).map((m) => {
+    const otherUser = m.userAId === userId ? m.userB : m.userA;
+    const conv = m.conversation;
+    const messages = conv?.messages || [];
+    const lastMessage = messages.length > 0
+      ? messages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+      : null;
+
+    const photos = (otherUser?.photos || [])
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((p) => p.url);
+
+    return {
+      id: m.id,
+      conversationId: conv?.id,
+      name: otherUser?.displayName || '',
+      images: photos,
+      verified: otherUser?.isVerified || false,
+      lastMessage: lastMessage?.body || '',
+      timestamp: lastMessage
+        ? formatTimestamp(lastMessage.createdAt)
+        : formatTimestamp(m.createdAt),
+      unread: false,
+      userId: otherUser?.id,
+    };
+  });
 }

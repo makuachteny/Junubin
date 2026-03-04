@@ -147,7 +147,7 @@ const MatchCelebrationOverlay = ({
               <Ionicons
                 name={i % 2 === 0 ? 'heart' : 'sparkles'}
                 size={i % 2 === 0 ? 16 : 14}
-                color={i % 2 === 0 ? '#FF5252' : '#FFD700'}
+                color={i % 2 === 0 ? '#E8453C' : '#FFD700'}
               />
             </Animated.View>
           );
@@ -169,7 +169,7 @@ const MatchCelebrationOverlay = ({
         </Animated.View>
 
         <View style={styles.heartBridge}>
-          <Ionicons name="heart" size={28} color="#FF5252" />
+          <Ionicons name="heart" size={28} color="#E8453C" />
         </View>
 
         <Animated.View style={[styles.photoWrap, { transform: [{ translateX: rightPhoto }] }]}>
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     height: PHOTO_SIZE + 6,
     borderRadius: (PHOTO_SIZE + 6) / 2,
     borderWidth: 3,
-    borderColor: '#FF5252',
+    borderColor: '#E8453C',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flexDirection: 'row',
-    backgroundColor: '#FF5252',
+    backgroundColor: '#E8453C',
     borderRadius: 28,
     paddingVertical: 16,
     alignItems: 'center',
@@ -305,4 +305,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MatchCelebrationOverlay;
+export default React.memo(MatchCelebrationOverlay);

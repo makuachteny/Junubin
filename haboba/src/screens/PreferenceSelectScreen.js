@@ -1,7 +1,7 @@
 // AnaJunubin — Preference Selection Screen
 // Full-screen picker for a single dating preference
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,19 @@ export default function PreferenceSelectScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const [selected, setSelected] = useState(currentValue);
 
   const handleSelect = (value) => {
+    setSelected(value);
     navigation.navigate('Preferences', {
       updatedPref: { key: prefKey, value, type: prefType },
+    });
+  };
+
+  const handleDone = () => {
+    // Navigate back to Preferences with the current selection
+    navigation.navigate('Preferences', {
+      updatedPref: { key: prefKey, value: selected, type: prefType },
     });
   };
 
@@ -30,14 +39,20 @@ export default function PreferenceSelectScreen({ navigation, route }) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={handleDone}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.backBtn}
         >
           <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{title}</Text>
-        <View style={{ width: 40 }} />
+        <TouchableOpacity
+          onPress={handleDone}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={styles.doneBtn}
+        >
+          <Text style={styles.doneText}>Done</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -49,7 +64,7 @@ export default function PreferenceSelectScreen({ navigation, route }) {
 
         <View style={styles.card}>
           {options.map((option, index) => {
-            const isSelected = option.value === currentValue;
+            const isSelected = option.value === selected;
             return (
               <TouchableOpacity
                 key={option.value}
@@ -111,6 +126,16 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 40,
     alignItems: 'flex-start',
   },
+  doneBtn: {
+    width: 40,
+    alignItems: 'flex-end',
+  },
+  doneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    color: colors.accent,
+  },
   headerTitle: {
     ...Typography.screenTitle,
     color: colors.black,
@@ -147,7 +172,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   optionSelected: {
-    backgroundColor: isDark ? 'rgba(255,82,82,0.08)' : 'rgba(255,82,82,0.05)',
+    backgroundColor: colors.accentTint05,
   },
   optionLeft: {
     flexDirection: 'row',
@@ -164,7 +189,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginRight: 14,
   },
   optionIconSelected: {
-    backgroundColor: isDark ? 'rgba(255,82,82,0.15)' : 'rgba(255,82,82,0.1)',
+    backgroundColor: colors.accentTint10,
   },
   optionTextWrap: {
     flex: 1,

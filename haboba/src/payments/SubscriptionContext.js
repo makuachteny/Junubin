@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PaymentService from './PaymentService';
-import { PRODUCTS, TIER_RANK } from './products';
+import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
 
 const STORAGE_KEY = '@haboba_subscription';
@@ -16,17 +16,21 @@ const DEFAULT_STATE = {
   purchaseHistory: [],
 };
 
-const SubscriptionContext = createContext(null);
+const SubscriptionStateContext = createContext(null);
+const SubscriptionActionsContext = createContext(null);
 
 export function SubscriptionProvider({ children }) {
   const [state, setState] = useState(DEFAULT_STATE);
   const [loaded, setLoaded] = useState(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
+  const [offerings, setOfferings] = useState(null);
+  const unsubRef = useRef(null);
 
-  // Load persisted state on mount
+  // Load persisted state + initialize PaymentService on mount
   useEffect(() => {
     (async () => {
       await PaymentService.initialize();
+
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
         if (stored) {
@@ -34,9 +38,42 @@ export function SubscriptionProvider({ children }) {
           setState((prev) => ({ ...prev, ...parsed }));
         }
       } catch {}
+
+      // Fetch real customer info from RevenueCat (if available)
+      if (!PaymentService.isDemoMode) {
+        try {
+          const info = await PaymentService.getCustomerInfo();
+          if (info.success && info.tier) {
+            setState((prev) => ({ ...prev, tier: info.tier }));
+          }
+        } catch {}
+      }
+
+      // Fetch offerings (localized prices)
+      try {
+        const currentOffering = await PaymentService.getOfferings();
+        if (currentOffering) {
+          setOfferings(currentOffering);
+        }
+      } catch {}
+
       setLoaded(true);
     })();
   }, []);
+
+  // Listen for customer info updates (subscription renewal/expiry)
+  useEffect(() => {
+    if (loaded && !PaymentService.isDemoMode) {
+      unsubRef.current = PaymentService.onCustomerInfoUpdate(({ tier }) => {
+        if (tier) {
+          setState((prev) => ({ ...prev, tier }));
+        }
+      });
+    }
+    return () => {
+      if (unsubRef.current) unsubRef.current();
+    };
+  }, [loaded]);
 
   // Persist state on change
   useEffect(() => {
@@ -45,15 +82,25 @@ export function SubscriptionProvider({ children }) {
     }
   }, [state, loaded]);
 
-  const purchase = useCallback(async (productId) => {
+  const purchase = useCallback(async (packageOrProductId) => {
+    // Determine the product for state updates
+    const productId = typeof packageOrProductId === 'string'
+      ? packageOrProductId
+      : packageOrProductId?.product?.identifier;
     const product = PRODUCTS[productId];
-    if (!product) return { success: false, error: 'Unknown product' };
 
     setPurchaseInProgress(true);
     try {
-      const result = await PaymentService.purchaseProduct(productId);
+      const result = await PaymentService.purchaseProduct(packageOrProductId);
+
       if (!result.success) {
         return { success: false, error: result.error || 'Purchase failed' };
+      }
+
+      // Update tier from RevenueCat customer info if available
+      let newTier = null;
+      if (result.customerInfo?.entitlements?.active) {
+        newTier = tierFromEntitlements(result.customerInfo.entitlements.active);
       }
 
       setState((prev) => {
@@ -65,10 +112,10 @@ export function SubscriptionProvider({ children }) {
         };
         next.purchaseHistory = [...prev.purchaseHistory, historyEntry];
 
-        if (product.type === 'subscription') {
-          next.tier = product.tier;
+        if (product?.type === 'subscription') {
+          next.tier = newTier || product.tier;
           next.tierProductId = productId;
-        } else if (product.type === 'consumable') {
+        } else if (product?.type === 'consumable') {
           if (product.category === 'spotlight') {
             next.spotlights = prev.spotlights + product.quantity;
           } else if (product.category === 'superlike') {
@@ -91,7 +138,13 @@ export function SubscriptionProvider({ children }) {
     setPurchaseInProgress(true);
     try {
       const result = await PaymentService.restorePurchases();
-      // In demo mode, restore just confirms current state persists
+
+      // Sync tier from restored purchases
+      if (result.success && result.customerInfo?.entitlements?.active) {
+        const restoredTier = tierFromEntitlements(result.customerInfo.entitlements.active);
+        setState((prev) => ({ ...prev, tier: restoredTier }));
+      }
+
       return { success: result.success, error: result.error };
     } finally {
       setPurchaseInProgress(false);
@@ -141,8 +194,7 @@ export function SubscriptionProvider({ children }) {
     await AsyncStorage.removeItem(STORAGE_KEY);
   }, []);
 
-  const value = useMemo(() => ({
-    // State
+  const stateValue = useMemo(() => ({
     tier: state.tier,
     tierProductId: state.tierProductId,
     spotlights: state.spotlights,
@@ -150,8 +202,17 @@ export function SubscriptionProvider({ children }) {
     whispers: state.whispers,
     purchaseInProgress,
     purchaseHistory: state.purchaseHistory,
+    offerings,
+    isDemoMode: PaymentService.isDemoMode,
+    hasTier: (requiredTier) => hasTierAccess(state.tier, requiredTier),
+    isSubscribed: () => checkSubscribed(state.tier),
+    canSeeWhoLikesYou: () => canSeeWhoLikesYou(state.tier),
+    hasUnlimitedLikes: () => hasUnlimitedLikes(state.tier),
+    canUseAdvancedFilters: () => canUseAdvancedFilters(state.tier),
+    canUseDiasporaConnect: () => canUseDiasporaConnect(state.tier),
+  }), [state, purchaseInProgress, offerings]);
 
-    // Actions
+  const actionsValue = useMemo(() => ({
     purchase,
     restorePurchases,
     cancelSubscription,
@@ -159,15 +220,7 @@ export function SubscriptionProvider({ children }) {
     consumeSuperLike,
     consumeWhisper,
     reset,
-
-    // Checks
-    hasTier: (requiredTier) => hasTierAccess(state.tier, requiredTier),
-    isSubscribed: () => checkSubscribed(state.tier),
-    canSeeWhoLikesYou: () => canSeeWhoLikesYou(state.tier),
-    hasUnlimitedLikes: () => hasUnlimitedLikes(state.tier),
-    canUseAdvancedFilters: () => canUseAdvancedFilters(state.tier),
-    canUseDiasporaConnect: () => canUseDiasporaConnect(state.tier),
-  }), [state, purchaseInProgress, purchase, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, reset]);
+  }), [purchase, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, reset]);
 
   if (!loaded) {
     return (
@@ -178,15 +231,30 @@ export function SubscriptionProvider({ children }) {
   }
 
   return (
-    <SubscriptionContext.Provider value={value}>
-      {children}
-    </SubscriptionContext.Provider>
+    <SubscriptionStateContext.Provider value={stateValue}>
+      <SubscriptionActionsContext.Provider value={actionsValue}>
+        {children}
+      </SubscriptionActionsContext.Provider>
+    </SubscriptionStateContext.Provider>
   );
 }
 
 export function useSubscription() {
-  const ctx = useContext(SubscriptionContext);
-  if (!ctx) throw new Error('useSubscription must be used within SubscriptionProvider');
+  const stateCtx = useContext(SubscriptionStateContext);
+  const actionsCtx = useContext(SubscriptionActionsContext);
+  if (!stateCtx || !actionsCtx) throw new Error('useSubscription must be used within SubscriptionProvider');
+  return useMemo(() => ({ ...stateCtx, ...actionsCtx }), [stateCtx, actionsCtx]);
+}
+
+export function useSubscriptionState() {
+  const ctx = useContext(SubscriptionStateContext);
+  if (!ctx) throw new Error('useSubscriptionState must be used within SubscriptionProvider');
+  return ctx;
+}
+
+export function useSubscriptionActions() {
+  const ctx = useContext(SubscriptionActionsContext);
+  if (!ctx) throw new Error('useSubscriptionActions must be used within SubscriptionProvider');
   return ctx;
 }
 
@@ -195,6 +263,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1A1612',
+    backgroundColor: '#1A1816',
   },
 });

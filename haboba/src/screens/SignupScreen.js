@@ -143,7 +143,7 @@ const SignupScreen = ({ navigation }) => {
             {/* Back */}
             <TouchableOpacity
               style={styles.backButtonVerify}
-              onPress={() => { setStep('input'); setVerificationCode(['', '', '', '', '', '']); }}
+              onPress={() => { setStep('input'); setVerificationCode(['', '', '', '']); }}
             >
               <Ionicons name="chevron-back" size={24} color={colors.black} />
             </TouchableOpacity>
@@ -162,7 +162,7 @@ const SignupScreen = ({ navigation }) => {
             {/* Heading */}
             <Text style={styles.verifyTitle}>Enter verification code</Text>
             <Text style={styles.verifySubtitle}>
-              We sent a 6-digit code to{'\n'}
+              We sent a verification code to{'\n'}
               <Text style={styles.verifyContact}>{maskedContact}</Text>
             </Text>
 
@@ -344,7 +344,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(26, 22, 18, 0.7)',
+    backgroundColor: 'rgba(26, 22, 18, 0.45)',
   },
   container: {
     flex: 1,
@@ -451,7 +451,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   countryCodeActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.1)',
+    backgroundColor: colors.accentTint10,
   },
   countryCodeText: {
     ...Typography.bodySemibold,
@@ -473,7 +473,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   inputActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
   },
 
   // Terms
@@ -555,12 +555,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginBottom: 32,
   },
   codeInput: {
-    width: 48,
-    height: 56,
-    borderRadius: 14,
+    width: 46,
+    height: 58,
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: isDark ? colors.gray300 : '#E8E2DA',
-    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.inputBg,
     fontSize: 22,
     fontWeight: '700',
     fontFamily: FontFamily.bold,

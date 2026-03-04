@@ -68,10 +68,10 @@ export const BorderRadius = {
 };
 
 export const Gradients = {
-  primary: ['#2D2319', '#1A1008'],
-  accent: ['#FF5252', '#D32F2F'],
+  primary: ['#332F2D', '#252220'],
+  accent: ['#E8453C', '#C62828'],
   rose: ['#FF80AB', '#F06292'],
   royal: ['#FF7854', '#E64A19'],
-  splash: ['#1A1612', '#12100D', '#0A0806'],
-  card: ['transparent', 'rgba(45, 35, 25, 0.75)'],
+  splash: ['#1A1816', '#141210', '#100E0D'],
+  card: ['transparent', 'rgba(28, 25, 23, 0.75)'],
 };

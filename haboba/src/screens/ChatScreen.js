@@ -19,14 +19,14 @@ import { mockMessages, imageSource } from '../data/mockProfiles';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import * as chatService from '../api/services/chatService';
-import { useSocket } from '../api/hooks/useSocket';
+import { useRealtime } from '../api/hooks/useRealtime';
 
 export default function ChatScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { hasTier } = useSubscription();
-  const { accessToken, user: currentUser } = useAuth();
+  const { session, user: currentUser } = useAuth();
 
   const match = route.params?.match || {};
   const matchId = match.id || 'match1';
@@ -39,12 +39,12 @@ export default function ChatScreen({ navigation, route }) {
   const flatListRef = useRef(null);
   const sentIdsRef = useRef(new Set());
 
-  const { joinConversation, leaveConversation, sendMessage: socketSendMessage, onMessage, onTypingStart, onTypingStop, emitTypingStart, emitTypingStop } = useSocket(accessToken);
+  const { onMessage, onTypingStart, onTypingStop } = useRealtime(currentUser?.id);
 
-  // Load message history from API and join socket room
+  // Load message history from API
   useEffect(() => {
-    if (!accessToken || !conversationId) return;
-    chatService.getMessages(accessToken, conversationId).then((apiMsgs) => {
+    if (!session || !conversationId) return;
+    chatService.getMessages(conversationId).then((apiMsgs) => {
       if (apiMsgs.length > 0) {
         setMessages(apiMsgs.map((m) => ({
           id: m.id,
@@ -54,16 +54,16 @@ export default function ChatScreen({ navigation, route }) {
           read: true,
         })));
       }
-    }).catch(() => {});
-
-    joinConversation(conversationId);
-    return () => leaveConversation(conversationId);
-  }, [accessToken, conversationId]);
+    }).catch((err) => {
+      if (__DEV__) console.warn('Message history load failed:', err);
+    });
+  }, [session, conversationId]);
 
   // Listen for real-time messages
   useEffect(() => {
-    const unsub = onMessage((msg) => {
-      if (!msg || msg.conversationId !== conversationId) return;
+    if (!conversationId) return;
+    const unsub = onMessage(conversationId, (msg) => {
+      if (!msg) return;
       // Deduplicate own messages (server echo)
       if (sentIdsRef.current.has(msg.id)) return;
       setMessages((prev) => [...prev, {
@@ -105,19 +105,16 @@ export default function ChatScreen({ navigation, route }) {
 
     setMessages((prev) => [...prev, newMessage]);
     setInputText('');
-    emitTypingStop(conversationId);
 
-    // Send via socket if connected, otherwise via REST
-    if (conversationId && socketSendMessage) {
-      socketSendMessage({ conversationId, body: text }, (ack) => {
-        if (ack?.message?.id) {
-          sentIdsRef.current.add(ack.message.id);
+    // Send via chatService — Realtime picks up the new message
+    if (conversationId) {
+      chatService.sendMessage(conversationId, text).then((result) => {
+        if (result?.id) {
+          sentIdsRef.current.add(result.id);
           // Replace optimistic message with server message
-          setMessages((prev) => prev.map((m) => m.id === optimisticId ? { ...m, id: ack.message.id, read: true } : m));
+          setMessages((prev) => prev.map((m) => m.id === optimisticId ? { ...m, id: result.id, read: true } : m));
         }
-      });
-    } else if (conversationId && accessToken) {
-      chatService.sendMessage(accessToken, conversationId, text).catch(() => {});
+      }).catch(() => {});
     }
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
@@ -208,6 +205,9 @@ export default function ChatScreen({ navigation, route }) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
         showsVerticalScrollIndicator={false}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        removeClippedSubviews={true}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         ListHeaderComponent={
           <View style={styles.matchBanner}>

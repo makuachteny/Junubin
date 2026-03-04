@@ -33,7 +33,7 @@ export default function PostDetailScreen({ navigation, route }) {
   const [commentLikes, setCommentLikes] = useState({});
 
   const theme = POST_THEMES[post.cardTheme] || POST_THEMES.default;
-  const isDarkCard = theme.bg === '#1A1612' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+  const isDarkCard = theme.bg === '#1C1917' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
 
   const handleLike = () => {
     setLiked(!liked);

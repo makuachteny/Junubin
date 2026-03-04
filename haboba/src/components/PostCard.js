@@ -8,7 +8,7 @@ import { POST_THEMES, imageSource } from '../data/mockProfiles';
 const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 32; // 16px margin each side
 
-export default function PostCard({ post, reactionState, onLikeToggle }) {
+const PostCard = ({ post, reactionState, onLikeToggle }) => {
   const fallbackReaction = useMemo(() => ({ liked: false, likeCount: post.likes }), [post.likes]);
   const [localReaction, setLocalReaction] = useState(fallbackReaction);
   const effectiveReaction = reactionState || localReaction;
@@ -18,7 +18,7 @@ export default function PostCard({ post, reactionState, onLikeToggle }) {
 
   // Get the user-chosen card theme (or default)
   const theme = POST_THEMES[post.cardTheme] || POST_THEMES.default;
-  const isDarkCard = theme.bg === '#1A1612' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+  const isDarkCard = theme.bg === '#1C1917' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
 
   const handleLike = () => {
     if (onLikeToggle) {
@@ -113,7 +113,9 @@ export default function PostCard({ post, reactionState, onLikeToggle }) {
       </View>
     </TouchableOpacity>
   );
-}
+};
+
+export default React.memo(PostCard);
 
 const styles = StyleSheet.create({
   card: {
@@ -140,7 +142,7 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 13,
     marginRight: 10,
-    backgroundColor: '#E8E2DA',
+    backgroundColor: '#E7E5E4',
   },
   headerInfo: {
     flex: 1,

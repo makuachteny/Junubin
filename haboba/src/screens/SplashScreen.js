@@ -108,7 +108,7 @@ export default function SplashScreen({ onFinish }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1A1612',
+    backgroundColor: '#1A1816',
   },
   backgroundImage: {
     position: 'absolute',
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     left: 0,
     width: SCREEN_W,
     height: SCREEN_H,
-    backgroundColor: '#1A1612',
+    backgroundColor: '#1A1816',
   },
   logoWrapper: {
     flex: 1,

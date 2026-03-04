@@ -71,7 +71,7 @@ const ProfileSetupScreen = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
-  const { accessToken, updateUser } = useAuth();
+  const { session, updateUser } = useAuth();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
@@ -101,7 +101,7 @@ const ProfileSetupScreen = ({ navigation }) => {
   const step = STEPS[currentStep];
 
   const saveProfileToApi = async () => {
-    if (!accessToken) {
+    if (!session) {
       navigation.navigate('Main');
       return;
     }
@@ -134,14 +134,14 @@ const ProfileSetupScreen = ({ navigation }) => {
         profileComplete: true,
       };
 
-      const user = await profileService.updateProfile(accessToken, updates);
+      const user = await profileService.updateProfile(updates);
       updateUser(user);
 
       // Upload photos
       const photoUris = photos.filter(Boolean);
       for (const uri of photoUris) {
         try {
-          await profileService.uploadPhoto(accessToken, uri);
+          await profileService.uploadPhoto(uri);
         } catch (e) {
           console.warn('Photo upload failed:', e.message);
         }
@@ -686,9 +686,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ─── Text Input ───
   textInput: {
-    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
+    backgroundColor: colors.inputBg,
     borderWidth: 1.5,
-    borderColor: isDark ? colors.gray300 : '#E8E2DA',
+    borderColor: colors.inputBorder,
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingVertical: 18,
@@ -718,11 +718,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
+    backgroundColor: colors.inputBg,
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1.5,
-    borderColor: isDark ? colors.gray300 : '#EDE7DF',
+    borderColor: colors.inputBorder,
   },
   radioRowActive: {
     borderColor: colors.accent,
@@ -799,12 +799,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   photoSlot: {
     width: (width - 48 - 24) / 3,
     aspectRatio: 3 / 4,
-    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
+    backgroundColor: colors.inputBg,
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: isDark ? colors.gray300 : '#E8E2DA',
+    borderColor: colors.inputBorder,
     borderStyle: 'dashed',
   },
   photoSlotPrimary: {
@@ -843,11 +843,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 16,
     paddingHorizontal: 20,
-    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
+    backgroundColor: colors.inputBg,
     borderRadius: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: isDark ? colors.gray300 : '#EDE7DF',
+    borderColor: colors.inputBorder,
   },
   promptOptionText: {
     fontSize: 15,
@@ -876,9 +876,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
   },
   promptInput: {
-    backgroundColor: isDark ? colors.gray100 : '#F5F0EA',
+    backgroundColor: colors.inputBg,
     borderWidth: 1.5,
-    borderColor: isDark ? colors.gray300 : '#E8E2DA',
+    borderColor: colors.inputBorder,
     borderRadius: 16,
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -906,7 +906,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: isDark ? colors.gray300 : '#E8E2DA',
+    borderColor: colors.inputBorder,
     backgroundColor: colors.white,
   },
   chipActive: {

@@ -1,6 +1,19 @@
 // AnaJunubin — Product Catalog
 // Two paid tiers: JuNubin+ (plus) and Junub (premium)
 // No ads ever. Social mode always free. Community-first.
+//
+// Prices shown here are USD fallbacks used when RevenueCat isn't configured.
+// In production, localized prices come from RevenueCat → App Store / Google Play,
+// so users see their local currency automatically (SSP, KES, GBP, AUD, etc.).
+
+// RevenueCat entitlement identifiers (configured in RevenueCat dashboard)
+export const ENTITLEMENTS = {
+  PLUS: 'plus',
+  JUNUB: 'junub',
+};
+
+// RevenueCat offering identifier
+export const OFFERING_ID = 'default';
 
 export const PRODUCT_IDS = {
   // ── JuNubin+ Subscriptions ──
@@ -29,7 +42,14 @@ export const TIER_RANK = {
   junub: 2,
 };
 
-// Full product catalog with metadata
+// Map RevenueCat entitlements to our tier names
+export function tierFromEntitlements(entitlements) {
+  if (entitlements?.[ENTITLEMENTS.JUNUB]?.isActive) return 'junub';
+  if (entitlements?.[ENTITLEMENTS.PLUS]?.isActive) return 'plus';
+  return 'free';
+}
+
+// Full product catalog with metadata (fallback prices in USD)
 export const PRODUCTS = {
   // ── JuNubin+ ──
   [PRODUCT_IDS.PLUS_MONTHLY]: {

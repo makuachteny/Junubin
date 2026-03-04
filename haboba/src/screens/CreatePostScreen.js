@@ -26,7 +26,7 @@ export default function CreatePostScreen({ navigation }) {
   const [content, setContent] = useState('');
   const [selectedTheme, setSelectedTheme] = useState('default');
   const theme = POST_THEMES[selectedTheme];
-  const isDarkCard = theme.bg === '#1A1612' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+  const isDarkCard = theme.bg === '#1C1917' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
 
   const handlePost = () => {
     if (!content.trim()) {
