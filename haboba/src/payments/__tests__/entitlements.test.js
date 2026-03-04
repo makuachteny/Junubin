@@ -5,6 +5,7 @@ import {
   canUseAdvancedFilters,
   canUseIncognito,
   hasUnlimitedRewinds,
+  canUseWhispers,
   canUseDiasporaConnect,
   isSubscribed,
 } from '../entitlements';
@@ -41,9 +42,10 @@ describe('entitlements', () => {
       expect(hasUnlimitedLikes('plus')).toBe(true);
     });
 
-    it('canUseAdvancedFilters requires junub', () => {
-      expect(canUseAdvancedFilters('plus')).toBe(false);
+    it('canUseAdvancedFilters requires plus', () => {
+      expect(canUseAdvancedFilters('plus')).toBe(true);
       expect(canUseAdvancedFilters('junub')).toBe(true);
+      expect(canUseAdvancedFilters('free')).toBe(false);
     });
 
     it('canUseIncognito requires junub', () => {
@@ -60,6 +62,12 @@ describe('entitlements', () => {
     it('hasUnlimitedRewinds requires plus', () => {
       expect(hasUnlimitedRewinds('free')).toBe(false);
       expect(hasUnlimitedRewinds('plus')).toBe(true);
+    });
+
+    it('canUseWhispers requires plus', () => {
+      expect(canUseWhispers('free')).toBe(false);
+      expect(canUseWhispers('plus')).toBe(true);
+      expect(canUseWhispers('junub')).toBe(true);
     });
 
     it('isSubscribed checks for non-free tier', () => {

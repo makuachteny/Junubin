@@ -143,7 +143,7 @@ const ProfileSetupScreen = ({ navigation }) => {
         try {
           await profileService.uploadPhoto(uri);
         } catch (e) {
-          console.warn('Photo upload failed:', e.message);
+          if (__DEV__) console.warn('Photo upload failed:', e.message);
         }
       }
 

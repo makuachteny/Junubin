@@ -163,7 +163,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    height: 56,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.separator,
     backgroundColor: colors.white,

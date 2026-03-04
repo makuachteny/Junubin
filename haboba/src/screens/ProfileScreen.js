@@ -14,28 +14,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
-import { currentUser, imageSource } from '../data/mockProfiles';
+import ProfileCompletenessCard from '../components/ProfileCompletenessCard';
+import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
-import { useAuth } from '../auth';
-import * as profileService from '../api/services/profileService';
+import { useCurrentUser } from '../hooks';
+import { calculateCompleteness } from '../utils/profileCompleteness';
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { spotlights, superLikes, whispers, hasTier } = useSubscription();
-  const { session } = useAuth();
-  const [profile, setProfile] = useState(null);
+  const { currentUser } = useCurrentUser();
 
-  useEffect(() => {
-    if (!session) return;
-    profileService.getMyProfile().then((apiUser) => {
-      setProfile(profileService.normalizeProfile(apiUser));
-    }).catch(() => {});
-  }, [session]);
-
-  // Use API profile data if available, otherwise fall back to mock
-  const displayUser = profile || currentUser;
+  const displayUser = currentUser;
 
   // Stats counter animation
   const statsAnim = useRef(new Animated.Value(0)).current;
@@ -65,23 +57,14 @@ export default function ProfileScreen({ navigation }) {
   ], [animatedCounts.spotlights, animatedCounts.superLikes, animatedCounts.whispers, colors.accent]);
 
   const showJunubCTA = !hasTier('junub');
+  const completeness = useMemo(() => calculateCompleteness(displayUser?._raw || displayUser), [displayUser]);
 
   const handleEdit = () => {
     navigation.navigate('EditProfile');
   };
 
   const handleVerify = () => {
-    Alert.alert(
-      'Get Verified',
-      'Verification helps build trust with your matches. Take a selfie to verify your identity.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Verify Now',
-          onPress: () => Alert.alert('Verification', 'Selfie verification will be available in the next update!'),
-        },
-      ]
-    );
+    navigation.navigate('PhotoVerification');
   };
 
   const handleSticker = () => {
@@ -104,7 +87,7 @@ export default function ProfileScreen({ navigation }) {
         {/* Profile photo with border ring */}
         <View style={styles.photoSection}>
           <View style={styles.photoBorderContainer}>
-            <Image source={imageSource(displayUser.images?.[0]) || imageSource(currentUser.images?.[0])} style={styles.profilePhoto} />
+            <Image source={imageSource(displayUser.images?.[0])} style={styles.profilePhoto} />
           </View>
 
           {/* Edit button */}
@@ -122,13 +105,20 @@ export default function ProfileScreen({ navigation }) {
         </View>
 
         {/* Name */}
-        <Text style={styles.name}>{displayUser.name || currentUser.name}, {displayUser.age || currentUser.age}</Text>
+        <Text style={styles.name}>{displayUser.name}, {displayUser.age}</Text>
 
         {/* Verification row */}
         <TouchableOpacity style={styles.verifyBtn} onPress={handleVerify}>
           <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
           <Text style={styles.verifyText}>Get verified</Text>
         </TouchableOpacity>
+
+        <ProfileCompletenessCard
+          score={completeness.score}
+          suggestion={completeness.suggestions?.[0]}
+          onPress={() => navigation.navigate('EditProfile')}
+          colors={colors}
+        />
 
         {/* Stats row */}
         <View style={styles.statsRow}>
@@ -326,7 +316,7 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingTop: 22,
-    backgroundColor: '#332F2D',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },

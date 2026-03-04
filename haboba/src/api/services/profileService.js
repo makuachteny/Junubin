@@ -162,6 +162,8 @@ export async function deletePhoto(photoId) {
       }
     }
   }
+
+  return { success: true };
 }
 
 export async function getTrendingCurrentlyInto() {

@@ -13,8 +13,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { POST_THEMES, currentUser, imageSource } from '../data/mockProfiles';
+import { POST_THEMES } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
+import { useCurrentUser } from '../hooks';
+import { GraffitiLocation } from '../components/icons';
 
 const themeKeys = Object.keys(POST_THEMES);
 
@@ -22,11 +26,29 @@ export default function CreatePostScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  const { currentUser } = useCurrentUser();
 
   const [content, setContent] = useState('');
+  const [postImage, setPostImage] = useState(null);
   const [selectedTheme, setSelectedTheme] = useState('default');
   const theme = POST_THEMES[selectedTheme];
-  const isDarkCard = theme.bg === '#1C1917' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+  const isDarkCard = theme.bg === '#262626' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+
+  const handlePickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow photo access to add images.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!result.canceled) {
+      setPostImage(result.assets[0].uri);
+    }
+  };
 
   const handlePost = () => {
     if (!content.trim()) {
@@ -88,6 +110,17 @@ export default function CreatePostScreen({ navigation }) {
           <Text style={[styles.charCount, { color: isDarkCard ? 'rgba(255,255,255,0.3)' : colors.gray400 }]}>
             {content.length}/500
           </Text>
+          {postImage && (
+            <View style={{ marginTop: 8, borderRadius: 12, overflow: 'hidden' }}>
+              <Image source={{ uri: postImage }} style={{ width: '100%', height: 180, borderRadius: 12 }} />
+              <TouchableOpacity
+                style={{ position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 12, padding: 4 }}
+                onPress={() => setPostImage(null)}
+              >
+                <Ionicons name="close" size={16} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Theme selector */}
@@ -123,28 +156,28 @@ export default function CreatePostScreen({ navigation }) {
         <View style={styles.mediaRow}>
           <TouchableOpacity
             style={styles.mediaBtn}
-            onPress={() => Alert.alert('Photos', 'Photo picker coming soon!')}
+            onPress={handlePickImage}
           >
             <Ionicons name="image" size={22} color={colors.accent} />
             <Text style={styles.mediaBtnText}>Photo</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.mediaBtn}
-            onPress={() => Alert.alert('Location', 'Location sharing coming soon!')}
+            onPress={() => Alert.alert('Location', 'Location sharing is not yet available.')}
           >
-            <Ionicons name="location" size={22} color="#3B82F6" />
+            <GraffitiLocation size={22} color="#3B82F6" filled />
             <Text style={styles.mediaBtnText}>Location</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.mediaBtn}
-            onPress={() => Alert.alert('Tag', 'Tag friends coming soon!')}
+            onPress={() => Alert.alert('Tag Friends', 'Tagging is not yet available.')}
           >
             <Ionicons name="people" size={22} color="#10B981" />
             <Text style={styles.mediaBtnText}>Tag</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.mediaBtn}
-            onPress={() => Alert.alert('Poll', 'Polls coming soon!')}
+            onPress={() => Alert.alert('Polls', 'Polls are not yet available.')}
           >
             <Ionicons name="bar-chart" size={22} color="#F59E0B" />
             <Text style={styles.mediaBtnText}>Poll</Text>

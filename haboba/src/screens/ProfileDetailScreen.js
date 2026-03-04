@@ -14,13 +14,15 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GraffitiHeart, GraffitiSparkles, GraffitiStickerIcon } from '../components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, getShadow } from '../theme';
-import { imageSource } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
+import AdBanner from '../components/AdBanner';
 
 const SW = Dimensions.get('window').width;
 const PHOTO_H = SW * 1.3;
@@ -50,22 +52,22 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const profile = route.params?.profile || {};
   const [photoIdx, setPhotoIdx] = useState(0);
-  const { consumeSuperLike, superLikes } = useSubscription();
+  const { consumeSuperLike, superLikes, hasTier } = useSubscription();
   const { session } = useAuth();
 
-  const handlePass = () => { if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass').catch(() => {}); navigation.goBack(); };
+  const handlePass = () => { if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass').catch((e) => { if (__DEV__) console.warn('Pass swipe failed:', e); }); navigation.goBack(); };
   const handleLike = () => {
     if (session && profile.id) {
       discoverService.recordSwipe(profile.id, 'like').then((r) => {
         if (r?.match) Alert.alert('It\'s a Match!', `You and ${profile.name} liked each other!`);
-      }).catch(() => {});
+      }).catch((e) => { if (__DEV__) console.warn('Like swipe failed:', e); });
     }
     navigation.goBack();
   };
   const handleSuperLike = () => {
     if (superLikes <= 0) { Alert.alert('No Super Likes', 'You\'re out of Super Likes!', [{ text: 'Get More', onPress: () => { navigation.goBack(); navigation.navigate('Boost'); } }, { text: 'Cancel', style: 'cancel' }]); return; }
     consumeSuperLike();
-    if (session && profile.id) discoverService.recordSwipe(profile.id, 'super_like').catch(() => {});
+    if (session && profile.id) discoverService.recordSwipe(profile.id, 'super_like').catch((e) => { if (__DEV__) console.warn('Super like failed:', e); });
     navigation.goBack();
   };
 
@@ -120,7 +122,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
 
           {/* Gradient that bleeds into the info area */}
           <LinearGradient
-            colors={['transparent', isDark ? colors.cream : '#EDEAE7']}
+            colors={['transparent', isDark ? colors.cream : colors.creamDark]}
             style={s.photoGradient}
             pointerEvents="none"
           />
@@ -158,7 +160,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               ) : null}
               {(intention || lookingFor) ? (
                 <View style={[s.factPill, s.factFilled]}>
-                  <Ionicons name="heart" size={12} color="#FFF" />
+                  <GraffitiHeart size={12} color="#FFF" filled />
                   <Text style={s.factFilledText}>{intention || lookingFor}</Text>
                 </View>
               ) : null}
@@ -240,7 +242,11 @@ const ProfileDetailScreen = ({ navigation, route }) => {
                   {stickers.map((st, i) => (
                     <View key={i} style={s.stickerItem}>
                       <View style={s.stickerCircle}>
-                        <Text style={s.stickerEmoji}>{st.emoji}</Text>
+                        {GraffitiStickerIcon.has(st.emoji) ? (
+                          <GraffitiStickerIcon emoji={st.emoji} size={26} color={colors.accent} />
+                        ) : (
+                          <Text style={s.stickerEmoji}>{st.emoji}</Text>
+                        )}
                       </View>
                       <Text style={s.stickerLabel}>{st.label}</Text>
                     </View>
@@ -249,6 +255,9 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               </View>
             </Animated.View>
           )}
+
+          {/* ── Ad Banner ── */}
+          <AdBanner colors={colors} style={{ marginBottom: 12 }} />
 
           <View style={{ height: 110 }} />
         </View>
@@ -269,14 +278,30 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         },
       ]}>
         <TouchableOpacity style={s.passBtn} onPress={handlePass} activeOpacity={0.7}>
-          <Ionicons name="close" size={28} color="#C95D4F" />
+          <Ionicons name="close" size={28} color={colors.rose} />
         </TouchableOpacity>
         <TouchableOpacity style={s.likeBtn} onPress={handleLike} activeOpacity={0.8}>
-          <Ionicons name="heart" size={22} color="#FFF" />
+          <GraffitiHeart size={22} color="#FFF" filled />
           <Text style={s.likeBtnText}>Like</Text>
         </TouchableOpacity>
         <TouchableOpacity style={s.superBtn} onPress={handleSuperLike} activeOpacity={0.7}>
-          <Ionicons name="sparkles" size={22} color={colors.accent} />
+          <GraffitiSparkles size={22} color={colors.accent} filled />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={s.challengeBtn}
+          onPress={() => {
+            if (!hasTier('plus')) {
+              Alert.alert('JuNubin+ Feature', 'In-chat games require JuNubin+ or higher.', [
+                { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+                { text: 'Cancel', style: 'cancel' },
+              ]);
+              return;
+            }
+            navigation.navigate('Chat', { match: profile, startGame: true });
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="game-controller" size={20} color="#FFD700" />
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -284,7 +309,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
 };
 
 const getStyles = (colors, isDark) => StyleSheet.create({
-  root: { flex: 1, backgroundColor: isDark ? colors.cream : '#EDEAE7' },
+  root: { flex: 1, backgroundColor: isDark ? colors.cream : colors.creamDark },
 
   // ── Photo ──
   photoWrap: { width: SW, height: PHOTO_H, backgroundColor: colors.gray200 },
@@ -306,18 +331,18 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, marginTop: 8 },
   factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.white, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.gray200 },
   factText: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
-  factAccent: { borderColor: colors.accent, backgroundColor: isDark ? 'rgba(196,149,106,0.1)' : 'rgba(196,149,106,0.06)' },
+  factAccent: { borderColor: colors.accent, backgroundColor: isDark ? colors.accentTint10 : colors.accentTint06 },
   factFilled: { backgroundColor: colors.accent, borderColor: colors.accent },
   factFilledText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
 
   // ── Prompt — hero card ──
   promptCard: {
-    backgroundColor: isDark ? 'rgba(196,149,106,0.12)' : 'rgba(196,149,106,0.08)',
+    backgroundColor: isDark ? colors.accentTint12 : colors.accentTint08,
     borderRadius: 24,
     padding: 24,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(196,149,106,0.2)' : 'rgba(196,149,106,0.15)',
+    borderColor: isDark ? colors.accentTint25 : colors.accentTint15,
   },
   promptQ: { fontSize: 12, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.accent, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 },
   promptA: { fontSize: 22, lineHeight: 32, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.black, fontStyle: 'italic' },
@@ -340,16 +365,17 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // ── Identity — circles ──
   stickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
   stickerItem: { alignItems: 'center', gap: 6 },
-  stickerCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.white, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.roseTint35, ...getShadow('sm', isDark) },
+  stickerCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.accentTint08, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? colors.accentTint25 : colors.accentTint25, borderStyle: 'dashed' },
   stickerEmoji: { fontSize: 24 },
   stickerLabel: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray500 },
 
   // ── Action Bar ──
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? 'rgba(0,0,0,0.95)' : 'rgba(26,22,18,0.95)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: 'rgba(255,255,255,0.08)' },
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.95)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: 'rgba(255,255,255,0.08)' },
   passBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
   likeBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
   likeBtnText: { color: '#FFF', fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.5 },
   superBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
+  challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(255,215,0,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(255,215,0,0.25)' },
 });
 
 export default ProfileDetailScreen;

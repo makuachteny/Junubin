@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,12 +14,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { POST_THEMES, mockComments, currentUser, imageSource } from '../data/mockProfiles';
+import { POST_THEMES, mockComments } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
+import { useCurrentUser } from '../hooks';
+import { GraffitiSend } from '../components/icons';
+import ThemedRefreshControl from '../components/ThemedRefreshControl';
+import EmptyState from '../components/EmptyState';
 
 export default function PostDetailScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  const { currentUser } = useCurrentUser();
 
   const post = route.params?.post || {};
   const postId = post.id || 'post1';
@@ -31,9 +37,19 @@ export default function PostDetailScreen({ navigation, route }) {
   const [commentText, setCommentText] = useState('');
   const [following, setFollowing] = useState(false);
   const [commentLikes, setCommentLikes] = useState({});
+  const [replyTo, setReplyTo] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const scrollRef = useRef(null);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 800);
+  }, []);
 
   const theme = POST_THEMES[post.cardTheme] || POST_THEMES.default;
-  const isDarkCard = theme.bg === '#1C1917' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+  const isDarkCard = theme.bg === '#262626' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
 
   const handleLike = () => {
     setLiked(!liked);
@@ -82,7 +98,15 @@ export default function PostDetailScreen({ navigation, route }) {
         <View style={{ width: 30 }} />
       </View>
 
-      <ScrollView style={styles.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.body}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
         {/* Post card */}
         <View style={[styles.postCard, { backgroundColor: theme.bg }]}>
           {/* Post header */}
@@ -127,7 +151,7 @@ export default function PostDetailScreen({ navigation, route }) {
                 {likeCount}
               </Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}>
               <Ionicons name="chatbubble" size={20} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
               <Text style={[styles.actionText, { color: isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400 }]}>
                 {comments.length}
@@ -146,6 +170,14 @@ export default function PostDetailScreen({ navigation, route }) {
         <View style={styles.commentsSection}>
           <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
 
+          {comments.length === 0 && (
+            <EmptyState
+              icon="chatbubble-outline"
+              title="No comments yet"
+              subtitle="Start the conversation!"
+            />
+          )}
+
           {comments.map((comment) => {
             const isLiked = commentLikes[comment.id];
             return (
@@ -163,7 +195,7 @@ export default function PostDetailScreen({ navigation, route }) {
                         Like{isLiked ? 'd' : ''} ({comment.likes + (isLiked ? 1 : 0)})
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity>
+                    <TouchableOpacity onPress={() => { setReplyTo(comment.user.name); setCommentText(`@${comment.user.name} `); }}>
                       <Text style={styles.commentAction}>Reply</Text>
                     </TouchableOpacity>
                   </View>
@@ -192,7 +224,7 @@ export default function PostDetailScreen({ navigation, route }) {
         </View>
         {commentText.trim() ? (
           <TouchableOpacity onPress={handleComment} style={styles.sendBtn}>
-            <Ionicons name="send" size={18} color="#FFFFFF" />
+            <GraffitiSend size={18} color="#FFFFFF" filled />
           </TouchableOpacity>
         ) : null}
       </View>

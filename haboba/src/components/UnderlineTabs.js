@@ -23,12 +23,15 @@ export default function UnderlineTabs({
             style={[styles.tab, !scrollable && styles.tabFill]}
             activeOpacity={0.75}
             onPress={() => onChange(tab)}
+            accessibilityRole="tab"
+            accessibilityLabel={tab}
+            accessibilityState={{ selected: isActive }}
           >
             <Text
               style={[
                 styles.label,
-                { color: isDark ? '#D6D6D6' : '#4A4A4A' },
-                isActive && { color: isDark ? '#FFFFFF' : '#1F1F1F', fontFamily: FontFamily.bold },
+                { color: isDark ? colors.gray600 : colors.gray500 },
+                isActive && { color: colors.black, fontFamily: FontFamily.bold },
               ]}
             >
               {tab}

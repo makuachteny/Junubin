@@ -1,199 +1,200 @@
 // ═══════════════════════════════════════════════════════════
-// AnaJunubin — Warm Stone + Modern Tech Palette
-// Warm stone neutrals inspired by Tailwind's stone scale.
-// Richer accent red. Semantic surface tokens for elevation.
+// AnaJunubin — Instagram-Inspired Palette
+// Monochrome foundation with Instagram's warm gradient accent.
+// Primary accent drawn from the iconic story ring gradient.
+// OLED-optimized dark mode.
 // ═══════════════════════════════════════════════════════════
 
 export const LightPalette = {
   // ── Text ──
-  primary: '#1C1917',
-  primaryDark: '#0C0A09',
-  primaryLight: '#44403C',
+  primary: '#262626',
+  primaryDark: '#000000',
+  primaryLight: '#363636',
 
-  // ── Surfaces — warm grey dominant ──
-  cream: '#F0EEEB',
-  creamDark: '#E8E6E3',
-  creamLight: '#F5F3F0',
+  // ── Surfaces ──
+  cream: '#FFFFFF',
+  creamDark: '#FAFAFA',
+  creamLight: '#FFFFFF',
 
-  // ── Accent — Deeper Red ──
-  accent: '#E8453C',
-  accentDark: '#C62828',
-  accentLight: '#FECACA',
+  // ── Accent — Instagram Warm Orange ──
+  accent: '#F56040',
+  accentDark: '#E6683C',
+  accentLight: '#FDE8E2',
 
-  // ── Rose — Love actions (playful pink) ──
-  rose: '#FF80AB',
-  roseDark: '#F06292',
-  roseLight: '#FCE4EC',
+  // ── Rose — Instagram Heart Red ──
+  rose: '#ED4956',
+  roseDark: '#D32F2F',
+  roseLight: '#FDEDEF',
 
   // ── Functional ──
-  success: '#4CAF50',
-  warning: '#F9A825',
-  error: '#D32F2F',
-  info: '#FF7854',
+  success: '#58C322',
+  warning: '#FCAF45',
+  error: '#ED4956',
+  info: '#0095F6',
 
   // ── Core neutrals ──
-  white: '#F0EEEB',
-  black: '#1C1917',
+  white: '#FFFFFF',
+  black: '#262626',
 
-  // ── Neutral grays (warm stone) ──
-  gray: '#78716C',
-  grayLight: '#DEDBD8',
-  grayLighter: '#E8E6E3',
-  grayLightest: '#F0EEEB',
-  gray100: '#E8E6E3',
-  gray200: '#E7E5E4',
-  gray300: '#D6D3D1',
-  gray400: '#A8A29E',
-  gray500: '#78716C',
-  gray600: '#57534E',
-  gray700: '#44403C',
-  gray800: '#292524',
-  gray900: '#1C1917',
+  // ── Neutral grays (Instagram light) ──
+  gray: '#8E8E8E',
+  grayLight: '#DBDBDB',
+  grayLighter: '#EFEFEF',
+  grayLightest: '#FAFAFA',
+  gray100: '#FAFAFA',
+  gray200: '#EFEFEF',
+  gray300: '#DBDBDB',
+  gray400: '#8E8E8E',
+  gray500: '#737373',
+  gray600: '#555555',
+  gray700: '#363636',
+  gray800: '#262626',
+  gray900: '#121212',
 
   // ── Overlays ──
-  overlay: 'rgba(28, 25, 23, 0.72)',
-  overlayLight: 'rgba(28, 25, 23, 0.36)',
+  overlay: 'rgba(0, 0, 0, 0.65)',
+  overlayLight: 'rgba(0, 0, 0, 0.30)',
 
   // ── Cards ──
-  cardBg: '#F7F5F2',
-  cardBorder: '#DEDBD8',
+  cardBg: '#FFFFFF',
+  cardBorder: '#DBDBDB',
 
   // ── Tab bar ──
-  tabActive: '#E8453C',
-  tabInactive: '#A8A29E',
+  tabActive: '#262626',
+  tabInactive: '#8E8E8E',
 
-  // ── Gold — Premium features ──
-  gold: '#FFC107',
-  goldDark: '#F9A825',
-  goldLight: '#FFF9C4',
+  // ── Gold — Instagram Amber ──
+  gold: '#FCAF45',
+  goldDark: '#F77737',
+  goldLight: '#FFDC80',
 
-  // ── Royal — Energy accent ──
-  royal: '#FF7854',
-  royalDark: '#E64A19',
-  royalLight: '#FFCCBC',
+  // ── Royal — Instagram Purple ──
+  royal: '#833AB4',
+  royalDark: '#5851DB',
+  royalLight: '#C9A0DC',
 
   // ── Separator ──
-  separator: 'rgba(28, 25, 23, 0.08)',
+  separator: '#DBDBDB',
 
   // ── Semantic surface tokens ──
-  surface: '#F7F5F2',
-  surfaceMuted: '#E8E6E3',
-  surfaceHover: '#E2DFDC',
-  inputBg: '#E8E6E3',
-  inputBorder: '#DEDBD8',
-  accentSurface: 'rgba(232, 69, 60, 0.06)',
-  textSecondary: '#78716C',
-  textTertiary: '#A8A29E',
+  surface: '#FFFFFF',
+  surfaceMuted: '#FAFAFA',
+  surfaceHover: '#EFEFEF',
+  inputBg: '#EFEFEF',
+  inputBorder: '#DBDBDB',
+  accentSurface: 'rgba(245, 96, 64, 0.06)',
+  textSecondary: '#8E8E8E',
+  textTertiary: '#737373',
 
-  // ── Accent tints (derived from accent #E8453C) ──
-  accentTint04: 'rgba(232, 69, 60, 0.04)',
-  accentTint05: 'rgba(232, 69, 60, 0.05)',
-  accentTint06: 'rgba(232, 69, 60, 0.06)',
-  accentTint08: 'rgba(232, 69, 60, 0.08)',
-  accentTint10: 'rgba(232, 69, 60, 0.10)',
-  accentTint12: 'rgba(232, 69, 60, 0.12)',
-  accentTint15: 'rgba(232, 69, 60, 0.15)',
-  accentTint25: 'rgba(232, 69, 60, 0.25)',
+  // ── Accent tints (derived from #F56040) ──
+  accentTint04: 'rgba(245, 96, 64, 0.04)',
+  accentTint05: 'rgba(245, 96, 64, 0.05)',
+  accentTint06: 'rgba(245, 96, 64, 0.06)',
+  accentTint08: 'rgba(245, 96, 64, 0.08)',
+  accentTint10: 'rgba(245, 96, 64, 0.10)',
+  accentTint12: 'rgba(245, 96, 64, 0.12)',
+  accentTint15: 'rgba(245, 96, 64, 0.15)',
+  accentTint25: 'rgba(245, 96, 64, 0.25)',
 
-  // ── Rose tints ──
-  roseTint12: 'rgba(255, 128, 171, 0.12)',
-  roseTint20: 'rgba(255, 128, 171, 0.20)',
-  roseTint35: 'rgba(255, 128, 171, 0.35)',
+  // ── Rose tints (derived from #ED4956) ──
+  roseTint12: 'rgba(237, 73, 86, 0.12)',
+  roseTint20: 'rgba(237, 73, 86, 0.20)',
+  roseTint35: 'rgba(237, 73, 86, 0.35)',
 };
 
 export const DarkPalette = {
-  // ── Text (flipped for dark mode) ──
-  primary: '#EDEDEB',
-  primaryDark: '#F5F5F3',
-  primaryLight: '#C8C5C1',
+  // ── Text (bright on dark) ──
+  primary: '#F5F5F5',
+  primaryDark: '#FFFFFF',
+  primaryLight: '#C7C7C7',
 
-  // ── Surfaces — warm dark grey ──
-  cream: '#1A1816',
-  creamDark: '#141210',
-  creamLight: '#201E1C',
+  // ── Surfaces — OLED-optimized pure black ──
+  cream: '#000000',
+  creamDark: '#000000',
+  creamLight: '#121212',
 
-  // ── Accent — Warm bright red for dark bg ──
-  accent: '#FF6B5A',
-  accentDark: '#E8453C',
-  accentLight: '#FECACA',
+  // ── Accent — Instagram Warm Orange ──
+  accent: '#F56040',
+  accentDark: '#E6683C',
+  accentLight: '#FDE8E2',
 
-  // ── Rose — Love actions (brighter for dark bg) ──
-  rose: '#FF80AB',
-  roseDark: '#FF5252',
-  roseLight: '#F8BBD0',
+  // ── Rose — Instagram Heart Red ──
+  rose: '#ED4956',
+  roseDark: '#FF6B6B',
+  roseLight: '#FDEDEF',
 
   // ── Functional ──
-  success: '#66BB6A',
-  warning: '#FFD54F',
-  error: '#FF5252',
-  info: '#FF8A65',
+  success: '#58C322',
+  warning: '#FCAF45',
+  error: '#ED4956',
+  info: '#0095F6',
 
   // ── Core neutrals (flipped) ──
-  white: '#1A1816',
-  black: '#EDEDEB',
+  white: '#000000',
+  black: '#F5F5F5',
 
-  // ── Neutral grays (warm stone inverted) ──
-  gray: '#A8A29E',
-  grayLight: '#4A4541',
-  grayLighter: '#332F2D',
-  grayLightest: '#252220',
-  gray100: '#252220',
-  gray200: '#332F2D',
-  gray300: '#4A4541',
-  gray400: '#78716C',
-  gray500: '#A8A29E',
-  gray600: '#D6D3D1',
-  gray700: '#E7E5E4',
-  gray800: '#F0EEEB',
-  gray900: '#EDEDEB',
+  // ── Neutral grays (Instagram dark — inverted scale) ──
+  gray: '#8E8E8E',
+  grayLight: '#363636',
+  grayLighter: '#262626',
+  grayLightest: '#1C1C1C',
+  gray100: '#121212',
+  gray200: '#1C1C1C',
+  gray300: '#262626',
+  gray400: '#737373',
+  gray500: '#8E8E8E',
+  gray600: '#C7C7C7',
+  gray700: '#DBDBDB',
+  gray800: '#EFEFEF',
+  gray900: '#F5F5F5',
 
   // ── Overlays ──
   overlay: 'rgba(0, 0, 0, 0.80)',
   overlayLight: 'rgba(0, 0, 0, 0.45)',
 
   // ── Cards ──
-  cardBg: '#252220',
-  cardBorder: '#332F2D',
+  cardBg: '#121212',
+  cardBorder: '#262626',
 
   // ── Tab bar ──
-  tabActive: '#FF6B5A',
-  tabInactive: '#78716C',
+  tabActive: '#FFFFFF',
+  tabInactive: '#8E8E8E',
 
-  // ── Gold — Premium features ──
-  gold: '#FFD54F',
-  goldDark: '#FFC107',
-  goldLight: '#FFF9C4',
+  // ── Gold — Instagram Amber ──
+  gold: '#FCAF45',
+  goldDark: '#F77737',
+  goldLight: '#FFDC80',
 
-  // ── Royal — Energy accent ──
-  royal: '#FF8A65',
-  royalDark: '#FF7854',
-  royalLight: '#FFCCBC',
+  // ── Royal — Instagram Purple ──
+  royal: '#833AB4',
+  royalDark: '#5851DB',
+  royalLight: '#C9A0DC',
 
   // ── Separator ──
-  separator: 'rgba(255, 255, 255, 0.10)',
+  separator: '#262626',
 
   // ── Semantic surface tokens ──
-  surface: '#201E1C',
-  surfaceMuted: '#1A1816',
-  surfaceHover: '#332F2D',
-  inputBg: '#252220',
-  inputBorder: '#332F2D',
-  accentSurface: 'rgba(255, 107, 90, 0.08)',
-  textSecondary: '#A8A29E',
-  textTertiary: '#78716C',
+  surface: '#121212',
+  surfaceMuted: '#000000',
+  surfaceHover: '#1C1C1C',
+  inputBg: '#262626',
+  inputBorder: '#363636',
+  accentSurface: 'rgba(245, 96, 64, 0.10)',
+  textSecondary: '#8E8E8E',
+  textTertiary: '#737373',
 
-  // ── Accent tints (derived from dark accent #FF6B5A) ──
-  accentTint04: 'rgba(255, 107, 90, 0.04)',
-  accentTint05: 'rgba(255, 107, 90, 0.05)',
-  accentTint06: 'rgba(255, 107, 90, 0.06)',
-  accentTint08: 'rgba(255, 107, 90, 0.08)',
-  accentTint10: 'rgba(255, 107, 90, 0.10)',
-  accentTint12: 'rgba(255, 107, 90, 0.12)',
-  accentTint15: 'rgba(255, 107, 90, 0.15)',
-  accentTint25: 'rgba(255, 107, 90, 0.25)',
+  // ── Accent tints (derived from #F56040) ──
+  accentTint04: 'rgba(245, 96, 64, 0.04)',
+  accentTint05: 'rgba(245, 96, 64, 0.05)',
+  accentTint06: 'rgba(245, 96, 64, 0.06)',
+  accentTint08: 'rgba(245, 96, 64, 0.08)',
+  accentTint10: 'rgba(245, 96, 64, 0.10)',
+  accentTint12: 'rgba(245, 96, 64, 0.12)',
+  accentTint15: 'rgba(245, 96, 64, 0.15)',
+  accentTint25: 'rgba(245, 96, 64, 0.25)',
 
-  // ── Rose tints ──
-  roseTint12: 'rgba(255, 128, 171, 0.12)',
-  roseTint20: 'rgba(255, 128, 171, 0.20)',
-  roseTint35: 'rgba(255, 128, 171, 0.35)',
+  // ── Rose tints (derived from #ED4956) ──
+  roseTint12: 'rgba(237, 73, 86, 0.12)',
+  roseTint20: 'rgba(237, 73, 86, 0.20)',
+  roseTint35: 'rgba(237, 73, 86, 0.35)',
 };

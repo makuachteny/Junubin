@@ -22,11 +22,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
+import { GraffitiSparkles } from '../components/icons';
 import Button from '../components/Button';
-import { currentUser } from '../data/mockProfiles';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
+import { interactiveStore } from '../utils/interactiveStore';
 
 // ── Member preferences ──────────────────────────────────────
 const MEMBER_PREFS = [
@@ -66,10 +68,10 @@ const SOCIAL_PREFS = [
 
 // Icon tint colors based on category
 const ICON_TINTS = {
-  accent: { light: 'rgba(232, 69, 60, 0.10)', dark: 'rgba(255, 107, 90, 0.14)', iconLight: '#E8453C', iconDark: '#FF6B5A' },
-  warm: { light: 'rgba(255, 120, 84, 0.10)', dark: 'rgba(255, 138, 101, 0.14)', iconLight: '#FF7854', iconDark: '#FF8A65' },
+  accent: { light: 'rgba(245, 96, 64, 0.10)', dark: 'rgba(245, 96, 64, 0.14)', iconLight: '#F56040', iconDark: '#F56040' },
+  warm: { light: 'rgba(245, 96, 64, 0.10)', dark: 'rgba(245, 96, 64, 0.14)', iconLight: '#F56040', iconDark: '#F56040' },
   gold: { light: 'rgba(249, 168, 37, 0.10)', dark: 'rgba(255, 213, 79, 0.14)', iconLight: '#F9A825', iconDark: '#FFD54F' },
-  neutral: { light: 'rgba(120, 113, 108, 0.08)', dark: 'rgba(168, 162, 158, 0.12)', iconLight: '#78716C', iconDark: '#A8A29E' },
+  neutral: { light: 'rgba(115, 115, 115, 0.08)', dark: 'rgba(142, 142, 142, 0.12)', iconLight: '#737373', iconDark: '#8E8E8E' },
 };
 
 // Check if a value is a "default" / unset value
@@ -264,6 +266,12 @@ export default function PreferencesScreen({ navigation, route }) {
   const [socialPrefValues, setSocialPrefValues] = useState(() =>
     SOCIAL_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: pref.value }), {})
   );
+  const [friendLayerEnabled, setFriendLayerEnabled] = useState(true);
+  const [seasonMode, setSeasonMode] = useState('Festival');
+  const [questAnswers] = useState({
+    weekend: 'Adventure',
+    chat: 'Playful',
+  });
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { hasTier } = useSubscription();
   const isSubscriber = hasTier('plus');
@@ -275,6 +283,10 @@ export default function PreferencesScreen({ navigation, route }) {
         setMode(stored);
         slideAnim.setValue(stored === 'Social' ? 1 : 0);
       }
+    });
+    interactiveStore.getFriendLayer().then((enabled) => setFriendLayerEnabled(!!enabled));
+    interactiveStore.getSeasonMode().then((saved) => {
+      if (saved) setSeasonMode(saved);
     });
   }, [slideAnim]);
 
@@ -309,6 +321,24 @@ export default function PreferencesScreen({ navigation, route }) {
   }, [route.params?.updatedPref, navigation]);
 
   const { session } = useAuth();
+  const { refreshUser } = useCurrentUser();
+
+  const handleSeasonMode = useCallback((nextMode) => {
+    setSeasonMode(nextMode);
+    interactiveStore.setSeasonMode(nextMode);
+  }, []);
+
+  const toggleFriendLayer = useCallback(() => {
+    if (!isSubscriber) {
+      navigation?.navigate?.('Elite');
+      return;
+    }
+    setFriendLayerEnabled((prev) => {
+      const next = !prev;
+      interactiveStore.setFriendLayer(next);
+      return next;
+    });
+  }, [isSubscriber, navigation]);
 
   const handleDone = async () => {
     const prefSource = mode === 'Social' ? socialPrefValues : memberPrefValues;
@@ -317,24 +347,19 @@ export default function PreferencesScreen({ navigation, route }) {
       .map((n) => Number(String(n).trim()));
     const parsedDistance = Number((prefSource.distance || '25 miles').split(' ')[0]);
 
-    if (!Number.isNaN(minAge) && !Number.isNaN(maxAge)) {
-      currentUser.preferences.ageRange = [minAge, maxAge];
-    }
-    if (!Number.isNaN(parsedDistance)) {
-      currentUser.preferences.distance = parsedDistance;
-    }
-    if (mode === 'Dating') {
-      currentUser.preferences.lookingFor = memberPrefValues.interestedIn || currentUser.preferences.lookingFor;
-    }
-
-    // Save to API
+    // Persist via API — no more direct mutation
     if (session) {
       const updates = {};
       if (!Number.isNaN(minAge)) updates.minPreferredAge = minAge;
       if (!Number.isNaN(maxAge)) updates.maxPreferredAge = maxAge;
       if (!Number.isNaN(parsedDistance)) updates.maxDistanceKm = Math.round(parsedDistance * 1.6);
       if (mode === 'Dating' && memberPrefValues.interestedIn) updates.lookingForGender = memberPrefValues.interestedIn;
-      profileService.updateProfile(updates).catch(() => {});
+      try {
+        await profileService.updateProfile(updates);
+        await refreshUser();
+      } catch {
+        // Silently fail — preferences will sync next time
+      }
     }
 
     navigation.goBack();
@@ -427,7 +452,7 @@ export default function PreferencesScreen({ navigation, route }) {
           <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
-          {isSocial ? 'Social Preferences' : 'Dating Preferences'}
+          {isSocial ? 'Socializing' : 'Dating'}
         </Text>
         <TouchableOpacity onPress={handleDone}>
           <Text style={styles.doneText}>Done</Text>
@@ -456,12 +481,12 @@ export default function PreferencesScreen({ navigation, route }) {
               ]}
             />
           )}
-          {['Dating', 'Social'].map((seg) => (
+          {[{ label: 'Date', value: 'Dating' }, { label: 'Socialize', value: 'Social' }].map((seg) => (
             <TouchableOpacity
-              key={seg}
+              key={seg.value}
               style={styles.segmentButton}
               activeOpacity={0.7}
-              onPress={() => handleModeToggle(seg)}
+              onPress={() => handleModeToggle(seg.value)}
             >
               <Animated.Text
                 style={[
@@ -469,14 +494,14 @@ export default function PreferencesScreen({ navigation, route }) {
                   {
                     color: slideAnim.interpolate({
                       inputRange: [0, 1],
-                      outputRange: seg === 'Dating'
+                      outputRange: seg.value === 'Dating'
                         ? ['#FFFFFF', colors.gray600]
                         : [colors.gray600, '#FFFFFF'],
                     }),
                   },
                 ]}
               >
-                {seg}
+                {seg.label}
               </Animated.Text>
             </TouchableOpacity>
           ))}
@@ -487,7 +512,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {/* ── SOCIAL PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
-              <Text style={styles.sectionHeader}>Social Preferences</Text>
+              <Text style={styles.sectionHeader}>Socializing Preferences</Text>
             </View>
             <View style={styles.card}>
               {SOCIAL_PREFS.map((pref, index) =>
@@ -522,7 +547,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {!isSubscriber && (
               <View style={styles.unlockBanner}>
                 <View style={styles.unlockIconRow}>
-                  <Ionicons name="sparkles" size={20} color={colors.gold} />
+                  <GraffitiSparkles size={20} color={colors.gold} filled />
                 </View>
                 <Text style={styles.unlockTitle}>Unlock Advanced Filters</Text>
                 <Text style={styles.unlockText}>
@@ -552,6 +577,65 @@ export default function PreferencesScreen({ navigation, route }) {
           </>
         )}
 
+        <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+          <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+          <Text style={styles.sectionHeader}>Interactive Experience</Text>
+        </View>
+        <View style={styles.card}>
+          <PressablePrefRow
+            style={[styles.prefRow, styles.prefRowBorder]}
+            onPress={toggleFriendLayer}
+            activeOpacity={0.75}
+          >
+            <View style={styles.prefLeft}>
+              <View style={[styles.prefIconWrap, { backgroundColor: colors.accentTint08 }]}>
+                <Ionicons name="people-circle-outline" size={18} color={colors.accent} />
+              </View>
+              <Text style={styles.prefLabel}>Friend-of-friend layer</Text>
+            </View>
+            <View style={styles.prefRight}>
+              <Text style={[styles.prefValue, friendLayerEnabled && styles.prefValueSet]}>
+                {friendLayerEnabled ? 'Enabled' : 'Disabled'}
+              </Text>
+            </View>
+          </PressablePrefRow>
+
+          <View style={[styles.prefRow, styles.prefRowBorder]}>
+            <View style={styles.prefLeft}>
+              <View style={[styles.prefIconWrap, { backgroundColor: colors.accentTint08 }]}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
+              </View>
+              <Text style={styles.prefLabel}>Seasonal mode</Text>
+            </View>
+            <View style={styles.seasonChips}>
+              {['Festival', 'Travel', 'Summer'].map((modeLabel) => (
+                <TouchableOpacity
+                  key={modeLabel}
+                  style={[styles.seasonChip, seasonMode === modeLabel && styles.seasonChipActive]}
+                  onPress={() => handleSeasonMode(modeLabel)}
+                >
+                  <Text style={[styles.seasonChipText, seasonMode === modeLabel && styles.seasonChipTextActive]}>
+                    {modeLabel}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.prefRow}>
+            <View style={styles.prefLeft}>
+              <View style={[styles.prefIconWrap, { backgroundColor: colors.accentTint08 }]}>
+                <Ionicons name="planet-outline" size={18} color={colors.accent} />
+              </View>
+              <Text style={styles.prefLabel}>Personality quest</Text>
+            </View>
+            <View style={styles.questMeta}>
+              <Text style={styles.prefValue}>Weekend: {questAnswers.weekend}</Text>
+              <Text style={styles.prefValue}>Chat: {questAnswers.chat}</Text>
+            </View>
+          </View>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </View>
@@ -561,15 +645,15 @@ export default function PreferencesScreen({ navigation, route }) {
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: isDark ? colors.cream : '#EDEAE7',
+    backgroundColor: isDark ? colors.cream : colors.creamDark,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: isDark ? colors.cream : '#EDEAE7',
+    height: 56,
+    backgroundColor: isDark ? colors.cream : colors.creamDark,
   },
   headerTitle: {
     fontSize: 34,
@@ -688,7 +772,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // Preference card
   card: {
-    backgroundColor: isDark ? colors.surface : '#F7F5F2',
+    backgroundColor: isDark ? colors.surface : colors.creamDark,
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: isDark ? 0.5 : 0,
@@ -749,5 +833,37 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: colors.accent,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
+  },
+  seasonChips: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+    gap: 6,
+    maxWidth: '56%',
+  },
+  seasonChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    backgroundColor: colors.white,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  seasonChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint08,
+  },
+  seasonChipText: {
+    ...Typography.caption,
+    color: colors.gray600,
+    fontSize: 9,
+  },
+  seasonChipTextActive: {
+    color: colors.accent,
+  },
+  questMeta: {
+    alignItems: 'flex-end',
+    maxWidth: '56%',
   },
 });

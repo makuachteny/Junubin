@@ -17,13 +17,17 @@ export function hasUnlimitedRewinds(tier) {
   return hasTierAccess(tier, 'plus');
 }
 
+export function canUseWhispers(tier) {
+  return hasTierAccess(tier, 'plus');
+}
+
 // Junub features
 export function canSeeWhoLikesYou(tier) {
   return hasTierAccess(tier, 'junub');
 }
 
 export function canUseAdvancedFilters(tier) {
-  return hasTierAccess(tier, 'junub');
+  return hasTierAccess(tier, 'plus');
 }
 
 export function canUseIncognito(tier) {

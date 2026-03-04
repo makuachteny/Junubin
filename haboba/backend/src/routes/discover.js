@@ -6,6 +6,8 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 import { rankCandidates } from '../utils/scoring.js';
 import { getOrComputeVector } from '../utils/preferenceVector.js';
 import { getPopularityBatch, getCollaborativeBoosts } from '../utils/popularity.js';
+import { matchingConfig } from '../config/matching.js';
+import { emitAnalyticsEvent } from '../utils/analytics.js';
 
 const router = Router();
 
@@ -106,11 +108,38 @@ router.get(
       ? await getCollaborativeBoosts(req.user.id, candidateIds)
       : {};
 
-    const ranked = rankCandidates(pool, currentUserProfile, query.limit, 5, {
+    const rankedResult = rankCandidates(pool, currentUserProfile, query.limit, matchingConfig.windowSize, {
       preferenceVector,
       popularityMap,
       collaborativeBoosts,
+      exploreRate: matchingConfig.exploreRate,
+      includeScores: matchingConfig.analyticsEnabled,
     });
+    const ranked = matchingConfig.analyticsEnabled
+      ? rankedResult.map((item) => item.candidate)
+      : rankedResult;
+
+    if (
+      matchingConfig.analyticsEnabled &&
+      Math.random() < matchingConfig.analyticsSampleRate
+    ) {
+      const top = rankedResult
+        .slice(0, matchingConfig.analyticsTopK)
+        .map((item) => ({
+          candidateId: item.candidate.id,
+          score: item.score,
+          breakdown: item.breakdown,
+        }));
+
+      emitAnalyticsEvent('discover_ranked', {
+        userId: req.user.id,
+        mode: query.mode,
+        poolSize: pool.length,
+        returnedCount: ranked.length,
+        top,
+      });
+    }
+
     const nextCursor = hasMore ? pool[pool.length - 1].id : null;
 
     res.json({ profiles: ranked, nextCursor });

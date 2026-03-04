@@ -10,15 +10,16 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { GraffitiFlame } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
-import { currentUser } from '../data/mockProfiles';
 import { useSubscription } from '../payments';
 import { CommonActions } from '@react-navigation/native';
 import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
 
 const TIER_LABELS = { free: 'Free', plus: 'JuNubin+', junub: 'Junub' };
@@ -60,8 +61,9 @@ export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
   const { logout, session } = useAuth();
-  const mode = currentUser.preferences.mode;
-  const [showMe, setShowMe] = useState(currentUser.preferences.showMe);
+  const { currentUser } = useCurrentUser();
+  const mode = currentUser.preferences?.mode || 'Dating';
+  const [showMe, setShowMe] = useState(currentUser.preferences?.showMe ?? true);
 
   const handleShowMeToggle = (val) => {
     setShowMe(val);
@@ -70,9 +72,9 @@ export default function SettingsScreen({ navigation }) {
     }
   };
   const [ads, setAds] = useState(true);
-  const lookingFor = currentUser.preferences.lookingFor;
+  const lookingFor = currentUser.preferences?.lookingFor || 'Women';
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const { tier, hasTier, restorePurchases, cancelSubscription, isSubscribed, purchaseInProgress, reset } = useSubscription();
+  const { tier, hasTier, restorePurchases, cancelSubscription, isSubscribed, purchaseInProgress, reset, spotlights, superLikes } = useSubscription();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
   const contentAnim = useRef(new Animated.Value(0)).current;
 
@@ -149,6 +151,8 @@ export default function SettingsScreen({ navigation }) {
   }, [navigation]);
 
   const menuItems = useMemo(() => [
+    { label: 'Invite Friends', icon: 'gift-outline', onPress: () => navigation.navigate('Referral') },
+    { label: 'Verify Your Photo', icon: 'camera-outline', onPress: () => navigation.navigate('PhotoVerification') },
     { label: 'FAQ', icon: 'help-circle-outline', onPress: () => handleInfoPagePress('faq') },
     { label: 'Contact Us', icon: 'mail-outline', onPress: () => handleInfoPagePress('contact') },
     { label: 'Terms of Use', icon: 'document-text-outline', onPress: () => handleInfoPagePress('terms') },
@@ -158,20 +162,20 @@ export default function SettingsScreen({ navigation }) {
     { label: 'Manage Subscription', icon: 'card-outline', onPress: handleManageSubscription },
     { label: 'Restore Purchases', icon: 'refresh-outline', onPress: handleRestore },
     { label: 'Manage Account', icon: 'person-outline', onPress: handleManageAccount },
-  ], [handleInfoPagePress, handleManageAccount, handleManageSubscription, handleRestore]);
+  ], [handleInfoPagePress, handleManageAccount, handleManageSubscription, handleRestore, navigation]);
   const surveySnapshot = useMemo(() => [
     { label: 'Mode', value: mode },
     { label: 'Looking For', value: lookingFor },
-    { label: 'Distance', value: `${currentUser.preferences.distance} mi` },
-    { label: 'Age Range', value: `${currentUser.preferences.ageRange[0]}-${currentUser.preferences.ageRange[1]}` },
+    { label: 'Distance', value: `${currentUser.preferences?.distance || 50} mi` },
+    { label: 'Age Range', value: `${currentUser.preferences?.ageRange?.[0] || 21}-${currentUser.preferences?.ageRange?.[1] || 30}` },
     { label: 'Show Me on AnaJubin', value: showMe ? 'On' : 'Off' },
   ], [mode, lookingFor, showMe]);
   const appChanges = useMemo(() => [
     { label: 'Theme', value: isDark ? 'Dark' : 'Light' },
     { label: 'Ads', value: ads ? 'On' : 'Off' },
     { label: 'Membership', value: TIER_LABELS[tier] },
-    { label: 'Spotlights', value: `${currentUser.boosts}` },
-    { label: 'Super Likes', value: `${currentUser.superLikes}` },
+    { label: 'Spotlights', value: `${spotlights}` },
+    { label: 'Super Likes', value: `${superLikes}` },
   ], [isDark, ads, tier]);
 
   return (
@@ -236,7 +240,7 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={styles.boostRow}>
           <TouchableOpacity style={styles.boostCard} onPress={() => navigation.navigate('Boost')}>
-            <Ionicons name="flash" size={24} color={colors.accent} />
+            <GraffitiFlame size={24} color={colors.accent} filled />
             <Text style={styles.boostCardText}>GET MORE{'\n'}SPOTLIGHTS</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.superLikeCard} onPress={() => navigation.navigate('Elite')}>
@@ -249,13 +253,18 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.othersSection}>
           <Text style={styles.othersTitle}>Others</Text>
 
-          <PressableRow style={styles.menuRow} onPress={() => handleInfoPagePress('email')}>
+          <PressableRow style={styles.menuRow} onPress={() => handleInfoPagePress('contact')}>
             <Text style={styles.menuLabel}>Email</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
           </PressableRow>
 
           <PressableRow style={styles.menuRow} onPress={() => navigation.navigate('Notifications')}>
             <Text style={styles.menuLabel}>Push Notifications</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
+          </PressableRow>
+
+          <PressableRow style={styles.menuRow} onPress={() => navigation.navigate('GameSettings')}>
+            <Text style={styles.menuLabel}>Game Settings</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
           </PressableRow>
 
@@ -362,14 +371,16 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    height: 56,
     borderBottomWidth: 0,
   },
   headerTitle: {
-    ...Typography.screenTitle,
+    fontSize: 34,
+    fontFamily: FontFamily.script,
     color: colors.black,
     flex: 1,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   doneText: {
     ...Typography.bodySemibold,

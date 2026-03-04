@@ -314,6 +314,9 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
           style={styles.filterIconButton}
           onPress={onSettingsPress}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Filter settings"
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
         >
           <Ionicons name="options-outline" size={18} color={isDark ? '#FFFFFF' : colors.black} />
         </TouchableOpacity>
@@ -339,6 +342,9 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
                 ]}
                 onPress={() => handlePillPress(filter)}
                 activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${filter.label}`}
+                accessibilityState={{ selected: isActive }}
               >
                 <Text
                   style={[

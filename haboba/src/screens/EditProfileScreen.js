@@ -10,12 +10,17 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { currentUser, CULTURAL_STICKERS, imageSource } from '../data/mockProfiles';
+import { CULTURAL_STICKERS } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
+import { GraffitiStickerIcon } from '../components/icons';
 import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
 import CurrentlyIntoSelector from '../components/CurrentlyIntoSelector';
 
@@ -28,25 +33,25 @@ const formReducer = (state, action) => {
   }
 };
 
-const initialFormState = {
-  name: currentUser.name,
-  bio: 'Designer exploring the city',
-  job: '',
-  school: '',
-  lookingFor: 'Something serious',
-};
-
 export default function EditProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { session, updateUser } = useAuth();
+  const { currentUser, refreshUser } = useCurrentUser();
   const [saving, setSaving] = useState(false);
 
-  const [form, dispatch] = useReducer(formReducer, initialFormState);
+  const [form, dispatch] = useReducer(formReducer, {
+    name: currentUser.name || '',
+    bio: currentUser.bio || '',
+    job: currentUser.job || '',
+    school: currentUser.school || '',
+    lookingFor: currentUser.lookingFor || 'Something serious',
+  });
   const setField = useCallback((key, value) => dispatch({ type: 'SET_FIELD', key, value }), []);
   const [selectedStickers, setSelectedStickers] = useState([0, 4]); // Dinka, Junub
-  const [currentlyInto, setCurrentlyInto] = useState([]);
+  const [currentlyInto, setCurrentlyInto] = useState(currentUser.currentlyInto || []);
+  const [uploading, setUploading] = useState(false);
 
   const lookingForOptions = ['Something serious', "Let's see where it goes", 'Marriage-minded', 'Friendship', 'Networking'];
 
@@ -61,6 +66,33 @@ export default function EditProfileScreen({ navigation }) {
       }
       return [...prev, index];
     });
+  };
+
+  const handleAddPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please allow photo access to add photos.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [3, 4],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+
+    const uri = result.assets[0].uri;
+    if (!session) return;
+    setUploading(true);
+    try {
+      await profileService.uploadPhoto(uri);
+      await refreshUser();
+    } catch (err) {
+      Alert.alert('Upload Failed', err.message || 'Could not upload photo. Please try again.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -81,6 +113,7 @@ export default function EditProfileScreen({ navigation }) {
         currentlyInto,
       });
       updateUser(user);
+      await refreshUser();
       Alert.alert('Profile Updated!', 'Your changes have been saved.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -111,10 +144,25 @@ export default function EditProfileScreen({ navigation }) {
         {/* Photos */}
         <Text style={styles.sectionTitle}>Photos</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosRow}>
-          {currentUser.images.map((img, i) => (
+          {(currentUser.images || []).map((img, i) => (
             <View key={i} style={styles.photoCard}>
               <Image source={imageSource(img)} style={styles.photo} />
-              <TouchableOpacity style={styles.photoRemove}>
+              <TouchableOpacity
+                style={styles.photoRemove}
+                onPress={() => {
+                  if (!session || !currentUser._raw) return;
+                  const photo = currentUser._raw?.photos?.[i];
+                  if (!photo) return;
+                  Alert.alert('Remove Photo', 'Delete this photo?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: () => {
+                      profileService.deletePhoto(photo.id).then(() => refreshUser()).catch((err) => {
+                        Alert.alert('Error', err.message || 'Could not delete photo.');
+                      });
+                    }},
+                  ]);
+                }}
+              >
                 <Ionicons name="close-circle" size={22} color={colors.accent} />
               </TouchableOpacity>
               {i === 0 && (
@@ -127,10 +175,17 @@ export default function EditProfileScreen({ navigation }) {
           {/* Add photo button */}
           <TouchableOpacity
             style={styles.addPhotoCard}
-            onPress={() => Alert.alert('Add Photo', 'Photo picker coming soon!')}
+            onPress={handleAddPhoto}
+            disabled={uploading}
           >
-            <Ionicons name="add" size={32} color={colors.accent} />
-            <Text style={styles.addPhotoText}>Add</Text>
+            {uploading ? (
+              <ActivityIndicator size="small" color={colors.accent} />
+            ) : (
+              <>
+                <Ionicons name="add" size={32} color={colors.accent} />
+                <Text style={styles.addPhotoText}>Add</Text>
+              </>
+            )}
           </TouchableOpacity>
         </ScrollView>
 
@@ -215,7 +270,11 @@ export default function EditProfileScreen({ navigation }) {
                 style={[styles.stickerChip, isSelected && styles.stickerChipActive]}
                 onPress={() => toggleSticker(index)}
               >
-                <Text style={styles.stickerEmoji}>{sticker.emoji}</Text>
+                {GraffitiStickerIcon.has(sticker.emoji) ? (
+                  <GraffitiStickerIcon emoji={sticker.emoji} size={20} color={isSelected ? colors.accent : colors.gray500} />
+                ) : (
+                  <Text style={styles.stickerEmoji}>{sticker.emoji}</Text>
+                )}
                 <Text style={[styles.stickerLabel, isSelected && styles.stickerLabelActive]}>
                   {sticker.label}
                 </Text>

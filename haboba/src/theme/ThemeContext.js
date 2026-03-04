@@ -17,6 +17,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     AsyncStorage.getItem(THEME_KEY).then((val) => {
       if (val === 'dark') setIsDark(true);
+    }).catch(() => {}).finally(() => {
       setLoaded(true);
     });
   }, []);
@@ -24,7 +25,7 @@ export function ThemeProvider({ children }) {
   const toggleTheme = () => {
     setIsDark((prev) => {
       const next = !prev;
-      AsyncStorage.setItem(THEME_KEY, next ? 'dark' : 'light');
+      AsyncStorage.setItem(THEME_KEY, next ? 'dark' : 'light').catch(() => {});
       return next;
     });
   };

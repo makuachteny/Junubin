@@ -24,7 +24,7 @@ const PHOTOS = {
 };
 
 // Avatars are the same images
-const AVATARS = PHOTOS;
+export const AVATARS = PHOTOS;
 
 // Re-export from utils for backward compatibility
 export { imageSource } from '../utils/imageSource';
@@ -381,10 +381,21 @@ export const mockProfiles = [
 
 // ── People who liked the current user (linked to real profiles) ──
 export const mockLikes = [
-  { id: 'like1', name: 'Nyibol', age: 22, images: [PHOTOS.p8], distance: '2 mi', verified: true },
-  { id: 'like2', name: 'Akuol', age: 25, images: [PHOTOS.p10], distance: '5 mi', verified: true },
-  { id: 'like3', name: 'Akech', age: 24, images: [PHOTOS.p6], distance: '7 mi', verified: false },
-  { id: 'like4', name: 'Achol', age: 25, images: [PHOTOS.p9], distance: '2 mi', verified: true },
+  { id: 'like1', name: 'Nyibol', age: 30, images: [PHOTOS.p8], distance: '2 mi', verified: true, activity: 'nearby' },
+  { id: 'like2', name: 'Akuol', age: 31, images: [PHOTOS.p10], distance: '5 mi', verified: true, activity: 'active' },
+  { id: 'like3', name: 'Akech', age: 24, images: [PHOTOS.p6], distance: '7 mi', verified: false, activity: 'nearby' },
+  { id: 'like4', name: 'Achol', age: 25, images: [PHOTOS.p9], distance: '2 mi', verified: true, activity: 'active' },
+  { id: 'like5', name: 'Adau', age: 24, images: [PHOTOS.p1], distance: '3 mi', verified: true, activity: 'nearby' },
+  { id: 'like6', name: 'Abuk', age: 27, images: [PHOTOS.p2], distance: '2 mi', verified: true, activity: 'active' },
+  { id: 'like7', name: 'Nyirou', age: 26, images: [PHOTOS.p3], distance: '8 mi', verified: true, activity: 'nearby' },
+  { id: 'like8', name: 'Athieng', age: 25, images: [PHOTOS.p4], distance: '5 mi', verified: true, activity: 'active' },
+  { id: 'like9', name: 'Yar', age: 21, images: [PHOTOS.p5], distance: '4 mi', verified: false, activity: 'nearby' },
+  { id: 'like10', name: 'Nyandeng', age: 23, images: [PHOTOS.p7], distance: '3 mi', verified: true, activity: 'active' },
+  { id: 'like11', name: 'Makuei', age: 28, images: [PHOTOS.p11], distance: '6 mi', verified: true, activity: 'nearby' },
+  { id: 'like12', name: 'Atem', age: 26, images: [PHOTOS.p12], distance: '3 mi', verified: true, activity: 'active' },
+  { id: 'like13', name: 'Garang', age: 29, images: [PHOTOS.p13], distance: '7 mi', verified: true, activity: 'nearby' },
+  { id: 'like14', name: 'Nyibol', age: 20, images: [PHOTOS.p8], distance: '1 mi', verified: true, activity: 'active' },
+  { id: 'like15', name: 'Akuol', age: 28, images: [PHOTOS.p10], distance: '4 mi', verified: true, activity: 'nearby' },
 ];
 
 // ── Matched connections for Messages screen (linked to real profiles) ──
@@ -399,10 +410,10 @@ export const mockMatches = [
 
 // ── Post card theme presets ─────────────────────────────────
 export const POST_THEMES = {
-  default: { bg: '#FFFFFF', text: '#1C1917', accent: '#E8453C', name: 'Classic' },
-  midnight: { bg: '#1C1917', text: '#FFFFFF', accent: '#FF80AB', name: 'Midnight' },
-  rose: { bg: '#E8453C', text: '#FFFFFF', accent: '#1C1917', name: 'Rose' },
-  blush: { bg: '#FCE4EC', text: '#C62828', accent: '#E8453C', name: 'Blush' },
+  default: { bg: '#FFFFFF', text: '#262626', accent: '#F56040', name: 'Classic' },
+  midnight: { bg: '#262626', text: '#FFFFFF', accent: '#ED4956', name: 'Midnight' },
+  rose: { bg: '#F56040', text: '#FFFFFF', accent: '#262626', name: 'Rose' },
+  blush: { bg: '#FDEDEF', text: '#C13584', accent: '#F56040', name: 'Blush' },
   ocean: { bg: '#0C4A6E', text: '#FFFFFF', accent: '#38BDF8', name: 'Ocean' },
   forest: { bg: '#14532D', text: '#FFFFFF', accent: '#4ADE80', name: 'Forest' },
   sunset: { bg: '#7C2D12', text: '#FFFFFF', accent: '#FB923C', name: 'Sunset' },

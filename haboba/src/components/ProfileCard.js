@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontFamily, ms, hp } from '../theme';
-import { imageSource } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -20,9 +20,11 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   interpolate,
+  interpolateColor,
   Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
+import { hapticLight, hapticMedium } from '../utils/haptics';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -49,24 +51,27 @@ const EXIT_SPRING = {
   restSpeedThreshold: 50,
 };
 
-const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, style }, ref) => {
+const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, onDoubleTap, style }, ref) => {
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const thresholdCrossed = useSharedValue(0); // 0 = not crossed, 1 = crossed
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageErrors, setImageErrors] = useState({});
 
   useEffect(() => {
     translateX.value = 0;
     translateY.value = 0;
+    thresholdCrossed.value = 0;
     setCurrentImageIndex(0);
     setImageErrors({});
-  }, [profile?.id, translateX, translateY]);
+  }, [profile?.id, translateX, translateY, thresholdCrossed]);
 
   const imageUrl = profile.images?.[currentImageIndex];
   const totalImages = profile.images?.length || 1;
   const hasImageError = imageErrors[currentImageIndex];
 
   const completeSwipe = useCallback((direction) => {
+    hapticMedium();
     onSwipe && onSwipe(direction);
     if (onSwipeProgress) {
       runOnJS(onSwipeProgress)(1);
@@ -82,7 +87,15 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
       'worklet';
       translateX.value = e.translationX;
       translateY.value = e.translationY * 0.25;
-      const progress = Math.min(Math.abs(e.translationX) / SWIPE_PROGRESS_DISTANCE, 1);
+      // Haptic feedback when crossing threshold
+      const absX = Math.abs(e.translationX);
+      if (absX > SWIPE_DISTANCE_THRESHOLD && thresholdCrossed.value === 0) {
+        thresholdCrossed.value = 1;
+        runOnJS(hapticLight)();
+      } else if (absX < SWIPE_DISTANCE_THRESHOLD && thresholdCrossed.value === 1) {
+        thresholdCrossed.value = 0;
+      }
+      const progress = Math.min(absX / SWIPE_PROGRESS_DISTANCE, 1);
       if (onSwipeProgress) {
         runOnJS(onSwipeProgress)(progress);
       }
@@ -139,6 +152,19 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
     }
   }, [currentImageIndex, totalImages, onExpand, profile]);
 
+  const handleDoubleTap = useCallback((x, y) => {
+    hapticMedium();
+    onDoubleTap && onDoubleTap({ x, y, profile });
+  }, [onDoubleTap, profile]);
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDuration(300)
+    .onEnd((e) => {
+      'worklet';
+      runOnJS(handleDoubleTap)(e.x, e.y);
+    });
+
   const tapGesture = Gesture.Tap()
     .maxDuration(250)
     .onEnd((e) => {
@@ -146,7 +172,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
       runOnJS(handleTap)(e.x);
     });
 
-  const composedGesture = Gesture.Exclusive(panGesture, tapGesture);
+  const composedGesture = Gesture.Exclusive(doubleTapGesture, panGesture, tapGesture);
 
   const cardAnimatedStyle = useAnimatedStyle(() => {
     'worklet';
@@ -161,6 +187,21 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
         { translateY: translateY.value },
         { rotate: `${rotate}deg` },
       ],
+    };
+  });
+
+  const accentColor = Colors.accent;
+  const grayColor = Colors.gray400;
+  const glowStyle = useAnimatedStyle(() => {
+    'worklet';
+    const absX = Math.abs(translateX.value);
+    const borderW = interpolate(absX, [0, 150], [0, 3.5], Extrapolation.CLAMP);
+    // Gold for right, gray for left
+    const isRight = translateX.value >= 0;
+    const color = isRight ? accentColor : grayColor;
+    return {
+      borderWidth: borderW,
+      borderColor: absX > 5 ? color : 'transparent',
     };
   });
 
@@ -201,8 +242,16 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
     }
   }, [completeSwipe, translateX, translateY, onSwipeProgress]);
 
+  const rewindFrom = useCallback((direction) => {
+    const startX = direction === 'right' ? EXIT_X : -EXIT_X;
+    translateX.value = startX;
+    translateY.value = 0;
+    translateX.value = withSpring(0, SNAP_BACK_SPRING);
+  }, [translateX, translateY]);
+
   useImperativeHandle(ref, () => ({
     swipe: triggerSwipe,
+    rewindFrom,
   }));
 
   const handleImageError = () => {
@@ -219,6 +268,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, s
           styles.card,
           style,
           cardAnimatedStyle,
+          glowStyle,
         ]}
       >
         <View style={styles.imageWrapper}>
@@ -428,7 +478,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.2)',
+    backgroundColor: Colors.accentTint25,
   },
   currentlyIntoPillText: {
     color: '#FFFFFF',

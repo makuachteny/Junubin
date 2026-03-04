@@ -1,5 +1,5 @@
 // AnaJunubin — Unified Theme
-// Romantic Core (Red · Pink · Gray) + Energetic Accents (Orange · Gold · Green)
+// Savanna Gold Core (Warm Gold · Pink · Gray) + Energetic Accents (Orange · Gold · Green)
 // Crown-themed, culturally rooted
 // Primary typeface: DM Sans
 
@@ -67,11 +67,30 @@ export const BorderRadius = {
   circle: 999,
 };
 
+export const ZIndex = {
+  base: 1,
+  card: 2,
+  actionButtons: 3,
+  header: 5,
+  tabBar: 10,
+  overlay: 50,
+  modal: 100,
+  toast: 500,
+  alert: 1000,
+  system: 9999,
+};
+
 export const Gradients = {
-  primary: ['#332F2D', '#252220'],
-  accent: ['#E8453C', '#C62828'],
-  rose: ['#FF80AB', '#F06292'],
-  royal: ['#FF7854', '#E64A19'],
-  splash: ['#1A1816', '#141210', '#100E0D'],
-  card: ['transparent', 'rgba(28, 25, 23, 0.75)'],
+  primary: ['#121212', '#000000'],
+  accent: ['#F77737', '#F56040', '#E6683C'],
+  rose: ['#ED4956', '#E1306C'],
+  royal: ['#833AB4', '#5851DB', '#405DE6'],
+  splash: ['#000000', '#080808', '#000000'],
+  card: ['transparent', 'rgba(0, 0, 0, 0.75)'],
+  // Instagram story ring gradient
+  storyRing: ['#F09433', '#E6683C', '#DC2743', '#CC2366', '#BC1888'],
+  // Full Instagram brand gradient
+  instagram: ['#405DE6', '#5851DB', '#833AB4', '#C13584', '#E1306C', '#FD1D1D', '#F56040', '#F77737', '#FCAF45', '#FFDC80'],
+  // Warm action gradient (buttons, CTAs)
+  warm: ['#F77737', '#F56040'],
 };

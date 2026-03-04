@@ -30,6 +30,11 @@ jest.mock('react-native-reanimated', () => {
     withDecay: ID,
     withDelay: (_delay, anim) => anim,
     withSequence: (...anims) => anims[anims.length - 1],
+    withRepeat: (anim) => anim,
+    Easing: {
+      ease: () => {},
+      inOut: (fn) => fn,
+    },
     interpolate: (value, inputRange, outputRange) => {
       if (value <= inputRange[0]) return outputRange[0];
       if (value >= inputRange[inputRange.length - 1]) return outputRange[outputRange.length - 1];
@@ -55,15 +60,31 @@ jest.mock('react-native-gesture-handler', () => {
   const gestureBuilder = () => {
     const g = {};
     const chain = (name) => (..._args) => { g[name] = true; return g; };
-    ['activeOffsetX', 'failOffsetY', 'maxDuration', 'onUpdate', 'onEnd', 'onStart', 'onBegin', 'onFinalize'].forEach(
+    ['activeOffsetX', 'failOffsetY', 'maxDuration', 'numberOfTaps', 'onUpdate', 'onEnd', 'onStart', 'onBegin', 'onFinalize'].forEach(
       (m) => { g[m] = chain(m); }
     );
-    return g;
+    // Return a proxy so any unlisted chainable method also works
+    return new Proxy(g, {
+      get(target, prop) {
+        if (prop in target) return target[prop];
+        return (..._args) => g;
+      },
+    });
   };
 
   return {
     GestureDetector,
     GestureHandlerRootView: View,
+    PanGestureHandler: View,
+    TapGestureHandler: View,
+    LongPressGestureHandler: View,
+    FlingGestureHandler: View,
+    ForceTouchGestureHandler: View,
+    NativeViewGestureHandler: View,
+    PinchGestureHandler: View,
+    RotationGestureHandler: View,
+    Swipeable: View,
+    DrawerLayout: View,
     Gesture: {
       Pan: gestureBuilder,
       Tap: gestureBuilder,

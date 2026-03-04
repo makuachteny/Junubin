@@ -136,6 +136,31 @@ cd backend && npm test
 npm run test:watch
 ```
 
+### E2E (Detox) setup
+
+Detox is configured for both iOS Simulator and Android Emulator using Expo prebuild.
+
+Prerequisites:
+- Xcode + iOS Simulator (macOS) for iOS tests
+- Android Studio + running AVD named `Pixel_7_API_34` for Android tests
+- Install dev deps: `npm install`
+
+Commands:
+
+```bash
+# iOS
+npm run e2e:build:ios
+npm run e2e:test:ios
+
+# Android
+npm run e2e:build:android
+npm run e2e:test:android
+```
+
+Notes:
+- `e2e:build:*` runs `expo prebuild` first, which generates native `ios/` and `android/` folders.
+- E2E specs live under `e2e/` with a starter smoke test in `e2e/smoke.e2e.js`.
+
 ### Test coverage
 
 | Area | Tests | What's covered |
@@ -156,6 +181,10 @@ npm run test:watch
 | `npm start` | Start Expo dev server |
 | `npm test` | Run frontend tests |
 | `npm run test:ci` | Run frontend tests in CI mode |
+| `npm run e2e:build:ios` | Prebuild + compile iOS app for Detox |
+| `npm run e2e:test:ios` | Run Detox tests on iOS simulator |
+| `npm run e2e:build:android` | Prebuild + compile Android app for Detox |
+| `npm run e2e:test:android` | Run Detox tests on Android emulator |
 | `cd backend && npm run dev` | Start backend with auto-reload |
 | `cd backend && npm start` | Start backend (production) |
 | `cd backend && npm test` | Run backend tests |

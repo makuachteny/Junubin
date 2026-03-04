@@ -12,35 +12,81 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GraffitiChat } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import { mockMatches, mockLikes, currentUser, imageSource } from '../data/mockProfiles';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme, Typography, FontFamily, getShadow, Gradients } from '../theme';
+import { mockMatches, mockLikes } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks';
 import * as matchesService from '../api/services/matchesService';
+import * as likesService from '../api/services/likesService';
+import { useRealtime } from '../api/hooks/useRealtime';
+import MessageListSkeleton from '../components/MessageListSkeleton';
+import ThemedRefreshControl from '../components/ThemedRefreshControl';
+import StoriesRow from '../components/StoriesRow';
+import AdBanner from '../components/AdBanner';
+import ProfilePromptBanner from '../components/ProfilePromptBanner';
 
 export default function MessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const [matches, setMatches] = useState(mockMatches);
-  const [likes, setLikes] = useState(mockLikes);
+  const [matches, setMatches] = useState([]);
+  const [likes, setLikes] = useState([]);
   const [activeTab, setActiveTab] = useState('messages');
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [searchQuery, setSearchQuery] = useState('');
   const { hasTier } = useSubscription();
   const { session } = useAuth();
+  const { currentUser } = useCurrentUser();
+  const { onMatchCreated } = useRealtime(currentUser?.id);
   const contentAnim = useRef(new Animated.Value(0)).current;
   const rowAnimsRef = useRef([]);
   const hasAnimatedRef = useRef(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
+  const fetchMatches = useCallback(() => {
+    if (!session) {
+      // Fall back to mock data when not authenticated
+      setMatches(mockMatches);
+      setLikes(mockLikes);
+      setIsLoading(false);
+      return Promise.resolve();
+    }
+    return Promise.all([
+      matchesService.getMatches().then((apiMatches) => {
+        if (apiMatches.length > 0) setMatches(apiMatches);
+        else setMatches(mockMatches); // fallback
+      }),
+      likesService.getReceivedLikes().then((apiLikes) => {
+        if (apiLikes.length > 0) setLikes(apiLikes);
+        else setLikes(mockLikes); // fallback
+      }),
+    ]).catch((err) => {
+      if (__DEV__) console.warn('Messages fetch failed:', err);
+      setMatches(mockMatches);
+      setLikes(mockLikes);
+    }).finally(() => setIsLoading(false));
+  }, [session]);
+
+  useEffect(() => { fetchMatches(); }, [fetchMatches]);
+
+  // Live match listener — re-fetch when a new match is created
   useEffect(() => {
     if (!session) return;
-    matchesService.getMatches().then((apiMatches) => {
-      if (apiMatches.length > 0) setMatches(apiMatches);
-    }).catch((err) => {
-      if (__DEV__) console.warn('Matches fetch failed:', err);
+    const unsub = onMatchCreated(() => {
+      fetchMatches();
     });
-  }, [session]);
+    return unsub;
+  }, [session, onMatchCreated, fetchMatches]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchMatches().finally(() => setRefreshing(false));
+  }, [fetchMatches]);
 
   useEffect(() => {
     Animated.timing(contentAnim, {
@@ -49,23 +95,6 @@ export default function MessagesScreen({ navigation }) {
       useNativeDriver: true,
     }).start();
   }, [contentAnim]);
-
-  // Build row animation values when conversation data changes (only first render)
-  useEffect(() => {
-    if (hasAnimatedRef.current || conversationData.length === 0) return;
-    const anims = conversationData.map(() => new Animated.Value(0));
-    rowAnimsRef.current = anims;
-    hasAnimatedRef.current = true;
-    const staggered = anims.map((anim, i) =>
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 280,
-        delay: i * 45,
-        useNativeDriver: true,
-      })
-    );
-    Animated.stagger(0, staggered).start();
-  }, [conversationData]);
 
   const handleMatchPress = (match) => {
     navigation.navigate('Chat', { match });
@@ -92,11 +121,22 @@ export default function MessagesScreen({ navigation }) {
     return all.filter((item) => item.name?.toLowerCase().includes(q));
   }, [likes, matches, searchQuery]);
 
-  const filteredMatches = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return matches;
-    return matches.filter((m) => m.name?.toLowerCase().includes(q));
-  }, [matches, searchQuery]);
+  // Build row animation values when conversation data changes (only first render)
+  useEffect(() => {
+    if (hasAnimatedRef.current || conversationData.length === 0) return;
+    const anims = conversationData.map(() => new Animated.Value(0));
+    rowAnimsRef.current = anims;
+    hasAnimatedRef.current = true;
+    const staggered = anims.map((anim, i) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 280,
+        delay: i * 45,
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(0, staggered).start();
+  }, [conversationData]);
 
   const renderConversation = ({ item, index }) => {
     const rowAnim = rowAnimsRef.current[index];
@@ -119,7 +159,14 @@ export default function MessagesScreen({ navigation }) {
             activeOpacity={0.7}
           >
             <View style={styles.avatarContainer}>
-              <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
+              <LinearGradient
+                colors={Gradients.accent}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.avatarRing}
+              >
+                <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
+              </LinearGradient>
             </View>
             <View style={styles.msgInfo}>
               <View style={styles.msgNameInline}>
@@ -144,7 +191,14 @@ export default function MessagesScreen({ navigation }) {
           activeOpacity={0.7}
         >
           <View style={styles.avatarContainer}>
-            <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
+            <LinearGradient
+              colors={Gradients.accent}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarRing}
+            >
+              <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
+            </LinearGradient>
             {item.unread && <View style={styles.unreadDot} />}
           </View>
           <View style={styles.msgInfo}>
@@ -164,6 +218,25 @@ export default function MessagesScreen({ navigation }) {
 
   const listHeader = useCallback(() => (
     <>
+      {/* ─── Upsell Banner (free users) ─── */}
+      {!hasTier('plus') && (
+        <ProfilePromptBanner
+          message="Unlock unlimited messages with JuNubin+"
+          onPress={() => navigation.navigate('Elite')}
+          colors={colors}
+        />
+      )}
+
+      {/* ─── Stories Row ─── */}
+      <StoriesRow
+        colors={colors}
+        onStoryPress={(story) => navigation.navigate('StoriesView', { story })}
+        onCreateStory={() => navigation.navigate('CreateStory')}
+      />
+
+      {/* ─── Ad Banner (free tier) ─── */}
+      <AdBanner colors={colors} />
+
       {/* ─── Search Bar ─── */}
       <View style={styles.searchWrap}>
         <View style={styles.searchBar}>
@@ -185,39 +258,13 @@ export default function MessagesScreen({ navigation }) {
         </View>
       </View>
 
-      {/* ─── New Connections ─── */}
-      <View style={styles.connectionsSection}>
-        <Text style={styles.connectionLabel}>New Connections</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.connectionsRow}>
-          <TouchableOpacity style={styles.likeCircle} onPress={() => navigation.navigate('LikesTab')}>
-            <View style={styles.likeCircleInner}>
-              <Text style={styles.likeCount}>{likes.length}</Text>
-            </View>
-            <Ionicons name="heart" size={14} color={colors.accent} style={styles.likeHeartIcon} />
-            <Text style={styles.likeLabel}>Like</Text>
-          </TouchableOpacity>
-
-          {filteredMatches.map((match) => (
-            <TouchableOpacity
-              key={match.id}
-              style={styles.matchCircle}
-              onPress={() => handleMatchPress(match)}
-            >
-              <Image source={imageSource(match.images?.[0])} style={styles.matchAvatar} />
-              {match.unread && <View style={styles.onlineDot} />}
-              <Text style={styles.matchName} numberOfLines={1}>{match.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
       {/* ─── Messages header ─── */}
       <View style={styles.messagesHeader}>
         <Text style={styles.messagesTitle}>Messages</Text>
         <Ionicons name="notifications" size={15} color={colors.black} />
       </View>
     </>
-  ), [colors, isDark, styles, searchQuery, likes, filteredMatches, navigation]);
+  ), [colors, isDark, styles, searchQuery, likes, navigation, hasTier]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -245,16 +292,21 @@ export default function MessagesScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chats</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-          <Image source={imageSource(currentUser.images?.[0])} style={styles.headerAvatar} />
+          <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
         </TouchableOpacity>
       </Animated.View>
 
       {/* ─── Everything scrolls together ─── */}
-      {conversationData.length === 0 && !searchQuery ? (
+      {isLoading ? (
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {listHeader()}
+          <MessageListSkeleton />
+        </ScrollView>
+      ) : conversationData.length === 0 && !searchQuery ? (
         <ScrollView showsVerticalScrollIndicator={false}>
           {listHeader()}
           <View style={styles.emptyMessages}>
-            <Ionicons name="chatbubbles-outline" size={50} color={colors.gray400} />
+            <GraffitiChat size={50} color={colors.gray400} />
             <Text style={styles.emptyText}>No messages yet</Text>
             <Text style={styles.emptySubtext}>Start swiping to find connections!</Text>
           </View>
@@ -271,6 +323,9 @@ export default function MessagesScreen({ navigation }) {
           maxToRenderPerBatch={8}
           windowSize={5}
           removeClippedSubviews={true}
+          refreshControl={
+            <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
         />
       )}
     </View>
@@ -286,7 +341,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // ─── Header ───
   header: {
     width: '100%',
-    height: 52,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -346,85 +401,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
 
   // ─── New Connections ───
-  connectionsSection: {
-    paddingBottom: 14,
-  },
-  connectionLabel: {
-    ...Typography.sectionTitle,
-    color: colors.black,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-  },
-  connectionsRow: {
-    paddingLeft: 16,
-    paddingRight: 8,
-    paddingBottom: 6,
-  },
-  likeCircle: {
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  likeCircleInner: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    borderWidth: 2.5,
-    borderColor: colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    ...getShadow('md', isDark),
-  },
-  likeCount: {
-    fontSize: 22,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
-    color: colors.accent,
-    letterSpacing: -0.5,
-  },
-  likeHeartIcon: {
-    position: 'absolute',
-    bottom: 16,
-    left: -2,
-  },
-  likeLabel: {
-    ...Typography.caption,
-    color: colors.black,
-    marginTop: 6,
-  },
-  matchCircle: {
-    alignItems: 'center',
-    marginRight: 16,
-    position: 'relative',
-  },
-  matchAvatar: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: colors.gray300,
-    borderWidth: 2,
-    borderColor: colors.accent,
-    ...getShadow('md', isDark),
-  },
-  onlineDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#10B981',
-    borderWidth: 2,
-    borderColor: colors.white,
-  },
-  matchName: {
-    ...Typography.caption,
-    color: colors.black,
-    marginTop: 6,
-    maxWidth: 68,
-    textAlign: 'center',
-  },
-
   // ─── Messages Header ───
   messagesHeader: {
     flexDirection: 'row',
@@ -458,13 +434,19 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     position: 'relative',
     marginRight: 14,
   },
+  avatarRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    padding: 2.5,
+  },
   msgAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 55,
+    height: 55,
+    borderRadius: 27.5,
     backgroundColor: colors.gray300,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.white,
   },
   unreadDot: {
     width: 12,

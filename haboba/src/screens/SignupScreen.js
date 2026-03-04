@@ -93,12 +93,14 @@ const SignupScreen = ({ navigation }) => {
     const code = verificationCode.join('');
     if (code.length === 6) {
       try {
-        await loginWithOtp({
+        const result = await loginWithOtp({
           email: selectedMethod === 'email' ? email.trim().toLowerCase() : undefined,
           phone: selectedMethod === 'phone' ? `+1${phone.replace(/\D/g, '')}` : undefined,
           code,
         });
-        navigation.replace('ProfileSetup');
+        // Returning user with complete profile → go straight to Main
+        const isProfileComplete = result?.appUser?.profile?.profileComplete;
+        navigation.replace(isProfileComplete ? 'Main' : 'ProfileSetup');
       } catch (error) {
         Alert.alert('Verification failed', error.message || 'Invalid code.');
       }
@@ -143,7 +145,7 @@ const SignupScreen = ({ navigation }) => {
             {/* Back */}
             <TouchableOpacity
               style={styles.backButtonVerify}
-              onPress={() => { setStep('input'); setVerificationCode(['', '', '', '']); }}
+              onPress={() => { setStep('input'); setVerificationCode(['', '', '', '', '', '']); }}
             >
               <Ionicons name="chevron-back" size={24} color={colors.black} />
             </TouchableOpacity>
