@@ -1,5 +1,8 @@
 import { supabase } from '../../config/supabase';
 import { formatTimestamp } from '../../utils/formatTime';
+import { cacheGet, cacheSet } from '../../utils/offlineCache';
+
+const OFFLINE_MATCHES_TTL = 300_000; // 5 min
 
 export async function getMatches() {
   const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -39,12 +42,12 @@ export async function getMatches() {
 
   if (error) throw error;
 
-  return (matches || []).map((m) => {
+  const result = (matches || []).map((m) => {
     const otherUser = m.userAId === userId ? m.userB : m.userA;
     const conv = m.conversation;
-    const messages = conv?.messages || [];
-    const lastMessage = messages.length > 0
-      ? messages.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
+    const msgs = conv?.messages || [];
+    const lastMessage = msgs.length > 0
+      ? msgs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
       : null;
 
     const photos = (otherUser?.photos || [])
@@ -65,4 +68,14 @@ export async function getMatches() {
       userId: otherUser?.id,
     };
   });
+
+  cacheSet('matches', result, OFFLINE_MATCHES_TTL);
+  return result;
+}
+
+/**
+ * Returns cached matches when offline. Call getMatches() first.
+ */
+export async function getCachedMatches() {
+  return cacheGet('matches');
 }

@@ -3,7 +3,8 @@ import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, Dimensions } fr
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { useNavigation } from '@react-navigation/native';
-import { POST_THEMES, imageSource } from '../data/mockProfiles';
+import { POST_THEMES } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 32; // 16px margin each side
@@ -18,7 +19,7 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
 
   // Get the user-chosen card theme (or default)
   const theme = POST_THEMES[post.cardTheme] || POST_THEMES.default;
-  const isDarkCard = theme.bg === '#1C1917' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+  const isDarkCard = theme.bg === '#262626' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
 
   const handleLike = () => {
     if (onLikeToggle) {
@@ -50,6 +51,18 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
     navigation.navigate('PostDetail', { post });
   };
 
+  const handleMoreMenu = () => {
+    Alert.alert(
+      post.user.name,
+      null,
+      [
+        { text: 'Report Post', onPress: () => Alert.alert('Reported', 'This post has been reported. We\'ll review it shortly.'), style: 'destructive' },
+        { text: 'Block User', onPress: () => Alert.alert('Blocked', `${post.user.name} has been blocked.`), style: 'destructive' },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   return (
     <TouchableOpacity
       style={[styles.card, { backgroundColor: theme.bg, borderColor: colors.cardBorder }]}
@@ -58,7 +71,7 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
     >
       {/* Header */}
       <View style={styles.header}>
-        <Image source={imageSource(post.user.avatar)} style={styles.avatar} />
+        <Image source={imageSource(post.user.avatar)} style={[styles.avatar, { backgroundColor: colors.gray200 }]} />
         <View style={styles.headerInfo}>
           <Text style={[styles.userName, { color: theme.text }]}>{post.user.name}</Text>
           <Text style={[styles.meta, { color: isDarkCard ? 'rgba(255,255,255,0.5)' : colors.gray400 }]}>
@@ -77,6 +90,14 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
             {following ? 'Following' : 'Follow'}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.moreBtn}
+          activeOpacity={0.7}
+          onPress={handleMoreMenu}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="ellipsis-vertical" size={18} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
+        </TouchableOpacity>
       </View>
 
       {/* Content */}
@@ -91,7 +112,7 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
 
       {/* Actions */}
       <View style={[styles.actions, isDarkCard && { borderTopColor: 'rgba(255,255,255,0.1)' }, !isDarkCard && { borderTopColor: colors.separator }]}>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleLike} accessibilityRole="button" accessibilityLabel={effectiveReaction.liked ? 'Unlike post' : 'Like post'} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons
             name={effectiveReaction.liked ? 'heart' : 'heart-outline'}
             size={20}
@@ -101,13 +122,13 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
             {effectiveReaction.likeCount}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleComment}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleComment} accessibilityRole="button" accessibilityLabel="Comment on post" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="chatbubble-outline" size={18} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
           <Text style={[styles.actionText, { color: isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400 }]}>
             {post.comments}
           </Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleShare} accessibilityRole="button" accessibilityLabel="Share post" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="share-outline" size={18} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
         </TouchableOpacity>
       </View>
@@ -142,7 +163,7 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 13,
     marginRight: 10,
-    backgroundColor: '#E7E5E4',
+    backgroundColor: '#EFEFEF',
   },
   headerInfo: {
     flex: 1,
@@ -164,6 +185,10 @@ const styles = StyleSheet.create({
   },
   followText: {
     ...Typography.captionBold,
+  },
+  moreBtn: {
+    marginLeft: 6,
+    padding: 4,
   },
   postText: {
     ...Typography.bodySmall,

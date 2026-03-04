@@ -5,7 +5,7 @@ const HEIGHT_MAP = { sm: 2, md: 4, lg: 8, xl: 12 };
 const ELEVATION_MAP = { sm: 2, md: 4, lg: 8, xl: 12 };
 
 export const getShadow = (level = 'sm', isDark = false, color) => {
-  const defaultColor = isDark ? '#000000' : '#44403C';
+  const defaultColor = isDark ? '#000000' : '#262626';
   const shadowColor = color || defaultColor;
   const opacityMap = isDark ? OPACITY_DARK : OPACITY_LIGHT;
 

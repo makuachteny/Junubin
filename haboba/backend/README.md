@@ -92,3 +92,29 @@ For global availability and low latency:
 - This scaffold is API-first and ready for mobile integration.
 - Replace local JWT-only auth with full refresh-token rotation + device session policies before production launch.
 - Refresh-token endpoints already included: `POST /v1/auth/refresh`, `POST /v1/auth/logout`.
+
+## 5) Matching Algorithm Setup
+
+Discovery ranking is configurable with environment variables:
+
+- `MATCH_EXPLORE_RATE` (0..1): probability of shuffling a ranking window for variety.
+- `MATCH_WINDOW_SIZE` (2..20): window size used for controlled shuffle.
+- `MATCH_BEHAVIORAL_MIN_SWIPES`: minimum swipes before behavioral scoring is applied.
+- `MATCH_WEIGHTS_JSON`: JSON multipliers for scoring signals.
+- `MATCH_ANALYTICS_ENABLED`: emits discover ranking analytics events to logs.
+- `MATCH_ANALYTICS_SAMPLE_RATE`: sample rate for analytics events (0..1).
+- `MATCH_ANALYTICS_TOP_K`: number of top candidates included with score breakdown.
+
+Example:
+
+```bash
+MATCH_EXPLORE_RATE=0.10
+MATCH_WINDOW_SIZE=5
+MATCH_BEHAVIORAL_MIN_SWIPES=25
+MATCH_WEIGHTS_JSON={"currentlyInto":1.4,"culturalAffinity":1.2,"recency":0.8}
+```
+
+Recommended rollout:
+1. Start with defaults for 1-2 weeks.
+2. Adjust one weight at a time (10-20% changes).
+3. Track match rate, reply rate, and day-7 retention before/after each change.

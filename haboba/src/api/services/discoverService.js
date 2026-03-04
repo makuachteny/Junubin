@@ -1,8 +1,10 @@
 import { supabase } from '../../config/supabase';
 import { normalizeProfile } from './profileService';
+import { cacheGet, cacheSet } from '../../utils/offlineCache';
 
 const profileCache = new Map();
 const PROFILE_CACHE_TTL = 60_000;
+const OFFLINE_PROFILES_TTL = 300_000; // 5 min persistent cache
 
 const likeStatusCache = { data: null, timestamp: 0 };
 const LIKE_STATUS_CACHE_TTL = 30_000;
@@ -21,25 +23,34 @@ export async function getProfiles(filters = {}) {
   if (filters.mode) params.set('mode', filters.mode);
 
   const qs = params.toString();
+  const offlineKey = `discover_${qs}`;
 
-  // Check cache
+  // Check in-memory cache
   const cached = profileCache.get(qs);
   if (cached && Date.now() - cached.timestamp < PROFILE_CACHE_TTL) {
     return cached.data;
   }
 
-  const { data, error } = await supabase.functions.invoke(`discover${qs ? `?${qs}` : ''}`);
-  if (error) throw error;
+  try {
+    const { data, error } = await supabase.functions.invoke(`discover${qs ? `?${qs}` : ''}`);
+    if (error) throw error;
 
-  const result = {
-    profiles: (data.profiles || []).map(normalizeProfile),
-    nextCursor: data.nextCursor,
-  };
+    const result = {
+      profiles: (data.profiles || []).map(normalizeProfile),
+      nextCursor: data.nextCursor,
+    };
 
-  // Store in cache
-  profileCache.set(qs, { data: result, timestamp: Date.now() });
+    // Store in both caches
+    profileCache.set(qs, { data: result, timestamp: Date.now() });
+    cacheSet(offlineKey, result, OFFLINE_PROFILES_TTL);
 
-  return result;
+    return result;
+  } catch (err) {
+    // Fall back to persistent cache on network failure
+    const offline = await cacheGet(offlineKey);
+    if (offline) return offline;
+    throw err;
+  }
 }
 
 export async function recordSwipe(toUserId, type) {

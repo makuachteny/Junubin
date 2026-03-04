@@ -9,22 +9,38 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { FontFamily } from '../theme';
+import { FontFamily, useTheme } from '../theme';
+import { GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame } from './icons';
 import { imageSource } from '../utils/imageSource';
+import { hapticHeavy } from '../utils/haptics';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PHOTO_SIZE = 100;
 
+// Outer ring (8) + inner ring (8) = 16 particles
 const BURST_VECTORS = [
-  { x: 0, y: -40 },
-  { x: 30, y: -28 },
-  { x: 40, y: 0 },
-  { x: 30, y: 28 },
-  { x: 0, y: 40 },
-  { x: -30, y: 28 },
-  { x: -40, y: 0 },
-  { x: -30, y: -28 },
+  // Outer ring
+  { x: 0, y: -55 },
+  { x: 40, y: -40 },
+  { x: 55, y: 0 },
+  { x: 40, y: 40 },
+  { x: 0, y: 55 },
+  { x: -40, y: 40 },
+  { x: -55, y: 0 },
+  { x: -40, y: -40 },
+  // Inner ring
+  { x: 20, y: -28 },
+  { x: 28, y: -10 },
+  { x: 28, y: 10 },
+  { x: 20, y: 28 },
+  { x: -20, y: 28 },
+  { x: -28, y: 10 },
+  { x: -28, y: -10 },
+  { x: -20, y: -28 },
 ];
+
+const PARTICLE_COMPONENTS = [GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame];
+const PARTICLE_COLORS = ['#F56040', '#FFD700', '#ED4956', '#F56040'];
 
 const MatchCelebrationOverlay = ({
   visible,
@@ -33,6 +49,7 @@ const MatchCelebrationOverlay = ({
   onSendMessage,
   onKeepSwiping,
 }) => {
+  const { colors } = useTheme();
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const leftPhoto = useRef(new Animated.Value(-SCREEN_W / 2)).current;
   const rightPhoto = useRef(new Animated.Value(SCREEN_W / 2)).current;
@@ -42,6 +59,7 @@ const MatchCelebrationOverlay = ({
 
   useEffect(() => {
     if (visible) {
+      hapticHeavy();
       // Reset
       overlayOpacity.setValue(0);
       leftPhoto.setValue(-SCREEN_W / 2);
@@ -72,7 +90,7 @@ const MatchCelebrationOverlay = ({
             useNativeDriver: true,
           }),
         ]),
-        // Title pop + burst
+        // Title pop + burst (16 particles, 1500ms, 50ms stagger)
         Animated.parallel([
           Animated.spring(titleScale, {
             toValue: 1,
@@ -83,8 +101,8 @@ const MatchCelebrationOverlay = ({
           ...burstAnims.map((anim, i) =>
             Animated.timing(anim, {
               toValue: 1,
-              duration: 800,
-              delay: i * 40,
+              duration: 1500,
+              delay: i * 50,
               useNativeDriver: true,
             })
           ),
@@ -144,11 +162,11 @@ const MatchCelebrationOverlay = ({
                 },
               ]}
             >
-              <Ionicons
-                name={i % 2 === 0 ? 'heart' : 'sparkles'}
-                size={i % 2 === 0 ? 16 : 14}
-                color={i % 2 === 0 ? '#E8453C' : '#FFD700'}
-              />
+              {React.createElement(PARTICLE_COMPONENTS[i % PARTICLE_COMPONENTS.length], {
+                size: i < 8 ? 16 : 13,
+                color: PARTICLE_COLORS[i % PARTICLE_COLORS.length],
+                filled: true,
+              })}
             </Animated.View>
           );
         })}
@@ -157,7 +175,7 @@ const MatchCelebrationOverlay = ({
       {/* Profile photos */}
       <View style={styles.photosRow}>
         <Animated.View style={[styles.photoWrap, { transform: [{ translateX: leftPhoto }] }]}>
-          <View style={styles.photoBorder}>
+          <View style={[styles.photoBorder, { borderColor: colors.accent }]}>
             {currentImg ? (
               <Image source={imageSource(currentImg)} style={styles.photo} />
             ) : (
@@ -169,11 +187,11 @@ const MatchCelebrationOverlay = ({
         </Animated.View>
 
         <View style={styles.heartBridge}>
-          <Ionicons name="heart" size={28} color="#E8453C" />
+          <GraffitiHeart size={28} color={colors.rose} filled />
         </View>
 
         <Animated.View style={[styles.photoWrap, { transform: [{ translateX: rightPhoto }] }]}>
-          <View style={styles.photoBorder}>
+          <View style={[styles.photoBorder, { borderColor: colors.accent }]}>
             {matchedImg ? (
               <Image source={imageSource(matchedImg)} style={styles.photo} />
             ) : (
@@ -195,7 +213,7 @@ const MatchCelebrationOverlay = ({
 
       {/* Buttons */}
       <Animated.View style={[styles.buttonsWrap, { opacity: buttonsOpacity }]}>
-        <TouchableOpacity style={styles.primaryBtn} onPress={onSendMessage} activeOpacity={0.85}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={onSendMessage} activeOpacity={0.85}>
           <Ionicons name="chatbubble" size={18} color="#FFF" style={{ marginRight: 8 }} />
           <Text style={styles.primaryBtnText}>Send a Message</Text>
         </TouchableOpacity>
@@ -239,7 +257,7 @@ const styles = StyleSheet.create({
     height: PHOTO_SIZE + 6,
     borderRadius: (PHOTO_SIZE + 6) / 2,
     borderWidth: 3,
-    borderColor: '#E8453C',
+    borderColor: '#F56040',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -279,7 +297,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flexDirection: 'row',
-    backgroundColor: '#E8453C',
+    backgroundColor: '#F56040',
     borderRadius: 28,
     paddingVertical: 16,
     alignItems: 'center',

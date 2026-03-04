@@ -13,6 +13,7 @@ const DEFAULT_STATE = {
   spotlights: 3,
   superLikes: 5,
   whispers: 2,
+  coins: 100,
   purchaseHistory: [],
 };
 
@@ -189,6 +190,20 @@ export function SubscriptionProvider({ children }) {
     return consumed;
   }, []);
 
+  const consumeCoins = useCallback((amount) => {
+    let consumed = false;
+    setState((prev) => {
+      if (prev.coins < amount) return prev;
+      consumed = true;
+      return { ...prev, coins: prev.coins - amount };
+    });
+    return consumed;
+  }, []);
+
+  const addCoins = useCallback((amount) => {
+    setState((prev) => ({ ...prev, coins: prev.coins + amount }));
+  }, []);
+
   const reset = useCallback(async () => {
     setState(DEFAULT_STATE);
     await AsyncStorage.removeItem(STORAGE_KEY);
@@ -200,6 +215,7 @@ export function SubscriptionProvider({ children }) {
     spotlights: state.spotlights,
     superLikes: state.superLikes,
     whispers: state.whispers,
+    coins: state.coins,
     purchaseInProgress,
     purchaseHistory: state.purchaseHistory,
     offerings,
@@ -219,13 +235,15 @@ export function SubscriptionProvider({ children }) {
     consumeSpotlight,
     consumeSuperLike,
     consumeWhisper,
+    consumeCoins,
+    addCoins,
     reset,
-  }), [purchase, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, reset]);
+  }), [purchase, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, consumeCoins, addCoins, reset]);
 
   if (!loaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#C4956A" />
+        <ActivityIndicator size="large" color="#F56040" />
       </View>
     );
   }
@@ -263,6 +281,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1A1816',
+    backgroundColor: '#000000',
   },
 });

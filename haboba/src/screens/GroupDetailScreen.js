@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import PostCard from '../components/PostCard';
 import { mockPosts } from '../data/mockProfiles';
+import ThemedRefreshControl from '../components/ThemedRefreshControl';
 
 export default function GroupDetailScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -22,6 +23,14 @@ export default function GroupDetailScreen({ navigation, route }) {
   const [joined, setJoined] = useState(route.params?.isMember || false);
   const [pinned, setPinned] = useState(false);
   const [memberCount, setMemberCount] = useState(group.members || 0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 800);
+  }, []);
 
   // Use some mock posts for this group
   const groupPosts = mockPosts.slice(0, 2).map((p, i) => ({
@@ -79,7 +88,13 @@ export default function GroupDetailScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.body}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
         {/* Group banner */}
         <View style={styles.banner}>
           <View style={styles.bannerIcon}>
@@ -188,7 +203,7 @@ const getStyles = (colors) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: '#332F2D',
+    backgroundColor: colors.surface,
   },
   backBtn: {
     padding: 4,
@@ -208,7 +223,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   banner: {
     alignItems: 'center',
-    backgroundColor: '#332F2D',
+    backgroundColor: colors.surface,
     paddingHorizontal: 24,
     paddingBottom: 28,
     borderBottomLeftRadius: 28,

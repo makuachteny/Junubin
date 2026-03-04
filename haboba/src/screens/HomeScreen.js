@@ -8,8 +8,11 @@ import {
   StatusBar,
   Alert,
   Animated,
+  Modal,
+  TextInput,
 } from 'react-native';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { GraffitiCrown, GraffitiHeart } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
@@ -19,15 +22,23 @@ import FilterBar from '../components/FilterBar';
 import ProfileCard from '../components/ProfileCard';
 import ActionButtons from '../components/ActionButtons';
 import MatchCelebrationOverlay from '../components/MatchCelebrationOverlay';
+import HeartBurstOverlay from '../components/HeartBurstOverlay';
+import CardSkeleton from '../components/CardSkeleton';
 import Button from '../components/Button';
-import { mockProfiles, currentUser, imageSource } from '../data/mockProfiles';
-import { useSubscription } from '../payments';
-import { hasUnlimitedLikes } from '../payments';
+import SpotlightCard from '../components/SpotlightCard';
+import InterstitialAd from '../components/InterstitialAd';
+import AdBanner from '../components/AdBanner';
+import { mockProfiles } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
+import { useSubscription, hasUnlimitedLikes, canUseWhispers } from '../payments';
 import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks';
 import * as discoverService from '../api/services/discoverService';
+import { hapticHeavy } from '../utils/haptics';
+import { trackEvent } from '../utils/analytics';
+import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightScheduler';
 
 const MIN_DATING_CARDS = 10;
-
 const shuffleArray = (arr) => {
   const shuffled = [...arr];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -132,15 +143,40 @@ const applyFilters = (profiles, toggleFilters, selections = {}) => {
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier, tier } = useSubscription();
+  const { session, user: authUser } = useAuth();
+  const { currentUser } = useCurrentUser();
   const [profiles, setProfiles] = useState(() => buildDatingDeck());
   const [unfilteredProfiles, setUnfilteredProfiles] = useState(null); // holds API or base profiles before filtering
   const [activeFilters, setActiveFilters] = useState([]);
   const [filterSelections, setFilterSelections] = useState({});
   const styles = useMemo(() => getStyles(colors, insets, isDark), [colors, insets, isDark]);
   const [matchData, setMatchData] = useState(null);
-  const [mode, setMode] = useState('Dating');
+  // Default mode from user's intention preference (Dating or Social)
+  const defaultMode = currentUser?.preferences?.mode === 'Social' ? 'Social' : 'Dating';
+  const [mode, setMode] = useState(defaultMode);
+  const [lastSwiped, setLastSwiped] = useState(null); // { profile, direction }
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
+  const [heartBurst, setHeartBurst] = useState(null); // { x, y }
+  const [showInterstitial, setShowInterstitial] = useState(false);
+  const swipeCountRef = useRef(0);
+  const [showSpotlight, setShowSpotlight] = useState(false);
+  const [likeStatus, setLikeStatus] = useState(null); // { used, limit, remaining }
+  const [showWhisperComposer, setShowWhisperComposer] = useState(false);
+  const [whisperDraft, setWhisperDraft] = useState('');
+  const [showPromoCard, setShowPromoCard] = useState(false);
+  const [showBoostPrompt, setShowBoostPrompt] = useState(false);
+  // Check if spotlight should show
+  useEffect(() => {
+    canShowSpotlight().then((canShow) => {
+      if (canShow && hasTier('junub')) {
+        setShowSpotlight(true);
+        markSpotlightShown();
+      }
+    });
+  }, [hasTier]);
 
-  // Read persisted mode on mount and when screen regains focus
+  // Read persisted mode on mount and when screen regains focus (overrides default)
   useFocusEffect(
     useCallback(() => {
       AsyncStorage.getItem('@haboba_mode').then((stored) => {
@@ -149,9 +185,6 @@ const HomeScreen = ({ navigation }) => {
     }, [])
   );
 
-  const [likeStatus, setLikeStatus] = useState(null); // { used, limit, remaining }
-  const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier, tier } = useSubscription();
-  const { session, user: authUser } = useAuth();
   const profileCardRef = useRef(null);
   const profilesRef = useRef(profiles);
   profilesRef.current = profiles;
@@ -160,7 +193,8 @@ const HomeScreen = ({ navigation }) => {
 
   // Fetch profiles from API on mount and when mode changes
   useEffect(() => {
-    if (!session) return;
+    if (!session) { setIsLoadingProfiles(false); return; }
+    setIsLoadingProfiles(true);
     discoverService.getProfiles({ mode: mode.toLowerCase() }).then(({ profiles: apiProfiles, nextCursor }) => {
       // Only use profiles that have at least one image (mirrors buildDatingDeck filter)
       const withImages = apiProfiles.filter((p) => p.images && p.images.length > 0);
@@ -172,7 +206,7 @@ const HomeScreen = ({ navigation }) => {
     }).catch((err) => {
       // Keep mock data on failure
       if (__DEV__) console.warn('Profile fetch failed:', err);
-    });
+    }).finally(() => setIsLoadingProfiles(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, mode]);
 
@@ -222,13 +256,33 @@ const HomeScreen = ({ navigation }) => {
       return;
     }
 
+    setLastSwiped({ profile: swipedProfile, direction });
     setProfiles((prev) => prev.slice(1));
+    trackEvent('swipe', { direction, profileId: swipedProfile?.id });
+
+    // Show interstitial ad every 5 swipes for free users
+    swipeCountRef.current += 1;
+    if (swipeCountRef.current % 5 === 0 && !hasTier('plus')) {
+      setShowInterstitial(true);
+    }
+
+    // Show promo card every 20 swipes
+    if (swipeCountRef.current % 20 === 0 && !hasTier('plus')) {
+      setShowPromoCard(true);
+    }
+
+    // Show boost prompt every 15 swipes (offset from promo)
+    if (swipeCountRef.current % 15 === 0 && swipeCountRef.current % 20 !== 0 && !hasTier('plus')) {
+      setShowBoostPrompt(true);
+      setTimeout(() => setShowBoostPrompt(false), 5000);
+    }
 
     // Record swipe via API (fire-and-forget)
     if (session && swipedProfile?.id) {
       const type = direction === 'right' ? 'like' : 'pass';
       discoverService.recordSwipe(swipedProfile.id, type).then((result) => {
         if (result?.match) {
+          hapticHeavy();
           setMatchData({
             matchedUser: swipedProfile,
             conversationId: result.match.conversation?.id,
@@ -292,9 +346,23 @@ const HomeScreen = ({ navigation }) => {
       ]);
       return;
     }
-  }, [hasTier, navigation]);
+    if (!lastSwiped) return;
+    // Prepend the last swiped profile back and animate rewind
+    setProfiles((prev) => [lastSwiped.profile, ...prev]);
+    setLastSwiped(null);
+    setTimeout(() => {
+      profileCardRef.current?.rewindFrom?.(lastSwiped.direction);
+    }, 50);
+  }, [hasTier, navigation, lastSwiped]);
 
   const handleMessage = useCallback(() => {
+    if (!canUseWhispers(tier || 'free')) {
+      Alert.alert('Premium Feature', 'Whispers are available on JuNubin+ and higher.', [
+        { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
     if (whispers <= 0) {
       Alert.alert('No Whispers', 'You\'re out of whispers!', [
         { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
@@ -302,14 +370,28 @@ const HomeScreen = ({ navigation }) => {
       ]);
       return;
     }
-    consumeWhisper();
-    Alert.alert('Whisper Sent!', 'Your message has been delivered.');
+    setShowWhisperComposer(true);
+  }, [tier, whispers, navigation]);
+
+  const handleSendWhisper = useCallback(() => {
+    const text = whisperDraft.trim();
+    if (!text) {
+      Alert.alert('Write a whisper', 'Please type a whisper before sending.');
+      return;
+    }
+    if (!consumeWhisper()) {
+      Alert.alert('No Whispers', 'You\'re out of whispers!');
+      return;
+    }
+    setShowWhisperComposer(false);
+    setWhisperDraft('');
+    Alert.alert('Whisper Sent!', `Your whisper was sent: "${text}"`);
     if (profileCardRef.current?.swipe) {
       profileCardRef.current.swipe('right');
     } else {
       handleSwipe('right');
     }
-  }, [whispers, consumeWhisper, profileCardRef, handleSwipe, navigation]);
+  }, [whisperDraft, consumeWhisper, handleSwipe]);
 
   const handleFilterPress = useCallback((filterName) => {
     if (filterName === 'More') {
@@ -357,14 +439,24 @@ const HomeScreen = ({ navigation }) => {
     }
   }, [currentProfile, session, handleSwipe]);
 
+  const handleDoubleTap = useCallback(({ x, y, profile }) => {
+    setHeartBurst({ x, y });
+    // Trigger a like on double-tap
+    if (profileCardRef.current?.swipe) {
+      profileCardRef.current.swipe('right');
+    } else {
+      handleSwipe('right');
+    }
+  }, [handleSwipe]);
+
   const handleSettingsPress = useCallback(() => {
     navigation?.navigate?.('Preferences');
   }, [navigation]);
 
   const overlayCurrentUser = useMemo(() => ({
-    name: authUser?.displayName || currentUser.name,
-    images: authUser?.photos?.map((p) => p.url) || currentUser.images,
-  }), [authUser?.displayName, authUser?.photos, currentUser.name, currentUser.images]);
+    name: authUser?.displayName || currentUser?.name,
+    images: authUser?.photos?.map((p) => p.url) || currentUser?.images,
+  }), [authUser?.displayName, authUser?.photos, currentUser?.name, currentUser?.images]);
 
   const handleMatchSendMessage = useCallback(() => {
     const convId = matchData?.conversationId;
@@ -402,7 +494,13 @@ const HomeScreen = ({ navigation }) => {
 
       {/* ─── DATING AREA ─── */}
       <View style={styles.datingArea}>
-        {hasValidProfile ? (
+        {isLoadingProfiles ? (
+          <View style={styles.cardArea}>
+            <View style={styles.cardLayer}>
+              <CardSkeleton />
+            </View>
+          </View>
+        ) : hasValidProfile ? (
           <>
             {/* Card with directional entry animation */}
             <View style={styles.cardArea}>
@@ -427,10 +525,19 @@ const HomeScreen = ({ navigation }) => {
                     profile={currentProfile}
                     onSwipe={handleSwipe}
                     onExpand={handleExpand}
+                    onDoubleTap={handleDoubleTap}
                     style={styles.fullCard}
                   />
                 </View>
               </View>
+              {/* Heart burst on double-tap */}
+              {heartBurst && (
+                <HeartBurstOverlay
+                  x={heartBurst.x}
+                  y={heartBurst.y}
+                  onComplete={() => setHeartBurst(null)}
+                />
+              )}
             </View>
 
             {/* Action buttons overlaid at bottom of card */}
@@ -449,7 +556,7 @@ const HomeScreen = ({ navigation }) => {
           <View style={styles.empty}>
             <View style={styles.emptyBanner}>
               <View style={styles.emptyCircle}>
-                <Ionicons name="heart-outline" size={30} color={colors.accent} />
+                <GraffitiHeart size={30} color={colors.accent} />
               </View>
               <Text style={styles.emptyTitle}>No more profiles</Text>
               <Text style={styles.emptySub}>
@@ -481,17 +588,17 @@ const HomeScreen = ({ navigation }) => {
           style={styles.headerSideSlot}
         >
           <LinearGradient
-            colors={['#0F47AF', '#CE1126', '#078930']}
+            colors={['#3B82F6', '#EF4444', '#22C55E']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.crownBadge}
           >
-            <FontAwesome5 name="crown" size={16} color="#FFFFFF" />
+            <GraffitiCrown size={16} color="#FFFFFF" filled />
           </LinearGradient>
         </TouchableOpacity>
 
         {/* Center — Mode title */}
-        <Text style={styles.headerTitle}>{mode === 'Social' ? 'Social' : 'Dating'}</Text>
+        <Text style={styles.headerTitle}>{mode === 'Social' ? 'Socializing' : 'Discover'}</Text>
 
         {/* Right — Profile avatar */}
         <TouchableOpacity
@@ -500,7 +607,7 @@ const HomeScreen = ({ navigation }) => {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.headerSideSlot}
         >
-          <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
+          <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
         </TouchableOpacity>
       </Animated.View>
 
@@ -535,10 +642,17 @@ const HomeScreen = ({ navigation }) => {
       {/* ─── LIKE COUNTER — subtle indicator near bottom ─── */}
       {likeStatus && !hasUnlimitedLikes(tier || 'free') && likeStatus.remaining < likeStatus.limit && (
         <View style={styles.likeCounter}>
-          <Ionicons name="heart" size={12} color={likeStatus.remaining <= 5 ? colors.accent : 'rgba(255,255,255,0.6)'} />
+          <GraffitiHeart size={12} color={likeStatus.remaining <= 5 ? colors.accent : 'rgba(255,255,255,0.6)'} filled />
           <Text style={[styles.likeCounterText, likeStatus.remaining <= 5 && { color: colors.accent }]}>
             {likeStatus.remaining} likes left today
           </Text>
+        </View>
+      )}
+
+      {/* ─── SPOTLIGHT CARD (Junub users) ─── */}
+      {showSpotlight && profiles[1] && (
+        <View style={styles.spotlightWrap}>
+          <SpotlightCard profile={profiles[1]} onPress={handleExpand} colors={colors} />
         </View>
       )}
 
@@ -549,6 +663,115 @@ const HomeScreen = ({ navigation }) => {
         matchedUser={matchData?.matchedUser}
         onSendMessage={handleMatchSendMessage}
         onKeepSwiping={handleKeepSwiping}
+      />
+
+      {/* ─── WHISPER COMPOSER (premium) ─── */}
+      <Modal
+        visible={showWhisperComposer}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowWhisperComposer(false);
+          setWhisperDraft('');
+        }}
+      >
+        <View style={styles.whisperOverlay}>
+          <View style={styles.whisperCard}>
+            <Text style={styles.whisperTitle}>Send Whisper</Text>
+            <Text style={styles.whisperSubtitle}>Premium private intro</Text>
+            <TextInput
+              style={styles.whisperInput}
+              value={whisperDraft}
+              onChangeText={setWhisperDraft}
+              placeholder="Write a quick intro..."
+              placeholderTextColor={colors.gray400}
+              multiline
+              maxLength={160}
+              autoFocus
+            />
+            <View style={styles.whisperFooter}>
+              <Text style={styles.whisperCount}>{whispers} left</Text>
+              <View style={styles.whisperActions}>
+                <TouchableOpacity
+                  style={styles.whisperCancel}
+                  onPress={() => {
+                    setShowWhisperComposer(false);
+                    setWhisperDraft('');
+                  }}
+                >
+                  <Text style={styles.whisperCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.whisperSend, !whisperDraft.trim() && styles.whisperSendDisabled]}
+                  onPress={handleSendWhisper}
+                  disabled={!whisperDraft.trim()}
+                >
+                  <Text style={styles.whisperSendText}>Send</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── AD BANNER (free tier, bottom of screen) ─── */}
+      <View style={styles.adBannerWrap}>
+        <AdBanner colors={colors} />
+      </View>
+
+      {/* ─── BOOST PROMPT (every 15 swipes) ─── */}
+      {showBoostPrompt && (
+        <TouchableOpacity
+          style={styles.boostBanner}
+          onPress={() => { setShowBoostPrompt(false); navigation?.navigate?.('Boost'); }}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="flash" size={16} color="#FFD700" />
+          <Text style={styles.boostBannerText}>Try Spotlight to get 10x more views</Text>
+          <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
+      )}
+
+      {/* ─── PROMO CARD (every 20 swipes) ─── */}
+      <Modal
+        visible={showPromoCard}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPromoCard(false)}
+      >
+        <View style={styles.promoOverlay}>
+          <LinearGradient
+            colors={[colors.accent, colors.rose || '#E1306C', '#7C4DFF']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.promoCard}
+          >
+            <Text style={styles.promoEmoji}>✨</Text>
+            <Text style={styles.promoTitle}>Upgrade to JuNubin+</Text>
+            <Text style={styles.promoFeature}>Unlimited likes & rewinds</Text>
+            <Text style={styles.promoFeature}>See who likes you</Text>
+            <Text style={styles.promoFeature}>Ad-free experience</Text>
+            <Text style={styles.promoFeature}>Priority in discover</Text>
+            <TouchableOpacity
+              style={styles.promoBtn}
+              onPress={() => { setShowPromoCard(false); navigation?.navigate?.('Elite'); }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.promoBtnText}>See Plans</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowPromoCard(false)} style={styles.promoDismiss}>
+              <Text style={styles.promoDismissText}>Not Now</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        </View>
+      </Modal>
+
+      {/* ─── INTERSTITIAL AD (free tier, every 5 swipes) ─── */}
+      <InterstitialAd
+        visible={showInterstitial}
+        onClose={() => setShowInterstitial(false)}
+        onUpgrade={() => { setShowInterstitial(false); navigation?.navigate?.('Elite'); }}
+        colors={colors}
       />
     </View>
   );
@@ -713,6 +936,179 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.7)',
   },
+
+  // ── Spotlight ──
+  spotlightWrap: {
+    position: 'absolute',
+    bottom: 100,
+    left: 0,
+    right: 0,
+    zIndex: 14,
+  },
+  whisperOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  whisperCard: {
+    backgroundColor: colors.white,
+    borderRadius: 20,
+    padding: 16,
+    ...getShadow('lg', isDark),
+  },
+  whisperTitle: {
+    ...Typography.h3,
+    color: colors.black,
+  },
+  whisperSubtitle: {
+    ...Typography.caption,
+    color: colors.gray600,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  whisperInput: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.black,
+    textAlignVertical: 'top',
+    fontFamily: FontFamily.regular,
+    fontSize: 15,
+  },
+  whisperFooter: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  whisperCount: {
+    ...Typography.caption,
+    color: colors.gray600,
+  },
+  whisperActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  whisperCancel: {
+    borderWidth: 1,
+    borderColor: colors.gray300,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  whisperCancelText: {
+    ...Typography.bodySmallMedium,
+    color: colors.gray600,
+  },
+  whisperSend: {
+    backgroundColor: colors.accent,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  whisperSendDisabled: {
+    opacity: 0.5,
+  },
+  whisperSendText: {
+    ...Typography.bodySmallMedium,
+    color: '#FFFFFF',
+  },
+
+  // ── Ad Banner ──
+  adBannerWrap: {
+    position: 'absolute',
+    bottom: insets.bottom + 70,
+    left: 0,
+    right: 0,
+    zIndex: 12,
+  },
+
+  // ── Boost Prompt Banner ──
+  boostBanner: {
+    position: 'absolute',
+    top: insets.top + 56 + 48,
+    left: 16,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    zIndex: 22,
+  },
+  boostBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    color: '#FFFFFF',
+  },
+
+  // ── Promo Card ──
+  promoOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  promoCard: {
+    width: '100%',
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 32,
+    alignItems: 'center',
+    gap: 6,
+  },
+  promoEmoji: {
+    fontSize: 40,
+    marginBottom: 8,
+  },
+  promoTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  promoFeature: {
+    fontSize: 15,
+    fontWeight: '500',
+    fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.9)',
+    lineHeight: 24,
+  },
+  promoBtn: {
+    marginTop: 18,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 36,
+    paddingVertical: 14,
+    borderRadius: 24,
+  },
+  promoBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.accent,
+  },
+  promoDismiss: {
+    marginTop: 10,
+    paddingVertical: 6,
+  },
+  promoDismissText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.7)',
+  },
+
 });
 
 export default HomeScreen;

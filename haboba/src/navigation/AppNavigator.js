@@ -1,13 +1,14 @@
 import React, { useMemo, useRef, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, Platform, ActivityIndicator, Animated, Dimensions } from 'react-native';
 import { useTheme, FontFamily } from '../theme';
+import { GraffitiHeart, GraffitiLocation, GraffitiChat, GraffitiCommunity } from '../components/icons';
 import { useAuth } from '../auth';
+import { hapticSelection } from '../utils/haptics';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const TAB_COUNT = 3;
+const TAB_COUNT = 4;
 
 // Screens - Onboarding flow (eager — auth flow)
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -17,13 +18,14 @@ import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import HomeScreen from '../screens/HomeScreen';
 import LikesScreen from '../screens/LikesScreen';
 import MessagesScreen from '../screens/MessagesScreen';
+import CommunityScreen from '../screens/CommunityScreen';
 
 // Lazy-loaded screens (behind navigation.navigate)
 function lazify(importFn) {
   const LazyComponent = React.lazy(importFn);
   return function LazyScreen(props) {
     return (
-      <React.Suspense fallback={<View style={styles.bootLoading}><ActivityIndicator size="large" color="#C4956A" /></View>}>
+      <React.Suspense fallback={<View style={styles.bootLoading}><ActivityIndicator size="large" color="#F56040" /></View>}>
         <LazyComponent {...props} />
       </React.Suspense>
     );
@@ -44,6 +46,17 @@ const EditProfileScreen = lazify(() => import('../screens/EditProfileScreen'));
 const NotificationsScreen = lazify(() => import('../screens/NotificationsScreen'));
 const SettingsInfoScreen = lazify(() => import('../screens/SettingsInfoScreen'));
 const PreferenceSelectScreen = lazify(() => import('../screens/PreferenceSelectScreen'));
+// New screens
+const CallScreen = lazify(() => import('../screens/CallScreen'));
+const PhotoVerificationScreen = lazify(() => import('../screens/PhotoVerificationScreen'));
+const ReferralScreen = lazify(() => import('../screens/ReferralScreen'));
+const StoriesViewScreen = lazify(() => import('../screens/StoriesViewScreen'));
+const CreateStoryScreen = lazify(() => import('../screens/CreateStoryScreen'));
+const EventsScreen = lazify(() => import('../screens/EventsScreen'));
+const EventDetailScreen = lazify(() => import('../screens/EventDetailScreen'));
+const CreateEventScreen = lazify(() => import('../screens/CreateEventScreen'));
+const InteractivityHubScreen = lazify(() => import('../screens/InteractivityHubScreen'));
+const GameSettingsScreen = lazify(() => import('../screens/GameSettingsScreen'));
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -52,8 +65,9 @@ function HomeTabs() {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const likesPink = colors.accent;
-  const tabIndicatorAnim = useRef(new Animated.Value(1)).current; // Start on HomeTab (index 1)
-  const TAB_NAMES = ['LikesTab', 'HomeTab', 'MessagesTab'];
+  const tabIndicatorAnim = useRef(new Animated.Value(0)).current; // Start on HomeTab (index 0)
+  const TAB_NAMES = ['HomeTab', 'LikesTab', 'CommunityTab', 'MessagesTab'];
+  const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
 
   return (
     <Tab.Navigator
@@ -83,43 +97,51 @@ function HomeTabs() {
           elevation: 10,
         },
         tabBarIcon: ({ focused }) => {
-          let iconName;
           const activeColor = route.name === 'LikesTab' ? likesPink : colors.tabActive;
           const iconColor = focused ? activeColor : colors.tabInactive;
+          const idx = TAB_NAMES.indexOf(route.name);
+          const scaleValue = idx >= 0 ? tabScales[idx] : new Animated.Value(1);
 
-          // Discover gets a big raised center button
-          if (route.name === 'HomeTab') {
-            return (
-              <View style={[styles.centerBtnWrap]}>
-                <View style={[styles.centerBtn, { backgroundColor: focused ? colors.accent : colors.gray200 }]}>
-                  <Ionicons
-                    name={focused ? 'location' : 'location-outline'}
-                    size={24}
-                    color={focused ? '#FFF' : colors.gray500}
-                  />
-                </View>
-              </View>
-            );
-          }
-
+          let IconComponent;
           switch (route.name) {
+            case 'HomeTab':
+              IconComponent = GraffitiLocation;
+              break;
             case 'LikesTab':
-              iconName = focused ? 'heart' : 'heart-outline';
+              IconComponent = GraffitiHeart;
+              break;
+            case 'CommunityTab':
+              IconComponent = GraffitiCommunity;
               break;
             case 'MessagesTab':
-              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
+              IconComponent = GraffitiChat;
               break;
           }
 
           return (
-            <View style={[styles.tabIcon, focused && styles.tabIconFocused]}>
-              <Ionicons name={iconName} size={26} color={iconColor} />
+            <Animated.View style={[styles.tabIcon, focused && styles.tabIconFocused, { transform: [{ scale: scaleValue }] }]}>
+              {IconComponent && <IconComponent size={26} color={iconColor} filled={focused} />}
               {focused && <View style={[styles.activeDot, { backgroundColor: activeColor }]} />}
-            </View>
+            </Animated.View>
           );
         },
       })}
       screenListeners={({ route }) => ({
+        tabPress: () => {
+          hapticSelection();
+          const idx = TAB_NAMES.indexOf(route.name);
+          if (idx >= 0) {
+            // Scale bounce animation
+            const scale = tabScales[idx];
+            scale.setValue(0.85);
+            Animated.spring(scale, {
+              toValue: 1,
+              tension: 200,
+              friction: 8,
+              useNativeDriver: true,
+            }).start();
+          }
+        },
         focus: () => {
           const idx = TAB_NAMES.indexOf(route.name);
           if (idx >= 0) {
@@ -133,15 +155,9 @@ function HomeTabs() {
         },
       })}
     >
+      <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Discover' }} />
       <Tab.Screen name="LikesTab" component={LikesScreen} options={{ tabBarLabel: 'Likes' }} />
-      <Tab.Screen
-        name="HomeTab"
-        component={HomeScreen}
-        options={{
-          tabBarLabel: 'Discover',
-          tabBarLabelStyle: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3, marginTop: 6 },
-        }}
-      />
+      <Tab.Screen name="CommunityTab" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
       <Tab.Screen name="MessagesTab" component={MessagesScreen} options={{ tabBarLabel: 'Chat' }} />
     </Tab.Navigator>
   );
@@ -150,7 +166,7 @@ function HomeTabs() {
 export default function AppNavigator() {
   const { colors } = useTheme();
   const { isAuthenticated, ready, user } = useAuth();
-  const profileComplete = user?.profile?.profileComplete ?? true;
+  const profileComplete = user?.profile?.profileComplete ?? false;
 
   if (!ready) {
     return (
@@ -247,6 +263,48 @@ export default function AppNavigator() {
         component={PreferenceSelectScreen}
         options={{ gestureEnabled: true }}
       />
+      {/* New feature screens */}
+      <Stack.Screen
+        name="Call"
+        component={CallScreen}
+        options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="PhotoVerification"
+        component={PhotoVerificationScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen name="Referral" component={ReferralScreen} />
+      <Stack.Screen
+        name="StoriesView"
+        component={StoriesViewScreen}
+        options={{ presentation: 'fullScreenModal', gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="CreateStory"
+        component={CreateStoryScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen name="Events" component={EventsScreen} />
+      <Stack.Screen
+        name="EventDetail"
+        component={EventDetailScreen}
+        options={{ presentation: 'modal', gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="CreateEvent"
+        component={CreateEventScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="InteractivityHub"
+        component={InteractivityHubScreen}
+      />
+      <Stack.Screen
+        name="GameSettings"
+        component={GameSettingsScreen}
+        options={{ presentation: 'modal' }}
+      />
     </Stack.Navigator>
   );
 }
@@ -268,25 +326,6 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colors.accent,
     marginTop: 3,
-  },
-  centerBtnWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -18,
-  },
-  centerBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 6,
-    borderWidth: 2.5,
-    borderColor: colors.surface,
   },
 });
 

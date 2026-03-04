@@ -17,7 +17,12 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   corsOrigin: process.env.CORS_ORIGIN || '*',
-  enableDevOtpBypass: process.env.ENABLE_DEV_OTP_BYPASS === 'true',
+  // Never enabled by default in production.
+  // In non-production, default to true unless explicitly disabled.
+  enableDevOtpBypass:
+    process.env.NODE_ENV === 'production'
+      ? process.env.ENABLE_DEV_OTP_BYPASS === 'true'
+      : process.env.ENABLE_DEV_OTP_BYPASS !== 'false',
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',

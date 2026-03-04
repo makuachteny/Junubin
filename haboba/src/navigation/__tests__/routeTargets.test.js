@@ -7,7 +7,10 @@ const SOURCE_DIRS = [path.join(ROOT, 'src')];
 const SOURCE_FILES = [path.join(ROOT, 'App.js')];
 
 const ROUTE_NAME_REGEX = /name="([A-Za-z0-9_]+)"/g;
-const NAVIGATE_TARGET_REGEX = /navigate\(\s*['"]([A-Za-z0-9_]+)['"]/g;
+const NAVIGATION_ACTION_TARGET_REGEX = /navigation\.(?:navigate|replace|push)\(\s*['"]([A-Za-z0-9_]+)['"]/g;
+const ROUTES_ARRAY_TARGET_REGEX = /routes:\s*\[\s*\{\s*name:\s*['"]([A-Za-z0-9_]+)['"]/g;
+const COMMON_ACTIONS_NAVIGATE_REGEX = /CommonActions\.navigate\(\s*(?:\{\s*)?name:\s*['"]([A-Za-z0-9_]+)['"]/g;
+const LAZY_SCREEN_IMPORT_REGEX = /import\(\s*['"](\.\.\/screens\/[^'"]+)['"]\s*\)/g;
 
 const walkJsFiles = (dir) => {
   const entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -36,7 +39,7 @@ const extractByRegex = (content, regex) => {
 };
 
 describe('navigation route targets', () => {
-  it('all navigation targets map to registered route names', () => {
+  it('all route targets map to registered route names across navigation actions', () => {
     const navigatorContent = fs.readFileSync(NAVIGATOR_FILE, 'utf8');
     const registeredRoutes = new Set(extractByRegex(navigatorContent, ROUTE_NAME_REGEX));
 
@@ -48,8 +51,12 @@ describe('navigation route targets', () => {
     const unknownTargets = [];
     filesToScan.forEach((filePath) => {
       const content = fs.readFileSync(filePath, 'utf8');
-      const targets = extractByRegex(content, NAVIGATE_TARGET_REGEX);
-      targets.forEach((target) => {
+      const targetGroups = [
+        ...extractByRegex(content, NAVIGATION_ACTION_TARGET_REGEX),
+        ...extractByRegex(content, ROUTES_ARRAY_TARGET_REGEX),
+        ...extractByRegex(content, COMMON_ACTIONS_NAVIGATE_REGEX),
+      ];
+      targetGroups.forEach((target) => {
         if (!registeredRoutes.has(target)) {
           unknownTargets.push({ target, filePath: path.relative(ROOT, filePath) });
         }
@@ -57,5 +64,20 @@ describe('navigation route targets', () => {
     });
 
     expect(unknownTargets).toEqual([]);
+  });
+
+  it('all lazy-loaded screen imports in AppNavigator resolve to real files', () => {
+    const navigatorContent = fs.readFileSync(NAVIGATOR_FILE, 'utf8');
+    const missingFiles = [];
+    const importPaths = extractByRegex(navigatorContent, LAZY_SCREEN_IMPORT_REGEX);
+
+    importPaths.forEach((relativeImportPath) => {
+      const resolved = path.resolve(path.dirname(NAVIGATOR_FILE), `${relativeImportPath}.js`);
+      if (!fs.existsSync(resolved)) {
+        missingFiles.push(path.relative(ROOT, resolved));
+      }
+    });
+
+    expect(missingFiles).toEqual([]);
   });
 });

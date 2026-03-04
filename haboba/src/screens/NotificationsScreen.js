@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,25 +11,64 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { mockNotifications, imageSource } from '../data/mockProfiles';
+import { mockNotifications } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
+import ThemedRefreshControl from '../components/ThemedRefreshControl';
+import EmptyState from '../components/EmptyState';
+import SkeletonShimmer from '../components/SkeletonShimmer';
 
 const ICON_MAP = {
-  like: { name: 'heart', color: '#FF80AB' },
-  match: { name: 'heart-circle', color: '#FF80AB' },
+  like: { name: 'heart', color: '#ED4956' },
+  match: { name: 'heart-circle', color: '#ED4956' },
   comment: { name: 'chatbubble', color: '#6B8DB5' },
   follow: { name: 'person-add', color: '#6B9E5B' },
-  like_post: { name: 'thumbs-up', color: '#E8453C' },
+  like_post: { name: 'thumbs-up', color: '#F56040' },
   group: { name: 'people', color: '#8B5CF6' },
   superlike: { name: 'star', color: '#FFC107' },
 };
+
+function NotificationSkeleton() {
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+      {Array.from({ length: 4 }).map((_, i) => (
+        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 14 }}>
+          <SkeletonShimmer width={50} height={50} borderRadius={25} />
+          <View style={{ flex: 1 }}>
+            <SkeletonShimmer width={160} height={14} borderRadius={7} />
+            <SkeletonShimmer width={100} height={12} borderRadius={6} style={{ marginTop: 8 }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 export default function NotificationsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const rowAnimsRef = useRef([]);
   const hasAnimatedRef = useRef(false);
+
+  useEffect(() => {
+    // Simulate initial load
+    const timer = setTimeout(() => {
+      setNotifications(mockNotifications);
+      setIsLoading(false);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setNotifications(mockNotifications);
+      setRefreshing(false);
+    }, 800);
+  }, []);
 
   useEffect(() => {
     if (hasAnimatedRef.current || notifications.length === 0) return;
@@ -75,6 +114,13 @@ export default function NotificationsScreen({ navigation }) {
             setNotifications((prev) =>
               prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
             );
+            if (item.type === 'match' || item.type === 'like' || item.type === 'superlike') {
+              navigation.navigate('LikesTab');
+            } else if (item.type === 'comment' || item.type === 'like_post') {
+              navigation.navigate('CommunityTab');
+            } else if (item.type === 'follow') {
+              navigation.navigate('CommunityTab');
+            }
           }}
         >
           <View style={styles.avatarWrap}>
@@ -116,22 +162,30 @@ export default function NotificationsScreen({ navigation }) {
       </View>
 
       {/* Notification list */}
-      <FlatList
-        data={notifications}
-        renderItem={renderNotification}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        maxToRenderPerBatch={8}
-        windowSize={5}
-        removeClippedSubviews={true}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="notifications-off-outline" size={48} color={colors.gray400} />
-            <Text style={styles.emptyText}>No notifications yet</Text>
-          </View>
-        }
-      />
+      {isLoading ? (
+        <NotificationSkeleton />
+      ) : (
+        <FlatList
+          data={notifications}
+          renderItem={renderNotification}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews={true}
+          refreshControl={
+            <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon="notifications-outline"
+              title="No notifications yet"
+              subtitle="We'll let you know when something happens"
+            />
+          }
+        />
+      )}
     </View>
   );
 }
@@ -146,7 +200,7 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    height: 56,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.gray200,
   },

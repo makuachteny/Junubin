@@ -5,6 +5,10 @@
 
 import { scoreCulturalAffinity } from './culturalAffinity.js';
 import { scoreKeywordOverlap, scoreProfileFreshness } from './keywords.js';
+import { matchingConfig } from '../config/matching.js';
+
+const weighted = (value, key) =>
+  Math.round(value * (matchingConfig.weights[key] ?? 1));
 
 /**
  * Score a single candidate against the current user's profile.
@@ -14,20 +18,33 @@ import { scoreKeywordOverlap, scoreProfileFreshness } from './keywords.js';
  * @returns {number} compatibility score
  */
 export function scoreCandidate(candidate, currentUserProfile, opts = {}) {
+  return scoreCandidateDetailed(candidate, currentUserProfile, opts).score;
+}
+
+export function scoreCandidateDetailed(candidate, currentUserProfile, opts = {}) {
   let score = 0;
   const candidateProfile = candidate.profile || {};
+  const breakdown = {};
+  const addScore = (key, rawPoints) => {
+    if (!rawPoints) return;
+    const weightedPoints = weighted(rawPoints, key);
+    score += weightedPoints;
+    breakdown[key] = (breakdown[key] || 0) + weightedPoints;
+  };
 
   // Shared interests: 10 pts each
   const myInterests = Array.isArray(currentUserProfile?.interests) ? currentUserProfile.interests : [];
   const theirInterests = Array.isArray(candidateProfile.interests) ? candidateProfile.interests : [];
+  let sharedInterestRaw = 0;
   if (myInterests.length > 0 && theirInterests.length > 0) {
     const mySet = new Set(myInterests.map((i) => (typeof i === 'string' ? i.toLowerCase() : '')));
     for (const interest of theirInterests) {
       if (mySet.has(typeof interest === 'string' ? interest.toLowerCase() : '')) {
-        score += 10;
+        sharedInterestRaw += 10;
       }
     }
   }
+  addScore('sharedInterests', sharedInterestRaw);
 
   // Matching dating intentions: 20 pts
   if (
@@ -35,54 +52,54 @@ export function scoreCandidate(candidate, currentUserProfile, opts = {}) {
     candidateProfile.datingIntentions &&
     currentUserProfile.datingIntentions.toLowerCase() === candidateProfile.datingIntentions.toLowerCase()
   ) {
-    score += 20;
+    addScore('datingIntentions', 20);
   }
 
   // Recency bonus based on lastActiveAt
   if (candidate.lastActiveAt) {
     const hoursSinceActive = (Date.now() - new Date(candidate.lastActiveAt).getTime()) / (1000 * 60 * 60);
-    if (hoursSinceActive < 1) score += 30;
-    else if (hoursSinceActive < 24) score += 20;
-    else if (hoursSinceActive < 72) score += 10;
+    if (hoursSinceActive < 1) addScore('recency', 30);
+    else if (hoursSinceActive < 24) addScore('recency', 20);
+    else if (hoursSinceActive < 72) addScore('recency', 10);
   }
 
   // Verified: 5 pts
   if (candidate.isVerified) {
-    score += 5;
+    addScore('verified', 5);
   }
 
   // 3+ photos: 10 pts
   if (candidate.photos && candidate.photos.length >= 3) {
-    score += 10;
+    addScore('photos', 10);
   }
 
   // Has bio: 5 pts
   if (candidateProfile.bio && candidateProfile.bio.trim().length > 0) {
-    score += 5;
+    addScore('bio', 5);
   }
 
   // ── Phase 1: Cultural Affinity + Keywords ──
-  score += scoreCulturalAffinity(currentUserProfile, candidateProfile);
-  score += scoreKeywordOverlap(currentUserProfile, candidateProfile);
-  score += scoreProfileFreshness(candidateProfile);
+  addScore('culturalAffinity', scoreCulturalAffinity(currentUserProfile, candidateProfile));
+  addScore('keywordOverlap', scoreKeywordOverlap(currentUserProfile, candidateProfile));
+  addScore('profileFreshness', scoreProfileFreshness(candidateProfile));
 
   // ── Phase 2: "Currently Into" ──
-  score += scoreCurrentlyInto(currentUserProfile, candidateProfile);
+  addScore('currentlyInto', scoreCurrentlyInto(currentUserProfile, candidateProfile));
 
   // ── Phase 3: Behavioral Learning ──
   if (opts.preferenceVector) {
-    score += scoreBehavioral(candidateProfile, candidate, opts.preferenceVector);
+    addScore('behavioral', scoreBehavioral(candidateProfile, candidate, opts.preferenceVector));
   }
 
   // ── Phase 4: Community Patterns ──
   if (opts.popularityMap) {
-    score += scorePopularity(opts.popularityMap[candidate.id]);
+    addScore('popularity', scorePopularity(opts.popularityMap[candidate.id]));
   }
   if (opts.collaborativeBoosts?.[candidate.id]) {
-    score += opts.collaborativeBoosts[candidate.id];
+    addScore('collaborative', opts.collaborativeBoosts[candidate.id]);
   }
 
-  return score;
+  return { score, breakdown };
 }
 
 // ── Phase 2: "Currently Into" scoring ───────────────────────────────────────
@@ -134,7 +151,7 @@ function scoreCurrentlyInto(currentUserProfile, candidateProfile) {
  * Total potential: ~60 pts.
  */
 function scoreBehavioral(candidateProfile, candidate, vector) {
-  if (!vector || vector.swipesAnalyzed < 20) return 0;
+  if (!vector || vector.swipesAnalyzed < matchingConfig.behavioralMinSwipes) return 0;
 
   let score = 0;
 
@@ -219,27 +236,47 @@ function scorePopularity(popularityRecord) {
  * @param {object} opts - Optional { preferenceVector, popularityMap, collaborativeBoosts }
  * @returns {object[]} Scored, ranked, and shuffled candidates
  */
-export function rankCandidates(candidates, currentUserProfile, limit, windowSize = 5, opts = {}) {
+export function rankCandidates(
+  candidates,
+  currentUserProfile,
+  limit,
+  windowSize = matchingConfig.windowSize,
+  opts = {}
+) {
   // Score each candidate
   const scored = candidates.map((c) => ({
     candidate: c,
-    score: scoreCandidate(c, currentUserProfile, opts),
+    ...scoreCandidateDetailed(c, currentUserProfile, opts),
   }));
 
   // Sort by score descending
   scored.sort((a, b) => b.score - a.score);
 
-  // Shuffle within windows of `windowSize` for variety
+  // Controlled exploration: shuffle some windows for variety while preserving ranking quality.
+  const exploreRate = typeof opts.exploreRate === 'number'
+    ? Math.max(0, Math.min(1, opts.exploreRate))
+    : matchingConfig.exploreRate;
+
   const result = [];
   for (let i = 0; i < scored.length; i += windowSize) {
     const window = scored.slice(i, i + windowSize);
-    // Fisher-Yates shuffle on the window
-    for (let j = window.length - 1; j > 0; j--) {
-      const k = Math.floor(Math.random() * (j + 1));
-      [window[j], window[k]] = [window[k], window[j]];
+    if (Math.random() < exploreRate) {
+      for (let j = window.length - 1; j > 0; j--) {
+        const k = Math.floor(Math.random() * (j + 1));
+        [window[j], window[k]] = [window[k], window[j]];
+      }
     }
     result.push(...window);
   }
 
-  return result.slice(0, limit).map((item) => item.candidate);
+  const limited = result.slice(0, limit);
+  if (opts.includeScores) {
+    return limited.map((item) => ({
+      candidate: item.candidate,
+      score: item.score,
+      breakdown: item.breakdown,
+    }));
+  }
+
+  return limited.map((item) => item.candidate);
 }

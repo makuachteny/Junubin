@@ -1,0 +1,373 @@
+// AnaJunubin — Stories Viewer (full-screen, progress bars, tap nav)
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated, TextInput, Alert, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { imageSource } from '../utils/imageSource';
+import { FontFamily } from '../theme';
+import { interactiveStore } from '../utils/interactiveStore';
+import { useSubscription } from '../payments';
+import { hapticSelection } from '../utils/haptics';
+
+const { width: W, height: H } = Dimensions.get('window');
+const STORY_DURATION = 5000;
+
+export default function StoriesViewScreen({ navigation, route }) {
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 375;
+  const { hasTier } = useSubscription();
+  const storyGroup = route.params?.story;
+  const stories = storyGroup?.stories || [];
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [reaction, setReaction] = useState('🔥');
+  const [thread, setThread] = useState([]);
+  const [threadInput, setThreadInput] = useState('');
+  const [sentReaction, setSentReaction] = useState(null);
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const reactionScale = useRef(new Animated.Value(1)).current;
+  const reactionFloat = useRef(new Animated.Value(0)).current;
+  const reactionOpacity = useRef(new Animated.Value(0)).current;
+  const timerRef = useRef(null);
+
+  const handleReaction = useCallback((emoji) => {
+    setReaction(emoji);
+    hapticSelection?.();
+    // Bounce the chip
+    Animated.sequence([
+      Animated.timing(reactionScale, { toValue: 1.3, duration: 100, useNativeDriver: true }),
+      Animated.spring(reactionScale, { toValue: 1, friction: 3, useNativeDriver: true }),
+    ]).start();
+    // Float-up burst
+    setSentReaction(emoji);
+    reactionFloat.setValue(0);
+    reactionOpacity.setValue(1);
+    Animated.parallel([
+      Animated.timing(reactionFloat, { toValue: -120, duration: 800, useNativeDriver: true }),
+      Animated.timing(reactionOpacity, { toValue: 0, duration: 800, useNativeDriver: true }),
+    ]).start(() => setSentReaction(null));
+  }, [reactionScale, reactionFloat, reactionOpacity]);
+
+  const story = stories[currentIndex];
+  const reactionSet = isCompact ? ['🔥', '✨', '😍', '💌'] : ['🔥', '✨', '💫', '😍', '💌'];
+  const threadKey = useMemo(() => `${storyGroup?.id || 'story'}-${story?.id || currentIndex}`, [storyGroup?.id, story?.id, currentIndex]);
+
+  useEffect(() => {
+    interactiveStore.getStoryThreads().then((all) => {
+      setThread(all?.[threadKey] || []);
+    });
+  }, [threadKey]);
+
+  useEffect(() => {
+    if (!story) return;
+    progressAnim.setValue(0);
+    const anim = Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: story.duration || STORY_DURATION,
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished) goNext();
+    });
+    return () => anim.stop();
+  }, [currentIndex, story]);
+
+  const goNext = () => {
+    if (currentIndex < stories.length - 1) {
+      setCurrentIndex((i) => i + 1);
+    } else {
+      navigation.goBack();
+    }
+  };
+
+  const goPrev = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex((i) => i - 1);
+    }
+  };
+
+  const handlePostReply = () => {
+    if (!hasTier('junub')) {
+      Alert.alert('Junub Feature', 'Story reply threads are available on Junub and higher.', [
+        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    const value = threadInput.trim();
+    if (!value) return;
+    const next = [value, ...thread].slice(0, 4);
+    setThread(next);
+    setThreadInput('');
+    interactiveStore.getStoryThreads().then((all) => {
+      const merged = { ...(all || {}), [threadKey]: next };
+      interactiveStore.setStoryThreads(merged);
+    });
+  };
+
+  if (!story) {
+    navigation.goBack();
+    return null;
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Story content */}
+      {story.type === 'image' ? (
+        <Image source={imageSource(story.uri)} style={styles.fullImage} resizeMode="cover" />
+      ) : (
+        <View style={[styles.textBg, { backgroundColor: story.bgColor || '#3B82F6' }]}>
+          <Text style={styles.storyText}>{story.text}</Text>
+        </View>
+      )}
+
+      {/* Progress bars */}
+      <View style={[styles.progressRow, { top: insets.top + 8 }]}>
+        {stories.map((_, i) => (
+          <View key={i} style={styles.progressTrack}>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                {
+                  width: i < currentIndex
+                    ? '100%'
+                    : i === currentIndex
+                    ? progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+                    : '0%',
+                },
+              ]}
+            />
+          </View>
+        ))}
+      </View>
+
+      {/* Header */}
+      <View style={[styles.header, { top: insets.top + 20 }]}>
+        <Image source={imageSource(storyGroup?.avatar)} style={styles.avatar} />
+        <Text style={styles.userName}>{storyGroup?.userName}</Text>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.closeBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Close story"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="close" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
+      {/* Tap zones */}
+      <View style={styles.tapZones}>
+        <TouchableOpacity style={styles.tapLeft} onPress={goPrev} activeOpacity={1} />
+        <TouchableOpacity style={styles.tapRight} onPress={goNext} activeOpacity={1} />
+      </View>
+
+      <View style={[styles.reactBar, { bottom: insets.bottom + 10 }]}>
+        {reactionSet.map((emoji) => (
+          <Animated.View key={emoji} style={reaction === emoji ? { transform: [{ scale: reactionScale }] } : undefined}>
+            <TouchableOpacity
+              style={[
+                styles.reactChip,
+                isCompact && styles.reactChipCompact,
+                reaction === emoji && styles.reactChipActive,
+              ]}
+              onPress={() => handleReaction(emoji)}
+              accessibilityRole="button"
+              accessibilityLabel={`React with ${emoji}`}
+              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            >
+              <Text style={[styles.reactEmoji, isCompact && styles.reactEmojiCompact]}>{emoji}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        ))}
+        <TextInput
+          value={threadInput}
+          onChangeText={setThreadInput}
+          placeholder="Reply..."
+          placeholderTextColor="rgba(255,255,255,0.55)"
+          style={styles.threadInput}
+          maxLength={80}
+          accessibilityLabel="Reply to story"
+        />
+        <TouchableOpacity
+          style={styles.sendBtn}
+          onPress={handlePostReply}
+          accessibilityRole="button"
+          accessibilityLabel="Send reply"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="arrow-forward" size={15} color="#FFF" />
+        </TouchableOpacity>
+      </View>
+      {/* Floating reaction burst */}
+      {sentReaction && (
+        <Animated.Text
+          style={[
+            styles.floatingReaction,
+            {
+              bottom: insets.bottom + 60,
+              transform: [{ translateY: reactionFloat }, { scale: 1.5 }],
+              opacity: reactionOpacity,
+            },
+          ]}
+        >
+          {sentReaction}
+        </Animated.Text>
+      )}
+      {thread.length > 0 && (
+        <View style={[styles.threadPreview, { bottom: insets.bottom + 64 }]}>
+          {thread.slice(0, 2).map((item, idx) => (
+            <Text key={`${item}-${idx}`} style={styles.threadText}>• {item}</Text>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#000' },
+  fullImage: { width: W, height: H },
+  textBg: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  storyText: {
+    fontSize: 28,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 38,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  progressRow: {
+    position: 'absolute',
+    left: 8,
+    right: 8,
+    flexDirection: 'row',
+    gap: 4,
+    zIndex: 20,
+  },
+  progressTrack: {
+    flex: 1,
+    height: 2.5,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 1.5,
+  },
+  header: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 20,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  userName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    color: '#FFFFFF',
+  },
+  closeBtn: { padding: 8 },
+  tapZones: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: 'row',
+    zIndex: 10,
+  },
+  tapLeft: { flex: 1 },
+  tapRight: { flex: 2 },
+  reactBar: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 25,
+  },
+  reactChip: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.25)',
+  },
+  reactChipCompact: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  reactChipActive: {
+    backgroundColor: 'rgba(245,96,64,0.95)',
+    borderColor: 'rgba(245,96,64,1)',
+  },
+  reactEmoji: {
+    fontSize: 18,
+  },
+  reactEmojiCompact: {
+    fontSize: 15,
+  },
+  floatingReaction: {
+    position: 'absolute',
+    alignSelf: 'center',
+    fontSize: 48,
+    zIndex: 30,
+  },
+  threadInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.30)',
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    color: '#FFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    fontSize: 12,
+  },
+  sendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F56040',
+  },
+  threadPreview: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    zIndex: 25,
+  },
+  threadText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+});

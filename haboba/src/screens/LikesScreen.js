@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,37 +7,76 @@ import {
   TouchableOpacity,
   Image,
   Animated,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
+import { GraffitiLocation, GraffitiHeart } from '../components/icons';
 import Button from '../components/Button';
-import { mockLikes, currentUser, imageSource } from '../data/mockProfiles';
+import AdBanner from '../components/AdBanner';
+import ProfilePromptBanner from '../components/ProfilePromptBanner';
+import EmptyState from '../components/EmptyState';
+import ThemedRefreshControl from '../components/ThemedRefreshControl';
+import { mockLikes } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks';
 import * as likesService from '../api/services/likesService';
 
-const FILTER_PILLS = ['All', 'Notes', 'New', 'Social', 'Dating', 'Recent', 'Nearby', 'Verified'];
+const { width: SCREEN_W } = Dimensions.get('window');
+const CARD_GAP = 12;
+const CARD_WIDTH = (SCREEN_W - 32 - CARD_GAP) / 2; // 16px padding each side
+const CARD_HEIGHT = CARD_WIDTH * 1.45;
 
 export default function LikesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const [activeTab, setActiveTab] = useState('All');
-  const [likes, setLikes] = useState(mockLikes);
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const { canSeeWhoLikesYou } = useSubscription();
+  const [likes, setLikes] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const styles = useMemo(() => getStyles(colors, isDark, insets), [colors, isDark, insets]);
+  const { canSeeWhoLikesYou, hasTier } = useSubscription();
   const { session } = useAuth();
+  const { currentUser } = useCurrentUser();
+  const [refreshing, setRefreshing] = useState(false);
   const contentAnim = useRef(new Animated.Value(0)).current;
   const cardAnimsRef = useRef([]);
   const hasAnimatedCardsRef = useRef(false);
 
-  useEffect(() => {
-    if (!session) return;
+  const fetchLikes = useCallback(() => {
+    if (!session) {
+      setLikes(mockLikes);
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
     likesService.getReceivedLikes().then((apiLikes) => {
-      if (apiLikes.length > 0) setLikes(apiLikes);
+      setLikes(apiLikes.length > 0 ? apiLikes : mockLikes);
     }).catch((err) => {
       if (__DEV__) console.warn('Likes fetch failed:', err);
-    });
+      setLikes(mockLikes);
+    }).finally(() => setIsLoading(false));
+  }, [session]);
+
+  useEffect(() => {
+    fetchLikes();
+  }, [fetchLikes]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    if (!session) {
+      setTimeout(() => {
+        setLikes(mockLikes);
+        setRefreshing(false);
+      }, 800);
+      return;
+    }
+    likesService.getReceivedLikes().then((apiLikes) => {
+      setLikes(apiLikes.length > 0 ? apiLikes : mockLikes);
+    }).catch(() => {
+      setLikes(mockLikes);
+    }).finally(() => setRefreshing(false));
   }, [session]);
 
   useEffect(() => {
@@ -50,8 +89,8 @@ export default function LikesScreen({ navigation }) {
 
   // Staggered scale+fade for grid cards (first render only)
   useEffect(() => {
-    if (hasAnimatedCardsRef.current || visibleLikes.length === 0) return;
-    const anims = visibleLikes.map(() => new Animated.Value(0));
+    if (hasAnimatedCardsRef.current || likes.length === 0) return;
+    const anims = likes.map(() => new Animated.Value(0));
     cardAnimsRef.current = anims;
     hasAnimatedCardsRef.current = true;
     const staggered = anims.map((anim, i) =>
@@ -64,34 +103,12 @@ export default function LikesScreen({ navigation }) {
       })
     );
     Animated.stagger(0, staggered).start();
-  }, [visibleLikes]);
+  }, [likes]);
 
   const unlocked = canSeeWhoLikesYou();
-  const likesAccent = '#FF80AB';
-  const visibleLikes = useMemo(() => {
-    switch (activeTab) {
-      case 'Notes':
-        return likes.filter((_, index) => index % 2 === 0);
-      case 'New':
-        return likes.slice(0, 3);
-      case 'Social':
-        return likes.filter((_, index) => index % 3 === 0);
-      case 'Dating':
-        return likes;
-      case 'Recent':
-        return likes.slice(0, 4);
-      case 'Nearby':
-        return likes.filter((l) => l.distance && parseInt(l.distance, 10) <= 5);
-      case 'Verified':
-        return likes.filter((l) => l.verified);
-      case 'All':
-      default:
-        return likes;
-    }
-  }, [activeTab, likes]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}> 
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header row */}
       <Animated.View
         style={[
@@ -111,36 +128,8 @@ export default function LikesScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Likes</Text>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-          <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
+          <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
         </TouchableOpacity>
-      </Animated.View>
-
-      {/* Filter pills — horizontally scrollable */}
-      <Animated.View
-        style={{
-          opacity: contentAnim,
-          transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }],
-        }}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pillsRow}
-        >
-          {FILTER_PILLS.map((pill) => {
-            const isActive = activeTab === pill;
-            return (
-              <TouchableOpacity
-                key={pill}
-                style={[styles.pill, isActive ? styles.pillActive : styles.pillInactive]}
-                onPress={() => setActiveTab(pill)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.pillText, isActive && styles.pillTextActive]}>{pill}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
       </Animated.View>
 
       <Animated.ScrollView
@@ -148,32 +137,53 @@ export default function LikesScreen({ navigation }) {
           styles.content,
           {
             opacity: contentAnim,
-            transform: [
-              {
-                translateY: contentAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [12, 0],
-                }),
-              },
-            ],
+            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
           },
         ]}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
-        <Text style={styles.likesCount}>{visibleLikes.length} Like{visibleLikes.length !== 1 ? 's' : ''}</Text>
+        {/* Like count */}
+        <Text style={styles.likesCount}>{likes.length} Like{likes.length !== 1 ? 's' : ''}</Text>
 
+        {/* Upgrade text */}
         {unlocked ? (
           <Text style={styles.upgradeText}>
             You can see everyone who likes you!
           </Text>
         ) : (
           <Text style={styles.upgradeText}>
-            Upgrade to Junub to see people who already liked you!
+            Upgrade to Elite Membership to see{'\n'}people who already liked you!
           </Text>
         )}
 
+        {/* Upsell Banner (free users) */}
+        {!hasTier('plus') && (
+          <ProfilePromptBanner
+            message="See who liked you first with JuNubin+"
+            onPress={() => navigation.navigate('Elite')}
+            colors={colors}
+          />
+        )}
+
+        {/* Ad Banner */}
+        <AdBanner colors={colors} style={{ marginBottom: 12 }} />
+
+        {/* Empty state */}
+        {likes.length === 0 && !isLoading && (
+          <EmptyState
+            icon="heart"
+            title="No likes yet"
+            subtitle="Keep swiping to get noticed!"
+          />
+        )}
+
+        {/* Card grid */}
         <View style={styles.likesGrid}>
-          {visibleLikes.map((like, idx) => {
+          {likes.map((like, idx) => {
             const cardAnim = cardAnimsRef.current[idx];
             const cardAnimStyle = cardAnim ? {
               opacity: cardAnim,
@@ -184,50 +194,69 @@ export default function LikesScreen({ navigation }) {
                 }),
               }],
             } : {};
+
             return (
               <Animated.View key={like.id} style={[styles.likeCard, cardAnimStyle]}>
                 <Image
                   source={imageSource(like.images?.[0])}
                   style={styles.likeImage}
-                  blurRadius={unlocked ? 0 : 20}
+                  blurRadius={unlocked ? 0 : 25}
                 />
-                <View style={styles.likeCardOverlay} />
+                {/* Bottom gradient overlay */}
+                <View style={styles.gradientOverlay} />
+
+                {/* Card info */}
                 <View style={styles.likeInfo}>
-                  <View style={styles.infoContent}>
+                  {/* Name + Age + Heart row */}
+                  <View style={styles.nameRow}>
                     {unlocked ? (
-                      <Text style={styles.likeName}>{like.name}</Text>
+                      <Text style={styles.likeName} numberOfLines={1}>{like.name}</Text>
                     ) : (
                       <View style={styles.blurredName} />
                     )}
                     <Text style={styles.likeAge}>{like.age}</Text>
+                    <GraffitiHeart size={16} color={colors.rose} filled />
                   </View>
-                  <View style={styles.likeDistance}>
-                    <Ionicons name="location" size={12} color="#FFFFFF" />
-                    <Text style={styles.likeDistText}>{like.distance}</Text>
+
+                  {/* Activity row */}
+                  <View style={styles.activityRow}>
+                    {like.activity === 'nearby' ? (
+                      <>
+                        <GraffitiLocation size={13} color="#FFFFFF" filled />
+                        <Text style={styles.activityText}>Nearby</Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={styles.activeDot} />
+                        <Text style={styles.activityText}>Recently Active</Text>
+                      </>
+                    )}
                   </View>
                 </View>
               </Animated.View>
             );
           })}
-        </View>
 
-        {!unlocked && visibleLikes.length > 0 && (
-          <View style={styles.ctaSection}>
-            <Button
-              title="SEE WHO LIKES YOU"
-              variant="primary"
-              size="lg"
-              onPress={() => navigation.navigate('Elite')}
-              textStyle={{ letterSpacing: 1 }}
-            />
-          </View>
-        )}
+        </View>
       </Animated.ScrollView>
+
+      {/* Fixed CTA button — stays at bottom, does not scroll */}
+      {!unlocked && likes.length > 0 && (
+        <View style={styles.ctaFixed}>
+          <TouchableOpacity
+            style={styles.ctaButton}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate('Elite')}
+          >
+            <Text style={styles.ctaText}>SEE WHO LIKES YOU</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
 
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors, isDark, insets) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
@@ -267,130 +296,150 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
     ...getShadow('md', isDark),
   },
-  pillsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    paddingLeft: 14,
-    gap: 8,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  pillActive: {
-    backgroundColor: colors.accent,
-    ...getShadow('md', isDark, colors.accent),
-  },
-  pillInactive: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.94)',
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.22)' : colors.gray300,
-    ...getShadow('sm', isDark),
-  },
-  pillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    color: isDark ? 'rgba(255,255,255,0.92)' : colors.gray700,
-  },
-  pillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-  },
   content: {
     flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: 16,
+    paddingBottom: 90,
   },
   likesCount: {
-    ...Typography.h1,
-    color: colors.black,
+    fontSize: 28,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.accent,
     textAlign: 'center',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 12,
+    marginBottom: 6,
   },
   upgradeText: {
-    ...Typography.bodySmall,
-    fontSize: 15,
-    color: colors.gray600,
+    fontSize: 16,
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
+    color: isDark ? colors.gray400 : colors.gray700,
     textAlign: 'center',
     marginBottom: 20,
-    lineHeight: 22,
+    lineHeight: 23,
   },
+
+  // ─── Card grid ───
   likesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
+    gap: CARD_GAP,
+    position: 'relative',
   },
   likeCard: {
-    width: '47.5%',
-    height: 200,
-    borderRadius: 16,
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.gray300,
-    ...getShadow('md', isDark),
   },
   likeImage: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
   },
-  likeCardOverlay: {
+  gradientOverlay: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.15)',
+    height: '50%',
+    backgroundColor: 'transparent',
+    // Simulated gradient with layered opacity
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    // Use a dark overlay at the bottom
+    ...StyleSheet.absoluteFillObject,
+    top: undefined,
+    backgroundGradient: undefined, // RN doesn't support CSS gradients
   },
   likeInfo: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingBottom: 14,
+    paddingTop: 40,
+    // Dark gradient effect
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
-  infoContent: {
+
+  // ─── Name row ───
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    marginBottom: 6,
   },
   blurredName: {
-    width: 60,
+    width: 70,
     height: 14,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.4)',
     borderRadius: 4,
   },
   likeName: {
-    ...Typography.bodySmallMedium,
-    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
   },
   likeAge: {
-    ...Typography.bodySmallMedium,
-    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-  },
-  likeDistance: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 6,
-  },
-  likeDistText: {
-    ...Typography.caption,
     color: '#FFFFFF',
   },
-  ctaSection: {
-    marginVertical: 24,
+
+  // ─── Activity row ───
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  activeDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.warning, // yellow dot for "Recently Active"
+  },
+  activityText: {
+    fontSize: 12,
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.85)',
+  },
+
+  // ─── CTA fixed at bottom ───
+  ctaFixed: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 16 + (insets?.bottom || 0),
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  ctaButton: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 40,
+    paddingVertical: 18,
+    borderRadius: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  ctaText: {
+    fontSize: 17,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
   },
 });

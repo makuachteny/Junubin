@@ -311,7 +311,7 @@ export default function EliteScreen({ navigation }) {
         {/* Social mode callout */}
         <View style={styles.socialCallout}>
           <Ionicons name="people" size={18} color={colors.accent} />
-          <Text style={styles.socialCalloutText}>Social mode is always free for everyone</Text>
+          <Text style={styles.socialCalloutText}>Socializing mode is always free for everyone</Text>
         </View>
 
         {/* Plan cards */}
@@ -597,7 +597,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     position: 'relative',
   },
   planSelected: {
-    backgroundColor: isDark ? colors.white : '#F7F5F2',
+    backgroundColor: colors.surfaceMuted,
     borderWidth: 2,
     borderColor: colors.accent,
     shadowColor: colors.accent,

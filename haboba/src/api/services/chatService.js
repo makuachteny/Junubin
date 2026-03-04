@@ -1,4 +1,7 @@
 import { supabase } from '../../config/supabase';
+import { cacheGet, cacheSet } from '../../utils/offlineCache';
+
+const OFFLINE_MESSAGES_TTL = 600_000; // 10 min
 
 export async function getMessages(conversationId) {
   const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -10,6 +13,8 @@ export async function getMessages(conversationId) {
     .eq('auth_id', authUser.id)
     .single();
 
+  if (!appUser) throw new Error('User not found');
+
   const { data: messages, error } = await supabase
     .from('Message')
     .select('id, body, type, createdAt, senderId, sender:User!senderId(id, displayName)')
@@ -19,16 +24,20 @@ export async function getMessages(conversationId) {
 
   if (error) throw error;
 
-  return (messages || []).map((m) => ({
+  const result = (messages || []).map((m) => ({
     id: m.id,
     sender: m.senderId === appUser?.id ? 'me' : (m.sender?.id || m.senderId),
     senderId: m.senderId,
     senderName: m.sender?.displayName || '',
     text: m.body,
+    type: m.type || 'text',
     time: formatTime(m.createdAt),
     createdAt: m.createdAt,
     read: true,
   }));
+
+  cacheSet(`messages_${conversationId}`, result, OFFLINE_MESSAGES_TTL);
+  return result;
 }
 
 export async function sendMessage(conversationId, body, type = 'text') {
@@ -43,7 +52,10 @@ export async function sendMessage(conversationId, body, type = 'text') {
 
   if (!appUser) throw new Error('User not found');
 
-  const sanitized = body.replace(/<[^>]*>/g, '').slice(0, 4000);
+  // Game messages carry JSON payloads — skip HTML stripping, allow larger body
+  const sanitized = type === 'game'
+    ? body.slice(0, 8000)
+    : body.replace(/<[^>]*>/g, '').slice(0, 4000);
 
   const { data: message, error } = await supabase
     .from('Message')

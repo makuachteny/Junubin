@@ -11,8 +11,10 @@ import {
   Animated,
   Text,
 } from 'react-native';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme, getShadow } from '../theme';
+import { hapticLight } from '../utils/haptics';
+import { GraffitiSmiley, GraffitiUndo, GraffitiSparkles, GraffitiHeart, GraffitiSend } from './icons';
 
 const BURST_VECTORS = [
   { x: 0, y: -22 },
@@ -78,15 +80,18 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
   }, [reactionsOpen, openAnim, emojiAnims]);
 
   const toggleReactions = useCallback(() => {
+    hapticLight();
     setReactionsOpen((prev) => !prev);
   }, []);
 
   const handleReaction = useCallback((emoji) => {
+    hapticLight();
     onReaction?.(emoji);
     setReactionsOpen(false);
   }, [onReaction]);
 
   const handleSuperLikePress = () => {
+    hapticLight();
     burstAnims.forEach((a) => a.setValue(0));
     Animated.parallel(
       burstAnims.map((a, i) =>
@@ -107,12 +112,14 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
         style={[styles.btn, styles.btnRegular]}
         onPress={toggleReactions}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={reactionsOpen ? 'Close reactions' : 'Open reactions'}
       >
-        <MaterialCommunityIcons
-          name={reactionsOpen ? 'close' : 'emoticon-happy-outline'}
-          size={28}
-          color={reactionsOpen ? colors.accent : colors.gray600}
-        />
+        {reactionsOpen ? (
+          <MaterialCommunityIcons name="close" size={28} color={colors.accent} />
+        ) : (
+          <GraffitiSmiley size={28} color={colors.gray600} />
+        )}
       </TouchableOpacity>
 
       {/* Content area — emojis and main buttons overlap here */}
@@ -122,8 +129,8 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
           style={[styles.mainRow, { opacity: mainOpacity }]}
           pointerEvents={reactionsOpen ? 'none' : 'auto'}
         >
-          <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={onRewind} activeOpacity={0.7}>
-            <MaterialCommunityIcons name="undo" size={28} color={colors.gray600} />
+          <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={() => { hapticLight(); onRewind?.(); }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Rewind">
+            <GraffitiUndo size={28} color={colors.gray600} />
           </TouchableOpacity>
 
           <View style={styles.superLikeWrap}>
@@ -142,23 +149,23 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
                     ],
                   }]}
                 >
-                  <Ionicons name="sparkles" size={12} color={colors.accent} />
+                  <GraffitiSparkles size={12} color={colors.accent} filled />
                 </Animated.View>
               );
             })}
-            <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={handleSuperLikePress} activeOpacity={0.7}>
-              <Ionicons name="sparkles" size={26} color={colors.accent} />
+            <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={handleSuperLikePress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Super like">
+              <GraffitiSparkles size={26} color={colors.accent} filled />
             </TouchableOpacity>
           </View>
 
           <Animated.View style={[styles.likeBtnOuter, { transform: [{ scale: pulseAnim }] }]}>
-            <TouchableOpacity style={styles.likeBtn} onPress={onLike} activeOpacity={0.8}>
-              <Ionicons name="heart" size={28} color="#FFFFFF" />
+            <TouchableOpacity style={styles.likeBtn} onPress={() => { hapticLight(); onLike?.(); }} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Like">
+              <GraffitiHeart size={28} color="#FFFFFF" filled />
             </TouchableOpacity>
           </Animated.View>
 
-          <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={onMessage} activeOpacity={0.7}>
-            <Ionicons name="paper-plane" size={24} color={colors.gray600} />
+          <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={() => { hapticLight(); onMessage?.(); }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Send message">
+            <GraffitiSend size={24} color={colors.gray600} />
           </TouchableOpacity>
         </Animated.View>
 
@@ -184,6 +191,8 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
                   onPress={() => handleReaction(item.emoji)}
                   activeOpacity={0.6}
                   style={styles.emojiBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel={`React with ${item.label}`}
                 >
                   <Text style={styles.emojiText}>{item.emoji}</Text>
                 </TouchableOpacity>
@@ -231,7 +240,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   btnRegular: {
     width: 54,
     height: 54,
-    backgroundColor: isDark ? 'rgba(28, 25, 23, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
     ...getShadow('md', isDark),
   },
   superLikeWrap: {

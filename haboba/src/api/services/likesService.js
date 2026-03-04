@@ -1,5 +1,8 @@
 import { supabase } from '../../config/supabase';
 import { normalizeProfile } from './profileService';
+import { cacheGet, cacheSet } from '../../utils/offlineCache';
+
+const OFFLINE_LIKES_TTL = 300_000; // 5 min
 
 export async function getReceivedLikes() {
   const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -37,7 +40,7 @@ export async function getReceivedLikes() {
 
   const swipedIds = new Set((mySwipes || []).map((s) => s.toUserId));
 
-  return (swipes || [])
+  const result = (swipes || [])
     .filter((s) => !swipedIds.has(s.fromUser?.id))
     .map((s) => {
       const profile = normalizeProfile(s.fromUser);
@@ -48,4 +51,14 @@ export async function getReceivedLikes() {
         likedAt: s.createdAt,
       };
     });
+
+  cacheSet('received_likes', result, OFFLINE_LIKES_TTL);
+  return result;
+}
+
+/**
+ * Returns cached likes when offline.
+ */
+export async function getCachedLikes() {
+  return cacheGet('received_likes');
 }

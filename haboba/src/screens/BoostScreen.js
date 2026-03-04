@@ -8,8 +8,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
+import { GraffitiFlame } from '../components/icons';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
+import BoostPulseRing from '../components/BoostPulseRing';
 import { useSubscription, PRODUCT_IDS } from '../payments';
 
 // Fallback packs (USD) — replaced by localized prices when RevenueCat is active
@@ -84,10 +86,11 @@ export default function BoostScreen({ navigation }) {
         </View>
       </TouchableOpacity>
 
-      {/* Lightning icon with glow */}
+      {/* Lightning icon with glow + pulse rings */}
       <View style={styles.iconContainer}>
+        <BoostPulseRing size={60} />
         <View style={styles.iconGlow} />
-        <Ionicons name="flash" size={60} color={colors.accent} />
+        <GraffitiFlame size={60} color={colors.accent} filled />
       </View>
 
       <Text style={styles.title}>Get In The Spotlight</Text>
@@ -97,7 +100,7 @@ export default function BoostScreen({ navigation }) {
 
       {/* Current count */}
       <View style={styles.countBadge}>
-        <Ionicons name="flash" size={16} color={colors.accent} />
+        <GraffitiFlame size={16} color={colors.accent} filled />
         <Text style={styles.countText}>{spotlights} spotlight{spotlights !== 1 ? 's' : ''} remaining</Text>
       </View>
 

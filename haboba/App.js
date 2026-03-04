@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,12 +11,23 @@ import { SubscriptionProvider } from './src/payments';
 import { AuthProvider } from './src/auth';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
+import ScreenshotGuard from './src/components/ScreenshotGuard';
+import OfflineBanner from './src/components/OfflineBanner';
+import { NetworkProvider } from './src/utils/useNetworkStatus';
+import { useNotifications } from './src/utils/useNotifications';
+import { useScreenTracking } from './src/utils/useScreenTracking';
+import ErrorBoundary from './src/components/ErrorBoundary';
 
 const LANDING_IMAGE = require('./src/assets/landing.jpeg');
 
 function AppInner() {
   const { colors, isDark } = useTheme();
   const [showSplash, setShowSplash] = useState(true);
+  const navigationRef = useRef(null);
+  const { onStateChange } = useScreenTracking();
+
+  // Push notification deep-linking
+  useNotifications(navigationRef);
 
   const handleSplashFinish = useCallback(() => {
     setShowSplash(false);
@@ -46,9 +57,10 @@ function AppInner() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} onStateChange={onStateChange}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppNavigator />
+      <OfflineBanner />
     </NavigationContainer>
   );
 }
@@ -67,17 +79,23 @@ export default function App() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <SubscriptionProvider>
-            <AuthProvider>
-              <AppInner />
-            </AuthProvider>
-          </SubscriptionProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={styles.container}>
+        <SafeAreaProvider>
+          <ThemeProvider>
+            <SubscriptionProvider>
+              <AuthProvider>
+                <NetworkProvider>
+                  <ScreenshotGuard>
+                    <AppInner />
+                  </ScreenshotGuard>
+                </NetworkProvider>
+              </AuthProvider>
+            </SubscriptionProvider>
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 
@@ -92,6 +110,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(26,22,18,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
 });

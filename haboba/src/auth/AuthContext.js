@@ -10,12 +10,14 @@ export function AuthProvider({ children }) {
   const fetchingRef = useRef(false);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    // Get initial session — await user fetch so navigator has full data
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       if (s) {
-        fetchUser(s.user.id);
+        await fetchUser(s.user.id);
       }
+      setReady(true);
+    }).catch(() => {
       setReady(true);
     });
 
@@ -33,7 +35,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const fetchUser = useCallback(async (authId) => {
-    if (fetchingRef.current) return;
+    if (fetchingRef.current) return null;
     fetchingRef.current = true;
     try {
       const { data, error } = await supabase
@@ -44,7 +46,9 @@ export function AuthProvider({ children }) {
 
       if (!error && data) {
         setUser(data);
+        return data;
       }
+      return null;
     } finally {
       fetchingRef.current = false;
     }
@@ -77,13 +81,14 @@ export function AuthProvider({ children }) {
     if (result.error) throw result.error;
 
     // Session is set automatically via onAuthStateChange
-    // Fetch user data
+    // Fetch user data and return it so callers know if profile exists
+    let appUser = null;
     if (result.data.user) {
-      await fetchUser(result.data.user.id);
+      appUser = await fetchUser(result.data.user.id);
     }
 
-    return user;
-  }, [fetchUser, user]);
+    return { ...result.data, appUser };
+  }, [fetchUser]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();

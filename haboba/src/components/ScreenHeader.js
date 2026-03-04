@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme, getShadow } from '../theme';
-import { imageSource } from '../data/mockProfiles';
+import { imageSource } from '../utils/imageSource';
 import BrandLogo from './BrandLogo';
 
 export default function ScreenHeader({
@@ -15,7 +15,13 @@ export default function ScreenHeader({
   const { colors, isDark } = useTheme();
 
   const rightNode = right || (
-    <TouchableOpacity onPress={onAvatarPress} activeOpacity={0.8}>
+    <TouchableOpacity
+      onPress={onAvatarPress}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel="Profile avatar"
+      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+    >
       <Image
         source={imageSource(avatarUri)}
         style={[
