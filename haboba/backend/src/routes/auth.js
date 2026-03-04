@@ -56,30 +56,19 @@ const signAccessToken = (userId) =>
   jwt.sign({ sub: userId }, env.jwtSecret, { expiresIn: env.jwtExpiresIn });
 
 const createRefreshToken = () => crypto.randomBytes(48).toString('hex');
-const otpStore = new Map();
-const otpAttempts = new Map(); // track failed attempts per key
+const hashValue = (value) => crypto.createHash('sha256').update(value).digest('hex');
 const MAX_OTP_ATTEMPTS = 5;
-
-// Clean up expired OTPs every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, record] of otpStore) {
-    if (record.expiresAt < now) otpStore.delete(key);
-  }
-  for (const [key, record] of otpAttempts) {
-    if (record.expiresAt < now) otpAttempts.delete(key);
-  }
-}, 10 * 60 * 1000);
 
 const issueAuthTokens = async (userId) => {
   const accessToken = signAccessToken(userId);
   const refreshToken = createRefreshToken();
+  const refreshTokenHash = hashValue(refreshToken);
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
   await prisma.session.create({
     data: {
       userId,
-      refreshToken,
+      refreshToken: refreshTokenHash,
       expiresAt,
     },
   });
@@ -163,7 +152,19 @@ router.post(
     const payload = otpStartSchema.parse(req.body);
     const key = payload.email ? `email:${payload.email.toLowerCase()}` : `phone:${payload.phone}`;
     const code = crypto.randomInt(100000, 999999).toString();
-    otpStore.set(key, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
+    await prisma.otpChallenge.upsert({
+      where: { key },
+      update: {
+        codeHash: hashValue(code),
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+      create: {
+        key,
+        codeHash: hashValue(code),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    });
     // TODO: Send OTP via SMS/email provider (Twilio, SendGrid, etc.)
     // For development, the code is logged to the server console
     if (env.nodeEnv !== 'production') {
@@ -178,24 +179,33 @@ router.post(
   asyncHandler(async (req, res) => {
     const payload = otpVerifySchema.parse(req.body);
     const key = payload.email ? `email:${payload.email.toLowerCase()}` : `phone:${payload.phone}`;
+    const now = Date.now();
 
-    // Check attempt limit
-    const attempts = otpAttempts.get(key);
-    if (attempts && attempts.count >= MAX_OTP_ATTEMPTS && attempts.expiresAt > Date.now()) {
+    const challenge = await prisma.otpChallenge.findUnique({ where: { key } });
+
+    // Check attempt limit for non-expired challenge
+    if (challenge && challenge.attempts >= MAX_OTP_ATTEMPTS && challenge.expiresAt.getTime() > now) {
       return res.status(429).json({ error: 'Too many attempts. Please request a new code.' });
     }
 
-    const record = otpStore.get(key);
-    const codeMatch = record ? crypto.timingSafeEqual(Buffer.from(payload.code), Buffer.from(record.code)) : false;
-    if (!record || record.expiresAt < Date.now() || !codeMatch) {
-      // Track failed attempt
-      const current = otpAttempts.get(key) || { count: 0, expiresAt: Date.now() + 10 * 60 * 1000 };
-      current.count += 1;
-      otpAttempts.set(key, current);
+    const devBypass = env.enableDevOtpBypass && env.nodeEnv !== 'production' && payload.code === '123456';
+    const isFreshChallenge = challenge && challenge.expiresAt.getTime() > now;
+    const providedCodeHash = hashValue(payload.code);
+    const codeMatch = isFreshChallenge
+      ? crypto.timingSafeEqual(Buffer.from(providedCodeHash), Buffer.from(challenge.codeHash))
+      : false;
+
+    if (!devBypass && !codeMatch) {
+      if (isFreshChallenge) {
+        await prisma.otpChallenge.update({
+          where: { key },
+          data: { attempts: { increment: 1 } },
+        });
+      }
       return res.status(401).json({ error: 'Invalid verification code' });
     }
-    otpStore.delete(key);
-    otpAttempts.delete(key);
+
+    await prisma.otpChallenge.deleteMany({ where: { key } });
 
     let user = await prisma.user.findFirst({
       where: {
@@ -230,8 +240,15 @@ router.post(
   '/refresh',
   asyncHandler(async (req, res) => {
     const { refreshToken } = refreshSchema.parse(req.body);
-    const session = await prisma.session.findUnique({
-      where: { refreshToken },
+    const refreshTokenHash = hashValue(refreshToken);
+    const session = await prisma.session.findFirst({
+      where: {
+        OR: [
+          { refreshToken: refreshTokenHash },
+          // Backward compatibility for legacy plaintext sessions.
+          { refreshToken },
+        ],
+      },
       include: { user: { select: { id: true, isActive: true } } },
     });
     if (!session || !session.user.isActive || session.expiresAt.getTime() < Date.now()) {
@@ -248,7 +265,16 @@ router.post(
   '/logout',
   asyncHandler(async (req, res) => {
     const { refreshToken } = refreshSchema.parse(req.body);
-    await prisma.session.deleteMany({ where: { refreshToken } });
+    const refreshTokenHash = hashValue(refreshToken);
+    await prisma.session.deleteMany({
+      where: {
+        OR: [
+          { refreshToken: refreshTokenHash },
+          // Backward compatibility for legacy plaintext sessions.
+          { refreshToken },
+        ],
+      },
+    });
     res.json({ ok: true });
   })
 );

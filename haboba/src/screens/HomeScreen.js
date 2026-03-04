@@ -136,7 +136,6 @@ const HomeScreen = ({ navigation }) => {
   const [unfilteredProfiles, setUnfilteredProfiles] = useState(null); // holds API or base profiles before filtering
   const [activeFilters, setActiveFilters] = useState([]);
   const [filterSelections, setFilterSelections] = useState({});
-  const swipeProgress = useRef(new Animated.Value(0)).current;
   const styles = useMemo(() => getStyles(colors, insets, isDark), [colors, insets, isDark]);
   const [matchData, setMatchData] = useState(null);
   const [mode, setMode] = useState('Dating');
@@ -152,19 +151,17 @@ const HomeScreen = ({ navigation }) => {
 
   const [likeStatus, setLikeStatus] = useState(null); // { used, limit, remaining }
   const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier, tier } = useSubscription();
-  const { accessToken, user: authUser } = useAuth();
+  const { session, user: authUser } = useAuth();
   const profileCardRef = useRef(null);
+  const profilesRef = useRef(profiles);
+  profilesRef.current = profiles;
   const topMotion = useRef(new Animated.Value(0)).current;
   const apiCursorRef = useRef(null);
-  const handleSwipeProgress = useCallback((value) => {
-    const clamped = Math.min(Math.max(value, 0), 1);
-    swipeProgress.setValue(clamped);
-  }, [swipeProgress]);
 
   // Fetch profiles from API on mount and when mode changes
   useEffect(() => {
-    if (!accessToken) return;
-    discoverService.getProfiles(accessToken, { mode: mode.toLowerCase() }).then(({ profiles: apiProfiles, nextCursor }) => {
+    if (!session) return;
+    discoverService.getProfiles({ mode: mode.toLowerCase() }).then(({ profiles: apiProfiles, nextCursor }) => {
       // Only use profiles that have at least one image (mirrors buildDatingDeck filter)
       const withImages = apiProfiles.filter((p) => p.images && p.images.length > 0);
       if (withImages.length > 0) {
@@ -172,17 +169,20 @@ const HomeScreen = ({ navigation }) => {
         setProfiles(applyFilters(withImages, activeFilters, filterSelections));
         apiCursorRef.current = nextCursor;
       }
-    }).catch(() => {
+    }).catch((err) => {
       // Keep mock data on failure
+      if (__DEV__) console.warn('Profile fetch failed:', err);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken, mode]);
+  }, [session, mode]);
 
   // Fetch daily like status
   useEffect(() => {
-    if (!accessToken) return;
-    discoverService.getDailyLikeStatus(accessToken).then(setLikeStatus).catch(() => {});
-  }, [accessToken]);
+    if (!session) return;
+    discoverService.getDailyLikeStatus().then(setLikeStatus).catch((err) => {
+      if (__DEV__) console.warn('Daily like status fetch failed:', err);
+    });
+  }, [session]);
 
   useEffect(() => {
     Animated.timing(topMotion, {
@@ -208,12 +208,10 @@ const HomeScreen = ({ navigation }) => {
     setProfiles(filteredDeck);
   }, [activeFilters, filterSelections, unfilteredProfiles]);
 
-  useEffect(() => {
-    swipeProgress.setValue(0);
-  }, [profiles.length, swipeProgress]);
 
   const handleSwipe = useCallback((direction) => {
-    const swipedProfile = profiles[0];
+    const currentProfiles = profilesRef.current;
+    const swipedProfile = currentProfiles[0];
 
     // Check daily like limit for right-swipes (free users)
     if (direction === 'right' && likeStatus && likeStatus.remaining <= 0 && !hasUnlimitedLikes(tier || 'free')) {
@@ -225,12 +223,11 @@ const HomeScreen = ({ navigation }) => {
     }
 
     setProfiles((prev) => prev.slice(1));
-    swipeProgress.setValue(0);
 
     // Record swipe via API (fire-and-forget)
-    if (accessToken && swipedProfile?.id) {
+    if (session && swipedProfile?.id) {
       const type = direction === 'right' ? 'like' : 'pass';
-      discoverService.recordSwipe(accessToken, swipedProfile.id, type).then((result) => {
+      discoverService.recordSwipe(swipedProfile.id, type).then((result) => {
         if (result?.match) {
           setMatchData({
             matchedUser: swipedProfile,
@@ -250,25 +247,28 @@ const HomeScreen = ({ navigation }) => {
     }
 
     // Auto-fetch more when deck runs low
-    if (profiles.length <= 3 && accessToken && apiCursorRef.current) {
-      discoverService.getProfiles(accessToken, { cursor: apiCursorRef.current, mode: mode.toLowerCase() }).then(({ profiles: more, nextCursor }) => {
+    if (currentProfiles.length <= 3 && session && apiCursorRef.current) {
+      discoverService.getProfiles({ cursor: apiCursorRef.current, mode: mode.toLowerCase() }).then(({ profiles: more, nextCursor }) => {
         const withImages = more.filter((p) => p.images && p.images.length > 0);
         if (withImages.length > 0) {
           setProfiles((prev) => [...prev, ...withImages]);
           apiCursorRef.current = nextCursor;
         }
-      }).catch(() => {});
+      }).catch((err) => {
+        if (__DEV__) console.warn('Auto-fetch more profiles failed:', err);
+      });
     }
-  }, [swipeProgress, profiles, accessToken, likeStatus, tier, navigation, mode]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session, likeStatus, tier, navigation, mode]);
 
   const currentProfile = profiles.length > 0 ? profiles[0] : null;
   const hasValidProfile = !!(currentProfile && currentProfile.name && currentProfile.images?.length);
 
-  const handleExpand = (profile) => {
+  const handleExpand = useCallback((profile) => {
     navigation?.navigate?.('ProfileDetail', { profile });
-  };
+  }, [navigation]);
 
-  const handleSuperLike = () => {
+  const handleSuperLike = useCallback(() => {
     if (superLikes <= 0) {
       Alert.alert('No Super Likes', 'You\'re out of Super Likes!', [
         { text: 'Get More', onPress: () => navigation?.navigate?.('Boost') },
@@ -282,9 +282,9 @@ const HomeScreen = ({ navigation }) => {
     } else {
       handleSwipe('right');
     }
-  };
+  }, [superLikes, consumeSuperLike, profileCardRef, handleSwipe, navigation]);
 
-  const handleRewind = () => {
+  const handleRewind = useCallback(() => {
     if (!hasTier('plus')) {
       Alert.alert('JuNubin+ Feature', 'Rewind requires JuNubin+ or higher.', [
         { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
@@ -292,9 +292,9 @@ const HomeScreen = ({ navigation }) => {
       ]);
       return;
     }
-  };
+  }, [hasTier, navigation]);
 
-  const handleMessage = () => {
+  const handleMessage = useCallback(() => {
     if (whispers <= 0) {
       Alert.alert('No Whispers', 'You\'re out of whispers!', [
         { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
@@ -309,9 +309,9 @@ const HomeScreen = ({ navigation }) => {
     } else {
       handleSwipe('right');
     }
-  };
+  }, [whispers, consumeWhisper, profileCardRef, handleSwipe, navigation]);
 
-  const handleFilterPress = (filterName) => {
+  const handleFilterPress = useCallback((filterName) => {
     if (filterName === 'More') {
       navigation?.navigate?.('Preferences');
       return;
@@ -321,9 +321,9 @@ const HomeScreen = ({ navigation }) => {
         ? prev.filter((f) => f !== filterName)
         : [...prev, filterName]
     );
-  };
+  }, [navigation]);
 
-  const handleFilterSelect = (filterName, value) => {
+  const handleFilterSelect = useCallback((filterName, value) => {
     setFilterSelections((prev) => {
       const next = { ...prev };
       if (value === null) {
@@ -333,21 +333,68 @@ const HomeScreen = ({ navigation }) => {
       }
       return next;
     });
-  };
+  }, []);
+
+  const handlePass = useCallback(() => {
+    profileCardRef.current?.swipe ? profileCardRef.current.swipe('left') : handleSwipe('left');
+  }, [handleSwipe]);
+
+  const handleLike = useCallback(() => {
+    profileCardRef.current?.swipe ? profileCardRef.current.swipe('right') : handleSwipe('right');
+  }, [handleSwipe]);
+
+  const handleReaction = useCallback((emoji) => {
+    // Send reaction as a super-like with the emoji attached
+    if (currentProfile?.id && session) {
+      discoverService.recordSwipe(currentProfile.id, 'super_like').catch((err) => {
+        if (__DEV__) console.warn('Reaction swipe failed:', err);
+      });
+    }
+    if (profileCardRef.current?.swipe) {
+      profileCardRef.current.swipe('right');
+    } else {
+      handleSwipe('right');
+    }
+  }, [currentProfile, session, handleSwipe]);
+
+  const handleSettingsPress = useCallback(() => {
+    navigation?.navigate?.('Preferences');
+  }, [navigation]);
+
+  const overlayCurrentUser = useMemo(() => ({
+    name: authUser?.displayName || currentUser.name,
+    images: authUser?.photos?.map((p) => p.url) || currentUser.images,
+  }), [authUser?.displayName, authUser?.photos, currentUser.name, currentUser.images]);
+
+  const handleMatchSendMessage = useCallback(() => {
+    const convId = matchData?.conversationId;
+    setMatchData(null);
+    if (convId) {
+      navigation?.navigate?.('Chat', { conversationId: convId });
+    }
+  }, [matchData?.conversationId, navigation]);
+
+  const handleKeepSwiping = useCallback(() => setMatchData(null), []);
+
+  // Prefetch images for the next few profiles so they're cached when the card mounts
+  const prefetchedRef = useRef(new Set());
+  useEffect(() => {
+    profiles.slice(1, 4).forEach((p) => {
+      const firstImg = p?.images?.[0];
+      const uri = typeof firstImg === 'string' ? firstImg : firstImg?.uri;
+      if (uri && uri.startsWith('http') && !prefetchedRef.current.has(uri)) {
+        prefetchedRef.current.add(uri);
+        Image.prefetch(uri).catch(() => {});
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProfile?.id]);
 
   // Next card in the stack (pre-rendered so its image is already decoded)
   const nextProfile = profiles.length > 1 ? profiles[1] : null;
   const hasNextProfile = !!(nextProfile && nextProfile.name && nextProfile.images?.length);
-  const nextCardScale = swipeProgress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.95, 1],
-    extrapolate: 'clamp',
-  });
-  const nextCardOpacity = swipeProgress.interpolate({
-    inputRange: [0, 0.3, 1],
-    outputRange: [0.5, 0.85, 1],
-    extrapolate: 'clamp',
-  });
+  // Next card is always at full opacity/scale — it sits behind the current card
+  // so it's only visible during swiping. No animated reveal needed.
 
   return (
     <View style={styles.screen}>
@@ -362,18 +409,15 @@ const HomeScreen = ({ navigation }) => {
               <View style={styles.cardLayer}>
                 {/* Next card — pre-rendered underneath, image already decoded */}
                 {hasNextProfile && (
-                  <Animated.View
-                    style={[styles.nextCard, {
-                      transform: [{ scale: nextCardScale }],
-                      opacity: nextCardOpacity,
-                    }]}
+                  <View
+                    style={styles.nextCard}
                     pointerEvents="none"
                   >
                     <ProfileCard
                       profile={nextProfile}
                       style={styles.fullCard}
                     />
-                  </Animated.View>
+                  </View>
                 )}
                 {/* Current card — swipeable, on top */}
                 <View style={styles.fullCard}>
@@ -383,7 +427,6 @@ const HomeScreen = ({ navigation }) => {
                     profile={currentProfile}
                     onSwipe={handleSwipe}
                     onExpand={handleExpand}
-                    onSwipeProgress={handleSwipeProgress}
                     style={styles.fullCard}
                   />
                 </View>
@@ -394,10 +437,11 @@ const HomeScreen = ({ navigation }) => {
             <View style={styles.actionOverlay}>
               <ActionButtons
                 onRewind={handleRewind}
-                onPass={() => (profileCardRef.current?.swipe ? profileCardRef.current.swipe('left') : handleSwipe('left'))}
-                onLike={() => (profileCardRef.current?.swipe ? profileCardRef.current.swipe('right') : handleSwipe('right'))}
+                onPass={handlePass}
+                onLike={handleLike}
                 onSuperLike={handleSuperLike}
                 onMessage={handleMessage}
+                onReaction={handleReaction}
               />
             </View>
           </>
@@ -446,8 +490,8 @@ const HomeScreen = ({ navigation }) => {
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Center — Brand title */}
-        <Text style={styles.headerTitle}>AnaJunubin</Text>
+        {/* Center — Mode title */}
+        <Text style={styles.headerTitle}>{mode === 'Social' ? 'Social' : 'Dating'}</Text>
 
         {/* Right — Profile avatar */}
         <TouchableOpacity
@@ -481,7 +525,7 @@ const HomeScreen = ({ navigation }) => {
       >
         <FilterBar
           onFilterPress={handleFilterPress}
-          onSettingsPress={() => navigation?.navigate?.('Preferences')}
+          onSettingsPress={handleSettingsPress}
           activeFilters={activeFilters}
           filterSelections={filterSelections}
           onFilterSelect={handleFilterSelect}
@@ -491,8 +535,8 @@ const HomeScreen = ({ navigation }) => {
       {/* ─── LIKE COUNTER — subtle indicator near bottom ─── */}
       {likeStatus && !hasUnlimitedLikes(tier || 'free') && likeStatus.remaining < likeStatus.limit && (
         <View style={styles.likeCounter}>
-          <Ionicons name="heart" size={12} color={likeStatus.remaining <= 5 ? '#FF5252' : 'rgba(255,255,255,0.6)'} />
-          <Text style={[styles.likeCounterText, likeStatus.remaining <= 5 && { color: '#FF5252' }]}>
+          <Ionicons name="heart" size={12} color={likeStatus.remaining <= 5 ? colors.accent : 'rgba(255,255,255,0.6)'} />
+          <Text style={[styles.likeCounterText, likeStatus.remaining <= 5 && { color: colors.accent }]}>
             {likeStatus.remaining} likes left today
           </Text>
         </View>
@@ -501,16 +545,10 @@ const HomeScreen = ({ navigation }) => {
       {/* ─── MATCH CELEBRATION OVERLAY ─── */}
       <MatchCelebrationOverlay
         visible={!!matchData}
-        currentUser={{ name: authUser?.displayName || currentUser.name, images: authUser?.photos?.map((p) => p.url) || currentUser.images }}
+        currentUser={overlayCurrentUser}
         matchedUser={matchData?.matchedUser}
-        onSendMessage={() => {
-          const convId = matchData?.conversationId;
-          setMatchData(null);
-          if (convId) {
-            navigation?.navigate?.('Messages', { screen: 'Chat', params: { conversationId: convId } });
-          }
-        }}
-        onKeepSwiping={() => setMatchData(null)}
+        onSendMessage={handleMatchSendMessage}
+        onKeepSwiping={handleKeepSwiping}
       />
     </View>
   );
@@ -523,15 +561,15 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   cardArea: {
     flex: 1,
-    paddingHorizontal: 10,
-    paddingTop: insets.top + 104,
-    paddingBottom: 6,
+    paddingHorizontal: 6,
+    paddingTop: insets.top + 100,
+    paddingBottom: 4,
     position: 'relative',
   },
   cardLayer: {
     flex: 1,
-    marginHorizontal: 6,
-    marginTop: 8,
+    marginHorizontal: 2,
+    marginTop: 4,
   },
   nextCard: {
     ...StyleSheet.absoluteFillObject,
@@ -568,10 +606,11 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     ...getShadow('md', isDark),
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 34,
     fontFamily: FontFamily.script,
     color: colors.black,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   crownBadge: {
     width: 34,
@@ -633,12 +672,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.15)',
+    borderColor: colors.accentTint15,
   },
   emptyTitle: {
     ...Typography.h2,

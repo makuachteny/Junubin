@@ -1,7 +1,4 @@
-// API base URL — uses Expo Constants for environment-based config.
-// In production, set EXPO_PUBLIC_API_URL in your EAS build profile.
-// Falls back to localhost for development.
-
-const DEV_API_URL = 'http://localhost:4000/v1';
-
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || DEV_API_URL;
+// Supabase configuration — replaces the Express API base URL.
+// Credentials are loaded from environment variables set via EAS secrets.
+export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';

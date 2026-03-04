@@ -120,12 +120,14 @@ model Swipe {
   toUserId   String
   type       SwipeType
   createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   fromUser User @relation("SentSwipes", fields: [fromUserId], references: [id], onDelete: Cascade)
   toUser   User @relation("ReceivedSwipes", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@unique([fromUserId, toUserId])
   @@index([toUserId, type, createdAt])
+  @@index([fromUserId, type, updatedAt])
 }
 
 model Match {
@@ -194,6 +196,16 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
+}
+
+model OtpChallenge {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  codeHash  String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UserPreferenceVector {

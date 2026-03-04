@@ -20,6 +20,10 @@ Everything you need to take the app from local development to production on Rend
 12. [Monitoring Overview](#12-monitoring-overview)
 13. [Production Environment Variables Reference](#13-production-environment-variables-reference)
 14. [Post-Deploy Checklist](#14-post-deploy-checklist)
+15. [Configure EAS Secrets](#15-configure-eas-secrets-required-before-building)
+16. [Set Up GitHub Actions CI/CD](#16-set-up-github-actions-cicd)
+17. [OTA Updates with EAS Update](#17-ota-updates-with-eas-update)
+18. [Dynamic App Configuration](#18-dynamic-app-configuration)
 
 ---
 
@@ -582,6 +586,22 @@ Run through this after your first successful deploy.
 - [ ] Photo uploads work end-to-end (upload from phone → visible in app)
 - [ ] Push notifications configured (via Expo Push or FCM/APNs)
 
+### CI/CD pipeline
+
+- [ ] `EXPO_TOKEN` added to GitHub Secrets
+- [ ] `RENDER_DEPLOY_HOOK_URL` added to GitHub Secrets
+- [ ] Test PR triggers `test-frontend` and `test-backend` jobs
+- [ ] Merge to main triggers `eas-build` and `deploy-backend` jobs
+
+### EAS secrets
+
+- [ ] `EAS_PROJECT_ID` stored in EAS secrets
+- [ ] `EXPO_PUBLIC_SUPABASE_URL` stored in EAS secrets
+- [ ] `EXPO_PUBLIC_SUPABASE_ANON_KEY` stored in EAS secrets
+- [ ] `YOUR_ASC_APP_ID` replaced in eas.json with real value
+- [ ] `YOUR_APPLE_TEAM_ID` replaced in eas.json with real value
+- [ ] `google-services.json` added for Android submission
+
 ### After launch
 
 - [ ] Set up daily backup verification for database
@@ -589,6 +609,7 @@ Run through this after your first successful deploy.
 - [ ] Watch Render metrics for memory/CPU patterns
 - [ ] Set up Sentry alerts for error rate spikes
 - [ ] Review Cloudflare analytics for suspicious traffic
+- [ ] Test OTA update flow: push an update to preview channel, verify it arrives
 
 ---
 
@@ -620,28 +641,258 @@ Run through this after your first successful deploy.
 
 ---
 
+## 15. Configure EAS Secrets (Required Before Building)
+
+The production build no longer hardcodes Supabase keys in `eas.json`. Instead, secrets are stored securely in EAS and injected at build time via `app.config.js`.
+
+### Step-by-step
+
+1. Install and log in to EAS CLI:
+   ```bash
+   npm install -g eas-cli
+   eas login
+   ```
+
+2. Initialize your EAS project (if not already done):
+   ```bash
+   cd haboba
+   eas init
+   ```
+   This gives you a project ID. Copy it.
+
+3. Store the project ID:
+   ```bash
+   eas secret:create --scope project --name EAS_PROJECT_ID --value "your-project-id-here"
+   ```
+
+4. Store the Supabase credentials:
+   ```bash
+   eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_URL \
+     --value "https://your-project.supabase.co"
+
+   eas secret:create --scope project --name EXPO_PUBLIC_SUPABASE_ANON_KEY \
+     --value "eyJhbGci..."
+   ```
+
+5. (Optional) Store RevenueCat keys when ready:
+   ```bash
+   eas secret:create --scope project --name EXPO_PUBLIC_REVENUECAT_IOS_KEY \
+     --value "appl_xxx"
+
+   eas secret:create --scope project --name EXPO_PUBLIC_REVENUECAT_ANDROID_KEY \
+     --value "goog_xxx"
+   ```
+
+6. Verify your secrets are stored:
+   ```bash
+   eas secret:list
+   ```
+
+### How it works
+
+- `app.config.js` reads `process.env.EXPO_PUBLIC_SUPABASE_URL` at build time
+- EAS injects the secrets into the build environment automatically
+- Local development still uses the `.env` file in the project root
+- Different build profiles (development, preview, production) can each use different secrets
+
+### Update app.json placeholder
+
+After running `eas init`, update the fallback in `app.config.js` line 44:
+
+```js
+projectId: process.env.EAS_PROJECT_ID || 'your-actual-project-id',
+```
+
+### Update Apple/Google submission IDs
+
+In `eas.json`, replace these placeholders with real values:
+
+| Placeholder | Where to Find It |
+|---|---|
+| `YOUR_ASC_APP_ID` | App Store Connect → your app → General → Apple ID (numeric) |
+| `YOUR_APPLE_TEAM_ID` | developer.apple.com → Membership → Team ID |
+| `google-services.json` | Google Play Console → Setup → API access → Create service account → download JSON key |
+
+---
+
+## 16. Set Up GitHub Actions CI/CD
+
+A CI/CD pipeline is configured at `.github/workflows/ci.yml`. It runs tests on every PR and deploys on merge to `main`.
+
+### What it does
+
+```
+Pull Request → main
+├── test-frontend (runs jest, 33 tests)
+├── test-backend  (runs jest against test PostgreSQL)
+└── (blocked until both pass)
+
+Merge to main
+├── eas-build     (builds iOS + Android via EAS)
+└── deploy-backend (triggers Render re-deploy)
+```
+
+### GitHub Secrets to configure
+
+Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**.
+
+| Secret Name | Value | Where to Get It |
+|---|---|---|
+| `EXPO_TOKEN` | Personal access token | expo.dev → Account Settings → Access Tokens → Create |
+| `RENDER_DEPLOY_HOOK_URL` | Deploy hook URL | Render dashboard → junubin-api → Settings → Deploy Hook → copy URL |
+
+### Step-by-step
+
+1. Push the repo to GitHub (if not already):
+   ```bash
+   cd /path/to/ss_haboba
+   git remote add origin https://github.com/YOUR_USER/haboba.git
+   git push -u origin main
+   ```
+
+2. Create the Expo token:
+   - Go to https://expo.dev → click your avatar → **Access Tokens**
+   - Click **Create Token** → name it `github-ci` → copy the token
+   - Add it as a GitHub secret named `EXPO_TOKEN`
+
+3. Create the Render deploy hook:
+   - Go to https://dashboard.render.com → **junubin-api** → **Settings**
+   - Scroll to **Deploy Hook** → click **Create Deploy Hook**
+   - Copy the URL (looks like `https://api.render.com/deploy/srv-xxxxx?key=xxxxx`)
+   - Add it as a GitHub secret named `RENDER_DEPLOY_HOOK_URL`
+
+4. Verify the pipeline works:
+   - Create a branch, make a small change, open a PR
+   - The `test-frontend` and `test-backend` jobs should run
+   - Merge the PR — the `eas-build` and `deploy-backend` jobs should trigger
+
+### Backend CI database
+
+The workflow spins up a temporary PostgreSQL 16 container for backend tests. No external database needed. The test database is destroyed after the job completes.
+
+---
+
+## 17. OTA Updates with EAS Update
+
+After your app is published, you can push JavaScript-only updates without going through the App Store / Play Store review process.
+
+### How channels work
+
+| Channel | Build Profile | Purpose |
+|---|---|---|
+| `development` | `development` | Dev builds with Expo Dev Client |
+| `preview` | `preview` | Internal testing (TestFlight-like) |
+| `production` | `production` | Live users on App Store / Play Store |
+
+### Push an OTA update
+
+```bash
+# Update preview testers
+npm run update:preview -- --message "Fix match overlay animation"
+
+# Update production users
+npm run update:prod -- --message "Fix daily like counter display"
+```
+
+### What can be updated OTA
+
+- JavaScript code changes (screens, components, logic)
+- Asset changes (images, fonts referenced in JS)
+
+### What requires a new native build
+
+- New native modules (e.g., adding `expo-camera`)
+- Changes to `app.config.js` native settings (bundle ID, permissions)
+- Upgrading Expo SDK version
+- Changes to `ios/` or `android/` directories
+
+### Rollback an update
+
+```bash
+# List recent updates
+eas update:list --channel production
+
+# Roll back by publishing the previous update group
+eas update:republish --group "previous-update-group-id"
+```
+
+---
+
+## 18. Dynamic App Configuration
+
+The app uses `app.config.js` (not `app.json`) for dynamic configuration. This allows:
+
+- **Different bundle IDs per environment** — so dev, preview, and production builds can coexist on the same device
+- **Environment-driven secrets** — Supabase keys, EAS project ID injected at build time
+- **OTA update support** — runtime version policy and update URL configured automatically
+
+### Build variants
+
+| `APP_VARIANT` | App Name | Bundle ID |
+|---|---|---|
+| `development` | JuNubin (Dev) | `com.haboba.app.dev` |
+| `preview` | JuNubin (Preview) | `com.haboba.app.preview` |
+| `production` | JuNubin | `com.haboba.app` |
+
+The variant is set automatically by the EAS build profile in `eas.json`.
+
+### Local development
+
+For local development, the `.env` file in the project root is used. Create it from the example:
+
+```bash
+cp .env.example .env
+```
+
+Then fill in your Supabase URL and anon key. The `app.config.js` reads these via `process.env.EXPO_PUBLIC_*` at build time.
+
+---
+
 ## Quick Commands Reference
 
 ```bash
+# ─── Secrets ────────────────────────────────
 # Generate production JWT secret
 openssl rand -hex 64
 
+# Store an EAS secret
+eas secret:create --scope project --name KEY_NAME --value "value"
+
+# List all EAS secrets
+eas secret:list
+
+# ─── Backend ────────────────────────────────
 # Test health check
 curl https://junubin-api.onrender.com/v1/health
 
 # Run database migrations manually (from backend/)
 DATABASE_URL="your-production-url" npx prisma migrate deploy
 
+# Seed database (from backend/)
+DATABASE_URL="your-production-url" npm run prisma:seed
+
 # Open Prisma Studio against production (be careful)
 DATABASE_URL="your-external-db-url" npx prisma studio
 
-# Build mobile app
-eas build --platform all --profile production
+# ─── Mobile App Builds ──────────────────────
+# Development build (with dev client)
+npm run build:dev
 
-# Submit to stores
-eas submit --platform ios
-eas submit --platform android
+# Preview build (internal testing)
+npm run build:preview
 
+# Production build (App Store / Play Store)
+npm run build:prod
+
+# ─── Store Submission ───────────────────────
+npm run submit:ios
+npm run submit:android
+
+# ─── OTA Updates (no store review needed) ───
+npm run update:preview -- --message "description of changes"
+npm run update:prod -- --message "description of changes"
+
+# ─── Monitoring ─────────────────────────────
 # View Render logs
 # Go to: dashboard.render.com → junubin-api → Logs
 

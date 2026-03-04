@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useReducer, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,18 +19,32 @@ import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
 import CurrentlyIntoSelector from '../components/CurrentlyIntoSelector';
 
+const formReducer = (state, action) => {
+  switch (action.type) {
+    case 'SET_FIELD':
+      return { ...state, [action.key]: action.value };
+    default:
+      return state;
+  }
+};
+
+const initialFormState = {
+  name: currentUser.name,
+  bio: 'Designer exploring the city',
+  job: '',
+  school: '',
+  lookingFor: 'Something serious',
+};
+
 export default function EditProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
-  const { accessToken, updateUser } = useAuth();
+  const { session, updateUser } = useAuth();
   const [saving, setSaving] = useState(false);
 
-  const [name, setName] = useState(currentUser.name);
-  const [bio, setBio] = useState('Designer exploring the city');
-  const [job, setJob] = useState('');
-  const [school, setSchool] = useState('');
-  const [lookingFor, setLookingFor] = useState('Something serious');
+  const [form, dispatch] = useReducer(formReducer, initialFormState);
+  const setField = useCallback((key, value) => dispatch({ type: 'SET_FIELD', key, value }), []);
   const [selectedStickers, setSelectedStickers] = useState([0, 4]); // Dinka, Junub
   const [currentlyInto, setCurrentlyInto] = useState([]);
 
@@ -50,19 +64,19 @@ export default function EditProfileScreen({ navigation }) {
   };
 
   const handleSave = async () => {
-    if (!accessToken) {
+    if (!session) {
       navigation.goBack();
       return;
     }
     setSaving(true);
     try {
       const stickers = selectedStickers.map((i) => CULTURAL_STICKERS[i]);
-      const user = await profileService.updateProfile(accessToken, {
-        displayName: name.trim(),
-        bio: bio.trim(),
-        job: job.trim(),
-        school: school.trim(),
-        lookingFor,
+      const user = await profileService.updateProfile({
+        displayName: form.name.trim(),
+        bio: form.bio.trim(),
+        job: form.job.trim(),
+        school: form.school.trim(),
+        lookingFor: form.lookingFor,
         stickers,
         currentlyInto,
       });
@@ -127,8 +141,8 @@ export default function EditProfileScreen({ navigation }) {
             <Text style={styles.fieldLabel}>Name</Text>
             <TextInput
               style={styles.fieldInput}
-              value={name}
-              onChangeText={setName}
+              value={form.name}
+              onChangeText={(val) => setField('name', val)}
               placeholder="Your name"
               placeholderTextColor={colors.gray400}
             />
@@ -137,21 +151,21 @@ export default function EditProfileScreen({ navigation }) {
             <Text style={styles.fieldLabel}>Bio</Text>
             <TextInput
               style={[styles.fieldInput, styles.fieldMultiline]}
-              value={bio}
-              onChangeText={setBio}
+              value={form.bio}
+              onChangeText={(val) => setField('bio', val)}
               placeholder="Tell people about yourself"
               placeholderTextColor={colors.gray400}
               multiline
               maxLength={200}
             />
-            <Text style={styles.charCount}>{bio.length}/200</Text>
+            <Text style={styles.charCount}>{form.bio.length}/200</Text>
           </View>
           <View style={styles.field}>
             <Text style={styles.fieldLabel}>Job</Text>
             <TextInput
               style={styles.fieldInput}
-              value={job}
-              onChangeText={setJob}
+              value={form.job}
+              onChangeText={(val) => setField('job', val)}
               placeholder="Your job title"
               placeholderTextColor={colors.gray400}
             />
@@ -160,8 +174,8 @@ export default function EditProfileScreen({ navigation }) {
             <Text style={styles.fieldLabel}>School</Text>
             <TextInput
               style={styles.fieldInput}
-              value={school}
-              onChangeText={setSchool}
+              value={form.school}
+              onChangeText={(val) => setField('school', val)}
               placeholder="Your school"
               placeholderTextColor={colors.gray400}
             />
@@ -174,10 +188,10 @@ export default function EditProfileScreen({ navigation }) {
           {lookingForOptions.map((option) => (
             <TouchableOpacity
               key={option}
-              style={[styles.optionChip, lookingFor === option && styles.optionChipActive]}
-              onPress={() => setLookingFor(option)}
+              style={[styles.optionChip, form.lookingFor === option && styles.optionChipActive]}
+              onPress={() => setField('lookingFor', option)}
             >
-              <Text style={[styles.optionText, lookingFor === option && styles.optionTextActive]}>
+              <Text style={[styles.optionText, form.lookingFor === option && styles.optionTextActive]}>
                 {option}
               </Text>
             </TouchableOpacity>
@@ -314,7 +328,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 82, 82, 0.05)',
+    backgroundColor: colors.accentTint05,
     gap: 4,
   },
   addPhotoText: {
@@ -372,7 +386,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   optionChipActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
   },
   optionText: {
     ...Typography.bodySmallMedium,
@@ -401,7 +415,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   stickerChipActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
   },
   stickerEmoji: {
     fontSize: 16,

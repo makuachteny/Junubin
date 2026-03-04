@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,7 +18,7 @@ const ICON_MAP = {
   match: { name: 'heart-circle', color: '#FF80AB' },
   comment: { name: 'chatbubble', color: '#6B8DB5' },
   follow: { name: 'person-add', color: '#6B9E5B' },
-  like_post: { name: 'thumbs-up', color: '#FF5252' },
+  like_post: { name: 'thumbs-up', color: '#E8453C' },
   group: { name: 'people', color: '#8B5CF6' },
   superlike: { name: 'star', color: '#FFC107' },
 };
@@ -27,6 +28,24 @@ export default function NotificationsScreen({ navigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [notifications, setNotifications] = useState(mockNotifications);
+  const rowAnimsRef = useRef([]);
+  const hasAnimatedRef = useRef(false);
+
+  useEffect(() => {
+    if (hasAnimatedRef.current || notifications.length === 0) return;
+    const anims = notifications.map(() => new Animated.Value(0));
+    rowAnimsRef.current = anims;
+    hasAnimatedRef.current = true;
+    const staggered = anims.map((anim, i) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 280,
+        delay: i * 45,
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(0, staggered).start();
+  }, [notifications]);
 
   const markAllRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -34,35 +53,48 @@ export default function NotificationsScreen({ navigation }) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const renderNotification = ({ item }) => {
+  const renderNotification = ({ item, index }) => {
     const iconConfig = ICON_MAP[item.type] || { name: 'notifications', color: colors.gray };
+    const rowAnim = rowAnimsRef.current[index];
+    const animStyle = rowAnim ? {
+      opacity: rowAnim,
+      transform: [{
+        translateY: rowAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [20, 0],
+        }),
+      }],
+    } : {};
+
     return (
-      <TouchableOpacity
-        style={[styles.notifRow, !item.read && styles.notifUnread]}
-        activeOpacity={0.7}
-        onPress={() => {
-          setNotifications((prev) =>
-            prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
-          );
-        }}
-      >
-        <View style={styles.avatarWrap}>
-          <Image source={imageSource(item.avatar)} style={styles.avatar} />
-          <View style={[styles.iconBadge, { backgroundColor: iconConfig.color }]}>
-            <Ionicons name={iconConfig.name} size={10} color="#FFFFFF" />
+      <Animated.View style={animStyle}>
+        <TouchableOpacity
+          style={[styles.notifRow, !item.read && styles.notifUnread]}
+          activeOpacity={0.7}
+          onPress={() => {
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
+            );
+          }}
+        >
+          <View style={styles.avatarWrap}>
+            <Image source={imageSource(item.avatar)} style={styles.avatar} />
+            <View style={[styles.iconBadge, { backgroundColor: iconConfig.color }]}>
+              <Ionicons name={iconConfig.name} size={10} color="#FFFFFF" />
+            </View>
           </View>
-        </View>
 
-        <View style={styles.notifContent}>
-          <Text style={styles.notifText}>
-            <Text style={styles.notifUser}>{item.user}</Text>{' '}
-            {item.text}
-          </Text>
-          <Text style={styles.notifTime}>{item.time}</Text>
-        </View>
+          <View style={styles.notifContent}>
+            <Text style={styles.notifText}>
+              <Text style={styles.notifUser}>{item.user}</Text>{' '}
+              {item.text}
+            </Text>
+            <Text style={styles.notifTime}>{item.time}</Text>
+          </View>
 
-        {!item.read && <View style={styles.unreadDot} />}
-      </TouchableOpacity>
+          {!item.read && <View style={styles.unreadDot} />}
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
@@ -90,6 +122,9 @@ export default function NotificationsScreen({ navigation }) {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews={true}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="notifications-off-outline" size={48} color={colors.gray400} />
@@ -119,8 +154,11 @@ const getStyles = (colors) => StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    ...Typography.sectionLabel,
+    fontSize: 34,
+    fontFamily: FontFamily.script,
     color: colors.black,
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   markRead: {
     ...Typography.caption,
@@ -140,7 +178,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   notifUnread: {
-    backgroundColor: 'rgba(255, 82, 82, 0.04)',
+    backgroundColor: colors.accentTint04,
   },
   avatarWrap: {
     position: 'relative',

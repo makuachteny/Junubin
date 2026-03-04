@@ -34,7 +34,7 @@ async function countTodayLikes(userId) {
     where: {
       fromUserId: userId,
       type: { in: [SwipeType.like, SwipeType.super_like] },
-      createdAt: { gte: startOfDay },
+      updatedAt: { gte: startOfDay },
     },
   });
 }

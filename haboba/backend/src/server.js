@@ -27,6 +27,9 @@ io.use((socket, next) => {
   if (!token) return next(new Error('Authentication required'));
   try {
     const payload = jwt.verify(token, env.jwtSecret);
+    if (!payload.sub || typeof payload.sub !== 'string') {
+      return next(new Error('Invalid token payload'));
+    }
     socket.userId = payload.sub;
     next();
   } catch {

@@ -26,15 +26,19 @@ export default function LikesScreen({ navigation }) {
   const [likes, setLikes] = useState(mockLikes);
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { canSeeWhoLikesYou } = useSubscription();
-  const { accessToken } = useAuth();
+  const { session } = useAuth();
   const contentAnim = useRef(new Animated.Value(0)).current;
+  const cardAnimsRef = useRef([]);
+  const hasAnimatedCardsRef = useRef(false);
 
   useEffect(() => {
-    if (!accessToken) return;
-    likesService.getReceivedLikes(accessToken).then((apiLikes) => {
+    if (!session) return;
+    likesService.getReceivedLikes().then((apiLikes) => {
       if (apiLikes.length > 0) setLikes(apiLikes);
-    }).catch(() => {});
-  }, [accessToken]);
+    }).catch((err) => {
+      if (__DEV__) console.warn('Likes fetch failed:', err);
+    });
+  }, [session]);
 
   useEffect(() => {
     Animated.timing(contentAnim, {
@@ -43,6 +47,24 @@ export default function LikesScreen({ navigation }) {
       useNativeDriver: true,
     }).start();
   }, [contentAnim]);
+
+  // Staggered scale+fade for grid cards (first render only)
+  useEffect(() => {
+    if (hasAnimatedCardsRef.current || visibleLikes.length === 0) return;
+    const anims = visibleLikes.map(() => new Animated.Value(0));
+    cardAnimsRef.current = anims;
+    hasAnimatedCardsRef.current = true;
+    const staggered = anims.map((anim, i) =>
+      Animated.spring(anim, {
+        toValue: 1,
+        tension: 68,
+        friction: 10,
+        delay: i * 50,
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(0, staggered).start();
+  }, [visibleLikes]);
 
   const unlocked = canSeeWhoLikesYou();
   const likesAccent = '#FF80AB';
@@ -151,30 +173,42 @@ export default function LikesScreen({ navigation }) {
         )}
 
         <View style={styles.likesGrid}>
-          {visibleLikes.map((like) => (
-            <View key={like.id} style={styles.likeCard}>
-              <Image
-                source={imageSource(like.images?.[0])}
-                style={styles.likeImage}
-                blurRadius={unlocked ? 0 : 20}
-              />
-              <View style={styles.likeCardOverlay} />
-              <View style={styles.likeInfo}>
-                <View style={styles.infoContent}>
-                  {unlocked ? (
-                    <Text style={styles.likeName}>{like.name}</Text>
-                  ) : (
-                    <View style={styles.blurredName} />
-                  )}
-                  <Text style={styles.likeAge}>{like.age}</Text>
+          {visibleLikes.map((like, idx) => {
+            const cardAnim = cardAnimsRef.current[idx];
+            const cardAnimStyle = cardAnim ? {
+              opacity: cardAnim,
+              transform: [{
+                scale: cardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.85, 1],
+                }),
+              }],
+            } : {};
+            return (
+              <Animated.View key={like.id} style={[styles.likeCard, cardAnimStyle]}>
+                <Image
+                  source={imageSource(like.images?.[0])}
+                  style={styles.likeImage}
+                  blurRadius={unlocked ? 0 : 20}
+                />
+                <View style={styles.likeCardOverlay} />
+                <View style={styles.likeInfo}>
+                  <View style={styles.infoContent}>
+                    {unlocked ? (
+                      <Text style={styles.likeName}>{like.name}</Text>
+                    ) : (
+                      <View style={styles.blurredName} />
+                    )}
+                    <Text style={styles.likeAge}>{like.age}</Text>
+                  </View>
+                  <View style={styles.likeDistance}>
+                    <Ionicons name="location" size={12} color="#FFFFFF" />
+                    <Text style={styles.likeDistText}>{like.distance}</Text>
+                  </View>
                 </View>
-                <View style={styles.likeDistance}>
-                  <Ionicons name="location" size={12} color="#FFFFFF" />
-                  <Text style={styles.likeDistText}>{like.distance}</Text>
-                </View>
-              </View>
-            </View>
-          ))}
+              </Animated.View>
+            );
+          })}
         </View>
 
         {!unlocked && visibleLikes.length > 0 && (
@@ -207,10 +241,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 34,
     fontFamily: FontFamily.script,
     color: colors.black,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   avatar: {
     width: 36,

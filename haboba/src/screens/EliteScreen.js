@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -35,15 +35,68 @@ const JUNUB_FEATURES = [
   { icon: 'star', title: 'Everything in JuNubin+', desc: 'Unlimited likes, rewinds, read receipts — all included.' },
 ];
 
-const PLUS_PLANS = [
+// Fallback plans (used when RevenueCat offerings aren't available)
+const PLUS_PLANS_FALLBACK = [
   { duration: '1', unit: 'Month', price: '$9.99', perMonth: '$9.99/mo', save: null, productId: PRODUCT_IDS.PLUS_MONTHLY },
   { duration: '6', unit: 'Months', price: '$39.99', perMonth: '$6.66/mo', save: 'Save 33%', productId: PRODUCT_IDS.PLUS_6MONTH },
 ];
 
-const JUNUB_PLANS = [
+const JUNUB_PLANS_FALLBACK = [
   { duration: '1', unit: 'Month', price: '$19.99', perMonth: '$19.99/mo', save: null, productId: PRODUCT_IDS.JUNUB_MONTHLY },
   { duration: '6', unit: 'Months', price: '$79.99', perMonth: '$13.33/mo', save: 'Save 33%', productId: PRODUCT_IDS.JUNUB_6MONTH },
 ];
+
+/**
+ * Build plan cards from RevenueCat offering packages (localized prices).
+ * Falls back to hardcoded USD if offerings aren't available.
+ */
+function buildPlans(offerings, tier) {
+  const fallback = tier === 'junub' ? JUNUB_PLANS_FALLBACK : PLUS_PLANS_FALLBACK;
+  if (!offerings?.availablePackages?.length) return { plans: fallback, packages: {} };
+
+  const monthlyId = tier === 'junub' ? PRODUCT_IDS.JUNUB_MONTHLY : PRODUCT_IDS.PLUS_MONTHLY;
+  const sixMonthId = tier === 'junub' ? PRODUCT_IDS.JUNUB_6MONTH : PRODUCT_IDS.PLUS_6MONTH;
+
+  const pkgMap = {};
+  for (const pkg of offerings.availablePackages) {
+    pkgMap[pkg.product.identifier] = pkg;
+  }
+
+  const monthlyPkg = pkgMap[monthlyId];
+  const sixMonthPkg = pkgMap[sixMonthId];
+
+  const plans = [];
+
+  if (monthlyPkg) {
+    plans.push({
+      duration: '1',
+      unit: 'Month',
+      price: monthlyPkg.product.priceString,
+      perMonth: `${monthlyPkg.product.priceString}/mo`,
+      save: null,
+      productId: monthlyId,
+      rcPackage: monthlyPkg,
+    });
+  } else {
+    plans.push(fallback[0]);
+  }
+
+  if (sixMonthPkg) {
+    plans.push({
+      duration: '6',
+      unit: 'Months',
+      price: sixMonthPkg.product.priceString,
+      perMonth: `${sixMonthPkg.product.priceString.replace(/[\d.,]+/, (n) => (parseFloat(n.replace(',', '.')) / 6).toFixed(2))}/mo`,
+      save: 'Save 33%',
+      productId: sixMonthId,
+      rcPackage: sixMonthPkg,
+    });
+  } else {
+    plans.push(fallback[1]);
+  }
+
+  return { plans, packages: pkgMap };
+}
 
 export default function EliteScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -53,14 +106,35 @@ export default function EliteScreen({ navigation }) {
   const [selectedPlan, setSelectedPlan] = useState(1);
   const scrollRef = useRef(null);
   const [featureIndex, setFeatureIndex] = useState(0);
-  const { purchase, tier, hasTier, purchaseInProgress } = useSubscription();
+  const { purchase, restorePurchases, tier, hasTier, purchaseInProgress, offerings } = useSubscription();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
   const tierSlide = useRef(new Animated.Value(1)).current;
   const [tierTabWidth, setTierTabWidth] = useState(0);
 
   const features = selectedTier === 'junub' ? JUNUB_FEATURES : PLUS_FEATURES;
-  const plans = selectedTier === 'junub' ? JUNUB_PLANS : PLUS_PLANS;
+  const { plans } = buildPlans(offerings, selectedTier);
   const tierLabel = selectedTier === 'junub' ? 'Junub' : 'JuNubin+';
+
+  // Staggered feature slide animations
+  const featureAnimsRef = useRef([]);
+  const hasAnimatedFeaturesRef = useRef(false);
+
+  useEffect(() => {
+    if (hasAnimatedFeaturesRef.current) return;
+    hasAnimatedFeaturesRef.current = true;
+    const maxFeatures = Math.max(JUNUB_FEATURES.length, PLUS_FEATURES.length);
+    const anims = Array.from({ length: maxFeatures }, () => new Animated.Value(0));
+    featureAnimsRef.current = anims;
+    const staggered = anims.map((anim, i) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 280,
+        delay: i * 50,
+        useNativeDriver: true,
+      })
+    );
+    Animated.stagger(0, staggered).start();
+  }, []);
 
   const inactiveColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.3)';
 
@@ -86,7 +160,9 @@ export default function EliteScreen({ navigation }) {
     const plan = plans[selectedPlan];
     setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Subscribing to ${tierLabel}` });
 
-    const result = await purchase(plan.productId);
+    // Use RevenueCat package if available, otherwise fall back to product ID
+    const purchaseTarget = plan.rcPackage || plan.productId;
+    const result = await purchase(purchaseTarget);
 
     if (result.success) {
       setModal({
@@ -95,6 +171,8 @@ export default function EliteScreen({ navigation }) {
         title: selectedTier === 'junub' ? 'Welcome to Junub!' : 'Welcome to JuNubin+!',
         message: `You're in. Enjoy your new features.`,
       });
+    } else if (result.error === 'cancelled') {
+      setModal((m) => ({ ...m, visible: false }));
     } else {
       setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
     }
@@ -197,15 +275,27 @@ export default function EliteScreen({ navigation }) {
           onMomentumScrollEnd={handleScroll}
           style={styles.carousel}
         >
-          {features.map((feature, index) => (
-            <View key={index} style={styles.featureSlide}>
-              <View style={styles.featureIconContainer}>
-                <Ionicons name={feature.icon} size={52} color={colors.accent} />
-              </View>
-              <Text style={styles.featureTitle}>{feature.title}</Text>
-              <Text style={styles.featureDesc}>{feature.desc}</Text>
-            </View>
-          ))}
+          {features.map((feature, index) => {
+            const featureAnim = featureAnimsRef.current[index];
+            const featureAnimStyle = featureAnim ? {
+              opacity: featureAnim,
+              transform: [{
+                translateX: featureAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              }],
+            } : {};
+            return (
+              <Animated.View key={index} style={[styles.featureSlide, featureAnimStyle]}>
+                <View style={styles.featureIconContainer}>
+                  <Ionicons name={feature.icon} size={52} color={colors.accent} />
+                </View>
+                <Text style={styles.featureTitle}>{feature.title}</Text>
+                <Text style={styles.featureDesc}>{feature.desc}</Text>
+              </Animated.View>
+            );
+          })}
         </ScrollView>
 
         {/* Pagination dots */}
@@ -271,9 +361,17 @@ export default function EliteScreen({ navigation }) {
               />
             </View>
 
-            {/* App Store link */}
-            <TouchableOpacity style={styles.appStoreBtn} onPress={handleSubscribe}>
-              <Text style={styles.appStoreTextLink}>Subscribe with App Store</Text>
+            {/* Restore purchases */}
+            <TouchableOpacity style={styles.restoreBtn} onPress={async () => {
+              setModal({ visible: true, type: 'loading', title: 'Restoring...', message: 'Checking your previous purchases' });
+              const result = await restorePurchases();
+              if (result.success) {
+                setModal({ visible: true, type: 'success', title: 'Restored!', message: 'Your purchases have been restored.' });
+              } else {
+                setModal({ visible: true, type: 'error', title: 'Restore Failed', message: result.error || 'Please try again.' });
+              }
+            }}>
+              <Text style={styles.restoreText}>Restore Purchases</Text>
             </TouchableOpacity>
           </>
         )}
@@ -326,9 +424,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: isDark ? 'rgba(255, 82, 82, 0.1)' : 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 82, 82, 0.2)' : 'rgba(255, 82, 82, 0.15)',
+    borderColor: colors.accentTint15,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
@@ -400,7 +498,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: isDark ? 'rgba(255, 82, 82, 0.15)' : 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -425,7 +523,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: isDark ? 'rgba(255, 82, 82, 0.08)' : 'rgba(255, 82, 82, 0.06)',
+    backgroundColor: colors.accentTint06,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -499,7 +597,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     position: 'relative',
   },
   planSelected: {
-    backgroundColor: isDark ? colors.white : '#FFFFFF',
+    backgroundColor: isDark ? colors.white : '#F7F5F2',
     borderWidth: 2,
     borderColor: colors.accent,
     shadowColor: colors.accent,
@@ -563,10 +661,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: '100%',
     marginTop: 24,
   },
-  appStoreBtn: {
+  restoreBtn: {
     marginTop: 18,
   },
-  appStoreTextLink: {
+  restoreText: {
     ...Typography.bodySemibold,
     color: colors.black,
     fontSize: 15,

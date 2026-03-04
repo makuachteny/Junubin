@@ -35,8 +35,8 @@ function getVariant(variant, colors, isDark) {
     case 'dark':
       return {
         container: {
-          backgroundColor: '#1A1612',
-          shadowColor: '#1A1612',
+          backgroundColor: colors.gray800,
+          shadowColor: colors.gray800,
           shadowOffset: { width: 0, height: 6 },
           shadowOpacity: 0.25,
           shadowRadius: 12,
@@ -56,9 +56,7 @@ function getVariant(variant, colors, isDark) {
     case 'secondary':
       return {
         container: {
-          backgroundColor: isDark
-            ? 'rgba(255, 82, 82, 0.15)'
-            : 'rgba(255, 82, 82, 0.08)',
+          backgroundColor: colors.accentSurface,
         },
         textColor: colors.accent,
       };
@@ -70,9 +68,9 @@ function getVariant(variant, colors, isDark) {
     case 'glass':
       return {
         container: {
-          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+          backgroundColor: 'rgba(255, 255, 255, 0.10)',
           borderWidth: 1,
-          borderColor: 'rgba(255, 255, 255, 0.12)',
+          borderColor: 'rgba(255, 255, 255, 0.15)',
         },
         textColor: '#FFFFFF',
       };

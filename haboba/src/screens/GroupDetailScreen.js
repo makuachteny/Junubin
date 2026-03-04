@@ -188,7 +188,7 @@ const getStyles = (colors) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: '#1A1612',
+    backgroundColor: '#332F2D',
   },
   backBtn: {
     padding: 4,
@@ -208,7 +208,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   banner: {
     alignItems: 'center',
-    backgroundColor: '#1A1612',
+    backgroundColor: '#332F2D',
     paddingHorizontal: 24,
     paddingBottom: 28,
     borderBottomLeftRadius: 28,
@@ -218,12 +218,12 @@ const getStyles = (colors) => StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 24,
-    backgroundColor: 'rgba(255, 82, 82, 0.15)',
+    backgroundColor: colors.accentTint15,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
     borderWidth: 2,
-    borderColor: 'rgba(255, 82, 82, 0.3)',
+    borderColor: colors.accentTint25,
   },
   bannerName: {
     ...Typography.h2,

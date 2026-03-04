@@ -30,39 +30,83 @@ import * as profileService from '../api/services/profileService';
 
 // ── Member preferences ──────────────────────────────────────
 const MEMBER_PREFS = [
-  { key: 'interestedIn', label: "I'm interested in", value: 'Women', icon: 'heart-outline' },
-  { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline' },
-  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline' },
-  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline' },
-  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline' },
-  { key: 'religion', label: 'Religion', value: 'Open to all', icon: 'book-outline' },
-  { key: 'relationshipType', label: 'Relationship Type', value: 'Monogamy', icon: 'people-outline' },
+  { key: 'interestedIn', label: "I'm interested in", value: 'Women', icon: 'heart-outline', tint: 'accent' },
+  { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline', tint: 'warm' },
+  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm' },
+  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral' },
+  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold' },
+  { key: 'religion', label: 'Religion', value: 'Open to all', icon: 'book-outline', tint: 'gold' },
+  { key: 'relationshipType', label: 'Relationship Type', value: 'Monogamy', icon: 'people-outline', tint: 'accent' },
 ];
 
 // ── Subscriber preferences ──────────────────────────────────
 const SUBSCRIBER_PREFS = [
-  { key: 'height', label: 'Height', icon: 'resize-outline' },
-  { key: 'datingIntentions', label: 'Dating Intentions', icon: 'search-outline' },
-  { key: 'children', label: 'Children', icon: 'happy-outline' },
-  { key: 'familyPlans', label: 'Family Plans', icon: 'home-outline' },
-  { key: 'drugs', label: 'Drugs', icon: 'medical-outline' },
-  { key: 'smoking', label: 'Smoking', icon: 'flame-outline' },
-  { key: 'marijuana', label: 'Marijuana', icon: 'leaf-outline' },
-  { key: 'drinking', label: 'Drinking', icon: 'wine-outline' },
-  { key: 'politics', label: 'Politics', icon: 'business-outline' },
-  { key: 'educationLevel', label: 'Education Level', icon: 'school-outline' },
+  { key: 'height', label: 'Height', icon: 'resize-outline', tint: 'neutral' },
+  { key: 'datingIntentions', label: 'Dating Intentions', icon: 'search-outline', tint: 'accent' },
+  { key: 'children', label: 'Children', icon: 'happy-outline', tint: 'warm' },
+  { key: 'familyPlans', label: 'Family Plans', icon: 'home-outline', tint: 'warm' },
+  { key: 'drugs', label: 'Drugs', icon: 'medical-outline', tint: 'neutral' },
+  { key: 'smoking', label: 'Smoking', icon: 'flame-outline', tint: 'neutral' },
+  { key: 'marijuana', label: 'Marijuana', icon: 'leaf-outline', tint: 'neutral' },
+  { key: 'drinking', label: 'Drinking', icon: 'wine-outline', tint: 'neutral' },
+  { key: 'politics', label: 'Politics', icon: 'business-outline', tint: 'neutral' },
+  { key: 'educationLevel', label: 'Education Level', icon: 'school-outline', tint: 'gold' },
 ];
 
 // ── Social preferences ──────────────────────────────────────
 const SOCIAL_PREFS = [
-  { key: 'activityType', label: 'Activity type', value: 'Open to all', icon: 'sparkles-outline' },
-  { key: 'hangoutSize', label: 'Group size', value: 'Any size', icon: 'people-outline' },
-  { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline' },
-  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline' },
-  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline' },
-  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline' },
-  { key: 'vibe', label: 'Vibe', value: 'Open to all', icon: 'musical-notes-outline' },
+  { key: 'activityType', label: 'Activity type', value: 'Open to all', icon: 'sparkles-outline', tint: 'accent' },
+  { key: 'hangoutSize', label: 'Group size', value: 'Any size', icon: 'people-outline', tint: 'warm' },
+  { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline', tint: 'warm' },
+  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm' },
+  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral' },
+  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold' },
+  { key: 'vibe', label: 'Vibe', value: 'Open to all', icon: 'musical-notes-outline', tint: 'accent' },
 ];
+
+// Icon tint colors based on category
+const ICON_TINTS = {
+  accent: { light: 'rgba(232, 69, 60, 0.10)', dark: 'rgba(255, 107, 90, 0.14)', iconLight: '#E8453C', iconDark: '#FF6B5A' },
+  warm: { light: 'rgba(255, 120, 84, 0.10)', dark: 'rgba(255, 138, 101, 0.14)', iconLight: '#FF7854', iconDark: '#FF8A65' },
+  gold: { light: 'rgba(249, 168, 37, 0.10)', dark: 'rgba(255, 213, 79, 0.14)', iconLight: '#F9A825', iconDark: '#FFD54F' },
+  neutral: { light: 'rgba(120, 113, 108, 0.08)', dark: 'rgba(168, 162, 158, 0.12)', iconLight: '#78716C', iconDark: '#A8A29E' },
+};
+
+// Check if a value is a "default" / unset value
+const isDefaultValue = (val) => !val || val === 'Open to all' || val === 'Set your location' || val === 'Any size';
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
+function PressablePrefRow({ style, onPress, activeOpacity, children }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      tension: 68,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      tension: 68,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+  return (
+    <AnimatedTouchable
+      style={[style, { transform: [{ scale: scaleAnim }] }]}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={activeOpacity || 0.6}
+    >
+      {children}
+    </AnimatedTouchable>
+  );
+}
 
 // ── Options for each preference ─────────────────────────────
 const PREF_OPTIONS = {
@@ -264,7 +308,7 @@ export default function PreferencesScreen({ navigation, route }) {
     navigation.setParams({ updatedPref: undefined });
   }, [route.params?.updatedPref, navigation]);
 
-  const { accessToken } = useAuth();
+  const { session } = useAuth();
 
   const handleDone = async () => {
     const prefSource = mode === 'Social' ? socialPrefValues : memberPrefValues;
@@ -284,13 +328,13 @@ export default function PreferencesScreen({ navigation, route }) {
     }
 
     // Save to API
-    if (accessToken) {
+    if (session) {
       const updates = {};
       if (!Number.isNaN(minAge)) updates.minPreferredAge = minAge;
       if (!Number.isNaN(maxAge)) updates.maxPreferredAge = maxAge;
       if (!Number.isNaN(parsedDistance)) updates.maxDistanceKm = Math.round(parsedDistance * 1.6);
       if (mode === 'Dating' && memberPrefValues.interestedIn) updates.lookingForGender = memberPrefValues.interestedIn;
-      profileService.updateProfile(accessToken, updates).catch(() => {});
+      profileService.updateProfile(updates).catch(() => {});
     }
 
     navigation.goBack();
@@ -338,6 +382,40 @@ export default function PreferencesScreen({ navigation, route }) {
 
   const isSocial = mode === 'Social';
 
+  const renderPrefRow = (pref, index, total, value, onPress, locked = false) => {
+    const tint = ICON_TINTS[pref.tint || 'neutral'];
+    const iconBg = isDark ? tint.dark : tint.light;
+    const iconColor = locked ? colors.gray400 : (isDark ? tint.iconDark : tint.iconLight);
+    const val = value || 'Open to all';
+    const isSet = !isDefaultValue(val);
+
+    return (
+      <PressablePrefRow
+        key={pref.key}
+        style={[styles.prefRow, index < total - 1 && styles.prefRowBorder, locked && styles.prefRowLocked]}
+        activeOpacity={locked ? 1 : 0.6}
+        onPress={onPress}
+      >
+        <View style={styles.prefLeft}>
+          <View style={[styles.prefIconWrap, { backgroundColor: locked ? colors.gray200 : iconBg }]}>
+            <Ionicons name={pref.icon} size={18} color={iconColor} />
+          </View>
+          <Text style={[styles.prefLabel, locked && styles.prefLabelLocked]}>{pref.label}</Text>
+        </View>
+        <View style={styles.prefRight}>
+          {locked ? (
+            <Ionicons name="lock-closed" size={14} color={colors.gray400} />
+          ) : (
+            <>
+              <Text style={[styles.prefValue, isSet && styles.prefValueSet]}>{val}</Text>
+              <Ionicons name="chevron-forward" size={16} color={isSet ? colors.accent : colors.gray400} />
+            </>
+          )}
+        </View>
+      </PressablePrefRow>
+    );
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
@@ -362,7 +440,6 @@ export default function PreferencesScreen({ navigation, route }) {
           style={styles.segmentedContainer}
           onLayout={(e) => setSegmentWidth(e.nativeEvent.layout.width - 6)}
         >
-          {/* Animated sliding pill */}
           {segmentWidth > 0 && (
             <Animated.View
               style={[
@@ -408,123 +485,69 @@ export default function PreferencesScreen({ navigation, route }) {
         {isSocial ? (
           <>
             {/* ── SOCIAL PREFERENCES ── */}
-            <Text style={styles.sectionHeader}>Social Preferences</Text>
+            <View style={styles.sectionHeaderRow}>
+              <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+              <Text style={styles.sectionHeader}>Social Preferences</Text>
+            </View>
             <View style={styles.card}>
-              {SOCIAL_PREFS.map((pref, index) => (
-                <TouchableOpacity
-                  key={pref.key}
-                  style={[
-                    styles.prefRow,
-                    index < SOCIAL_PREFS.length - 1 && styles.prefRowBorder,
-                  ]}
-                  activeOpacity={0.6}
-                  onPress={() => openSocialPref(pref)}
-                >
-                  <View style={styles.prefLeft}>
-                    <View style={styles.prefIconWrap}>
-                      <Ionicons name={pref.icon} size={18} color={colors.gray500} />
-                    </View>
-                    <Text style={styles.prefLabel}>{pref.label}</Text>
-                  </View>
-                  <View style={styles.prefRight}>
-                    <Text style={styles.prefValue}>{socialPrefValues[pref.key] || pref.value}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {SOCIAL_PREFS.map((pref, index) =>
+                renderPrefRow(pref, index, SOCIAL_PREFS.length, socialPrefValues[pref.key] || pref.value, () => openSocialPref(pref))
+              )}
             </View>
           </>
         ) : (
           <>
             {/* ── MEMBER PREFERENCES ── */}
-            <Text style={styles.sectionHeader}>Member Preferences</Text>
+            <View style={styles.sectionHeaderRow}>
+              <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+              <Text style={styles.sectionHeader}>Member Preferences</Text>
+            </View>
             <View style={styles.card}>
-              {MEMBER_PREFS.map((pref, index) => (
-                <TouchableOpacity
-                  key={pref.key}
-                  style={[
-                    styles.prefRow,
-                    index < MEMBER_PREFS.length - 1 && styles.prefRowBorder,
-                  ]}
-                  activeOpacity={0.6}
-                  onPress={() => openMemberPref(pref)}
-                >
-                  <View style={styles.prefLeft}>
-                    <View style={styles.prefIconWrap}>
-                      <Ionicons name={pref.icon} size={18} color={colors.gray500} />
-                    </View>
-                    <Text style={styles.prefLabel}>{pref.label}</Text>
-                  </View>
-                  <View style={styles.prefRight}>
-                    <Text style={styles.prefValue}>{memberPrefValues[pref.key] || pref.value}</Text>
-                    <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {MEMBER_PREFS.map((pref, index) =>
+                renderPrefRow(pref, index, MEMBER_PREFS.length, memberPrefValues[pref.key] || pref.value, () => openMemberPref(pref))
+              )}
             </View>
 
             {/* ── SUBSCRIBER PREFERENCES ── */}
-            <View style={styles.subscriberHeaderRow}>
+            <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+              <View style={[styles.sectionDot, { backgroundColor: colors.gold }]} />
               <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
               {!isSubscriber && (
                 <View style={styles.lockBadge}>
-                  <Ionicons name="lock-closed" size={12} color="#FFFFFF" />
+                  <Ionicons name="lock-closed" size={10} color="#FFFFFF" />
                 </View>
               )}
             </View>
 
             {!isSubscriber && (
               <View style={styles.unlockBanner}>
+                <View style={styles.unlockIconRow}>
+                  <Ionicons name="sparkles" size={20} color={colors.gold} />
+                </View>
+                <Text style={styles.unlockTitle}>Unlock Advanced Filters</Text>
                 <Text style={styles.unlockText}>
-                  Complete your profile to unlock advanced filters
+                  Fine-tune who you see with height, lifestyle, and more
                 </Text>
                 <Button
-                  title="Upgrade"
+                  title="Upgrade to Plus"
                   variant="primary"
                   size="sm"
                   fullWidth={false}
                   onPress={() => navigation?.navigate?.('Elite')}
-                  style={{ marginTop: 10, paddingHorizontal: 40, alignSelf: 'center' }}
+                  style={{ marginTop: 14, paddingHorizontal: 36, alignSelf: 'center' }}
                 />
               </View>
             )}
 
             <View style={styles.card}>
-              {SUBSCRIBER_PREFS.map((pref, index) => (
-                <TouchableOpacity
-                  key={pref.key}
-                  style={[
-                    styles.prefRow,
-                    index < SUBSCRIBER_PREFS.length - 1 && styles.prefRowBorder,
-                    !isSubscriber && styles.prefRowLocked,
-                  ]}
-                  activeOpacity={isSubscriber ? 0.6 : 1}
-                  onPress={() => openSubscriberPref(pref)}
-                >
-                  <View style={styles.prefLeft}>
-                    <View style={[styles.prefIconWrap, !isSubscriber && styles.prefIconLocked]}>
-                      <Ionicons
-                        name={pref.icon}
-                        size={18}
-                        color={isSubscriber ? colors.gray500 : colors.gray400}
-                      />
-                    </View>
-                    <Text style={[styles.prefLabel, !isSubscriber && styles.prefLabelLocked]}>
-                      {pref.label}
-                    </Text>
-                  </View>
-                  <View style={styles.prefRight}>
-                    {!isSubscriber ? (
-                      <Ionicons name="lock-closed" size={14} color={colors.gray400} />
-                    ) : (
-                      <>
-                        <Text style={styles.prefValue}>{subscriberPrefValues[pref.key]}</Text>
-                        <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
-                      </>
-                    )}
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {SUBSCRIBER_PREFS.map((pref, index) =>
+                renderPrefRow(
+                  pref, index, SUBSCRIBER_PREFS.length,
+                  subscriberPrefValues[pref.key],
+                  () => openSubscriberPref(pref),
+                  !isSubscriber
+                )
+              )}
             </View>
           </>
         )}
@@ -538,7 +561,7 @@ export default function PreferencesScreen({ navigation, route }) {
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.cream,
+    backgroundColor: isDark ? colors.cream : '#EDEAE7',
   },
   header: {
     flexDirection: 'row',
@@ -546,13 +569,14 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: colors.cardBg,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.separator,
+    backgroundColor: isDark ? colors.cream : '#EDEAE7',
   },
   headerTitle: {
-    ...Typography.screenTitle,
+    fontSize: 34,
+    fontFamily: FontFamily.script,
     color: colors.black,
+    textAlign: 'center',
+    letterSpacing: 0.3,
   },
   doneText: {
     ...Typography.bodySemibold,
@@ -566,10 +590,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // Segmented control
   segmentedContainer: {
     flexDirection: 'row',
-    backgroundColor: colors.gray100,
+    backgroundColor: isDark ? colors.gray200 : colors.gray100,
     borderRadius: 14,
     padding: 3,
-    marginBottom: 24,
+    marginBottom: 28,
     position: 'relative',
   },
   segmentPill: {
@@ -596,60 +620,79 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
 
   // Section headers
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    marginLeft: 4,
+  },
+  sectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
   sectionHeader: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: colors.gray500,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 10,
-    marginLeft: 4,
-  },
-  subscriberHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 24,
-    marginBottom: 10,
-    marginLeft: 4,
+    letterSpacing: 1,
   },
   lockBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.primaryDark,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.gold,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 2,
   },
 
   // Unlock banner
   unlockBanner: {
-    backgroundColor: colors.cardBg,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    backgroundColor: isDark ? 'rgba(255, 213, 79, 0.06)' : 'rgba(249, 168, 37, 0.05)',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    alignItems: 'center',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255, 213, 79, 0.15)' : 'rgba(249, 168, 37, 0.2)',
+  },
+  unlockIconRow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: isDark ? 'rgba(255, 213, 79, 0.12)' : 'rgba(249, 168, 37, 0.10)',
+    justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 82, 82, 0.25)',
-    borderStyle: 'dashed',
-    ...getShadow('sm', isDark),
+  },
+  unlockTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.black,
+    marginBottom: 4,
   },
   unlockText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
     color: colors.gray600,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 19,
   },
 
   // Preference card
   card: {
-    backgroundColor: colors.cardBg,
-    borderRadius: 16,
+    backgroundColor: isDark ? colors.surface : '#F7F5F2',
+    borderRadius: 18,
     overflow: 'hidden',
+    borderWidth: isDark ? 0.5 : 0,
+    borderColor: isDark ? colors.cardBorder : 'transparent',
     ...getShadow('sm', isDark),
   },
 
@@ -659,14 +702,14 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 15,
+    paddingVertical: 14,
   },
   prefRowBorder: {
     borderBottomWidth: 0.5,
     borderBottomColor: colors.separator,
   },
   prefRowLocked: {
-    opacity: 0.55,
+    opacity: 0.45,
   },
   prefLeft: {
     flexDirection: 'row',
@@ -674,16 +717,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
   },
   prefIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: colors.gray100,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-  },
-  prefIconLocked: {
-    backgroundColor: colors.gray200,
   },
   prefLabel: {
     fontSize: 15,
@@ -698,11 +737,17 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    maxWidth: '45%',
   },
   prefValue: {
     fontSize: 14,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
     color: colors.gray500,
+  },
+  prefValueSet: {
+    color: colors.accent,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
   },
 });

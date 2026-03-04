@@ -7,11 +7,15 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
+    "start:prod": "prisma migrate deploy && node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "node prisma/seed.js",
+    "prisma:reset": "prisma migrate reset --force",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --forceExit",
-    "test:ci": "node --experimental-vm-modules node_modules/.bin/jest --forceExit --ci"
+    "test:ci": "node --experimental-vm-modules node_modules/.bin/jest --forceExit --ci",
+    "healthcheck": "curl -sf http://localhost:${PORT:-4000}/v1/health || exit 1"
   },
   "jest": {
     "testEnvironment": "node",

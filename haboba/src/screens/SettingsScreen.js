@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,17 +23,50 @@ import * as profileService from '../api/services/profileService';
 
 const TIER_LABELS = { free: 'Free', plus: 'JuNubin+', junub: 'Junub' };
 
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
+function PressableRow({ style, onPress, children }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      tension: 68,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      tension: 68,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  };
+  return (
+    <AnimatedTouchable
+      style={[style, { transform: [{ scale: scaleAnim }] }]}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={0.7}
+    >
+      {children}
+    </AnimatedTouchable>
+  );
+}
+
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
-  const { logout, accessToken } = useAuth();
+  const { logout, session } = useAuth();
   const mode = currentUser.preferences.mode;
   const [showMe, setShowMe] = useState(currentUser.preferences.showMe);
 
   const handleShowMeToggle = (val) => {
     setShowMe(val);
-    if (accessToken) {
-      profileService.updateProfile(accessToken, { showMe: val }).catch(() => {});
+    if (session) {
+      profileService.updateProfile({ showMe: val }).catch(() => {});
     }
   };
   const [ads, setAds] = useState(true);
@@ -107,15 +140,15 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
-  const handleInfoPagePress = (pageKey) => {
+  const handleInfoPagePress = useCallback((pageKey) => {
     navigation.navigate('SettingsInfo', { pageKey });
-  };
+  }, [navigation]);
 
-  const handleManageAccount = () => {
+  const handleManageAccount = useCallback(() => {
     navigation.navigate('EditProfile');
-  };
+  }, [navigation]);
 
-  const menuItems = [
+  const menuItems = useMemo(() => [
     { label: 'FAQ', icon: 'help-circle-outline', onPress: () => handleInfoPagePress('faq') },
     { label: 'Contact Us', icon: 'mail-outline', onPress: () => handleInfoPagePress('contact') },
     { label: 'Terms of Use', icon: 'document-text-outline', onPress: () => handleInfoPagePress('terms') },
@@ -125,21 +158,21 @@ export default function SettingsScreen({ navigation }) {
     { label: 'Manage Subscription', icon: 'card-outline', onPress: handleManageSubscription },
     { label: 'Restore Purchases', icon: 'refresh-outline', onPress: handleRestore },
     { label: 'Manage Account', icon: 'person-outline', onPress: handleManageAccount },
-  ];
-  const surveySnapshot = [
+  ], [handleInfoPagePress, handleManageAccount, handleManageSubscription, handleRestore]);
+  const surveySnapshot = useMemo(() => [
     { label: 'Mode', value: mode },
     { label: 'Looking For', value: lookingFor },
     { label: 'Distance', value: `${currentUser.preferences.distance} mi` },
     { label: 'Age Range', value: `${currentUser.preferences.ageRange[0]}-${currentUser.preferences.ageRange[1]}` },
     { label: 'Show Me on AnaJubin', value: showMe ? 'On' : 'Off' },
-  ];
-  const appChanges = [
+  ], [mode, lookingFor, showMe]);
+  const appChanges = useMemo(() => [
     { label: 'Theme', value: isDark ? 'Dark' : 'Light' },
     { label: 'Ads', value: ads ? 'On' : 'Off' },
     { label: 'Membership', value: TIER_LABELS[tier] },
     { label: 'Spotlights', value: `${currentUser.boosts}` },
     { label: 'Super Likes', value: `${currentUser.superLikes}` },
-  ];
+  ], [isDark, ads, tier]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -216,15 +249,15 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.othersSection}>
           <Text style={styles.othersTitle}>Others</Text>
 
-          <TouchableOpacity style={styles.menuRow} onPress={() => handleInfoPagePress('email')}>
+          <PressableRow style={styles.menuRow} onPress={() => handleInfoPagePress('email')}>
             <Text style={styles.menuLabel}>Email</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </TouchableOpacity>
+          </PressableRow>
 
-          <TouchableOpacity style={styles.menuRow} onPress={() => navigation.navigate('Notifications')}>
+          <PressableRow style={styles.menuRow} onPress={() => navigation.navigate('Notifications')}>
             <Text style={styles.menuLabel}>Push Notifications</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </TouchableOpacity>
+          </PressableRow>
 
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
@@ -289,17 +322,17 @@ export default function SettingsScreen({ navigation }) {
 
         {/* Menu items */}
         {menuItems.map((item, idx) => (
-          <TouchableOpacity key={idx} style={styles.menuRow} onPress={item.onPress}>
+          <PressableRow key={idx} style={styles.menuRow} onPress={item.onPress}>
             <Text style={styles.menuLabel}>{item.label}</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </TouchableOpacity>
+          </PressableRow>
         ))}
 
         {/* Logout */}
-        <TouchableOpacity style={styles.menuRow} onPress={handleLogout}>
+        <PressableRow style={styles.menuRow} onPress={handleLogout}>
           <Text style={[styles.menuLabel, { color: colors.error }]}>Logout</Text>
           <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-        </TouchableOpacity>
+        </PressableRow>
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -351,7 +384,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255, 82, 82, 0.08)',
+    backgroundColor: colors.accentTint08,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -372,27 +405,27 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   boostCard: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.accentTint25,
+    borderRadius: 22,
+    paddingVertical: 22,
+    paddingHorizontal: 14,
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.cardBg,
-    ...getShadow('md', isDark),
+    gap: 10,
+    backgroundColor: colors.accentSurface,
+    ...getShadow('sm', isDark),
   },
   superLikeCard: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.accentTint25,
+    borderRadius: 22,
+    paddingVertical: 22,
+    paddingHorizontal: 14,
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.cardBg,
-    ...getShadow('md', isDark),
+    gap: 10,
+    backgroundColor: colors.accentSurface,
+    ...getShadow('sm', isDark),
   },
   boostCardText: {
     ...Typography.captionBold,
@@ -507,7 +540,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   radioActive: {
     borderColor: colors.accent,
-    backgroundColor: 'rgba(255, 82, 82, 0.1)',
+    backgroundColor: colors.accentTint10,
   },
   radioInner: {
     width: 12,

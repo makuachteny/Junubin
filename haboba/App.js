@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ function AppInner() {
     setShowSplash(false);
   }, []);
 
-  const navTheme = {
+  const navTheme = useMemo(() => ({
     ...(isDark ? DarkTheme : DefaultTheme),
     dark: isDark,
     colors: {
@@ -34,7 +34,7 @@ function AppInner() {
       border: colors.cardBorder,
       notification: colors.rose,
     },
-  };
+  }), [isDark, colors]);
 
   if (showSplash) {
     return (

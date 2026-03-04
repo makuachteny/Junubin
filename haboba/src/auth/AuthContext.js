@@ -1,155 +1,119 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiRequest } from '../api/client';
-
-const ACCESS_KEY = '@junubin_access_token';
-const REFRESH_KEY = '@junubin_refresh_token';
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
+  const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
-  const [accessToken, setAccessToken] = useState(null);
-  const [refreshToken, setRefreshToken] = useState(null);
-  const refreshingRef = useRef(null);
-  // Keep a ref to latest tokens for use inside callbacks without re-creating them
-  const tokensRef = useRef({ accessToken: null, refreshToken: null });
-  tokensRef.current = { accessToken, refreshToken };
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
-    (async () => {
-      const [storedAccess, storedRefresh] = await Promise.all([
-        AsyncStorage.getItem(ACCESS_KEY),
-        AsyncStorage.getItem(REFRESH_KEY),
-      ]);
-      setAccessToken(storedAccess);
-      setRefreshToken(storedRefresh);
-      if (storedAccess) {
-        try {
-          const me = await apiRequest('/auth/me', { token: storedAccess });
-          setUser(me.user);
-        } catch (err) {
-          if (err.status === 401 && storedRefresh) {
-            try {
-              const tokens = await apiRequest('/auth/refresh', {
-                method: 'POST',
-                body: { refreshToken: storedRefresh },
-              });
-              setAccessToken(tokens.accessToken);
-              setRefreshToken(tokens.refreshToken);
-              await AsyncStorage.multiSet([
-                [ACCESS_KEY, tokens.accessToken],
-                [REFRESH_KEY, tokens.refreshToken],
-              ]);
-              const me = await apiRequest('/auth/me', { token: tokens.accessToken });
-              setUser(me.user);
-            } catch {
-              await AsyncStorage.multiRemove([ACCESS_KEY, REFRESH_KEY]);
-              setAccessToken(null);
-              setRefreshToken(null);
-            }
-          } else {
-            await AsyncStorage.multiRemove([ACCESS_KEY, REFRESH_KEY]);
-            setAccessToken(null);
-            setRefreshToken(null);
-          }
-        }
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s) {
+        fetchUser(s.user.id);
       }
       setReady(true);
-    })();
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      if (s) {
+        fetchUser(s.user.id);
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchUser = useCallback(async (authId) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const { data, error } = await supabase
+        .from('User')
+        .select('*, profile:Profile(*), photos:Photo(*)')
+        .eq('auth_id', authId)
+        .single();
+
+      if (!error && data) {
+        setUser(data);
+      }
+    } finally {
+      fetchingRef.current = false;
+    }
   }, []);
 
   const startOtp = useCallback(async ({ email, phone }) => {
-    return apiRequest('/auth/otp/start', {
-      method: 'POST',
-      body: { email, phone },
-    });
+    if (email) {
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) throw error;
+      return { message: 'OTP sent' };
+    }
+    if (phone) {
+      const { error } = await supabase.auth.signInWithOtp({ phone });
+      if (error) throw error;
+      return { message: 'OTP sent' };
+    }
+    throw new Error('Email or phone required');
   }, []);
 
   const loginWithOtp = useCallback(async ({ email, phone, code }) => {
-    const data = await apiRequest('/auth/otp/verify', {
-      method: 'POST',
-      body: { email, phone, code },
-    });
-    setUser(data.user);
-    setAccessToken(data.accessToken);
-    setRefreshToken(data.refreshToken);
-    await AsyncStorage.multiSet([
-      [ACCESS_KEY, data.accessToken],
-      [REFRESH_KEY, data.refreshToken],
-    ]);
-    return data.user;
-  }, []);
+    let result;
+    if (email) {
+      result = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+    } else if (phone) {
+      result = await supabase.auth.verifyOtp({ phone, token: code, type: 'sms' });
+    } else {
+      throw new Error('Email or phone required');
+    }
 
-  const clearAuth = useCallback(async () => {
-    setUser(null);
-    setAccessToken(null);
-    setRefreshToken(null);
-    await AsyncStorage.multiRemove([ACCESS_KEY, REFRESH_KEY]);
-  }, []);
+    if (result.error) throw result.error;
+
+    // Session is set automatically via onAuthStateChange
+    // Fetch user data
+    if (result.data.user) {
+      await fetchUser(result.data.user.id);
+    }
+
+    return user;
+  }, [fetchUser, user]);
 
   const logout = useCallback(async () => {
-    try {
-      const rt = tokensRef.current.refreshToken;
-      if (rt) {
-        await apiRequest('/auth/logout', {
-          method: 'POST',
-          body: { refreshToken: rt },
-        });
-      }
-    } catch { /* ignore logout errors */ }
-    await clearAuth();
-  }, [clearAuth]);
+    await supabase.auth.signOut();
+    setUser(null);
+    setSession(null);
+  }, []);
 
   const updateUser = useCallback((userData) => {
     setUser(userData);
   }, []);
 
-  const authenticatedRequest = useCallback(async (path, options = {}) => {
-    const { accessToken: at, refreshToken: rt } = tokensRef.current;
-    try {
-      return await apiRequest(path, { ...options, token: at });
-    } catch (err) {
-      if (err.status === 401 && rt) {
-        if (!refreshingRef.current) {
-          refreshingRef.current = apiRequest('/auth/refresh', {
-            method: 'POST',
-            body: { refreshToken: rt },
-          }).finally(() => { refreshingRef.current = null; });
-        }
-        try {
-          const tokens = await refreshingRef.current;
-          setAccessToken(tokens.accessToken);
-          setRefreshToken(tokens.refreshToken);
-          await AsyncStorage.multiSet([
-            [ACCESS_KEY, tokens.accessToken],
-            [REFRESH_KEY, tokens.refreshToken],
-          ]);
-          return await apiRequest(path, { ...options, token: tokens.accessToken });
-        } catch {
-          await clearAuth();
-          throw err;
-        }
-      }
-      throw err;
+  const refreshUser = useCallback(async () => {
+    if (session?.user?.id) {
+      await fetchUser(session.user.id);
     }
-  }, [clearAuth]);
+  }, [session, fetchUser]);
 
   const value = useMemo(
     () => ({
       user,
-      accessToken,
-      refreshToken,
+      session,
       ready,
-      isAuthenticated: !!accessToken,
+      isAuthenticated: !!session,
       startOtp,
       loginWithOtp,
       logout,
       updateUser,
-      authenticatedRequest,
+      refreshUser,
     }),
-    [user, accessToken, refreshToken, ready, startOtp, loginWithOtp, logout, updateUser, authenticatedRequest]
+    [user, session, ready, startOtp, loginWithOtp, logout, updateUser, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -545,11 +545,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 24,
-    elevation: 20,
+    ...getShadow('xl', isDark),
   },
   handleRow: {
     alignItems: 'center',
@@ -651,16 +647,12 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   applyBtn: {
     flex: 1,
-    backgroundColor: isDark ? '#FFFFFF' : '#1A1612',
+    backgroundColor: isDark ? '#FFFFFF' : colors.gray800,
     borderRadius: 999,
     paddingVertical: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    ...getShadow('md', isDark),
   },
   applyBtnDisabled: {
     opacity: 0.4,
@@ -669,9 +661,9 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: isDark ? '#1A1612' : '#FFFFFF',
+    color: isDark ? colors.gray800 : '#FFFFFF',
     letterSpacing: 0.3,
   },
 });
 
-export default FilterBar;
+export default React.memo(FilterBar);

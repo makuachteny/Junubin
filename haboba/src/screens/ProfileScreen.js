@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,24 +24,45 @@ export default function ProfileScreen({ navigation }) {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
   const { spotlights, superLikes, whispers, hasTier } = useSubscription();
-  const { accessToken } = useAuth();
+  const { session } = useAuth();
   const [profile, setProfile] = useState(null);
 
   useEffect(() => {
-    if (!accessToken) return;
-    profileService.getMyProfile(accessToken).then((apiUser) => {
+    if (!session) return;
+    profileService.getMyProfile().then((apiUser) => {
       setProfile(profileService.normalizeProfile(apiUser));
     }).catch(() => {});
-  }, [accessToken]);
+  }, [session]);
 
   // Use API profile data if available, otherwise fall back to mock
   const displayUser = profile || currentUser;
 
-  const statItems = [
-    { icon: 'flash', iconColor: colors.accent, label: `${spotlights} Spotlights`, screen: 'Boost' },
-    { icon: 'crown', iconColor: colors.accent, label: `${superLikes} Super Likes`, screen: 'Elite' },
-    { icon: 'send', iconColor: colors.accent, label: `${whispers} Whispers`, screen: null },
-  ];
+  // Stats counter animation
+  const statsAnim = useRef(new Animated.Value(0)).current;
+  const [animatedCounts, setAnimatedCounts] = useState({ spotlights: 0, superLikes: 0, whispers: 0 });
+
+  useEffect(() => {
+    const listener = statsAnim.addListener(({ value }) => {
+      setAnimatedCounts({
+        spotlights: Math.round(value * spotlights),
+        superLikes: Math.round(value * superLikes),
+        whispers: Math.round(value * whispers),
+      });
+    });
+    Animated.timing(statsAnim, {
+      toValue: 1,
+      duration: 600,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+    return () => statsAnim.removeListener(listener);
+  }, [spotlights, superLikes, whispers, statsAnim]);
+
+  const statItems = useMemo(() => [
+    { icon: 'flash', iconColor: colors.accent, label: `${animatedCounts.spotlights} Spotlights`, screen: 'Boost' },
+    { icon: 'crown', iconColor: colors.accent, label: `${animatedCounts.superLikes} Super Likes`, screen: 'Elite' },
+    { icon: 'send', iconColor: colors.accent, label: `${animatedCounts.whispers} Whispers`, screen: null },
+  ], [animatedCounts.spotlights, animatedCounts.superLikes, animatedCounts.whispers, colors.accent]);
 
   const showJunubCTA = !hasTier('junub');
 
@@ -174,7 +197,8 @@ const getStyles = (colors) => StyleSheet.create({
   content: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 16,
     paddingHorizontal: 16,
     backgroundColor: colors.white,
   },
@@ -288,7 +312,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 82, 82, 0.04)',
+    backgroundColor: colors.accentTint04,
   },
   stickerText: {
     ...Typography.caption,
@@ -302,7 +326,7 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingTop: 22,
-    backgroundColor: '#1A1612',
+    backgroundColor: '#332F2D',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
   },

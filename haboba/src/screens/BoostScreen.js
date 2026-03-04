@@ -12,30 +12,64 @@ import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import { useSubscription, PRODUCT_IDS } from '../payments';
 
-const PACKS = [
+// Fallback packs (USD) — replaced by localized prices when RevenueCat is active
+const PACKS_FALLBACK = [
   { count: 1, price: '$5.99', perUnit: '$5.99/each', save: null, productId: PRODUCT_IDS.SPOTLIGHT_1 },
   { count: 5, price: '$19.99', perUnit: '$3.99/each', save: 'Save 33%', productId: PRODUCT_IDS.SPOTLIGHT_5 },
   { count: 10, price: '$29.99', perUnit: '$2.99/each', save: null, productId: PRODUCT_IDS.SPOTLIGHT_10 },
 ];
+
+function buildPacks(offerings) {
+  if (!offerings?.availablePackages?.length) return PACKS_FALLBACK;
+
+  const pkgMap = {};
+  for (const pkg of offerings.availablePackages) {
+    pkgMap[pkg.product.identifier] = pkg;
+  }
+
+  return PACKS_FALLBACK.map((fallback) => {
+    const pkg = pkgMap[fallback.productId];
+    if (!pkg) return fallback;
+
+    const price = pkg.product.price;
+    const priceStr = pkg.product.priceString;
+    const perUnit = pkg.product.priceString.replace(
+      /[\d.,]+/,
+      (n) => (parseFloat(n.replace(',', '.')) / fallback.count).toFixed(2)
+    );
+
+    return {
+      ...fallback,
+      price: priceStr,
+      perUnit: `${perUnit}/each`,
+      rcPackage: pkg,
+    };
+  });
+}
 
 export default function BoostScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [selected, setSelected] = useState(1);
-  const { purchase, spotlights, purchaseInProgress } = useSubscription();
+  const { purchase, spotlights, purchaseInProgress, offerings } = useSubscription();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
 
+  const PACKS = buildPacks(offerings);
   const selectedPack = PACKS[selected];
 
   const handleBuy = async () => {
     const pack = PACKS[selected];
     setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Getting ${pack.count} Spotlight${pack.count > 1 ? 's' : ''}` });
 
-    const result = await purchase(pack.productId);
+    // Use RevenueCat package if available, otherwise fall back to product ID
+    const purchaseTarget = pack.rcPackage || pack.productId;
+    const result = await purchase(purchaseTarget);
 
     if (result.success) {
       setModal({ visible: true, type: 'success', title: 'Spotlights Added!', message: `You now have ${spotlights + pack.count} spotlights.` });
+    } else if (result.error === 'cancelled') {
+      setModal((m) => ({ ...m, visible: false }));
     } else {
       setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
     }

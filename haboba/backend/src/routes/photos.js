@@ -110,7 +110,7 @@ router.patch(
   '/:id',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { sortOrder } = reorderSchema.parse(req.body);
+    const { sortOrder: targetOrder } = reorderSchema.parse(req.body);
     const photo = await prisma.photo.findFirst({
       where: { id: req.params.id, userId: req.user.id },
     });
@@ -118,10 +118,24 @@ router.patch(
       return res.status(404).json({ error: 'Photo not found' });
     }
 
-    await prisma.photo.update({
-      where: { id: photo.id },
-      data: { sortOrder, isPrimary: sortOrder === 0 },
+    // Fetch all user photos, reorder transactionally to prevent duplicate sortOrder / isPrimary
+    const allPhotos = await prisma.photo.findMany({
+      where: { userId: req.user.id },
+      orderBy: { sortOrder: 'asc' },
     });
+
+    const clampedTarget = Math.min(targetOrder, allPhotos.length - 1);
+    const reordered = allPhotos.filter((p) => p.id !== photo.id);
+    reordered.splice(clampedTarget, 0, photo);
+
+    await prisma.$transaction(
+      reordered.map((p, i) =>
+        prisma.photo.update({
+          where: { id: p.id },
+          data: { sortOrder: i, isPrimary: i === 0 },
+        })
+      )
+    );
 
     res.json({ ok: true });
   })
