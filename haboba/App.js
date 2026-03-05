@@ -7,25 +7,25 @@ import { StyleSheet, View, ActivityIndicator, ImageBackground } from 'react-nati
 import { useFonts } from 'expo-font';
 
 import { ThemeProvider, useTheme, fontAssets } from './src/theme';
+import { AccessibilityPreferencesProvider } from './src/accessibility';
 import { SubscriptionProvider } from './src/payments';
-import { AuthProvider } from './src/auth';
+import { AuthProvider, useAuth } from './src/auth';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
 import ScreenshotGuard from './src/components/ScreenshotGuard';
 import OfflineBanner from './src/components/OfflineBanner';
 import { NetworkProvider } from './src/utils/useNetworkStatus';
 import { useNotifications } from './src/utils/useNotifications';
-import { useScreenTracking } from './src/utils/useScreenTracking';
+
 import ErrorBoundary from './src/components/ErrorBoundary';
 
 const LANDING_IMAGE = require('./src/assets/landing.jpeg');
 
 function AppInner() {
   const { colors, isDark } = useTheme();
+  const { ready: authReady } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
   const navigationRef = useRef(null);
-  const { onStateChange } = useScreenTracking();
-
   // Push notification deep-linking
   useNotifications(navigationRef);
 
@@ -51,13 +51,13 @@ function AppInner() {
     return (
       <>
         <StatusBar style="light" />
-        <SplashScreen onFinish={handleSplashFinish} />
+        <SplashScreen onFinish={handleSplashFinish} authReady={authReady} />
       </>
     );
   }
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navTheme} onStateChange={onStateChange}>
+    <NavigationContainer ref={navigationRef} theme={navTheme}>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppNavigator />
       <OfflineBanner />
@@ -83,15 +83,17 @@ export default function App() {
       <GestureHandlerRootView style={styles.container}>
         <SafeAreaProvider>
           <ThemeProvider>
-            <SubscriptionProvider>
-              <AuthProvider>
-                <NetworkProvider>
-                  <ScreenshotGuard>
-                    <AppInner />
-                  </ScreenshotGuard>
-                </NetworkProvider>
-              </AuthProvider>
-            </SubscriptionProvider>
+            <AccessibilityPreferencesProvider>
+              <SubscriptionProvider>
+                <AuthProvider>
+                  <NetworkProvider>
+                    <ScreenshotGuard>
+                      <AppInner />
+                    </ScreenshotGuard>
+                  </NetworkProvider>
+                </AuthProvider>
+              </SubscriptionProvider>
+            </AccessibilityPreferencesProvider>
           </ThemeProvider>
         </SafeAreaProvider>
       </GestureHandlerRootView>

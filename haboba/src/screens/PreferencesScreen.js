@@ -406,6 +406,14 @@ export default function PreferencesScreen({ navigation, route }) {
   };
 
   const isSocial = mode === 'Social';
+  const activeCoreCount = useMemo(() => {
+    const source = isSocial ? socialPrefValues : memberPrefValues;
+    return Object.values(source).filter((val) => !isDefaultValue(val)).length;
+  }, [isSocial, socialPrefValues, memberPrefValues]);
+  const activeSubscriberCount = useMemo(
+    () => Object.values(subscriberPrefValues).filter((val) => !isDefaultValue(val)).length,
+    [subscriberPrefValues]
+  );
 
   const renderPrefRow = (pref, index, total, value, onPress, locked = false) => {
     const tint = ICON_TINTS[pref.tint || 'neutral'];
@@ -432,7 +440,9 @@ export default function PreferencesScreen({ navigation, route }) {
             <Ionicons name="lock-closed" size={14} color={colors.gray400} />
           ) : (
             <>
-              <Text style={[styles.prefValue, isSet && styles.prefValueSet]}>{val}</Text>
+              <View style={[styles.prefValuePill, isSet && styles.prefValuePillSet]}>
+                <Text style={[styles.prefValue, isSet && styles.prefValueSet]}>{val}</Text>
+              </View>
               <Ionicons name="chevron-forward" size={16} color={isSet ? colors.accent : colors.gray400} />
             </>
           )}
@@ -507,12 +517,32 @@ export default function PreferencesScreen({ navigation, route }) {
           ))}
         </View>
 
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIconWrap}>
+            <Ionicons name={isSocial ? 'people-circle-outline' : 'heart-circle-outline'} size={20} color={colors.accent} />
+          </View>
+          <View style={styles.summaryTextWrap}>
+            <Text style={styles.summaryTitle}>{isSocial ? 'Social Match Setup' : 'Dating Match Setup'}</Text>
+            <Text style={styles.summaryMeta}>
+              {activeCoreCount} active filters{!isSocial ? ` • ${activeSubscriberCount} advanced` : ''}
+            </Text>
+          </View>
+          <View style={[styles.summaryBadge, { backgroundColor: isSubscriber ? colors.gold : colors.gray300 }]}>
+            <Text style={[styles.summaryBadgeText, { color: isSubscriber ? '#1A1A1A' : colors.gray700 }]}>
+              {isSubscriber ? 'Plus' : 'Free'}
+            </Text>
+          </View>
+        </View>
+
         {isSocial ? (
           <>
             {/* ── SOCIAL PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
               <Text style={styles.sectionHeader}>Socializing Preferences</Text>
+              <View style={styles.sectionCountPill}>
+                <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
+              </View>
             </View>
             <View style={styles.card}>
               {SOCIAL_PREFS.map((pref, index) =>
@@ -526,6 +556,9 @@ export default function PreferencesScreen({ navigation, route }) {
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
               <Text style={styles.sectionHeader}>Member Preferences</Text>
+              <View style={styles.sectionCountPill}>
+                <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
+              </View>
             </View>
             <View style={styles.card}>
               {MEMBER_PREFS.map((pref, index) =>
@@ -537,6 +570,9 @@ export default function PreferencesScreen({ navigation, route }) {
             <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
               <View style={[styles.sectionDot, { backgroundColor: colors.gold }]} />
               <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
+              <View style={[styles.sectionCountPill, styles.sectionCountPillGold]}>
+                <Text style={[styles.sectionCountText, styles.sectionCountTextGold]}>{activeSubscriberCount}</Text>
+              </View>
               {!isSubscriber && (
                 <View style={styles.lockBadge}>
                   <Ionicons name="lock-closed" size={10} color="#FFFFFF" />
@@ -670,6 +706,54 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
+  summaryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(245, 96, 64, 0.22)' : colors.accentTint12,
+    backgroundColor: isDark ? 'rgba(245, 96, 64, 0.10)' : 'rgba(245, 96, 64, 0.06)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 18,
+  },
+  summaryIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#FFFFFF',
+    marginRight: 10,
+  },
+  summaryTextWrap: {
+    flex: 1,
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontFamily: FontFamily.bold,
+    fontWeight: '700',
+    color: colors.black,
+  },
+  summaryMeta: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
+    color: colors.gray600,
+  },
+  summaryBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  summaryBadgeText: {
+    fontSize: 11,
+    fontFamily: FontFamily.bold,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
 
   // Segmented control
   segmentedContainer: {
@@ -723,6 +807,29 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: colors.gray500,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  sectionCountPill: {
+    borderWidth: 1,
+    borderColor: colors.accentTint25,
+    borderRadius: 999,
+    backgroundColor: colors.accentTint06,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    minWidth: 22,
+    alignItems: 'center',
+  },
+  sectionCountText: {
+    fontSize: 10,
+    fontFamily: FontFamily.bold,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  sectionCountPillGold: {
+    borderColor: isDark ? 'rgba(255, 213, 79, 0.28)' : 'rgba(249, 168, 37, 0.32)',
+    backgroundColor: isDark ? 'rgba(255, 213, 79, 0.14)' : 'rgba(249, 168, 37, 0.10)',
+  },
+  sectionCountTextGold: {
+    color: colors.gold,
   },
   lockBadge: {
     width: 20,
@@ -823,8 +930,20 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     gap: 6,
     maxWidth: '45%',
   },
+  prefValuePill: {
+    borderRadius: 999,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.gray100,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.14)' : colors.gray200,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  prefValuePillSet: {
+    backgroundColor: colors.accentTint10,
+    borderColor: colors.accentTint25,
+  },
   prefValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
     color: colors.gray500,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,14 +12,32 @@ import LogoMark from '../components/LogoMark';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// Keep splash/loading background aligned with onboarding/signup landing
 const SPLASH_IMAGE = require('../assets/landing.jpeg');
 
-export default function SplashScreen({ onFinish }) {
+export default function SplashScreen({ onFinish, authReady }) {
   const logoFade = useRef(new Animated.Value(0)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
-  const blurFade = useRef(new Animated.Value(1)).current; // blurry layer starts visible
-  const overlayFade = useRef(new Animated.Value(0.7)).current; // dark overlay starts strong
+  const blurFade = useRef(new Animated.Value(1)).current;
+  const overlayFade = useRef(new Animated.Value(0.7)).current;
+  const animDone = useRef(false);
+  const hasFinished = useRef(false);
+
+  const tryFinish = useCallback(() => {
+    if (animDone.current && authReady && !hasFinished.current) {
+      hasFinished.current = true;
+      // Fade out then hand off
+      Animated.timing(logoFade, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => onFinish?.());
+    }
+  }, [authReady, logoFade, onFinish]);
+
+  // When auth becomes ready after animation, finish immediately
+  useEffect(() => {
+    tryFinish();
+  }, [tryFinish]);
 
   useEffect(() => {
     // Phase 1: Logo fades in over blurry background
@@ -53,20 +71,17 @@ export default function SplashScreen({ onFinish }) {
       ]).start();
     }, 800);
 
-    // Phase 3: Everything fades out, transition to app
-    const finishTimer = setTimeout(() => {
-      Animated.timing(logoFade, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start(() => onFinish?.());
-    }, 3000);
+    // Phase 3: Minimum animation time reached — try to finish
+    const minTimer = setTimeout(() => {
+      animDone.current = true;
+      tryFinish();
+    }, 2500);
 
     return () => {
       clearTimeout(revealTimer);
-      clearTimeout(finishTimer);
+      clearTimeout(minTimer);
     };
-  }, [logoFade, logoScale, blurFade, overlayFade, onFinish]);
+  }, [logoFade, logoScale, blurFade, overlayFade, tryFinish]);
 
   return (
     <View style={styles.container}>

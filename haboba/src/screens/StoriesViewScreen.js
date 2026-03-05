@@ -3,11 +3,13 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated, TextInput, Alert, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import { interactiveStore } from '../utils/interactiveStore';
 import { useSubscription } from '../payments';
 import { hapticSelection } from '../utils/haptics';
+import { useAccessibilityPreferences } from '../accessibility';
 
 const { width: W, height: H } = Dimensions.get('window');
 const STORY_DURATION = 5000;
@@ -17,8 +19,13 @@ export default function StoriesViewScreen({ navigation, route }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 375;
   const { hasTier } = useSubscription();
-  const storyGroup = route.params?.story;
-  const stories = storyGroup?.stories || [];
+  const { prefs } = useAccessibilityPreferences();
+  const storyList = route.params?.storyList || [];
+  const startIndex = route.params?.storyIndex ?? 0;
+  const initialGroup = route.params?.story;
+  const groups = storyList.length > 0 ? storyList : (initialGroup ? [initialGroup] : []);
+  const initialGroupIndex = Math.max(0, Math.min(startIndex, Math.max(groups.length - 1, 0)));
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(initialGroupIndex);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [reaction, setReaction] = useState('🔥');
   const [thread, setThread] = useState([]);
@@ -28,11 +35,17 @@ export default function StoriesViewScreen({ navigation, route }) {
   const reactionScale = useRef(new Animated.Value(1)).current;
   const reactionFloat = useRef(new Animated.Value(0)).current;
   const reactionOpacity = useRef(new Animated.Value(0)).current;
-  const timerRef = useRef(null);
 
   const handleReaction = useCallback((emoji) => {
     setReaction(emoji);
     hapticSelection?.();
+    if (prefs?.reducedMotion) {
+      setSentReaction(emoji);
+      reactionFloat.setValue(-18);
+      reactionOpacity.setValue(1);
+      setTimeout(() => setSentReaction(null), 380);
+      return;
+    }
     // Bounce the chip
     Animated.sequence([
       Animated.timing(reactionScale, { toValue: 1.3, duration: 100, useNativeDriver: true }),
@@ -46,11 +59,21 @@ export default function StoriesViewScreen({ navigation, route }) {
       Animated.timing(reactionFloat, { toValue: -120, duration: 800, useNativeDriver: true }),
       Animated.timing(reactionOpacity, { toValue: 0, duration: 800, useNativeDriver: true }),
     ]).start(() => setSentReaction(null));
-  }, [reactionScale, reactionFloat, reactionOpacity]);
+  }, [prefs, reactionScale, reactionFloat, reactionOpacity]);
 
+  const storyGroup = groups[currentGroupIndex];
+  const stories = storyGroup?.stories || [];
   const story = stories[currentIndex];
   const reactionSet = isCompact ? ['🔥', '✨', '😍', '💌'] : ['🔥', '✨', '💫', '😍', '💌'];
   const threadKey = useMemo(() => `${storyGroup?.id || 'story'}-${story?.id || currentIndex}`, [storyGroup?.id, story?.id, currentIndex]);
+
+  useEffect(() => {
+    const safeIndex = Math.max(0, Math.min(currentGroupIndex, Math.max(groups.length - 1, 0)));
+    if (safeIndex !== currentGroupIndex) {
+      setCurrentGroupIndex(safeIndex);
+      setCurrentIndex(0);
+    }
+  }, [currentGroupIndex, groups.length]);
 
   useEffect(() => {
     interactiveStore.getStoryThreads().then((all) => {
@@ -63,30 +86,42 @@ export default function StoriesViewScreen({ navigation, route }) {
     progressAnim.setValue(0);
     const anim = Animated.timing(progressAnim, {
       toValue: 1,
-      duration: story.duration || STORY_DURATION,
+      duration: prefs?.reducedMotion ? Math.min(story.duration || STORY_DURATION, 3500) : (story.duration || STORY_DURATION),
       useNativeDriver: false,
     });
     anim.start(({ finished }) => {
       if (finished) goNext();
     });
     return () => anim.stop();
-  }, [currentIndex, story]);
+  }, [story, goNext, progressAnim, prefs]);
 
-  const goNext = () => {
+  const goNext = useCallback(() => {
     if (currentIndex < stories.length - 1) {
       setCurrentIndex((i) => i + 1);
-    } else {
-      navigation.goBack();
+      return;
     }
-  };
+    if (currentGroupIndex < groups.length - 1) {
+      setCurrentGroupIndex((i) => i + 1);
+      setCurrentIndex(0);
+      return;
+    }
+    navigation.goBack();
+  }, [currentIndex, stories.length, currentGroupIndex, groups.length, navigation]);
 
-  const goPrev = () => {
+  const goPrev = useCallback(() => {
     if (currentIndex > 0) {
       setCurrentIndex((i) => i - 1);
+      return;
     }
-  };
+    if (currentGroupIndex > 0) {
+      const prevGroup = groups[currentGroupIndex - 1];
+      const prevStories = prevGroup?.stories || [];
+      setCurrentGroupIndex((i) => i - 1);
+      setCurrentIndex(Math.max(prevStories.length - 1, 0));
+    }
+  }, [currentIndex, currentGroupIndex, groups]);
 
-  const handlePostReply = () => {
+  const postReply = useCallback((rawValue) => {
     if (!hasTier('junub')) {
       Alert.alert('Junub Feature', 'Story reply threads are available on Junub and higher.', [
         { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
@@ -94,7 +129,7 @@ export default function StoriesViewScreen({ navigation, route }) {
       ]);
       return;
     }
-    const value = threadInput.trim();
+    const value = (rawValue || '').trim();
     if (!value) return;
     const next = [value, ...thread].slice(0, 4);
     setThread(next);
@@ -103,7 +138,11 @@ export default function StoriesViewScreen({ navigation, route }) {
       const merged = { ...(all || {}), [threadKey]: next };
       interactiveStore.setStoryThreads(merged);
     });
-  };
+  }, [hasTier, navigation, thread, threadKey]);
+
+  const handlePostReply = useCallback(() => {
+    postReply(threadInput);
+  }, [postReply, threadInput]);
 
   if (!story) {
     navigation.goBack();
@@ -162,42 +201,53 @@ export default function StoriesViewScreen({ navigation, route }) {
         <TouchableOpacity style={styles.tapRight} onPress={goNext} activeOpacity={1} />
       </View>
 
-      <View style={[styles.reactBar, { bottom: insets.bottom + 10 }]}>
-        {reactionSet.map((emoji) => (
-          <Animated.View key={emoji} style={reaction === emoji ? { transform: [{ scale: reactionScale }] } : undefined}>
-            <TouchableOpacity
-              style={[
-                styles.reactChip,
-                isCompact && styles.reactChipCompact,
-                reaction === emoji && styles.reactChipActive,
-              ]}
-              onPress={() => handleReaction(emoji)}
-              accessibilityRole="button"
-              accessibilityLabel={`React with ${emoji}`}
-              hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-            >
-              <Text style={[styles.reactEmoji, isCompact && styles.reactEmojiCompact]}>{emoji}</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        ))}
-        <TextInput
-          value={threadInput}
-          onChangeText={setThreadInput}
-          placeholder="Reply..."
-          placeholderTextColor="rgba(255,255,255,0.55)"
-          style={styles.threadInput}
-          maxLength={80}
-          accessibilityLabel="Reply to story"
-        />
-        <TouchableOpacity
-          style={styles.sendBtn}
-          onPress={handlePostReply}
-          accessibilityRole="button"
-          accessibilityLabel="Send reply"
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="arrow-forward" size={15} color="#FFF" />
-        </TouchableOpacity>
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(0,0,0,0.24)', 'rgba(0,0,0,0.42)', 'rgba(0,0,0,0.62)', 'rgba(0,0,0,0.78)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={[styles.bottomShade, { height: insets.bottom + (isCompact ? 66 : 72) }]}
+      />
+
+      <View style={[styles.reactBarShell, { bottom: insets.bottom + 10 }]}>
+        <View style={styles.reactBar}>
+          {reactionSet.map((emoji) => (
+            <Animated.View key={emoji} style={reaction === emoji ? { transform: [{ scale: reactionScale }] } : undefined}>
+              <TouchableOpacity
+                style={[
+                  styles.reactChip,
+                  isCompact && styles.reactChipCompact,
+                  prefs?.largerTouchTargets && styles.reactChipLarge,
+                  reaction === emoji && styles.reactChipActive,
+                ]}
+                onPress={() => handleReaction(emoji)}
+                accessibilityRole="button"
+                accessibilityLabel={`React with ${emoji}`}
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+              >
+                <Text style={[styles.reactEmoji, isCompact && styles.reactEmojiCompact]}>{emoji}</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          ))}
+          <TextInput
+            value={threadInput}
+            onChangeText={setThreadInput}
+            placeholder="Reply..."
+            placeholderTextColor={prefs?.highContrast ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.55)'}
+            style={[styles.threadInput, prefs?.largerTouchTargets && styles.threadInputLarge]}
+            maxLength={80}
+            accessibilityLabel="Reply to story"
+          />
+          <TouchableOpacity
+            style={styles.sendBtn}
+            onPress={handlePostReply}
+            accessibilityRole="button"
+            accessibilityLabel="Send reply"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="arrow-forward" size={15} color="#FFF" />
+          </TouchableOpacity>
+        </View>
       </View>
       {/* Floating reaction burst */}
       {sentReaction && (
@@ -294,15 +344,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     zIndex: 10,
   },
+  bottomShade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 18,
+  },
   tapLeft: { flex: 1 },
   tapRight: { flex: 2 },
   reactBar: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  reactBarShell: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    borderRadius: 28,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    backgroundColor: 'transparent',
     zIndex: 25,
   },
   reactChip: {
@@ -319,6 +382,11 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
+  },
+  reactChipLarge: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
   },
   reactChipActive: {
     backgroundColor: 'rgba(245,96,64,0.95)',
@@ -346,6 +414,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     fontSize: 12,
+  },
+  threadInputLarge: {
+    minHeight: 42,
+    fontSize: 14,
+    paddingVertical: 8,
   },
   sendBtn: {
     width: 34,

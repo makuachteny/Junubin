@@ -14,6 +14,7 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import { useSubscription, PRODUCT_IDS } from '../payments';
+import { formatPerMonth } from '../payments/pricing';
 
 const { width } = Dimensions.get('window');
 
@@ -72,7 +73,7 @@ function buildPlans(offerings, tier) {
       duration: '1',
       unit: 'Month',
       price: monthlyPkg.product.priceString,
-      perMonth: `${monthlyPkg.product.priceString}/mo`,
+      perMonth: formatPerMonth(monthlyPkg.product, 1),
       save: null,
       productId: monthlyId,
       rcPackage: monthlyPkg,
@@ -86,7 +87,7 @@ function buildPlans(offerings, tier) {
       duration: '6',
       unit: 'Months',
       price: sixMonthPkg.product.priceString,
-      perMonth: `${sixMonthPkg.product.priceString.replace(/[\d.,]+/, (n) => (parseFloat(n.replace(',', '.')) / 6).toFixed(2))}/mo`,
+      perMonth: formatPerMonth(sixMonthPkg.product, 6),
       save: 'Save 33%',
       productId: sixMonthId,
       rcPackage: sixMonthPkg,

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../auth';
+import { useAccessibilityPreferences } from '../accessibility';
 
 const { width } = Dimensions.get('window');
 
@@ -34,6 +35,7 @@ const SignupScreen = ({ navigation }) => {
   const [emailActive, setEmailActive] = useState(false);
   const insets = useSafeAreaInsets();
   const { startOtp, loginWithOtp } = useAuth();
+  const { prefs } = useAccessibilityPreferences();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
@@ -41,6 +43,7 @@ const SignupScreen = ({ navigation }) => {
   const codeRefs = useRef([]);
 
   const handlePhoneChange = (text) => {
+    if (inputError) setInputError('');
     const digits = text.replace(/\D/g, '');
     let formatted = '';
     if (digits.length <= 3) {
@@ -53,22 +56,46 @@ const SignupScreen = ({ navigation }) => {
     setPhone(formatted);
   };
 
+  const handleEmailChange = (text) => {
+    if (inputError) setInputError('');
+    setEmail(text);
+  };
+
+  const [inputError, setInputError] = useState('');
+
+  const validateInput = () => {
+    if (selectedMethod === 'phone') {
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length === 0) return 'Please enter your phone number.';
+      if (digits.length < 10) return 'Phone number must be at least 10 digits.';
+      if (digits.length > 11) return 'Phone number is too long.';
+      return null;
+    }
+    const trimmed = email.trim().toLowerCase();
+    if (trimmed.length === 0) return 'Please enter your email address.';
+    // RFC-ish check: local@domain.tld
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+    if (!emailRegex.test(trimmed)) return 'Please enter a valid email address.';
+    return null;
+  };
+
   const handleSendCode = async () => {
+    const error = validateInput();
+    if (error) {
+      setInputError(error);
+      return;
+    }
+    setInputError('');
     const phoneDigits = phone.replace(/\D/g, '');
-    if (
-      (selectedMethod === 'phone' && phoneDigits.length >= 10) ||
-      (selectedMethod === 'email' && email.includes('@'))
-    ) {
-      try {
-        Keyboard.dismiss();
-        await startOtp({
-          email: selectedMethod === 'email' ? email.trim().toLowerCase() : undefined,
-          phone: selectedMethod === 'phone' ? `+1${phoneDigits}` : undefined,
-        });
-        setStep('verify');
-      } catch (error) {
-        Alert.alert('Could not send code', error.message || 'Please try again.');
-      }
+    try {
+      Keyboard.dismiss();
+      await startOtp({
+        email: selectedMethod === 'email' ? email.trim().toLowerCase() : undefined,
+        phone: selectedMethod === 'phone' ? `+1${phoneDigits}` : undefined,
+      });
+      setStep('verify');
+    } catch (error) {
+      Alert.alert('Could not send code', error.message || 'Please try again.');
     }
   };
 
@@ -99,8 +126,13 @@ const SignupScreen = ({ navigation }) => {
           code,
         });
         // Returning user with complete profile → go straight to Main
-        const isProfileComplete = result?.appUser?.profile?.profileComplete;
-        navigation.replace(isProfileComplete ? 'Main' : 'ProfileSetup');
+        const appProfile = result?.appUser?.profile;
+        if (appProfile?.profileComplete || appProfile?.accountPurpose) {
+          navigation.replace('Main');
+          return;
+        }
+        // Brand-new user — start onboarding survey
+        navigation.replace(prefs?.surveyCompleted ? 'ProfileSetup' : 'AccessibilitySurvey');
       } catch (error) {
         Alert.alert('Verification failed', error.message || 'Invalid code.');
       }
@@ -123,10 +155,6 @@ const SignupScreen = ({ navigation }) => {
     })();
   };
 
-  const phoneDigits = phone.replace(/\D/g, '');
-  const isInputValid =
-    (selectedMethod === 'phone' && phoneDigits.length >= 10) ||
-    (selectedMethod === 'email' && email.includes('@'));
   const isCodeComplete = verificationCode.join('').length === 6;
 
   const maskedContact = selectedMethod === 'phone'
@@ -250,7 +278,7 @@ const SignupScreen = ({ navigation }) => {
             <View style={styles.methodToggle}>
               <TouchableOpacity
                 style={[styles.methodTab, selectedMethod === 'phone' && styles.methodTabActive]}
-                onPress={() => setSelectedMethod('phone')}
+                onPress={() => { setSelectedMethod('phone'); setInputError(''); }}
               >
                 <Ionicons
                   name="phone-portrait"
@@ -263,7 +291,7 @@ const SignupScreen = ({ navigation }) => {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.methodTab, selectedMethod === 'email' && styles.methodTabActive]}
-                onPress={() => setSelectedMethod('email')}
+                onPress={() => { setSelectedMethod('email'); setInputError(''); }}
               >
                 <Ionicons
                   name="mail"
@@ -306,12 +334,20 @@ const SignupScreen = ({ navigation }) => {
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={email}
-                  onChangeText={setEmail}
+                  onChangeText={handleEmailChange}
                   onFocus={() => setEmailActive(true)}
                   onBlur={() => setEmailActive(false)}
                 />
               </View>
             )}
+
+            {/* Inline error */}
+            {inputError ? (
+              <View style={styles.inputErrorRow}>
+                <Ionicons name="alert-circle" size={15} color="#FF4D4D" />
+                <Text style={styles.inputErrorText}>{inputError}</Text>
+              </View>
+            ) : null}
 
             {/* Terms */}
             <View style={{ flex: 1 }} />
@@ -324,9 +360,9 @@ const SignupScreen = ({ navigation }) => {
             {/* Next Button (BLK-style circle) */}
             <View style={[styles.nextRow, { paddingBottom: insets.bottom + 20 }]}>
               <TouchableOpacity
-                style={[styles.nextCircleBtn, !isInputValid && styles.nextCircleBtnDisabled]}
+                style={[styles.nextCircleBtn, inputError && styles.nextCircleBtnDisabled]}
                 onPress={handleSendCode}
-                disabled={!isInputValid}
+                activeOpacity={0.8}
               >
                 <Ionicons name="arrow-forward" size={28} color="#FFFFFF" />
               </TouchableOpacity>
@@ -476,6 +512,21 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   inputActive: {
     borderColor: colors.accent,
     backgroundColor: colors.accentTint08,
+  },
+
+  // Inline error
+  inputErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  inputErrorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    color: '#FF4D4D',
+    flex: 1,
   },
 
   // Terms

@@ -50,10 +50,6 @@ jest.mock('../../api/services/chatService', () => ({
   sendMessage: jest.fn(async () => ({ id: 'sent-1' })),
 }));
 
-jest.mock('../../utils/analytics', () => ({
-  trackEvent: jest.fn(),
-}));
-
 jest.mock('../../utils/useScreenshotProtection', () => ({
   useScreenshotProtection: jest.fn(),
 }));

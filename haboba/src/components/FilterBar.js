@@ -1,7 +1,7 @@
 // AnaJunubin — Filter Bar
 // Scrollable filter pills with bottom-sheet wheel-picker dropdowns
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -215,6 +215,11 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
   const [pendingSelection, setPendingSelection] = useState(null);
   const [dealbreaker, setDealbreaker] = useState({});
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const appliedCount = useMemo(() => {
+    const selectedCount = Object.values(filterSelections).filter(Boolean).length;
+    const activeCount = activeFilters.filter((label) => !filterSelections[label]).length;
+    return selectedCount + activeCount;
+  }, [activeFilters, filterSelections]);
 
   const isFilterActive = (filterLabel) => activeFilters.includes(filterLabel);
 
@@ -319,6 +324,11 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
           hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
         >
           <Ionicons name="options-outline" size={18} color={isDark ? '#FFFFFF' : colors.black} />
+          {appliedCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{appliedCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
 
         <ScrollView
@@ -362,6 +372,9 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
                     color={isActive ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.85)' : colors.gray600)}
                     style={styles.chevron}
                   />
+                )}
+                {hasSelection && !isOpen && (
+                  <View style={styles.selectionDot} />
                 )}
               </TouchableOpacity>
             );
@@ -489,6 +502,27 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     marginRight: 8,
     ...getShadow('md', isDark),
   },
+  filterBadge: {
+    position: 'absolute',
+    right: -5,
+    top: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: isDark ? colors.gray100 : '#FFFFFF',
+  },
+  filterBadgeText: {
+    fontSize: 9,
+    fontFamily: FontFamily.bold,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    lineHeight: 12,
+  },
   scrollView: {
     flex: 1,
   },
@@ -500,18 +534,19 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingVertical: 9,
+    borderRadius: 22,
     justifyContent: 'center',
+    minHeight: 40,
   },
   pillActive: {
     backgroundColor: colors.accent,
     ...getShadow('md', isDark, colors.accent),
   },
   pillInactive: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.94)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.96)',
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.22)' : colors.gray300,
+    borderColor: isDark ? 'rgba(255,255,255,0.28)' : 'rgba(38,38,38,0.14)',
     ...getShadow('sm', isDark),
   },
   pillOpen: {
@@ -533,6 +568,13 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   chevron: {
     marginLeft: 4,
+  },
+  selectionDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginLeft: 6,
+    backgroundColor: isDark ? '#FFFFFF' : colors.accent,
   },
 
   // ─── Overlay ───

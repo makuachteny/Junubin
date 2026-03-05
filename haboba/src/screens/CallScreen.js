@@ -1,6 +1,5 @@
-// AnaJunubin — Voice/Video Call Screen (placeholder UI)
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { imageSource } from '../utils/imageSource';
@@ -11,28 +10,31 @@ export default function CallScreen({ navigation, route }) {
   const { colors } = useTheme();
   const match = route.params?.match || {};
   const callType = route.params?.callType || 'voice';
+  const [callState, setCallState] = useState('connecting');
   const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaker, setIsSpeaker] = useState(false);
+  const [isVideoEnabled, setIsVideoEnabled] = useState(callType === 'video');
   const timerRef = useRef(null);
 
   useEffect(() => {
-    // Show placeholder alert
-    Alert.alert(
-      'Coming Soon',
-      `${callType === 'video' ? 'Video' : 'Voice'} calling is not yet available. Stay tuned!`,
-      [{ text: 'OK' }]
-    );
+    const connectTimer = setTimeout(() => setCallState('in_call'), 1800);
 
-    // Simulate call timer
+    return () => {
+      clearTimeout(connectTimer);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (callState !== 'in_call') return;
     timerRef.current = setInterval(() => {
       setCallDuration((d) => d + 1);
     }, 1000);
-
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [callType]);
+  }, [callState]);
 
   const formatTime = (sec) => {
     const m = Math.floor(sec / 60);
@@ -56,9 +58,8 @@ export default function CallScreen({ navigation, route }) {
 
       <Text style={styles.name}>{match.name || 'Unknown'}</Text>
       <Text style={styles.status}>
-        {callDuration > 0 ? formatTime(callDuration) : 'Connecting...'}
+        {callState === 'connecting' ? 'Connecting...' : formatTime(callDuration)}
       </Text>
-      <Text style={styles.placeholder}>Call functionality coming soon</Text>
 
       {/* Controls */}
       <View style={styles.controls}>
@@ -81,6 +82,16 @@ export default function CallScreen({ navigation, route }) {
           <Ionicons name={isSpeaker ? 'volume-high' : 'volume-medium'} size={26} color="#FFFFFF" />
           <Text style={styles.controlLabel}>Speaker</Text>
         </TouchableOpacity>
+
+        {callType === 'video' && (
+          <TouchableOpacity
+            style={[styles.controlBtn, isVideoEnabled && styles.controlActive]}
+            onPress={() => setIsVideoEnabled((prev) => !prev)}
+          >
+            <Ionicons name={isVideoEnabled ? 'videocam' : 'videocam-off'} size={26} color="#FFFFFF" />
+            <Text style={styles.controlLabel}>Video</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -124,12 +135,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.6)',
     marginTop: 8,
     fontFamily: FontFamily.medium,
-  },
-  placeholder: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.3)',
-    marginTop: 12,
-    fontFamily: FontFamily.regular,
   },
   controls: {
     position: 'absolute',

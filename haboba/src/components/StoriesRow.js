@@ -23,11 +23,11 @@ export default function StoriesRow({ onStoryPress, onCreateStory, colors }) {
       </TouchableOpacity>
 
       {/* Story circles */}
-      {mockStories.map((story) => (
+      {mockStories.map((story, index) => (
         <TouchableOpacity
           key={story.id}
           style={styles.storyItem}
-          onPress={() => onStoryPress?.(story)}
+          onPress={() => onStoryPress?.(story, index, mockStories)}
           activeOpacity={0.7}
         >
           <LinearGradient
