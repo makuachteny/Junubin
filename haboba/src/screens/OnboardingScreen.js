@@ -18,19 +18,19 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontFamily, useTheme, Colors } from '../theme';
+import { FontFamily, useTheme } from '../theme';
 import LogoMark from '../components/LogoMark';
+import { useAccessibilityPreferences } from '../accessibility';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
-const ACCENT = Colors.accent;
-const GRADIENT_START = Colors.accent;
-const GRADIENT_END = Colors.accentDark;
+const ACCENT = '#F56040';
 
 const PAGES = [{ id: 1 }, { id: 2 }, { id: 3 }];
 
 const OnboardingScreen = ({ navigation }) => {
   const { colors } = useTheme();
+  const { prefs } = useAccessibilityPreferences();
   const [currentPage, setCurrentPage] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef(null);
@@ -39,17 +39,29 @@ const OnboardingScreen = ({ navigation }) => {
   // ── Entrance animation ──
   const entrance = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (prefs?.reducedMotion) {
+      Animated.timing(entrance, {
+        toValue: 1,
+        duration: 140,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
     Animated.spring(entrance, {
       toValue: 1,
       tension: 35,
       friction: 9,
       useNativeDriver: true,
     }).start();
-  }, [entrance]);
+  }, [entrance, prefs]);
 
   // ── Subtle pulse for scroll hint ──
   const pulse = useRef(new Animated.Value(0)).current;
   useEffect(() => {
+    if (prefs?.reducedMotion) {
+      pulse.setValue(0);
+      return undefined;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, { toValue: 1, duration: 1400, useNativeDriver: true }),
@@ -58,7 +70,7 @@ const OnboardingScreen = ({ navigation }) => {
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [pulse, prefs]);
 
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { x: scrollX } } }],
@@ -75,6 +87,13 @@ const OnboardingScreen = ({ navigation }) => {
   }, [currentPage]);
 
   const goSignup = useCallback(() => navigation.navigate('Signup'), [navigation]);
+  const handleLandingSkip = useCallback(() => {
+    if (__DEV__) {
+      navigation.replace('Main');
+      return;
+    }
+    navigation.navigate('Signup');
+  }, [navigation]);
 
   // ── Page animation factory ──
   const anim = (idx) => {
@@ -148,7 +167,7 @@ const OnboardingScreen = ({ navigation }) => {
         {currentPage < PAGES.length - 1 && (
           <TouchableOpacity
             testID="onboarding-skip"
-            onPress={() => navigation.replace('Main')}
+            onPress={handleLandingSkip}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <Text style={s.skipText}>Skip</Text>

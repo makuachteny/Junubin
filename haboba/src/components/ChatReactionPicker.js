@@ -1,6 +1,6 @@
 // AnaJunubin — Chat Reaction Picker (Long-press popup)
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Modal } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Modal, useWindowDimensions } from 'react-native';
 
 const REACTIONS = [
   { emoji: '\u2764\uFE0F', label: 'heart' },
@@ -12,15 +12,22 @@ const REACTIONS = [
 ];
 
 export default function ChatReactionPicker({ visible, onSelect, onClose, position, colors }) {
+  const { width, height } = useWindowDimensions();
   if (!visible) return null;
+  const pickerWidth = 284;
+  const rawX = (position?.x ?? (width / 2)) - (pickerWidth / 2);
+  const left = Math.max(10, Math.min(rawX, width - pickerWidth - 10));
+  const rawY = (position?.y ?? (height * 0.45)) - 70;
+  const top = Math.max(72, Math.min(rawY, height - 140));
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
-        <View style={[styles.picker, { top: position?.y ?? 200, left: position?.x ?? 40, backgroundColor: colors?.cardBg || '#FFFFFF' }]}>
+        <View style={[styles.picker, { top, left, backgroundColor: colors?.cardBg || '#FFFFFF' }]}>
           {REACTIONS.map((r) => (
             <TouchableOpacity
               key={r.label}
+              testID={`reaction-${r.label}`}
               style={styles.reactionBtn}
               onPress={() => { onSelect(r); onClose(); }}
             >

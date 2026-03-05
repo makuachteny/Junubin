@@ -13,6 +13,7 @@ import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import BoostPulseRing from '../components/BoostPulseRing';
 import { useSubscription, PRODUCT_IDS } from '../payments';
+import { formatPerUnit } from '../payments/pricing';
 
 // Fallback packs (USD) — replaced by localized prices when RevenueCat is active
 const PACKS_FALLBACK = [
@@ -33,17 +34,13 @@ function buildPacks(offerings) {
     const pkg = pkgMap[fallback.productId];
     if (!pkg) return fallback;
 
-    const price = pkg.product.price;
     const priceStr = pkg.product.priceString;
-    const perUnit = pkg.product.priceString.replace(
-      /[\d.,]+/,
-      (n) => (parseFloat(n.replace(',', '.')) / fallback.count).toFixed(2)
-    );
+    const perUnit = formatPerUnit(pkg.product, fallback.count);
 
     return {
       ...fallback,
       price: priceStr,
-      perUnit: `${perUnit}/each`,
+      perUnit,
       rcPackage: pkg,
     };
   });

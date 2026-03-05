@@ -22,24 +22,27 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
 // ─── Step Definitions ───
-const STEPS = [
+// Generic steps come first, then the purpose toggle, then dating-only steps
+const ALL_STEPS = [
   { key: 'name', title: "What's your first name?", icon: 'person', subtitle: 'This is how you\'ll appear on AnaJubin.' },
   { key: 'birthday', title: 'When were you born?', icon: 'calendar', subtitle: 'Your age will be shown on your profile.' },
   { key: 'gender', title: 'What\'s your gender?', icon: 'body', subtitle: 'Select the option that best describes you.' },
   { key: 'pronouns', title: 'What are your pronouns?', icon: 'chatbubbles', subtitle: 'Select up to 4. This will be visible on your profile.' },
-  { key: 'sexuality', title: 'What\'s your sexuality?', icon: 'heart', subtitle: 'This helps us find your best matches.' },
-  { key: 'datePref', title: 'Who do you want to date?', icon: 'people', subtitle: 'You can always change this later.' },
-  { key: 'intention', title: 'What are you looking for?', icon: 'compass', subtitle: 'Be upfront about your intentions.' },
   { key: 'ethnicity', title: 'What\'s your background?', icon: 'flag', subtitle: 'Help others learn more about you.' },
   { key: 'education', title: 'Education level', icon: 'school', subtitle: 'Optional — visible on your profile.' },
-  { key: 'children', title: 'Do you have children?', icon: 'happy', subtitle: 'Optional — visible on your profile.' },
   { key: 'photos', title: 'Add your best photos', icon: 'camera', subtitle: 'Add at least 2 photos. The more, the better!' },
   { key: 'prompts', title: 'Answer a profile prompt', icon: 'chatbox-ellipses', subtitle: 'Show off your personality.' },
   { key: 'interests', title: 'What do you love?', icon: 'star', subtitle: 'Pick at least 3 interests.' },
+  { key: 'purpose', title: 'What brings you here?', icon: 'options', subtitle: 'Choose your vibe. You can always explore both later.' },
+  { key: 'sexuality', title: 'What\'s your sexuality?', icon: 'heart', subtitle: 'This helps us find your best matches.', datingOnly: true },
+  { key: 'datePref', title: 'Who do you want to date?', icon: 'people', subtitle: 'You can always change this later.', datingOnly: true },
+  { key: 'intention', title: 'What are you looking for?', icon: 'compass', subtitle: 'Be upfront about your intentions.', datingOnly: true },
+  { key: 'children', title: 'Do you have children?', icon: 'happy', subtitle: 'Optional — visible on your profile.', datingOnly: true },
 ];
 
 // ─── Options Data ───
@@ -67,7 +70,38 @@ const PROMPT_OPTIONS = [
   'My love language is...',
 ];
 
+const PURPOSE_OPTIONS = [
+  {
+    key: 'dating',
+    icon: 'heart',
+    label: 'Dating',
+    description: 'Find meaningful connections and meet someone special.',
+    gradient: ['#F56040', '#FF3868'],
+  },
+  {
+    key: 'socialize',
+    icon: 'people',
+    label: 'Socialize',
+    description: 'Make friends, join communities, and stay connected.',
+    gradient: ['#7B61FF', '#5B8DEF'],
+  },
+];
+
 const ProfileSetupScreen = ({ navigation }) => {
+  const [purpose, setPurpose] = useState(null); // null until the user picks on the purpose step
+  const isSocialOnly = purpose === 'socialize';
+  const STEPS = useMemo(
+    () => ALL_STEPS.filter((s) => {
+      // Always show non-dating steps and the purpose step itself
+      if (!s.datingOnly) return true;
+      // Before purpose is chosen, hide dating steps (they come after purpose)
+      if (!purpose) return false;
+      // After purpose is chosen, show dating steps only if dating
+      return !isSocialOnly;
+    }),
+    [purpose, isSocialOnly]
+  );
+
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
@@ -105,6 +139,16 @@ const ProfileSetupScreen = ({ navigation }) => {
       navigation.navigate('Main');
       return;
     }
+    // Final validation before save
+    const name = firstName.trim();
+    if (!name || name.length < 2) {
+      Alert.alert('Invalid profile', 'Your name must be at least 2 characters.');
+      return;
+    }
+    if (!purpose) {
+      Alert.alert('Invalid profile', 'Please select whether you\'re here for dating or socializing.');
+      return;
+    }
     setSaving(true);
     try {
       // Parse birthDate MM/DD/YYYY → ISO
@@ -122,15 +166,18 @@ const ProfileSetupScreen = ({ navigation }) => {
         ...(dateOfBirth ? { dateOfBirth } : {}),
         ...(selectedGender ? { gender: genderMap[selectedGender] || 'other' } : {}),
         pronouns: selectedPronouns.join(', '),
-        sexuality: selectedSexuality,
-        lookingForGender: selectedDatePref,
-        datingIntentions: selectedIntention,
+        ...(isSocialOnly ? {} : {
+          sexuality: selectedSexuality,
+          lookingForGender: selectedDatePref,
+          datingIntentions: selectedIntention,
+          children: selectedChildren,
+        }),
         ethnicity: selectedEthnicity,
         education: selectedEducation,
-        children: selectedChildren,
         interests: selectedInterests,
         promptQuestion: selectedPrompt,
         promptAnswer: promptAnswer.trim(),
+        accountPurpose: purpose,
         profileComplete: true,
       };
 
@@ -155,7 +202,15 @@ const ProfileSetupScreen = ({ navigation }) => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = (skip = false) => {
+    if (!skip) {
+      const error = validateStep();
+      if (error) {
+        setFieldError(error);
+        return;
+      }
+    }
+    setFieldError(null);
     if (currentStep < totalSteps - 1) {
       setCurrentStep(currentStep + 1);
     } else {
@@ -164,11 +219,18 @@ const ProfileSetupScreen = ({ navigation }) => {
   };
 
   const handleBack = () => {
+    setFieldError(null);
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
     } else {
       navigation.goBack();
     }
+  };
+
+  const handleNameChange = (text) => {
+    // Strip anything that isn't a letter, space, hyphen, or apostrophe
+    const clean = text.replace(/[^a-zA-Z\s'-]/g, '').slice(0, 30);
+    setFirstName(clean);
   };
 
   const handleDateChange = (text) => {
@@ -182,6 +244,32 @@ const ProfileSetupScreen = ({ navigation }) => {
       formatted = digits.slice(0, 2) + '/' + digits.slice(2, 4) + '/' + digits.slice(4, 8);
     }
     setBirthDate(formatted);
+
+    // Show inline error as soon as the full date is entered
+    if (formatted.length === 10) {
+      const [mm, dd, yyyy] = formatted.split('/').map(Number);
+      if (mm < 1 || mm > 12) {
+        setFieldError('Invalid month. Please enter a value between 01 and 12.');
+      } else {
+        const daysInMonth = new Date(yyyy, mm, 0).getDate();
+        if (dd < 1 || dd > daysInMonth) {
+          setFieldError(`Invalid day. ${mm}/${yyyy} only has ${daysInMonth} days.`);
+        } else if (yyyy < 1900 || yyyy > new Date().getFullYear()) {
+          setFieldError('Please enter a valid year.');
+        } else {
+          const dob = new Date(yyyy, mm - 1, dd);
+          const today = new Date();
+          let age = today.getFullYear() - dob.getFullYear();
+          const md = today.getMonth() - dob.getMonth();
+          if (md < 0 || (md === 0 && today.getDate() < dob.getDate())) age--;
+          if (age < 18) {
+            setFieldError('You must be at least 18 years old to use AnaJubin.');
+          } else if (age > 120) {
+            setFieldError('Please enter a valid date of birth.');
+          }
+        }
+      }
+    }
   };
 
   const togglePronoun = (p) => {
@@ -221,24 +309,93 @@ const ProfileSetupScreen = ({ navigation }) => {
     }
   };
 
-  const isStepValid = () => {
+  // Returns null if valid, or an error message string if invalid
+  const validateStep = () => {
     switch (step.key) {
-      case 'name': return firstName.trim().length > 0;
-      case 'birthday': return birthDate.length === 10;
-      case 'gender': return !!selectedGender;
-      case 'pronouns': return selectedPronouns.length > 0;
-      case 'sexuality': return !!selectedSexuality;
-      case 'datePref': return !!selectedDatePref;
-      case 'intention': return !!selectedIntention;
-      case 'ethnicity': return !!selectedEthnicity;
-      case 'education': return !!selectedEducation;
-      case 'children': return !!selectedChildren;
-      case 'photos': return true; // optional for now
-      case 'prompts': return !!selectedPrompt && promptAnswer.trim().length > 0;
-      case 'interests': return selectedInterests.length >= 3;
-      default: return true;
+      case 'name': {
+        const name = firstName.trim();
+        if (name.length === 0) return 'Please enter your first name.';
+        if (name.length < 2) return 'Name must be at least 2 characters.';
+        if (name.length > 30) return 'Name cannot exceed 30 characters.';
+        if (!/^[a-zA-Z\s'-]+$/.test(name)) return 'Name can only contain letters, spaces, hyphens, and apostrophes.';
+        return null;
+      }
+      case 'birthday': {
+        if (birthDate.length < 10) return 'Please enter your full date of birth (MM/DD/YYYY).';
+        const [mm, dd, yyyy] = birthDate.split('/').map(Number);
+        if (mm < 1 || mm > 12) return 'Invalid month. Please enter a value between 01 and 12.';
+        const daysInMonth = new Date(yyyy, mm, 0).getDate();
+        if (dd < 1 || dd > daysInMonth) return `Invalid day. ${mm}/${yyyy} only has ${daysInMonth} days.`;
+        if (yyyy < 1900 || yyyy > new Date().getFullYear()) return 'Please enter a valid year.';
+        const dob = new Date(yyyy, mm - 1, dd);
+        const today = new Date();
+        let age = today.getFullYear() - dob.getFullYear();
+        const monthDiff = today.getMonth() - dob.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+        if (age < 18) return 'You must be at least 18 years old to use AnaJubin.';
+        if (age > 120) return 'Please enter a valid date of birth.';
+        return null;
+      }
+      case 'gender':
+        return selectedGender ? null : 'Please select your gender.';
+      case 'pronouns':
+        return selectedPronouns.length > 0 ? null : 'Please select at least one pronoun.';
+      case 'purpose':
+        return purpose ? null : 'Please choose whether you\'re here to date or socialize.';
+      case 'sexuality':
+        return selectedSexuality ? null : 'Please select your sexuality.';
+      case 'datePref':
+        return selectedDatePref ? null : 'Please select who you want to date.';
+      case 'intention':
+        return selectedIntention ? null : 'Please select what you\'re looking for.';
+      case 'ethnicity':
+        return selectedEthnicity ? null : 'Please select your background.';
+      case 'education':
+        return selectedEducation ? null : 'Please select your education level.';
+      case 'children':
+        return selectedChildren ? null : 'Please select an option.';
+      case 'photos': {
+        const count = photos.filter(Boolean).length;
+        if (count < 2) return 'Please add at least 2 photos.';
+        return null;
+      }
+      case 'prompts': {
+        if (!selectedPrompt) return 'Please choose a prompt.';
+        const answer = promptAnswer.trim();
+        if (answer.length === 0) return 'Please write an answer to your prompt.';
+        if (answer.length < 10) return 'Your answer is too short. Write at least 10 characters.';
+        return null;
+      }
+      case 'interests':
+        if (selectedInterests.length < 3) return `Pick at least 3 interests. You've selected ${selectedInterests.length}.`;
+        return null;
+      default:
+        return null;
     }
   };
+
+  const isStepValid = () => validateStep() === null;
+
+  const [fieldError, setFieldError] = useState(null);
+
+  // Clear error whenever the user changes input for the current step
+  const stepInputKey = step.key === 'name' ? firstName
+    : step.key === 'birthday' ? birthDate
+    : step.key === 'gender' ? selectedGender
+    : step.key === 'pronouns' ? selectedPronouns.length
+    : step.key === 'purpose' ? purpose
+    : step.key === 'sexuality' ? selectedSexuality
+    : step.key === 'datePref' ? selectedDatePref
+    : step.key === 'intention' ? selectedIntention
+    : step.key === 'ethnicity' ? selectedEthnicity
+    : step.key === 'education' ? selectedEducation
+    : step.key === 'children' ? selectedChildren
+    : step.key === 'photos' ? photos.filter(Boolean).length
+    : step.key === 'prompts' ? `${selectedPrompt}${promptAnswer}`
+    : step.key === 'interests' ? selectedInterests.length
+    : null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => { if (fieldError) setFieldError(null); }, [stepInputKey]);
 
   const canSkip = ['education', 'children', 'photos', 'prompts'].includes(step.key);
 
@@ -302,7 +459,8 @@ const ProfileSetupScreen = ({ navigation }) => {
               placeholder="Your first name"
               placeholderTextColor={colors.gray400}
               value={firstName}
-              onChangeText={setFirstName}
+              onChangeText={handleNameChange}
+              maxLength={30}
               returnKeyType="done"
               onSubmitEditing={Keyboard.dismiss}
               autoFocus
@@ -491,6 +649,42 @@ const ProfileSetupScreen = ({ navigation }) => {
           </View>
         );
 
+      case 'purpose':
+        return (
+          <View style={styles.stepContent}>
+            <View style={{ gap: 14 }}>
+              {PURPOSE_OPTIONS.map((opt) => {
+                const isActive = purpose === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    testID={`purpose-${opt.key}`}
+                    style={[styles.purposeCard, isActive && styles.purposeCardActive]}
+                    onPress={async () => {
+                      setPurpose(opt.key);
+                      const mode = opt.key === 'dating' ? 'Dating' : 'Social';
+                      await AsyncStorage.setItem('@haboba_mode', mode);
+                      await AsyncStorage.setItem('@haboba_purpose', opt.key);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.purposeIconCircle, isActive && { backgroundColor: isActive ? opt.gradient[0] : colors.gray100 }]}>
+                      <Ionicons name={opt.icon} size={26} color={isActive ? '#FFFFFF' : colors.gray500} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.purposeTitle, isActive && styles.purposeTitleActive]}>{opt.label}</Text>
+                      <Text style={[styles.purposeSubtitle, isActive && styles.purposeSubtitleActive]}>{opt.description}</Text>
+                    </View>
+                    <View style={[styles.radioCircle, isActive && styles.radioCircleActive]}>
+                      {isActive && <View style={styles.radioCircleInner} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        );
+
       default:
         return null;
     }
@@ -524,7 +718,7 @@ const ProfileSetupScreen = ({ navigation }) => {
             </View>
 
             {canSkip ? (
-              <TouchableOpacity onPress={handleNext}>
+              <TouchableOpacity onPress={() => handleNext(true)}>
                 <Text style={styles.skipBtn}>Skip</Text>
               </TouchableOpacity>
             ) : (
@@ -555,6 +749,14 @@ const ProfileSetupScreen = ({ navigation }) => {
             {renderStepContent()}
           </ScrollView>
 
+          {/* ── Error ── */}
+          {fieldError && (
+            <View style={styles.errorRow}>
+              <Ionicons name="alert-circle" size={16} color={colors.rose || '#E53935'} />
+              <Text style={styles.errorText}>{fieldError}</Text>
+            </View>
+          )}
+
           {/* ── Footer ── */}
           <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
             <View style={styles.footerLeft}>
@@ -563,9 +765,9 @@ const ProfileSetupScreen = ({ navigation }) => {
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.nextCircle, (!isStepValid() || saving) && styles.nextCircleDisabled]}
+              style={[styles.nextCircle, (fieldError || saving) && styles.nextCircleDisabled]}
               onPress={handleNext}
-              disabled={!isStepValid() || saving}
+              disabled={saving}
               activeOpacity={0.8}
             >
               {saving ? (
@@ -921,6 +1123,64 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   chipTextActive: {
     color: isDark ? colors.gray900 : '#FFFFFF',
+  },
+
+  // ─── Inline Error ───
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+  },
+  errorText: {
+    ...Typography.caption,
+    color: colors.rose || '#E53935',
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    flex: 1,
+  },
+
+  // ─── Purpose Cards ───
+  purposeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 18,
+    borderRadius: 16,
+    backgroundColor: colors.inputBg,
+    borderWidth: 2,
+    borderColor: colors.inputBorder,
+  },
+  purposeCardActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint04,
+  },
+  purposeIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.gray100,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  purposeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.gray600,
+    marginBottom: 2,
+  },
+  purposeTitleActive: {
+    color: colors.black,
+  },
+  purposeSubtitle: {
+    ...Typography.caption,
+    color: colors.gray400,
+    lineHeight: 16,
+  },
+  purposeSubtitleActive: {
+    color: colors.gray500,
   },
 
   // ─── Footer ───

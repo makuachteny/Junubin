@@ -46,6 +46,7 @@ const EditProfileScreen = lazify(() => import('../screens/EditProfileScreen'));
 const NotificationsScreen = lazify(() => import('../screens/NotificationsScreen'));
 const SettingsInfoScreen = lazify(() => import('../screens/SettingsInfoScreen'));
 const PreferenceSelectScreen = lazify(() => import('../screens/PreferenceSelectScreen'));
+const AccessibilitySurveyScreen = lazify(() => import('../screens/AccessibilitySurveyScreen'));
 // New screens
 const CallScreen = lazify(() => import('../screens/CallScreen'));
 const PhotoVerificationScreen = lazify(() => import('../screens/PhotoVerificationScreen'));
@@ -165,16 +166,9 @@ function HomeTabs() {
 
 export default function AppNavigator() {
   const { colors } = useTheme();
-  const { isAuthenticated, ready, user } = useAuth();
-  const profileComplete = user?.profile?.profileComplete ?? false;
-
-  if (!ready) {
-    return (
-      <View style={[styles.bootLoading, { backgroundColor: colors.cream }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
-    );
-  }
+  const { isAuthenticated, user } = useAuth();
+  const profile = user?.profile;
+  const profileComplete = profile?.profileComplete || profile?.accountPurpose;
 
   return (
     <Stack.Navigator
@@ -198,6 +192,7 @@ export default function AppNavigator() {
     >
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
+      <Stack.Screen name="AccessibilitySurvey" component={AccessibilitySurveyScreen} />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
       <Stack.Screen name="Main" component={HomeTabs} />
       {/* Main app and modals */}

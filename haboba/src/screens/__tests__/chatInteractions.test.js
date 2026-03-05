@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import ChatScreen from '../ChatScreen';
 
 const mockUseTheme = jest.fn();
@@ -42,10 +43,6 @@ jest.mock('../../api/services/chatService', () => ({
 
 jest.mock('../../utils/useScreenshotProtection', () => ({
   useScreenshotProtection: jest.fn(),
-}));
-
-jest.mock('../../utils/analytics', () => ({
-  trackEvent: jest.fn(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -96,8 +93,11 @@ jest.mock('expo-av', () => ({
 }));
 
 describe('Chat interactive actions', () => {
+  let alertSpy;
+
   beforeEach(() => {
     jest.useFakeTimers();
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     mockUseTheme.mockReturnValue({
       colors: {
         cream: '#F7F2EA',
@@ -125,6 +125,7 @@ describe('Chat interactive actions', () => {
   });
 
   afterEach(() => {
+    alertSpy.mockRestore();
     jest.clearAllTimers();
     jest.useRealTimers();
   });
@@ -156,5 +157,52 @@ describe('Chat interactive actions', () => {
       jest.advanceTimersByTime(200);
     });
     expect(queryByText('Syncing...')).toBeTruthy();
+  });
+
+  it('mic action opens voice call flow for eligible tiers', () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const match = { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] };
+    const route = { params: { match } };
+    const { getByTestId } = render(
+      <ChatScreen navigation={navigation} route={route} />
+    );
+
+    fireEvent.press(getByTestId('chat-mic'));
+
+    expect(navigation.navigate).toHaveBeenCalledWith('Call', { match, callType: 'voice' });
+  });
+
+  it('sticker action prompts upgrade for non-premium users', () => {
+    mockUseSubscription.mockReturnValue({
+      hasTier: () => false,
+      coins: 200,
+      consumeCoins: () => true,
+    });
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
+    const { getByTestId } = render(
+      <ChatScreen navigation={navigation} route={route} />
+    );
+
+    fireEvent.press(getByTestId('chat-plus'));
+    fireEvent.press(getByTestId('chat-sticker'));
+
+    expect(alertSpy).toHaveBeenCalled();
+  });
+
+  it('long press text message can add emoji reaction', () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
+    const { getByPlaceholderText, getByTestId, getByText } = render(
+      <ChatScreen navigation={navigation} route={route} />
+    );
+
+    fireEvent.changeText(getByPlaceholderText('Type a message...'), 'Hello there');
+    fireEvent.press(getByTestId('chat-send'));
+
+    fireEvent(getByText('Hello there'), 'longPress', { nativeEvent: { pageX: 190, pageY: 320 } });
+    fireEvent.press(getByTestId('reaction-heart'));
+
+    expect(getByText('❤️')).toBeTruthy();
   });
 });

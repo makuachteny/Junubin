@@ -60,7 +60,14 @@ export default function PreferenceSelectScreen({ navigation, route }) {
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        <Text style={styles.subtitle}>Choose your preference</Text>
+        <View style={styles.contextCard}>
+          <View style={styles.contextIconWrap}>
+            <Ionicons name="options-outline" size={16} color={colors.accent} />
+          </View>
+          <Text style={styles.contextText}>Fine-tune your matches</Text>
+        </View>
+
+        <Text style={styles.subtitle}>Choose one option</Text>
 
         <View style={styles.card}>
           {options.map((option, index) => {
@@ -77,6 +84,9 @@ export default function PreferenceSelectScreen({ navigation, route }) {
                 onPress={() => handleSelect(option.value)}
               >
                 <View style={styles.optionLeft}>
+                  <View style={[styles.selectionRing, isSelected && styles.selectionRingActive]}>
+                    {isSelected && <View style={styles.selectionRingInner} />}
+                  </View>
                   {option.icon && (
                     <View style={[styles.optionIconWrap, isSelected && styles.optionIconSelected]}>
                       <Ionicons
@@ -154,9 +164,37 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginBottom: 16,
     marginLeft: 4,
   },
+  contextCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.accentTint12,
+    backgroundColor: colors.accentTint05,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  contextIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : '#FFFFFF',
+    marginRight: 8,
+  },
+  contextText: {
+    fontSize: 13,
+    fontFamily: FontFamily.semibold,
+    fontWeight: '600',
+    color: colors.gray700,
+  },
   card: {
     backgroundColor: colors.cardBg,
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: isDark ? colors.cardBorder : colors.gray200,
     overflow: 'hidden',
     ...getShadow('sm', isDark),
   },
@@ -178,6 +216,25 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  selectionRing: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: colors.gray300,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectionRingActive: {
+    borderColor: colors.accent,
+  },
+  selectionRingInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
   },
   optionIconWrap: {
     width: 36,

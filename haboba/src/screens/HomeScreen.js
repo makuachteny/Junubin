@@ -27,7 +27,6 @@ import CardSkeleton from '../components/CardSkeleton';
 import Button from '../components/Button';
 import SpotlightCard from '../components/SpotlightCard';
 import InterstitialAd from '../components/InterstitialAd';
-import AdBanner from '../components/AdBanner';
 import { mockProfiles } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription, hasUnlimitedLikes, canUseWhispers } from '../payments';
@@ -35,7 +34,7 @@ import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as discoverService from '../api/services/discoverService';
 import { hapticHeavy } from '../utils/haptics';
-import { trackEvent } from '../utils/analytics';
+
 import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightScheduler';
 
 const MIN_DATING_CARDS = 10;
@@ -258,7 +257,7 @@ const HomeScreen = ({ navigation }) => {
 
     setLastSwiped({ profile: swipedProfile, direction });
     setProfiles((prev) => prev.slice(1));
-    trackEvent('swipe', { direction, profileId: swipedProfile?.id });
+
 
     // Show interstitial ad every 5 swipes for free users
     swipeCountRef.current += 1;
@@ -714,11 +713,6 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* ─── AD BANNER (free tier, bottom of screen) ─── */}
-      <View style={styles.adBannerWrap}>
-        <AdBanner colors={colors} />
-      </View>
-
       {/* ─── BOOST PROMPT (every 15 swipes) ─── */}
       {showBoostPrompt && (
         <TouchableOpacity
@@ -1017,15 +1011,6 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   whisperSendText: {
     ...Typography.bodySmallMedium,
     color: '#FFFFFF',
-  },
-
-  // ── Ad Banner ──
-  adBannerWrap: {
-    position: 'absolute',
-    bottom: insets.bottom + 70,
-    left: 0,
-    right: 0,
-    zIndex: 12,
   },
 
   // ── Boost Prompt Banner ──

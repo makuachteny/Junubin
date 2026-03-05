@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import UnderlineTabs from '../components/UnderlineTabs';
 import { GAME_CATALOG } from '../data/games';
-import { trackEvent } from '../utils/analytics';
+
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import * as matchesService from '../api/services/matchesService';
@@ -166,7 +166,6 @@ function GamesTab({ styles, colors, isDark, navigation, hasTier, connections }) 
             style={styles.gameCard}
             activeOpacity={0.8}
             onPress={() => requirePlus(() => {
-              trackEvent('game_selected', { type: game.type, source: 'hub' });
               navigation.navigate('Chat', { startGame: true });
             })}
           >

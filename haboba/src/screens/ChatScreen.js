@@ -38,10 +38,11 @@ import GameResultOverlay from '../components/GameResultOverlay';
 import { createGameSession, createSessionFromInvite, processMyAnswer, processTheirAnswer, advanceRound, serializeGameMessage, deserializeGameMessage, isTimedOut, markTimedOut, roundSummaryText, serializeActiveGames, deserializeActiveGames } from '../utils/gameEngine';
 import { hapticMedium, hapticHeavy } from '../utils/haptics';
 import { useScreenshotProtection } from '../utils/useScreenshotProtection';
-import { trackEvent } from '../utils/analytics';
+
 import { interactiveStore } from '../utils/interactiveStore';
 import { enqueueAction, processQueue } from '../utils/offlineQueue';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
+import { useAccessibilityPreferences } from '../accessibility';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -111,7 +112,8 @@ export default function ChatScreen({ navigation, route }) {
   const { width } = useWindowDimensions();
   const isCompact = width < 375;
   const { colors } = useTheme();
-  const styles = useMemo(() => getStyles(colors, isCompact), [colors, isCompact]);
+  const { prefs } = useAccessibilityPreferences();
+  const styles = useMemo(() => getStyles(colors, isCompact, prefs), [colors, isCompact, prefs]);
   const { hasTier, coins, consumeCoins } = useSubscription();
   const { session, user: currentUser } = useAuth();
   const { isConnected } = useNetworkStatus();
@@ -143,6 +145,7 @@ export default function ChatScreen({ navigation, route }) {
   const [voiceIntroPlayed, setVoiceIntroPlayed] = useState(false);
   const [activeSticker, setActiveSticker] = useState(CHAT_STICKERS[0]);
   const [showStickerTray, setShowStickerTray] = useState(false);
+  const [showActionRow, setShowActionRow] = useState(false);
   const [showGamePicker, setShowGamePicker] = useState(route.params?.startGame || false);
   const [activeGames, setActiveGames] = useState(new Map());
   const [gameResult, setGameResult] = useState(null);
@@ -280,7 +283,7 @@ export default function ChatScreen({ navigation, route }) {
         if (advanced.status === 'complete') {
           hapticHeavy();
           setGameResult(advanced);
-          trackEvent('game_complete', { type: advanced.type, gameId });
+
           // Cleanup: remove completed game after 30s
           setTimeout(() => {
             setActiveGames((prev) => {
@@ -456,7 +459,6 @@ export default function ChatScreen({ navigation, route }) {
       question: prev.question || text.includes('?'),
     }));
     setInputText('');
-    trackEvent('message_sent', { type: 'text' });
 
     if (conversationId) {
       chatService.sendMessage(conversationId, text).then((result) => {
@@ -484,13 +486,19 @@ export default function ChatScreen({ navigation, route }) {
       read: false,
     };
     setMessages((prev) => [...prev, msg]);
-    trackEvent('message_sent', { type: 'image' });
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [match.images]);
 
   const handleVoiceNote = useCallback(() => {
-    Alert.alert('Voice Notes', 'Voice notes are not yet available. Stay tuned!');
-  }, []);
+    if (!hasTier('plus')) {
+      Alert.alert('JuNubin+ Feature', 'Voice notes require JuNubin+ or higher.', [
+        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    navigation.navigate('Call', { match, callType: 'voice' });
+  }, [hasTier, navigation, matchId, match]);
 
   const handlePlayVoiceIntro = useCallback(() => {
     if (!hasTier('plus')) {
@@ -501,24 +509,20 @@ export default function ChatScreen({ navigation, route }) {
       return;
     }
     setVoiceIntroPlayed(true);
-    trackEvent('voice_intro_played', { matchId });
   }, [hasTier, navigation, matchId]);
 
   const handleMiniGamePick = useCallback((pick) => {
     setMiniGamePick(pick);
     setInputText(`Mini-game pick: ${pick}. What did you choose?`);
-    trackEvent('mini_game_pick', { pick, matchId });
   }, [matchId]);
 
   const handleDuoVote = useCallback((vote) => {
     setDuoPollVote(vote);
-    trackEvent('duo_poll_vote', { vote, matchId });
   }, [matchId]);
 
   const handleSpinWheel = useCallback(() => {
     const line = WHEEL_LINES[Math.floor(Math.random() * WHEEL_LINES.length)];
     setInputText(line);
-    trackEvent('icebreaker_wheel_spin', { matchId });
   }, [matchId]);
 
   const handleStartSync = useCallback(() => {
@@ -531,7 +535,6 @@ export default function ChatScreen({ navigation, route }) {
     }
     setSyncState('syncing');
     setTimeout(() => setSyncState('live'), 1200);
-    trackEvent('co_watch_start', { matchId });
   }, [hasTier, navigation, matchId]);
 
   const handleSendSticker = useCallback(() => {
@@ -554,9 +557,30 @@ export default function ChatScreen({ navigation, route }) {
     setMessages((prev) => [...prev, msg]);
     setMissionState((prev) => ({ ...prev, intro: true }));
     setShowStickerTray(false);
-    trackEvent('sticker_sent', { sticker: activeSticker, matchId });
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [hasTier, navigation, activeSticker, matchId]);
+
+  const handleToggleStickerTray = useCallback(() => {
+    if (!hasTier('junub')) {
+      Alert.alert('Junub Feature', 'Sticker tray is available on Junub and higher.', [
+        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    setShowStickerTray((v) => !v);
+  }, [hasTier, navigation]);
+
+  const handleOpenGamePicker = useCallback(() => {
+    if (!hasTier('plus')) {
+      Alert.alert('JuNubin+ Feature', 'In-chat games require JuNubin+ or higher.', [
+        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    setShowGamePicker(true);
+  }, [hasTier, navigation]);
 
   const handleVideoCall = useCallback(() => {
     if (!hasTier('plus')) {
@@ -581,8 +605,11 @@ export default function ChatScreen({ navigation, route }) {
   }, [hasTier, navigation, match]);
 
   const handleLongPressMessage = useCallback((item, event) => {
+    if (item?.type !== 'text') return;
+    const pageX = event?.nativeEvent?.pageX ?? 180;
+    const pageY = event?.nativeEvent?.pageY ?? 260;
     setSelectedMessageId(item.id);
-    setReactionPosition({ x: event.nativeEvent.pageX - 100, y: event.nativeEvent.pageY - 60 });
+    setReactionPosition({ x: pageX, y: pageY });
     setShowReactionPicker(true);
   }, []);
 
@@ -590,7 +617,6 @@ export default function ChatScreen({ navigation, route }) {
     setMessages((prev) => prev.map((m) =>
       m.id === selectedMessageId ? { ...m, reaction: reaction.emoji } : m
     ));
-    trackEvent('message_reaction', { emoji: reaction.label });
   }, [selectedMessageId]);
 
   const handleGiftSelect = useCallback((gift) => {
@@ -614,7 +640,6 @@ export default function ChatScreen({ navigation, route }) {
       read: false,
     };
     setMessages((prev) => [...prev, msg]);
-    trackEvent('gift_sent', { giftId: gift.id, coins: gift.coins });
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [consumeCoins, navigation]);
 
@@ -631,7 +656,6 @@ export default function ChatScreen({ navigation, route }) {
     if (!session) return;
 
     setActiveGames((prev) => new Map(prev).set(session.id, session));
-    trackEvent('game_selected', { type: game.type });
 
     LayoutAnimation.configureNext(SPRING_ANIM);
     const msg = {
@@ -657,7 +681,6 @@ export default function ChatScreen({ navigation, route }) {
 
   const handleGameAnswer = useCallback((gameId, answer) => {
     hapticMedium();
-    trackEvent('game_answer', { gameId });
 
     // Compute updated session first so we can send it via chat without stale data
     const currentSession = activeGamesRef.current.get(gameId);
@@ -785,6 +808,9 @@ export default function ChatScreen({ navigation, route }) {
         <View style={[styles.timeRow, isMe && { justifyContent: 'flex-end' }]}>
           {item.reaction && <Text style={styles.reactionEmoji}>{item.reaction}</Text>}
           <Text style={styles.timeText}>{item.time}</Text>
+          {isMe && prefs?.nonColorCues && (
+            <Text style={styles.deliveryText}>{item.read ? 'Read' : 'Sent'}</Text>
+          )}
           {isMe && (
             <Ionicons
               name={item.read ? 'checkmark-done' : 'checkmark'}
@@ -796,7 +822,7 @@ export default function ChatScreen({ navigation, route }) {
         </View>
       </TouchableOpacity>
     );
-  }, [colors, styles, handleLongPressMessage, activeGames, handleGameAnswer, handleGamePlayAgain, match.name]);
+  }, [colors, styles, prefs, handleLongPressMessage, activeGames, handleGameAnswer, handleGamePlayAgain, match.name]);
 
   return (
     <KeyboardAvoidingView
@@ -1020,27 +1046,45 @@ export default function ChatScreen({ navigation, route }) {
         </View>
       )}
 
+      {/* Sticker popup (floats above input bar) */}
+      {showStickerTray && (
+        <View style={[styles.stickerPopup, { bottom: insets.bottom + 62 }]}>
+          {CHAT_STICKERS.map((emoji) => (
+            <TouchableOpacity
+              key={emoji}
+              style={[styles.stickerChoice, activeSticker === emoji && styles.stickerChoiceActive]}
+              onPress={() => setActiveSticker(emoji)}
+              accessibilityLabel={`Sticker ${emoji}`}
+              accessibilityRole="button"
+            >
+              <Text style={styles.stickerChoiceText}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+          <TouchableOpacity style={styles.stickerSend} onPress={handleSendSticker}>
+            <Text style={styles.stickerSendText}>Send</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Input bar */}
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity onPress={handlePhoto} style={styles.inputIcon}>
-          <Ionicons name="image" size={24} color={colors.accent} />
-        </TouchableOpacity>
-
-        <TouchableOpacity onPress={() => setShowGiftPicker(true)} style={styles.inputIcon}>
-          <Ionicons name="gift" size={22} color={colors.accent} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowStickerTray((v) => !v)} style={styles.inputIcon}>
-          <Ionicons name="sparkles" size={20} color={colors.accent} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => { setShowGamePicker(true); trackEvent('game_picker_open'); }} style={styles.inputIcon}>
-          <Ionicons name="game-controller" size={22} color={colors.accent} />
+        <TouchableOpacity
+          accessibilityLabel={prefs?.screenReaderHints ? 'More actions' : 'chat-plus'}
+          testID="chat-plus"
+          onPress={() => {
+            LayoutAnimation.configureNext(SPRING_ANIM);
+            setShowActionRow((v) => !v);
+          }}
+          style={styles.plusBtn}
+        >
+          <Ionicons name={showActionRow ? 'close' : 'add'} size={22} color={colors.accent} />
         </TouchableOpacity>
 
         <View style={styles.inputWrap}>
           <TextInput
             style={styles.textInput}
             placeholder="Type a message..."
-            placeholderTextColor={colors.gray400}
+            placeholderTextColor={prefs?.highContrast ? colors.gray600 : colors.gray400}
             value={inputText}
             onChangeText={(text) => {
               setInputText(text);
@@ -1057,29 +1101,75 @@ export default function ChatScreen({ navigation, route }) {
         </View>
 
         {inputText.trim() ? (
-          <TouchableOpacity onPress={handleSend} style={styles.sendBtn}>
+          <TouchableOpacity
+            accessibilityLabel={prefs?.screenReaderHints ? 'Send message' : 'chat-send'}
+            testID="chat-send"
+            onPress={handleSend}
+            style={styles.sendBtn}
+          >
             <GraffitiSend size={20} color="#FFFFFF" filled />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity onPress={handleVoiceNote} style={styles.inputIcon}>
+          <TouchableOpacity
+            accessibilityLabel={prefs?.screenReaderHints ? 'Send voice note' : 'chat-mic'}
+            testID="chat-mic"
+            onPress={handleVoiceNote}
+            style={styles.inputIcon}
+          >
             <Ionicons name="mic" size={24} color={colors.accent} />
           </TouchableOpacity>
         )}
       </View>
 
-      {showStickerTray && (
-        <View style={styles.stickerTray}>
-          {CHAT_STICKERS.map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={[styles.stickerChoice, activeSticker === emoji && styles.stickerChoiceActive]}
-              onPress={() => setActiveSticker(emoji)}
-            >
-              <Text style={styles.stickerChoiceText}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={styles.stickerSend} onPress={handleSendSticker}>
-            <Text style={styles.stickerSendText}>Send</Text>
+      {/* Expandable action row */}
+      {showActionRow && (
+        <View style={[styles.actionRow, { paddingBottom: insets.bottom > 0 ? 4 : 8 }]}>
+          <TouchableOpacity
+            accessibilityLabel={prefs?.screenReaderHints ? 'Attach a photo' : 'chat-photo'}
+            testID="chat-photo"
+            onPress={handlePhoto}
+            style={styles.actionIcon}
+          >
+            <View style={styles.actionIconCircle}>
+              <Ionicons name="image" size={22} color={colors.accent} />
+            </View>
+            <Text style={styles.actionIconLabel}>Photo</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            accessibilityLabel={prefs?.screenReaderHints ? 'Send a gift' : 'chat-gift'}
+            testID="chat-gift"
+            onPress={() => setShowGiftPicker(true)}
+            style={styles.actionIcon}
+          >
+            <View style={styles.actionIconCircle}>
+              <Ionicons name="gift" size={20} color={colors.accent} />
+            </View>
+            <Text style={styles.actionIconLabel}>Gift</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            accessibilityLabel={prefs?.screenReaderHints ? 'Open sticker tray' : 'chat-sticker'}
+            testID="chat-sticker"
+            onPress={handleToggleStickerTray}
+            style={styles.actionIcon}
+          >
+            <View style={styles.actionIconCircle}>
+              <Ionicons name="sparkles" size={20} color={colors.accent} />
+            </View>
+            <Text style={styles.actionIconLabel}>Sticker</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            accessibilityLabel={prefs?.screenReaderHints ? 'Open in-chat games' : 'chat-game'}
+            testID="chat-game"
+            onPress={handleOpenGamePicker}
+            style={styles.actionIcon}
+          >
+            <View style={styles.actionIconCircle}>
+              <Ionicons name="game-controller" size={20} color={colors.accent} />
+            </View>
+            <Text style={styles.actionIconLabel}>Game</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1127,7 +1217,7 @@ export default function ChatScreen({ navigation, route }) {
   );
 }
 
-const getStyles = (colors, isCompact) => StyleSheet.create({
+const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -1499,7 +1589,13 @@ const getStyles = (colors, isCompact) => StyleSheet.create({
   timeText: {
     ...Typography.caption,
     fontSize: 11,
-    color: colors.gray400,
+    color: prefs?.highContrast ? colors.gray600 : colors.gray400,
+  },
+  deliveryText: {
+    ...Typography.caption,
+    fontSize: 10,
+    color: colors.gray600,
+    marginLeft: 5,
   },
   reactionEmoji: {
     fontSize: 14,
@@ -1538,7 +1634,7 @@ const getStyles = (colors, isCompact) => StyleSheet.create({
     gap: isCompact ? 4 : 6,
   },
   inputIcon: {
-    padding: isCompact ? 6 : 8,
+    padding: prefs?.largerTouchTargets ? (isCompact ? 10 : 11) : (isCompact ? 6 : 8),
     marginBottom: 2,
   },
   inputWrap: {
@@ -1553,16 +1649,16 @@ const getStyles = (colors, isCompact) => StyleSheet.create({
   },
   textInput: {
     ...Typography.bodySmall,
-    fontSize: isCompact ? 14 : 15,
+    fontSize: prefs?.highContrast ? (isCompact ? 15 : 16) : (isCompact ? 14 : 15),
     color: colors.black,
     maxHeight: 80,
     paddingTop: 0,
     paddingBottom: 0,
   },
   sendBtn: {
-    width: isCompact ? 36 : 40,
-    height: isCompact ? 36 : 40,
-    borderRadius: isCompact ? 18 : 20,
+    width: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 36 : 40),
+    height: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 36 : 40),
+    borderRadius: prefs?.largerTouchTargets ? (isCompact ? 20 : 22) : (isCompact ? 18 : 20),
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1573,24 +1669,72 @@ const getStyles = (colors, isCompact) => StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  stickerTray: {
+  plusBtn: {
+    width: prefs?.largerTouchTargets ? 42 : 36,
+    height: prefs?.largerTouchTargets ? 42 : 36,
+    borderRadius: prefs?.largerTouchTargets ? 21 : 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentTint08,
+    marginBottom: 2,
+  },
+  actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: isCompact ? 6 : 8,
-    paddingHorizontal: isCompact ? 10 : 12,
-    paddingVertical: 8,
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 16,
+    paddingTop: 10,
     backgroundColor: colors.white,
     borderTopWidth: 0.5,
     borderTopColor: colors.gray200,
   },
-  stickerChoice: {
-    width: isCompact ? 30 : 32,
-    height: isCompact ? 30 : 32,
-    borderRadius: isCompact ? 15 : 16,
+  actionIcon: {
+    alignItems: 'center',
+    gap: 4,
+    minWidth: 60,
+  },
+  actionIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.accentTint08,
     borderWidth: 1,
+    borderColor: colors.accentTint12,
+  },
+  actionIconLabel: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: colors.gray500,
+  },
+  stickerPopup: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: isCompact ? 8 : 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: colors.cardBg,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+    zIndex: 50,
+  },
+  stickerChoice: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
     borderColor: colors.gray300,
     backgroundColor: colors.cream,
   },
@@ -1599,13 +1743,13 @@ const getStyles = (colors, isCompact) => StyleSheet.create({
     backgroundColor: colors.accentTint10,
   },
   stickerChoiceText: {
-    fontSize: isCompact ? 15 : 16,
+    fontSize: 20,
   },
   stickerSend: {
     marginLeft: 'auto',
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: colors.accent,
   },
   stickerSendText: {

@@ -29,14 +29,16 @@ import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import StoriesRow from '../components/StoriesRow';
 import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
+import { mockStories } from '../data/mockStories';
+import { useAccessibilityPreferences } from '../accessibility';
 
 export default function MessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { prefs } = useAccessibilityPreferences();
   const [matches, setMatches] = useState([]);
   const [likes, setLikes] = useState([]);
-  const [activeTab, setActiveTab] = useState('messages');
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const styles = useMemo(() => getStyles(colors, isDark, prefs), [colors, isDark, prefs]);
   const [searchQuery, setSearchQuery] = useState('');
   const { hasTier } = useSubscription();
   const { session } = useAuth();
@@ -100,6 +102,19 @@ export default function MessagesScreen({ navigation }) {
     navigation.navigate('Chat', { match });
   };
 
+  const handleOpenStoryIfAvailable = useCallback((person) => {
+    const name = person?.name?.trim().toLowerCase();
+    if (!name) return false;
+    const index = mockStories.findIndex((s) => s.userName?.trim().toLowerCase() === name);
+    if (index < 0) return false;
+    navigation.navigate('StoriesView', {
+      story: mockStories[index],
+      storyIndex: index,
+      storyList: mockStories,
+    });
+    return true;
+  }, [navigation]);
+
   const handleLikePress = (like) => {
     if (!hasTier('junub')) {
       Alert.alert('Junub Feature', 'Upgrade to Junub to message people who liked you.', [
@@ -157,8 +172,17 @@ export default function MessagesScreen({ navigation }) {
             style={styles.messageRow}
             onPress={() => handleLikePress(item)}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, liked you recently` : item.name}
           >
-            <View style={styles.avatarContainer}>
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                handleOpenStoryIfAvailable(item);
+              }}
+              activeOpacity={0.8}
+            >
               <LinearGradient
                 colors={Gradients.accent}
                 start={{ x: 0, y: 0 }}
@@ -167,7 +191,7 @@ export default function MessagesScreen({ navigation }) {
               >
                 <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
               </LinearGradient>
-            </View>
+            </TouchableOpacity>
             <View style={styles.msgInfo}>
               <View style={styles.msgNameInline}>
                 <Text style={styles.msgName}>{item.name}</Text>
@@ -189,8 +213,19 @@ export default function MessagesScreen({ navigation }) {
           style={styles.messageRow}
           onPress={() => handleMatchPress(item)}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${item.unread ? 'unread message' : 'message thread'}` : item.name}
         >
-          <View style={styles.avatarContainer}>
+          <TouchableOpacity
+            style={styles.avatarContainer}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              if (!handleOpenStoryIfAvailable(item)) {
+                handleMatchPress(item);
+              }
+            }}
+            activeOpacity={0.8}
+          >
             <LinearGradient
               colors={Gradients.accent}
               start={{ x: 0, y: 0 }}
@@ -200,10 +235,15 @@ export default function MessagesScreen({ navigation }) {
               <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
             </LinearGradient>
             {item.unread && <View style={styles.unreadDot} />}
-          </View>
+          </TouchableOpacity>
           <View style={styles.msgInfo}>
             <View style={styles.msgNameRow}>
               <Text style={styles.msgName}>{item.name}</Text>
+              {item.unread && prefs?.nonColorCues && (
+                <View style={styles.unreadBadge}>
+                  <Text style={styles.unreadBadgeText}>Unread</Text>
+                </View>
+              )}
               <Text style={styles.msgTime}>{item.timestamp}</Text>
             </View>
             <Text style={[styles.msgPreview, item.unread && styles.msgUnread]}>
@@ -230,7 +270,7 @@ export default function MessagesScreen({ navigation }) {
       {/* ─── Stories Row ─── */}
       <StoriesRow
         colors={colors}
-        onStoryPress={(story) => navigation.navigate('StoriesView', { story })}
+        onStoryPress={(story, index, storyList) => navigation.navigate('StoriesView', { story, storyIndex: index, storyList })}
         onCreateStory={() => navigation.navigate('CreateStory')}
       />
 
@@ -332,7 +372,7 @@ export default function MessagesScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
@@ -426,7 +466,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: prefs?.largerTouchTargets ? 16 : 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
   },
@@ -470,7 +510,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   msgNameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 4,
   },
   msgNameInline: {
@@ -485,14 +525,29 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   msgTime: {
     ...Typography.caption,
-    color: colors.gray500,
+    color: prefs?.highContrast ? colors.gray700 : colors.gray500,
     marginLeft: 8,
   },
   msgPreview: {
     ...Typography.bodySmall,
-    color: colors.gray600,
+    color: prefs?.highContrast ? colors.gray700 : colors.gray600,
     marginTop: 2,
     lineHeight: 18,
+  },
+  unreadBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint10,
+  },
+  unreadBadgeText: {
+    ...Typography.captionBold,
+    color: colors.accent,
+    fontSize: 10,
+    letterSpacing: 0.2,
   },
   msgUnread: {
     fontWeight: '600',

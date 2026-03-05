@@ -19,6 +19,7 @@ import { POST_THEMES } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { GraffitiLocation } from '../components/icons';
+import { buildPostContent } from '../utils/postComposer';
 
 const themeKeys = Object.keys(POST_THEMES);
 
@@ -31,8 +32,23 @@ export default function CreatePostScreen({ navigation }) {
   const [content, setContent] = useState('');
   const [postImage, setPostImage] = useState(null);
   const [selectedTheme, setSelectedTheme] = useState('default');
+  const [location, setLocation] = useState('');
+  const [tagInput, setTagInput] = useState('');
+  const [tags, setTags] = useState([]);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptionA, setPollOptionA] = useState('');
+  const [pollOptionB, setPollOptionB] = useState('');
+  const [activeComposerSection, setActiveComposerSection] = useState(null);
   const theme = POST_THEMES[selectedTheme];
   const isDarkCard = theme.bg === '#262626' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
+  const composedContent = buildPostContent({
+    content,
+    location,
+    tags,
+    pollQuestion,
+    pollOptions: [pollOptionA, pollOptionB],
+  });
+  const canPost = Boolean(composedContent.trim() || postImage);
 
   const handlePickImage = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -50,14 +66,47 @@ export default function CreatePostScreen({ navigation }) {
     }
   };
 
-  const handlePost = () => {
-    if (!content.trim()) {
-      Alert.alert('Empty Post', 'Please write something before posting.');
+  const handleAddTag = () => {
+    const clean = tagInput.trim().replace(/^@+/, '');
+    if (!clean) return;
+    if (tags.some((name) => name.toLowerCase() === clean.toLowerCase())) {
+      setTagInput('');
       return;
     }
-    Alert.alert('Posted!', 'Your post has been shared with the community.', [
-      { text: 'OK', onPress: () => navigation.goBack() },
-    ]);
+    setTags((prev) => [...prev, clean]);
+    setTagInput('');
+  };
+
+  const handleRemoveTag = (name) => {
+    setTags((prev) => prev.filter((t) => t !== name));
+  };
+
+  const handlePost = () => {
+    if (!canPost) {
+      Alert.alert('Empty Post', 'Add text, photo, location, tags, or a poll before posting.');
+      return;
+    }
+
+    const newPost = {
+      id: `u_${Date.now()}`,
+      user: {
+        name: currentUser.name || 'You',
+        avatar: currentUser.images?.[0] || currentUser.avatar,
+        location: currentUser?.preferences?.location || 'Your area',
+      },
+      timestamp: 'Just now',
+      content: composedContent,
+      image: postImage,
+      likes: 0,
+      comments: 0,
+      cardTheme: selectedTheme,
+    };
+
+    navigation.navigate('Main', {
+      screen: 'CommunityTab',
+      params: { createdPost: newPost },
+    });
+    navigation.goBack();
   };
 
   return (
@@ -72,12 +121,12 @@ export default function CreatePostScreen({ navigation }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>New Post</Text>
         <TouchableOpacity
-          style={[styles.postBtn, !content.trim() && styles.postBtnDisabled]}
+          style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
           onPress={handlePost}
-          disabled={!content.trim()}
+          disabled={!canPost}
           activeOpacity={0.8}
         >
-          <Text style={[styles.postBtnText, !content.trim() && styles.postBtnTextDisabled]}>Post</Text>
+          <Text style={[styles.postBtnText, !canPost && styles.postBtnTextDisabled]}>Post</Text>
         </TouchableOpacity>
       </View>
 
@@ -162,27 +211,102 @@ export default function CreatePostScreen({ navigation }) {
             <Text style={styles.mediaBtnText}>Photo</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.mediaBtn}
-            onPress={() => Alert.alert('Location', 'Location sharing is not yet available.')}
+            style={[styles.mediaBtn, activeComposerSection === 'location' && styles.mediaBtnActive]}
+            onPress={() => setActiveComposerSection((prev) => (prev === 'location' ? null : 'location'))}
           >
             <GraffitiLocation size={22} color="#3B82F6" filled />
             <Text style={styles.mediaBtnText}>Location</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.mediaBtn}
-            onPress={() => Alert.alert('Tag Friends', 'Tagging is not yet available.')}
+            style={[styles.mediaBtn, activeComposerSection === 'tag' && styles.mediaBtnActive]}
+            onPress={() => setActiveComposerSection((prev) => (prev === 'tag' ? null : 'tag'))}
           >
             <Ionicons name="people" size={22} color="#10B981" />
             <Text style={styles.mediaBtnText}>Tag</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.mediaBtn}
-            onPress={() => Alert.alert('Polls', 'Polls are not yet available.')}
+            style={[styles.mediaBtn, activeComposerSection === 'poll' && styles.mediaBtnActive]}
+            onPress={() => setActiveComposerSection((prev) => (prev === 'poll' ? null : 'poll'))}
           >
             <Ionicons name="bar-chart" size={22} color="#F59E0B" />
             <Text style={styles.mediaBtnText}>Poll</Text>
           </TouchableOpacity>
         </View>
+
+        {activeComposerSection === 'location' && (
+          <View style={styles.composeCard}>
+            <Text style={styles.composeTitle}>Add location</Text>
+            <TextInput
+              style={styles.composeInput}
+              placeholder="Enter neighborhood or city"
+              placeholderTextColor={colors.gray400}
+              value={location}
+              onChangeText={setLocation}
+              maxLength={50}
+            />
+          </View>
+        )}
+
+        {activeComposerSection === 'tag' && (
+          <View style={styles.composeCard}>
+            <Text style={styles.composeTitle}>Tag people</Text>
+            <View style={styles.tagInputRow}>
+              <TextInput
+                style={[styles.composeInput, styles.tagInput]}
+                placeholder="Type a name"
+                placeholderTextColor={colors.gray400}
+                value={tagInput}
+                onChangeText={setTagInput}
+                onSubmitEditing={handleAddTag}
+                returnKeyType="done"
+                maxLength={20}
+              />
+              <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag} activeOpacity={0.8}>
+                <Text style={styles.addTagBtnText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+            {tags.length > 0 && (
+              <View style={styles.tagChipWrap}>
+                {tags.map((name) => (
+                  <TouchableOpacity key={name} style={styles.tagChip} onPress={() => handleRemoveTag(name)}>
+                    <Text style={styles.tagChipText}>@{name}</Text>
+                    <Ionicons name="close" size={12} color={colors.accent} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
+        {activeComposerSection === 'poll' && (
+          <View style={styles.composeCard}>
+            <Text style={styles.composeTitle}>Create poll</Text>
+            <TextInput
+              style={styles.composeInput}
+              placeholder="Poll question"
+              placeholderTextColor={colors.gray400}
+              value={pollQuestion}
+              onChangeText={setPollQuestion}
+              maxLength={80}
+            />
+            <TextInput
+              style={[styles.composeInput, styles.composeInputGap]}
+              placeholder="Option 1"
+              placeholderTextColor={colors.gray400}
+              value={pollOptionA}
+              onChangeText={setPollOptionA}
+              maxLength={40}
+            />
+            <TextInput
+              style={[styles.composeInput, styles.composeInputGap]}
+              placeholder="Option 2"
+              placeholderTextColor={colors.gray400}
+              value={pollOptionB}
+              onChangeText={setPollOptionB}
+              maxLength={40}
+            />
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -330,10 +454,81 @@ const getStyles = (colors) => StyleSheet.create({
     borderColor: colors.gray200,
     gap: 6,
   },
+  mediaBtnActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint05,
+  },
   mediaBtnText: {
     ...Typography.caption,
     color: colors.black,
     fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+  },
+  composeCard: {
+    marginTop: -2,
+    marginBottom: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    backgroundColor: colors.cream,
+    padding: 12,
+  },
+  composeTitle: {
+    ...Typography.captionBold,
+    color: colors.gray600,
+    marginBottom: 8,
+  },
+  composeInput: {
+    ...Typography.bodySmall,
+    color: colors.black,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: colors.white,
+  },
+  composeInputGap: {
+    marginTop: 8,
+  },
+  tagInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  tagInput: {
+    flex: 1,
+  },
+  addTagBtn: {
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: colors.accent,
+  },
+  addTagBtnText: {
+    ...Typography.captionBold,
+    color: '#FFFFFF',
+  },
+  tagChipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: colors.accentTint08,
+    borderWidth: 1,
+    borderColor: colors.accentTint15,
+  },
+  tagChipText: {
+    ...Typography.caption,
+    color: colors.accent,
     fontFamily: FontFamily.semibold,
   },
 });

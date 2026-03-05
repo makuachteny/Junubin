@@ -36,7 +36,7 @@ const COMMUNITY_FILTERS = [
   { id: 'popular', label: 'Popular', icon: 'flame' },
 ];
 
-export default function CommunityScreen({ navigation }) {
+export default function CommunityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { currentUser } = useCurrentUser();
@@ -63,6 +63,14 @@ export default function CommunityScreen({ navigation }) {
     }, 600);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    const createdPost = route?.params?.createdPost;
+    if (!createdPost) return;
+    setPosts((prev) => [createdPost, ...prev.filter((p) => p.id !== createdPost.id)]);
+    setActiveTab('Feed');
+    navigation.setParams({ createdPost: undefined });
+  }, [route?.params?.createdPost, navigation]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -581,7 +589,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // ─── FAB ───
   fab: {
     position: 'absolute',
-    bottom: 100,
+    bottom: 90,
     right: 20,
     width: 56,
     height: 56,
