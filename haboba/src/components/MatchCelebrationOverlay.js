@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontFamily, useTheme } from '../theme';
-import { GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame } from './icons';
+import { GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame, GraffitiCrown, GraffitiShield } from './icons';
 import { imageSource } from '../utils/imageSource';
 import { hapticHeavy } from '../utils/haptics';
+import { TribalDivider, SpraySplatter } from './GraffitiAccents';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PHOTO_SIZE = 100;
@@ -39,8 +40,8 @@ const BURST_VECTORS = [
   { x: -20, y: -28 },
 ];
 
-const PARTICLE_COMPONENTS = [GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame];
-const PARTICLE_COLORS = ['#F56040', '#FFD700', '#ED4956', '#F56040'];
+const PARTICLE_COMPONENTS = [GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame, GraffitiCrown, GraffitiShield];
+const PARTICLE_COLORS = ['#EF4444', '#22C55E', '#3B82F6', '#FFD700', '#F56040', '#22C55E'];
 
 const MatchCelebrationOverlay = ({
   visible,
@@ -204,12 +205,29 @@ const MatchCelebrationOverlay = ({
       </View>
 
       {/* Title */}
-      <Animated.View style={{ transform: [{ scale: titleScale }] }}>
+      <Animated.View style={[styles.titleWrap, { transform: [{ scale: titleScale }] }]}>
+        <TribalDivider width={140} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 10 }} />
         <Text style={styles.title}>It's a Match!</Text>
         <Text style={styles.subtitle}>
           You and {matchedUser?.name || 'someone'} liked each other
         </Text>
+        {/* Flag stripe */}
+        <View style={styles.flagStripe}>
+          <View style={[styles.flagBand, { backgroundColor: '#000000' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#EF4444' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#FFFFFF' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#22C55E' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#3B82F6' }]} />
+        </View>
       </Animated.View>
+
+      {/* Spray accents */}
+      <View style={styles.splatterLeft} pointerEvents="none">
+        <SpraySplatter size={50} color="#22C55E" opacity={0.1} />
+      </View>
+      <View style={styles.splatterRight} pointerEvents="none">
+        <SpraySplatter size={50} color="#EF4444" opacity={0.08} />
+      </View>
 
       {/* Buttons */}
       <Animated.View style={[styles.buttonsWrap, { opacity: buttonsOpacity }]}>
@@ -275,6 +293,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 4,
   },
+  titleWrap: {
+    alignItems: 'center',
+  },
   title: {
     fontFamily: FontFamily.script,
     fontSize: 36,
@@ -289,6 +310,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
+  flagStripe: {
+    flexDirection: 'row',
+    height: 3,
+    width: 100,
+    marginTop: 12,
+    borderRadius: 2,
+    overflow: 'hidden',
+    opacity: 0.5,
+  },
+  flagBand: { flex: 1, height: 3 },
+  splatterLeft: { position: 'absolute', left: 20, top: '25%' },
+  splatterRight: { position: 'absolute', right: 20, bottom: '25%' },
   buttonsWrap: {
     marginTop: 40,
     width: '100%',

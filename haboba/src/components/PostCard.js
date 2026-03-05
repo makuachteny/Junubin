@@ -5,6 +5,7 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import { useNavigation } from '@react-navigation/native';
 import { POST_THEMES } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
+import { SpraySplatter } from './GraffitiAccents';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 32; // 16px margin each side
@@ -98,6 +99,11 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
         >
           <Ionicons name="ellipsis-vertical" size={18} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
         </TouchableOpacity>
+      </View>
+
+      {/* Subtle spray accent */}
+      <View style={{ position: 'absolute', right: 8, top: 8 }} pointerEvents="none">
+        <SpraySplatter size={24} color="#22C55E" opacity={0.04} />
       </View>
 
       {/* Content */}

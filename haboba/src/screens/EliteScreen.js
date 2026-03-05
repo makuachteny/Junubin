@@ -15,6 +15,8 @@ import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import { useSubscription, PRODUCT_IDS } from '../payments';
 import { formatPerMonth } from '../payments/pricing';
+import { GraffitiCrown, GraffitiShield } from '../components/icons';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
 
 const { width } = Dimensions.get('window');
 
@@ -247,18 +249,30 @@ export default function EliteScreen({ navigation }) {
           ))}
         </View>
 
-        {/* Tier branding */}
+        {/* Tier branding with tribal accents */}
         <View style={styles.brandRow}>
-          <View style={styles.brandLine} />
-          <Text style={styles.brandText}>{tierLabel}</Text>
-          <View style={styles.brandLine} />
+          <TribalDivider width={60} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 10 }}>
+            {selectedTier === 'junub' ? (
+              <GraffitiCrown size={18} color={colors.accent} filled />
+            ) : (
+              <GraffitiShield size={16} color={colors.accent} filled />
+            )}
+            <Text style={styles.brandText}>{tierLabel}</Text>
+          </View>
+          <TribalDivider width={60} height={6} colors={['#3B82F6', '#22C55E', '#EF4444']} />
         </View>
 
         {selectedTier === 'junub' && (
           <Text style={styles.junubMeaning}>
-            "South" — connecting South Sudanese everywhere
+            "Junub" means South — for South Sudanese everywhere
           </Text>
         )}
+
+        {/* Ambient spray accents */}
+        <View style={{ position: 'absolute', right: 10, top: 80 }} pointerEvents="none">
+          <SpraySplatter size={50} color="#22C55E" opacity={0.06} />
+        </View>
 
         {alreadyHasTier && (
           <View style={styles.currentBadge}>

@@ -12,7 +12,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import { GraffitiCommunity } from '../components/icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { GraffitiCommunity, GraffitiDrum, GraffitiSpray, GraffitiSparkles, GraffitiFlame, GraffitiLocation, GraffitiStar } from '../components/icons';
+import { SpraySplatter, GraffitiSectionDivider } from '../components/GraffitiAccents';
 import UnderlineTabs from '../components/UnderlineTabs';
 import PostCard from '../components/PostCard';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
@@ -28,12 +30,12 @@ import { applyCommunityFilters } from '../utils/communityFilters';
 const TABS = ['Feed', 'Groups', 'Events'];
 
 const COMMUNITY_FILTERS = [
-  { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true },
-  { id: 'trending', label: 'Trending', icon: 'trending-up' },
-  { id: 'nearby', label: 'Nearby', icon: 'location' },
+  { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
+  { id: 'trending', label: 'Trending', icon: 'trending-up', graffitiIcon: 'flame' },
+  { id: 'nearby', label: 'Nearby', icon: 'location', graffitiIcon: 'location' },
   { id: 'new', label: 'New', icon: 'time' },
-  { id: 'friends', label: 'Friends', icon: 'people' },
-  { id: 'popular', label: 'Popular', icon: 'flame' },
+  { id: 'friends', label: 'Friends', icon: 'people', graffitiIcon: 'community' },
+  { id: 'popular', label: 'Popular', icon: 'flame', graffitiIcon: 'star' },
 ];
 
 export default function CommunityScreen({ navigation, route }) {
@@ -153,8 +155,11 @@ export default function CommunityScreen({ navigation, route }) {
         />
       )}
 
+      {/* Graffiti section divider */}
+      <GraffitiSectionDivider colors={colors} style={{ marginTop: 16 }} />
+
       {/* Discover Groups — vertical list */}
-      <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Discover Groups</Text>
+      <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Discover Groups</Text>
       {filteredDiscoverGroups.map((group) => (
         <TouchableOpacity
           key={group.id}
@@ -202,7 +207,13 @@ export default function CommunityScreen({ navigation, route }) {
         >
           <Ionicons name="options-outline" size={18} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Community</Text>
+        <View style={styles.headerCenter}>
+          <View style={styles.headerTitleRow}>
+            <GraffitiDrum size={20} color={colors.accent} filled style={{ marginRight: 6, opacity: 0.7 }} />
+            <Text style={styles.headerTitle}>Community</Text>
+            <GraffitiSpray size={18} color={colors.accent} style={{ marginLeft: 6, opacity: 0.5 }} />
+          </View>
+        </View>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
           <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
         </TouchableOpacity>
@@ -225,6 +236,15 @@ export default function CommunityScreen({ navigation, route }) {
         >
           {COMMUNITY_FILTERS.map((filter) => {
             const isActive = filter.accent || activeFilters.includes(filter.id);
+            const iconColor = isActive ? '#FFFFFF' : colors.gray600;
+            const GRAFFITI_MAP = {
+              sparkles: GraffitiSparkles,
+              flame: GraffitiFlame,
+              location: GraffitiLocation,
+              community: GraffitiCommunity,
+              star: GraffitiStar,
+            };
+            const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
             return (
               <TouchableOpacity
                 key={filter.id}
@@ -236,11 +256,15 @@ export default function CommunityScreen({ navigation, route }) {
                 onPress={() => handleFilterPress(filter.id)}
                 activeOpacity={0.8}
               >
-                <Ionicons
-                  name={filter.icon}
-                  size={14}
-                  color={isActive ? '#FFFFFF' : colors.gray600}
-                />
+                {GraffitiComp ? (
+                  <GraffitiComp size={14} color={iconColor} filled={isActive} />
+                ) : (
+                  <Ionicons
+                    name={filter.icon}
+                    size={14}
+                    color={iconColor}
+                  />
+                )}
                 <Text
                   style={[
                     styles.filterPillText,
@@ -374,11 +398,18 @@ export default function CommunityScreen({ navigation, route }) {
       {/* ─── FAB — Feed tab only ─── */}
       {activeTab === 'Feed' && (
         <TouchableOpacity
-          style={[styles.fab, { backgroundColor: colors.accent }]}
+          style={styles.fab}
           activeOpacity={0.85}
           onPress={() => navigation.navigate('CreatePost')}
         >
-          <Ionicons name="add" size={28} color="#FFF" />
+          <LinearGradient
+            colors={['#000000', '#EF4444', '#22C55E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.fabGradient}
+          >
+            <GraffitiSpray size={24} color="#FFF" filled />
+          </LinearGradient>
         </TouchableOpacity>
       )}
     </View>
@@ -397,6 +428,13 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingHorizontal: 16,
     height: 56,
     backgroundColor: colors.white,
+  },
+  headerCenter: {
+    alignItems: 'center',
+  },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 34,
@@ -594,12 +632,17 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 8,
+  },
+  fabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

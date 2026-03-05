@@ -31,7 +31,7 @@ export default function StoriesRow({ onStoryPress, onCreateStory, colors }) {
           activeOpacity={0.7}
         >
           <LinearGradient
-            colors={Gradients.accent}
+            colors={['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradientRing}

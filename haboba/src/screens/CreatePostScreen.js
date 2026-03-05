@@ -19,6 +19,7 @@ import { POST_THEMES } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { GraffitiLocation } from '../components/icons';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
 import { buildPostContent } from '../utils/postComposer';
 
 const themeKeys = Object.keys(POST_THEMES);
@@ -119,7 +120,10 @@ export default function CreatePostScreen({ navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="close" size={28} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Post</Text>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>New Post</Text>
+          <TribalDivider width={70} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 2 }} />
+        </View>
         <TouchableOpacity
           style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
           onPress={handlePost}
@@ -131,6 +135,10 @@ export default function CreatePostScreen({ navigation }) {
       </View>
 
       <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
+        {/* Ambient spray accents */}
+        <View style={{ position: 'absolute', right: 8, top: 10 }} pointerEvents="none">
+          <SpraySplatter size={30} color="#22C55E" opacity={0.05} />
+        </View>
         {/* User info */}
         <View style={styles.userRow}>
           <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
@@ -201,6 +209,9 @@ export default function CreatePostScreen({ navigation }) {
         </ScrollView>
 
         {/* Add media */}
+        <View style={{ alignItems: 'center', marginBottom: 8 }}>
+          <TribalDivider width={120} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
+        </View>
         <Text style={styles.sectionTitle}>Add to Post</Text>
         <View style={styles.mediaRow}>
           <TouchableOpacity

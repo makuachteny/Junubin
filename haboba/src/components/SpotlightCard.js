@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
+import { SpraySplatter } from './GraffitiAccents';
 
 export default function SpotlightCard({ profile, onPress, colors }) {
   if (!profile) return null;
@@ -22,6 +23,9 @@ export default function SpotlightCard({ profile, onPress, colors }) {
           <View style={styles.badge}>
             <Ionicons name="star" size={12} color={colors.gold} />
             <Text style={[styles.badgeText, { color: colors.gold }]}>SPOTLIGHT</Text>
+          </View>
+          <View style={{ position: 'absolute', left: 8, top: 8 }} pointerEvents="none">
+            <SpraySplatter size={20} color="#22C55E" opacity={0.06} />
           </View>
           <View style={styles.info}>
             <Text style={[styles.name, { color: colors.black }]}>{profile.name}, {profile.age}</Text>

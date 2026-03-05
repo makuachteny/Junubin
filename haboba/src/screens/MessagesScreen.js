@@ -12,7 +12,8 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiChat } from '../components/icons';
+import { GraffitiChat, GraffitiTag } from '../components/icons';
+import { TribalDivider } from '../components/GraffitiAccents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, Typography, FontFamily, getShadow, Gradients } from '../theme';
@@ -23,6 +24,7 @@ import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as matchesService from '../api/services/matchesService';
 import * as likesService from '../api/services/likesService';
+import { getEthnicIdentity } from '../utils/ethnicIdentity';
 import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
@@ -239,6 +241,14 @@ export default function MessagesScreen({ navigation }) {
           <View style={styles.msgInfo}>
             <View style={styles.msgNameRow}>
               <Text style={styles.msgName}>{item.name}</Text>
+              {!!item.ethnicity && (() => {
+                const eth = getEthnicIdentity(item.ethnicity);
+                return (
+                  <View style={[styles.msgEthnicDot, { backgroundColor: eth.color }]}>
+                    <Text style={styles.msgEthnicEmoji}>{eth.emoji}</Text>
+                  </View>
+                );
+              })()}
               {item.unread && prefs?.nonColorCues && (
                 <View style={styles.unreadBadge}>
                   <Text style={styles.unreadBadgeText}>Unread</Text>
@@ -330,7 +340,10 @@ export default function MessagesScreen({ navigation }) {
         >
           <Ionicons name="options-outline" size={18} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chats</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Chats</Text>
+          <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: -1 }} />
+        </View>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
           <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
         </TouchableOpacity>
@@ -399,6 +412,9 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.white,
     ...getShadow('md', isDark),
+  },
+  headerCenter: {
+    alignItems: 'center',
   },
   headerTitle: {
     fontSize: 34,
@@ -521,7 +537,18 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   msgName: {
     ...Typography.sectionLabel,
     color: colors.black,
-    flex: 1,
+  },
+  msgEthnicDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 5,
+    marginRight: 'auto',
+  },
+  msgEthnicEmoji: {
+    fontSize: 10,
   },
   msgTime: {
     ...Typography.caption,

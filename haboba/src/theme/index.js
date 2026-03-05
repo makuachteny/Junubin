@@ -93,4 +93,8 @@ export const Gradients = {
   instagram: ['#405DE6', '#5851DB', '#833AB4', '#C13584', '#E1306C', '#FD1D1D', '#F56040', '#F77737', '#FCAF45', '#FFDC80'],
   // Warm action gradient (buttons, CTAs)
   warm: ['#F77737', '#F56040'],
+  // South Sudan flag gradient (Black, Red, White, Green, Blue)
+  southSudan: ['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6'],
+  // South Sudan flag gradient (vibrant, for rings and borders)
+  flagRing: ['#1A1A1A', '#DC2626', '#F5F5F5', '#16A34A', '#2563EB'],
 };

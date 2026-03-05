@@ -14,7 +14,8 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiHeart, GraffitiSparkles, GraffitiStickerIcon } from '../components/icons';
+import { GraffitiHeart, GraffitiSparkles, GraffitiStickerIcon, GraffitiShield } from '../components/icons';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, getShadow } from '../theme';
@@ -23,6 +24,7 @@ import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
 import AdBanner from '../components/AdBanner';
+import { getEthnicIdentity } from '../utils/ethnicIdentity';
 
 const SW = Dimensions.get('window').width;
 const PHOTO_H = SW * 1.3;
@@ -153,11 +155,15 @@ const ProfileDetailScreen = ({ navigation, route }) => {
                   <Text style={s.factText}>{f}</Text>
                 </View>
               ))}
-              {ethnicity ? (
-                <View style={[s.factPill, s.factAccent]}>
-                  <Text style={[s.factText, { color: colors.accent }]}>{ethnicity}</Text>
-                </View>
-              ) : null}
+              {ethnicity ? (() => {
+                const eth = getEthnicIdentity(ethnicity);
+                return (
+                  <View style={[s.factPill, { borderColor: eth.color, backgroundColor: eth.tint }]}>
+                    <Text style={{ fontSize: 14 }}>{eth.emoji}</Text>
+                    <Text style={[s.factText, { color: eth.color }]}>{eth.label}</Text>
+                  </View>
+                );
+              })() : null}
               {(intention || lookingFor) ? (
                 <View style={[s.factPill, s.factFilled]}>
                   <GraffitiHeart size={12} color="#FFF" filled />
@@ -171,6 +177,9 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               ) : null}
             </View>
           </Animated.View>
+
+          {/* Tribal divider accent */}
+          <TribalDivider width={200} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ alignSelf: 'center', marginBottom: 12 }} />
 
           {/* ── Prompt — the hero card ── */}
           <Animated.View style={{
@@ -237,20 +246,30 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               transform: [{ translateY: sectionsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
             }}>
               <View style={s.section}>
-                <Text style={s.sectionLabel}>Identity</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <GraffitiShield size={16} color={colors.accent} filled />
+                  <Text style={s.sectionLabel}>Identity</Text>
+                </View>
                 <View style={s.stickerRow}>
-                  {stickers.map((st, i) => (
-                    <View key={i} style={s.stickerItem}>
-                      <View style={s.stickerCircle}>
-                        {GraffitiStickerIcon.has(st.emoji) ? (
-                          <GraffitiStickerIcon emoji={st.emoji} size={26} color={colors.accent} />
-                        ) : (
-                          <Text style={s.stickerEmoji}>{st.emoji}</Text>
-                        )}
+                  {stickers.map((st, i) => {
+                    const eth = getEthnicIdentity(st.label);
+                    const isEthnic = ['Dinka','Nuer','Shilluk','Bari','Zande','Acholi','Murle','Toposa','Lotuko','Madi','Luo'].includes(st.label);
+                    const ringColor = isEthnic ? eth.color : colors.accentTint25;
+                    const bgColor = isEthnic ? eth.tint : (isDark ? 'rgba(255,255,255,0.06)' : colors.accentTint08);
+                    const iconColor = isEthnic ? eth.color : colors.accent;
+                    return (
+                      <View key={i} style={s.stickerItem}>
+                        <View style={[s.stickerCircle, { borderColor: ringColor, backgroundColor: bgColor }]}>
+                          {GraffitiStickerIcon.has(st.emoji) ? (
+                            <GraffitiStickerIcon emoji={st.emoji} size={26} color={iconColor} />
+                          ) : (
+                            <Text style={s.stickerEmoji}>{st.emoji}</Text>
+                          )}
+                        </View>
+                        <Text style={[s.stickerLabel, isEthnic && { color: eth.color }]}>{st.label}</Text>
                       </View>
-                      <Text style={s.stickerLabel}>{st.label}</Text>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               </View>
             </Animated.View>

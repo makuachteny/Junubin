@@ -12,7 +12,8 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiCrown, GraffitiHeart } from '../components/icons';
+import { GraffitiCrown, GraffitiHeart, GraffitiShield, GraffitiTag } from '../components/icons';
+import { SpraySplatter, GraffitiCorner, TribalDivider } from '../components/GraffitiAccents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
@@ -554,13 +555,32 @@ const HomeScreen = ({ navigation }) => {
         ) : (
           <View style={styles.empty}>
             <View style={styles.emptyBanner}>
-              <View style={styles.emptyCircle}>
-                <GraffitiHeart size={30} color={colors.accent} />
+              {/* Graffiti corner frames */}
+              <View style={styles.emptyCornerTL}>
+                <GraffitiCorner size={28} color={colors.accent} position="topLeft" />
+              </View>
+              <View style={styles.emptyCornerTR}>
+                <GraffitiCorner size={28} color="#22C55E" position="topRight" />
+              </View>
+              <View style={styles.emptyCornerBL}>
+                <GraffitiCorner size={28} color="#3B82F6" position="bottomLeft" />
+              </View>
+              <View style={styles.emptyCornerBR}>
+                <GraffitiCorner size={28} color="#EF4444" position="bottomRight" />
+              </View>
+
+              <View style={styles.emptyIconRow}>
+                <GraffitiShield size={22} color={colors.accent} filled />
+                <View style={styles.emptyCircle}>
+                  <GraffitiHeart size={30} color={colors.accent} />
+                </View>
+                <GraffitiTag size={22} color={colors.accent} />
               </View>
               <Text style={styles.emptyTitle}>No more profiles</Text>
               <Text style={styles.emptySub}>
                 You've seen everyone nearby. Check back later or adjust your filters to see more people.
               </Text>
+              <TribalDivider width={200} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 16 }} />
               <Button
                 title="Adjust Filters"
                 variant="primary"
@@ -579,6 +599,11 @@ const HomeScreen = ({ navigation }) => {
         style={[styles.topBar, { top: insets.top }]}
         pointerEvents="box-none"
       >
+        {/* Spray splatter accent — decorative */}
+        <View style={styles.topBarSplatter} pointerEvents="none">
+          <SpraySplatter size={50} color={colors.accent} opacity={0.08} />
+        </View>
+
         {/* Left — Crown Badge (SS flag colors, Instagram-style) — tappable → Boost */}
         <TouchableOpacity
           onPress={() => navigation?.navigate?.('Boost')}
@@ -587,7 +612,7 @@ const HomeScreen = ({ navigation }) => {
           style={styles.headerSideSlot}
         >
           <LinearGradient
-            colors={['#3B82F6', '#EF4444', '#22C55E']}
+            colors={['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.crownBadge}
@@ -597,7 +622,9 @@ const HomeScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         {/* Center — Mode title */}
-        <Text style={styles.headerTitle}>{mode === 'Social' ? 'Socializing' : 'Discover'}</Text>
+        <View style={styles.headerTitleWrap}>
+          <Text style={styles.headerTitle}>{mode === 'Social' ? 'Socializing' : 'Discover'}</Text>
+        </View>
 
         {/* Right — Profile avatar */}
         <TouchableOpacity
@@ -822,12 +849,25 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
+
+  headerTitleWrap: {
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 34,
     fontFamily: FontFamily.script,
     color: colors.black,
     textAlign: 'center',
     letterSpacing: 0.3,
+  },
+  headerTagAccent: {
+    marginTop: -2,
+    opacity: 0.7,
+  },
+  topBarSplatter: {
+    position: 'absolute',
+    right: -8,
+    top: -12,
   },
   crownBadge: {
     width: 34,
@@ -884,6 +924,16 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     paddingVertical: 24,
     alignItems: 'center',
     ...getShadow('lg', isDark),
+  },
+  emptyCornerTL: { position: 'absolute', top: 8, left: 8 },
+  emptyCornerTR: { position: 'absolute', top: 8, right: 8 },
+  emptyCornerBL: { position: 'absolute', bottom: 8, left: 8 },
+  emptyCornerBR: { position: 'absolute', bottom: 8, right: 8 },
+  emptyIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
   },
   emptyCircle: {
     width: 80,

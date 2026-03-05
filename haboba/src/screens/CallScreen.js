@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { imageSource } from '../utils/imageSource';
 import { useTheme, FontFamily, Colors } from '../theme';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
 
 export default function CallScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -60,6 +61,15 @@ export default function CallScreen({ navigation, route }) {
       <Text style={styles.status}>
         {callState === 'connecting' ? 'Connecting...' : formatTime(callDuration)}
       </Text>
+      <TribalDivider width={120} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 10 }} />
+
+      {/* Ambient spray accents */}
+      <View style={{ position: 'absolute', left: 10, top: 100 }} pointerEvents="none">
+        <SpraySplatter size={40} color="#22C55E" opacity={0.06} />
+      </View>
+      <View style={{ position: 'absolute', right: 15, bottom: 180 }} pointerEvents="none">
+        <SpraySplatter size={45} color="#EF4444" opacity={0.05} />
+      </View>
 
       {/* Controls */}
       <View style={styles.controls}>

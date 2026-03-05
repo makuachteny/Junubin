@@ -13,6 +13,12 @@ export default function AdBanner({ style, colors }) {
 
   return (
     <View style={[styles.banner, { backgroundColor: colors.gray100, borderColor: colors.separator }, style]}>
+      {/* SS flag accent stripe */}
+      <View style={styles.flagStripe} pointerEvents="none">
+        {['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6'].map((c, i) => (
+          <View key={i} style={{ flex: 1, backgroundColor: c, opacity: 0.35 }} />
+        ))}
+      </View>
       <View style={styles.content}>
         <View style={[styles.adLabel, { backgroundColor: colors.accentTint15 }]}>
           <Text style={[styles.adLabelText, { color: colors.accent }]}>AD</Text>
@@ -56,4 +62,15 @@ const styles = StyleSheet.create({
   adTitle: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold },
   adDesc: { fontSize: 11, marginTop: 1 },
   closeBtn: { padding: 4 },
+  flagStripe: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    flexDirection: 'row',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    overflow: 'hidden',
+  },
 });

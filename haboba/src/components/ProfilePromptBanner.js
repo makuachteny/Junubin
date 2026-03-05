@@ -3,11 +3,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontFamily } from '../theme';
+import { GraffitiShield } from './icons';
 
 export default function ProfilePromptBanner({ message, onPress, colors }) {
   return (
     <TouchableOpacity style={[styles.banner, { backgroundColor: colors.accentTint08, borderColor: colors.accentTint15 }]} onPress={onPress} activeOpacity={0.8}>
-      <Ionicons name="bulb" size={18} color={colors.accent} />
+      <GraffitiShield size={18} color={colors.accent} filled />
       <Text style={[styles.text, { color: colors.black }]}>{message}</Text>
       <Ionicons name="chevron-forward" size={16} color={colors.accent} />
     </TouchableOpacity>

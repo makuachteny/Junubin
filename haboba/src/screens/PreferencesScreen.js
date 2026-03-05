@@ -23,6 +23,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import { GraffitiSparkles } from '../components/icons';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { GraffitiShield } from '../components/icons';
 import Button from '../components/Button';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
@@ -461,9 +463,12 @@ export default function PreferencesScreen({ navigation, route }) {
         >
           <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isSocial ? 'Socializing' : 'Dating'}
-        </Text>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>
+            {isSocial ? 'Socializing' : 'Dating'}
+          </Text>
+          <TribalDivider width={80} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: -2 }} />
+        </View>
         <TouchableOpacity onPress={handleDone}>
           <Text style={styles.doneText}>Done</Text>
         </TouchableOpacity>
@@ -539,6 +544,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {/* ── SOCIAL PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+              <GraffitiShield size={14} color="#22C55E" />
               <Text style={styles.sectionHeader}>Socializing Preferences</Text>
               <View style={styles.sectionCountPill}>
                 <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
@@ -555,6 +561,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {/* ── MEMBER PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+              <GraffitiShield size={14} color="#EF4444" />
               <Text style={styles.sectionHeader}>Member Preferences</Text>
               <View style={styles.sectionCountPill}>
                 <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
@@ -569,6 +576,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {/* ── SUBSCRIBER PREFERENCES ── */}
             <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
               <View style={[styles.sectionDot, { backgroundColor: colors.gold }]} />
+              <GraffitiShield size={14} color={colors.gold} />
               <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
               <View style={[styles.sectionCountPill, styles.sectionCountPillGold]}>
                 <Text style={[styles.sectionCountText, styles.sectionCountTextGold]}>{activeSubscriberCount}</Text>
@@ -615,6 +623,7 @@ export default function PreferencesScreen({ navigation, route }) {
 
         <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
           <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+          <GraffitiShield size={14} color={colors.accent} />
           <Text style={styles.sectionHeader}>Interactive Experience</Text>
         </View>
         <View style={styles.card}>

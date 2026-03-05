@@ -1,16 +1,21 @@
 // AnaJunubin — Empty State
-// Reusable empty state with icon circle, title, subtitle, optional action button.
+// Reusable empty state with icon circle, tribal accents, and South Sudanese graffiti flair.
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Typography, FontFamily } from '../theme';
+import { TribalDivider, GraffitiCorner } from './GraffitiAccents';
 
 export default function EmptyState({ icon, title, subtitle, actionLabel, onAction }) {
   const { colors } = useTheme();
 
   return (
     <View style={styles.container}>
+      {/* Graffiti corner accents */}
+      <View style={styles.cornerTL}><GraffitiCorner size={20} color={colors.accent} position="topLeft" /></View>
+      <View style={styles.cornerBR}><GraffitiCorner size={20} color="#22C55E" position="bottomRight" /></View>
+
       <View style={[styles.iconCircle, { backgroundColor: colors.accentTint08 }]}>
         <Ionicons name={icon} size={32} color={colors.accent} />
       </View>
@@ -18,6 +23,7 @@ export default function EmptyState({ icon, title, subtitle, actionLabel, onActio
       {subtitle ? (
         <Text style={[styles.subtitle, { color: colors.gray400 }]}>{subtitle}</Text>
       ) : null}
+      <TribalDivider width={120} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 12, marginBottom: 4 }} />
       {actionLabel && onAction ? (
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: colors.accent }]}
@@ -36,7 +42,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
     paddingHorizontal: 32,
+    position: 'relative',
   },
+  cornerTL: { position: 'absolute', top: 40, left: 24 },
+  cornerBR: { position: 'absolute', bottom: 40, right: 24 },
   iconCircle: {
     width: 72,
     height: 72,

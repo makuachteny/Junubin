@@ -11,3 +11,7 @@ export { default as GraffitiUndo } from './GraffitiUndo';
 export { default as GraffitiSmiley } from './GraffitiSmiley';
 export { default as GraffitiStickerIcon } from './GraffitiStickerIcon';
 export { default as GraffitiCommunity } from './GraffitiCommunity';
+export { default as GraffitiShield } from './GraffitiShield';
+export { default as GraffitiDrum } from './GraffitiDrum';
+export { default as GraffitiSpray } from './GraffitiSpray';
+export { default as GraffitiTag } from './GraffitiTag';

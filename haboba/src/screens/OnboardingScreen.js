@@ -21,6 +21,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily, useTheme } from '../theme';
 import LogoMark from '../components/LogoMark';
 import { useAccessibilityPreferences } from '../accessibility';
+import { GraffitiShield, GraffitiCrown } from '../components/icons';
+import { SpraySplatter, TribalDivider } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
@@ -202,9 +204,17 @@ const OnboardingScreen = ({ navigation }) => {
             </Animated.View>
 
             <Animated.View style={[s.heroTextBlock, { opacity: taglineOpacity, transform: [{ translateY: taglineY }] }]}>
-              <View style={s.heroAccentLine} />
+              <TribalDivider width={120} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 20 }} />
               <Text style={s.heroTagline}>Where Junubin</Text>
               <Text testID="onboarding-hero-connect" style={s.heroAccent}>connect.</Text>
+              {/* South Sudan flag stripe */}
+              <View style={s.flagStripe}>
+                <View style={[s.flagBand, { backgroundColor: '#000000' }]} />
+                <View style={[s.flagBand, { backgroundColor: '#EF4444' }]} />
+                <View style={[s.flagBand, { backgroundColor: '#FFFFFF' }]} />
+                <View style={[s.flagBand, { backgroundColor: '#22C55E' }]} />
+                <View style={[s.flagBand, { backgroundColor: '#3B82F6' }]} />
+              </View>
             </Animated.View>
           </Animated.View>
 
@@ -230,10 +240,13 @@ const OnboardingScreen = ({ navigation }) => {
               OUR STORY
             </Animated.Text>
 
-            <Text style={s.bigTitle}>
-              Heritage{'\n'}Brought Us{'\n'}
-              <Text style={s.bigTitleGlow}>Together</Text>
-            </Text>
+            <View style={s.bigTitleRow}>
+              <Text style={s.bigTitle}>
+                Heritage{'\n'}Brought Us{'\n'}
+                <Text style={s.bigTitleGlow}>Together</Text>
+              </Text>
+              <GraffitiShield size={36} color="#22C55E" filled style={{ opacity: 0.25, marginLeft: 8, marginTop: 8 }} />
+            </View>
 
             <View style={s.rule} />
 
@@ -244,22 +257,32 @@ const OnboardingScreen = ({ navigation }) => {
             </Text>
 
             <Animated.View style={[s.pillRow, { transform: [{ translateX: a1.slideX }] }]}>
-              {[
-                { icon: 'heart', label: 'Dating' },
-                { icon: 'people', label: 'Social' },
-                { icon: 'earth', label: 'Diaspora' },
-              ].map((c) => (
-                <View key={c.label} style={s.pill}>
-                  <Ionicons name={c.icon} size={13} color="#FFFFFF" />
-                  <Text style={s.pillText}>{c.label}</Text>
-                </View>
-              ))}
+              <View style={s.pill}>
+                <GraffitiShield size={14} color="#EF4444" filled />
+                <Text style={s.pillText}>Dating</Text>
+              </View>
+              <View style={s.pill}>
+                <GraffitiCrown size={14} color="#22C55E" filled />
+                <Text style={s.pillText}>Social</Text>
+              </View>
+              <View style={s.pill}>
+                <Ionicons name="earth" size={13} color="#3B82F6" />
+                <Text style={s.pillText}>Diaspora</Text>
+              </View>
             </Animated.View>
           </Animated.View>
         </View>
 
         {/* ──── PAGE 3: THE INVITATION ──── */}
         <View style={s.pg}>
+          {/* Ambient spray accents */}
+          <Animated.View style={[{ position: 'absolute', right: 20, top: H * 0.35 }, { opacity: a2.opacity }]} pointerEvents="none">
+            <SpraySplatter size={70} color="#22C55E" opacity={0.08} />
+          </Animated.View>
+          <Animated.View style={[{ position: 'absolute', left: 10, top: H * 0.25 }, { opacity: a2.opacity }]} pointerEvents="none">
+            <SpraySplatter size={50} color="#EF4444" opacity={0.06} />
+          </Animated.View>
+
           <Animated.View style={[s.inviteWrap, { opacity: a2.opacity, transform: [{ translateY: a2.slideUp }] }]}>
             <Animated.Text style={[s.eyebrow, { transform: [{ translateX: a2.slideX }] }]}>
               EVERYWHERE
@@ -378,10 +401,12 @@ const s = StyleSheet.create({
   // ══ PAGE 1 — Hero ══
   heroWrap: { alignItems: 'center', paddingHorizontal: 32 },
   heroTextBlock: { alignItems: 'center', marginTop: 24 },
-  heroAccentLine: {
-    width: 40, height: 2.5, borderRadius: 2,
-    backgroundColor: ACCENT, marginBottom: 24, opacity: 0.8,
+  flagStripe: {
+    flexDirection: 'row', height: 3, width: 100,
+    marginTop: 14, borderRadius: 2, overflow: 'hidden', opacity: 0.5,
   },
+  flagBand: { flex: 1, height: 3 },
+  bigTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
   heroTagline: {
     fontSize: 22, fontWeight: '300', fontFamily: FontFamily.regular,
     color: 'rgba(255,255,255,0.65)', textAlign: 'center',

@@ -19,6 +19,8 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../auth';
 import { useAccessibilityPreferences } from '../accessibility';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { GraffitiShield } from '../components/icons';
 
 const { width } = Dimensions.get('window');
 
@@ -266,12 +268,24 @@ const SignupScreen = ({ navigation }) => {
             {/* Logo */}
             <View style={styles.logoContainer}>
               <BrandLogo size="medium" light />
+              <TribalDivider width={100} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 8 }} />
+            </View>
+
+            {/* Spray accents */}
+            <View style={{ position: 'absolute', right: 10, top: 120 }} pointerEvents="none">
+              <SpraySplatter size={50} color="#22C55E" opacity={0.08} />
+            </View>
+            <View style={{ position: 'absolute', left: 5, bottom: 200 }} pointerEvents="none">
+              <SpraySplatter size={40} color="#EF4444" opacity={0.06} />
             </View>
 
             {/* Heading */}
-            <Text style={styles.heading}>Create your{'\n'}account</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.heading}>Create your{'\n'}account</Text>
+              <GraffitiShield size={28} color="#22C55E" filled style={{ opacity: 0.3, marginTop: 10 }} />
+            </View>
             <Text style={styles.subheading}>
-              Join AnaJubin and start connecting with the South Sudanese community.
+              Join AnaJunubin and connect with South Sudanese worldwide.
             </Text>
 
             {/* Method Toggle */}

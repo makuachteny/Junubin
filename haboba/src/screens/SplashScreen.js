@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { FontFamily } from '../theme';
 import LogoMark from '../components/LogoMark';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -112,9 +113,26 @@ export default function SplashScreen({ onFinish, authReady }) {
         <LogoMark size={180} light animated />
       </Animated.View>
 
-      {/* Bottom tagline */}
+      {/* Spray accents — decorative */}
+      <Animated.View style={[styles.splatterTopRight, { opacity: logoFade }]} pointerEvents="none">
+        <SpraySplatter size={60} color="#22C55E" opacity={0.1} />
+      </Animated.View>
+      <Animated.View style={[styles.splatterBottomLeft, { opacity: logoFade }]} pointerEvents="none">
+        <SpraySplatter size={50} color="#EF4444" opacity={0.08} />
+      </Animated.View>
+
+      {/* Bottom tagline + flag accent */}
       <Animated.View style={[styles.bottomSection, { opacity: logoFade }]}>
+        <TribalDivider width={140} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 12 }} />
         <Text style={styles.tagline}>Connect with your people</Text>
+        {/* South Sudan flag stripe */}
+        <View style={styles.flagStripe}>
+          <View style={[styles.flagBand, { backgroundColor: '#000000' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#EF4444' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#FFFFFF' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#22C55E' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#3B82F6' }]} />
+        </View>
       </Animated.View>
     </View>
   );
@@ -160,5 +178,28 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
+  },
+  flagStripe: {
+    flexDirection: 'row',
+    height: 3,
+    width: 120,
+    marginTop: 16,
+    borderRadius: 2,
+    overflow: 'hidden',
+    opacity: 0.6,
+  },
+  flagBand: {
+    flex: 1,
+    height: 3,
+  },
+  splatterTopRight: {
+    position: 'absolute',
+    top: 80,
+    right: 10,
+  },
+  splatterBottomLeft: {
+    position: 'absolute',
+    bottom: 140,
+    left: 10,
   },
 });

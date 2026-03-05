@@ -23,6 +23,7 @@ import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getEthnicIdentity } from '../utils/ethnicIdentity';
 
 const { width } = Dimensions.get('window');
 
@@ -528,7 +529,32 @@ const ProfileSetupScreen = ({ navigation }) => {
       case 'ethnicity':
         return (
           <View style={styles.stepContent}>
-            {ETHNICITY_OPTIONS.map((opt) => renderRadioOption(opt, selectedEthnicity, setSelectedEthnicity))}
+            {ETHNICITY_OPTIONS.map((opt) => {
+              const eth = getEthnicIdentity(opt);
+              const isActive = selectedEthnicity === opt;
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  style={[
+                    styles.radioRow,
+                    isActive && { borderColor: eth.color, backgroundColor: eth.tint },
+                  ]}
+                  onPress={() => setSelectedEthnicity(opt)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 20, marginRight: 4 }}>{eth.emoji}</Text>
+                  <Text style={[
+                    styles.radioText,
+                    isActive && { color: eth.color, fontWeight: '600', fontFamily: FontFamily.semibold },
+                  ]}>
+                    {opt}
+                  </Text>
+                  <View style={[styles.radioCircle, isActive && { borderColor: eth.color }]}>
+                    {isActive && <View style={[styles.radioCircleInner, { backgroundColor: eth.color }]} />}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
             {renderVisibilityToggle('Visible on profile', showEthnicity, setShowEthnicity)}
           </View>
         );
@@ -703,18 +729,22 @@ const ProfileSetupScreen = ({ navigation }) => {
               <Ionicons name="chevron-back" size={24} color={colors.black} />
             </TouchableOpacity>
 
-            {/* Progress Dots (BLK style) */}
+            {/* Progress Dots */}
             <View style={styles.progressDots}>
-              {STEPS.map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.progressDot,
-                    i <= currentStep && styles.progressDotActive,
-                    i === currentStep && styles.progressDotCurrent,
-                  ]}
-                />
-              ))}
+              {STEPS.map((_, i) => {
+                const isActive = i <= currentStep;
+                const isCurrent = i === currentStep;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.progressDot,
+                      isActive && styles.progressDotActive,
+                      isCurrent && styles.progressDotCurrent,
+                    ]}
+                  />
+                );
+              })}
             </View>
 
             {canSkip ? (
@@ -812,24 +842,27 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   progressDots: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   progressDot: {
-    flex: 1,
-    height: 3,
-    borderRadius: 1.5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: colors.gray200,
-    maxWidth: 24,
   },
   progressDotActive: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.accentTint25 || colors.accent,
+    width: 8,
+    height: 8,
   },
   progressDotCurrent: {
     backgroundColor: colors.accent,
-    height: 4,
+    width: 24,
+    height: 8,
+    borderRadius: 4,
   },
   skipBtn: {
     ...Typography.label,

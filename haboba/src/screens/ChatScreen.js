@@ -15,7 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiSend } from '../components/icons';
+import { GraffitiSend, GraffitiShield } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -860,6 +860,14 @@ export default function ChatScreen({ navigation, route }) {
             <Ionicons name="ellipsis-vertical" size={20} color={colors.gray} />
           </TouchableOpacity>
         </View>
+      </View>
+      {/* South Sudan flag accent stripe */}
+      <View style={{ flexDirection: 'row', height: 2 }}>
+        <View style={{ flex: 1, backgroundColor: '#000000', opacity: 0.4 }} />
+        <View style={{ flex: 1, backgroundColor: '#EF4444', opacity: 0.4 }} />
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', opacity: 0.2 }} />
+        <View style={{ flex: 1, backgroundColor: '#22C55E', opacity: 0.4 }} />
+        <View style={{ flex: 1, backgroundColor: '#3B82F6', opacity: 0.4 }} />
       </View>
 
       {/* Messages */}

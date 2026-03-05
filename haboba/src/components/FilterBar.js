@@ -15,7 +15,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontFamily, useTheme, getShadow } from '../theme';
+import { FontFamily, useTheme, getShadow, Gradients } from '../theme';
+import { TribalDivider } from './GraffitiAccents';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -415,6 +416,9 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
             <Text style={styles.sheetSubtitle}>
               Set your preferred range
             </Text>
+            <View style={{ alignItems: 'center', marginBottom: 4 }}>
+              <TribalDivider width={100} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
+            </View>
 
             {/* Wheel Picker */}
             <View style={styles.pickerWrap}>

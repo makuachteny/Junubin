@@ -400,24 +400,24 @@ export const mockLikes = [
 
 // ── Matched connections for Messages screen (linked to real profiles) ──
 export const mockMatches = [
-  { id: 'match1', name: 'Adau', images: [PHOTOS.p1], lastMessage: 'Hey! How are you doing?', timestamp: '2m ago', unread: true },
-  { id: 'match2', name: 'Achol', images: [PHOTOS.p9], lastMessage: 'That sounds great, let me know!', timestamp: '1h ago', unread: false },
-  { id: 'match3', name: 'Nyirou', images: [PHOTOS.p3], lastMessage: 'See you Saturday!', timestamp: '3h ago', unread: true },
-  { id: 'match4', name: 'Akech', images: [PHOTOS.p6], lastMessage: 'I just got here, where are you?', timestamp: '5h ago', unread: false },
-  { id: 'match5', name: 'Akuol', images: [PHOTOS.p10], lastMessage: 'Coffee this weekend?', timestamp: '7h ago', unread: true },
-  { id: 'match6', name: 'Nyandeng', images: [PHOTOS.p7], lastMessage: 'That playlist is so good.', timestamp: '9h ago', unread: false },
+  { id: 'match1', name: 'Adau', images: [PHOTOS.p1], lastMessage: 'Hey! How are you doing?', timestamp: '2m ago', unread: true, ethnicity: 'Dinka' },
+  { id: 'match2', name: 'Achol', images: [PHOTOS.p9], lastMessage: 'That sounds great, let me know!', timestamp: '1h ago', unread: false, ethnicity: 'Shilluk' },
+  { id: 'match3', name: 'Nyirou', images: [PHOTOS.p3], lastMessage: 'See you Saturday!', timestamp: '3h ago', unread: true, ethnicity: 'Nuer' },
+  { id: 'match4', name: 'Akech', images: [PHOTOS.p6], lastMessage: 'I just got here, where are you?', timestamp: '5h ago', unread: false, ethnicity: 'Dinka' },
+  { id: 'match5', name: 'Akuol', images: [PHOTOS.p10], lastMessage: 'Coffee this weekend?', timestamp: '7h ago', unread: true, ethnicity: 'Bari' },
+  { id: 'match6', name: 'Nyandeng', images: [PHOTOS.p7], lastMessage: 'That playlist is so good.', timestamp: '9h ago', unread: false, ethnicity: 'Nuer' },
 ];
 
-// ── Post card theme presets ─────────────────────────────────
+// ── Post card theme presets (South Sudanese inspired) ───────
 export const POST_THEMES = {
   default: { bg: '#FFFFFF', text: '#262626', accent: '#F56040', name: 'Classic' },
   midnight: { bg: '#262626', text: '#FFFFFF', accent: '#ED4956', name: 'Midnight' },
-  rose: { bg: '#F56040', text: '#FFFFFF', accent: '#262626', name: 'Rose' },
-  blush: { bg: '#FDEDEF', text: '#C13584', accent: '#F56040', name: 'Blush' },
-  ocean: { bg: '#0C4A6E', text: '#FFFFFF', accent: '#38BDF8', name: 'Ocean' },
-  forest: { bg: '#14532D', text: '#FFFFFF', accent: '#4ADE80', name: 'Forest' },
-  sunset: { bg: '#7C2D12', text: '#FFFFFF', accent: '#FB923C', name: 'Sunset' },
-  lavender: { bg: '#EDE9FE', text: '#4C1D95', accent: '#8B5CF6', name: 'Lavender' },
+  savanna: { bg: '#F5E6CC', text: '#5D4037', accent: '#C0392B', name: 'Savanna' },
+  nile: { bg: '#0E4D64', text: '#FFFFFF', accent: '#48C9B0', name: 'Nile' },
+  jubaSunset: { bg: '#7C2D12', text: '#FFFFFF', accent: '#FB923C', name: 'Juba Sunset' },
+  borDawn: { bg: '#FDE8D0', text: '#6C3483', accent: '#E74C3C', name: 'Bor Dawn' },
+  malakal: { bg: '#1A5276', text: '#FFFFFF', accent: '#F9E79F', name: 'Malakal' },
+  heritage: { bg: '#1B4332', text: '#FFFFFF', accent: '#F9A825', name: 'Heritage' },
 };
 
 // ── Community feed posts (no external images) ───────────────

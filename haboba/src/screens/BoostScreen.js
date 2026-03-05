@@ -9,6 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { GraffitiFlame } from '../components/icons';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { GraffitiShield } from '../components/icons';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import BoostPulseRing from '../components/BoostPulseRing';
@@ -83,6 +85,14 @@ export default function BoostScreen({ navigation }) {
         </View>
       </TouchableOpacity>
 
+      {/* Ambient spray accents */}
+      <View style={{ position: 'absolute', right: 16, top: 120 }} pointerEvents="none">
+        <SpraySplatter size={35} color="#22C55E" opacity={0.06} />
+      </View>
+      <View style={{ position: 'absolute', left: 12, bottom: 160 }} pointerEvents="none">
+        <SpraySplatter size={40} color="#EF4444" opacity={0.05} />
+      </View>
+
       {/* Lightning icon with glow + pulse rings */}
       <View style={styles.iconContainer}>
         <BoostPulseRing size={60} />
@@ -91,6 +101,7 @@ export default function BoostScreen({ navigation }) {
       </View>
 
       <Text style={styles.title}>Get In The Spotlight</Text>
+      <TribalDivider width={100} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 8 }} />
       <Text style={styles.subtitle}>
         Put your profile at the top of the stack — be the first person seen in your area!
       </Text>
@@ -140,9 +151,9 @@ export default function BoostScreen({ navigation }) {
       </View>
 
       <View style={styles.divider}>
-        <View style={styles.dividerLine} />
+        <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
         <Text style={styles.dividerText}>or upgrade</Text>
-        <View style={styles.dividerLine} />
+        <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
       </View>
 
       {/* Junub upsell */}
@@ -312,11 +323,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: '100%',
     marginVertical: 24,
     gap: 10,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.separator,
   },
   dividerText: {
     ...Typography.label,

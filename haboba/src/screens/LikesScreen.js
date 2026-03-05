@@ -12,7 +12,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import { GraffitiLocation, GraffitiHeart } from '../components/icons';
+import { GraffitiLocation, GraffitiHeart, GraffitiShield } from '../components/icons';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
 import Button from '../components/Button';
 import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
@@ -126,7 +127,10 @@ export default function LikesScreen({ navigation }) {
         >
           <Ionicons name="options-outline" size={18} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Likes</Text>
+        <View style={{ alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>Likes</Text>
+          <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: -2 }} />
+        </View>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
           <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
         </TouchableOpacity>
@@ -146,6 +150,14 @@ export default function LikesScreen({ navigation }) {
           <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
+        {/* Ambient spray accents */}
+        <View style={{ position: 'absolute', right: 8, top: 20 }} pointerEvents="none">
+          <SpraySplatter size={35} color="#22C55E" opacity={0.06} />
+        </View>
+        <View style={{ position: 'absolute', left: 4, bottom: 100 }} pointerEvents="none">
+          <SpraySplatter size={40} color="#EF4444" opacity={0.05} />
+        </View>
+
         {/* Like count */}
         <Text style={styles.likesCount}>{likes.length} Like{likes.length !== 1 ? 's' : ''}</Text>
 

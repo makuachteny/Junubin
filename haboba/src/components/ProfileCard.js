@@ -25,6 +25,8 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { hapticLight, hapticMedium } from '../utils/haptics';
+import { getEthnicIdentity } from '../utils/ethnicIdentity';
+import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -310,12 +312,25 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
             pointerEvents="none"
           />
          <View style={styles.infoOverlay}>
+            {/* Spray splatter decoration */}
+            <View style={styles.infoSplatter} pointerEvents="none">
+              <SpraySplatter size={32} color="#FFFFFF" opacity={0.06} />
+            </View>
             {profile.distance != null && (
               <Text style={styles.distanceText}>{profile.distance} miles away</Text>
             )}
             <Text style={styles.name}>
               {profile.name}, {profile.age}
             </Text>
+            {!!profile.ethnicity && (() => {
+              const eth = getEthnicIdentity(profile.ethnicity);
+              return (
+                <View style={[styles.ethnicBadge, { backgroundColor: eth.color }]}>
+                  <Text style={styles.ethnicEmoji}>{eth.emoji}</Text>
+                  <Text style={styles.ethnicLabel}>{eth.label}</Text>
+                </View>
+              );
+            })()}
             {!!statusText && (
               <View style={styles.statusPill}>
                 <Text style={styles.statusEmoji}>{'\uD83D\uDC4B'}</Text>
@@ -419,6 +434,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 220,
   },
+  infoSplatter: {
+    position: 'absolute',
+    right: -4,
+    top: -10,
+  },
   infoOverlay: {
     position: 'absolute',
     left: 16,
@@ -436,6 +456,26 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#FFFFFF',
     fontFamily: FontFamily.black,
+  },
+  ethnicBadge: {
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+  },
+  ethnicEmoji: {
+    fontSize: 13,
+  },
+  ethnicLabel: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    letterSpacing: 0.3,
   },
   statusPill: {
     marginTop: 6,

@@ -14,6 +14,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import UnderlineTabs from '../components/UnderlineTabs';
+import { GraffitiCrown, GraffitiFlame } from '../components/icons';
+import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
 import { GAME_CATALOG } from '../data/games';
 
 import { useSubscription } from '../payments';
@@ -108,7 +110,13 @@ export default function InteractivityHubScreen({ navigation }) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.8}>
             <Ionicons name="chevron-back" size={22} color={colors.black} />
           </TouchableOpacity>
-          <Text style={styles.title}>Games & Fun</Text>
+          <View style={{ alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <GraffitiFlame size={18} color={colors.accent} filled />
+              <Text style={styles.title}>Games & Fun</Text>
+            </View>
+            <TribalDivider width={80} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 1 }} />
+          </View>
           <View style={styles.backBtnSpacer} />
         </View>
         <UnderlineTabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />

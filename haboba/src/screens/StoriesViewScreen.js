@@ -32,6 +32,7 @@ export default function StoriesViewScreen({ navigation, route }) {
   const [threadInput, setThreadInput] = useState('');
   const [sentReaction, setSentReaction] = useState(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const dotSlideAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(1)).current;
   const reactionFloat = useRef(new Animated.Value(0)).current;
   const reactionOpacity = useRef(new Animated.Value(0)).current;
@@ -80,6 +81,16 @@ export default function StoriesViewScreen({ navigation, route }) {
       setThread(all?.[threadKey] || []);
     });
   }, [threadKey]);
+
+  // Animate dot slide to current index
+  useEffect(() => {
+    Animated.spring(dotSlideAnim, {
+      toValue: currentIndex,
+      tension: 68,
+      friction: 10,
+      useNativeDriver: true,
+    }).start();
+  }, [currentIndex, dotSlideAnim]);
 
   useEffect(() => {
     if (!story) return;
@@ -160,24 +171,38 @@ export default function StoriesViewScreen({ navigation, route }) {
         </View>
       )}
 
-      {/* Progress bars */}
-      <View style={[styles.progressRow, { top: insets.top + 8 }]}>
-        {stories.map((_, i) => (
-          <View key={i} style={styles.progressTrack}>
-            <Animated.View
+      {/* Progress dots */}
+      <View style={[styles.dotsRow, { top: insets.top + 8 }]}>
+        {stories.map((_, i) => {
+          const isActive = i === currentIndex;
+          const isPast = i < currentIndex;
+          return (
+            <View
+              key={i}
               style={[
-                styles.progressFill,
-                {
-                  width: i < currentIndex
-                    ? '100%'
-                    : i === currentIndex
-                    ? progressAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
-                    : '0%',
-                },
+                styles.dot,
+                isPast && styles.dotPast,
+                isActive && styles.dotActive,
               ]}
-            />
-          </View>
-        ))}
+            >
+              {isActive && (
+                <Animated.View
+                  style={[
+                    styles.dotFill,
+                    {
+                      transform: [{
+                        scaleX: progressAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, 1],
+                        }),
+                      }],
+                    },
+                  ]}
+                />
+              )}
+            </View>
+          );
+        })}
       </View>
 
       {/* Header */}
@@ -295,25 +320,41 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
   },
-  progressRow: {
+  dotsRow: {
     position: 'absolute',
-    left: 8,
-    right: 8,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
-    gap: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
     zIndex: 20,
   },
-  progressTrack: {
-    flex: 1,
-    height: 2.5,
-    borderRadius: 1.5,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.3)',
     overflow: 'hidden',
   },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 1.5,
+  dotPast: {
+    backgroundColor: '#22C55E',
+  },
+  dotActive: {
+    width: 24,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  dotFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#22C55E',
+    borderRadius: 4,
+    transformOrigin: 'left',
   },
   header: {
     position: 'absolute',
@@ -329,7 +370,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: '#22C55E',
   },
   userName: {
     flex: 1,
@@ -426,7 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F56040',
+    backgroundColor: '#EF4444',
   },
   threadPreview: {
     position: 'absolute',

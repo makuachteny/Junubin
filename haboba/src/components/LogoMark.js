@@ -79,10 +79,11 @@ export default function LogoMark({ size = 120, light = false, animated = false }
       <Svg width={size} height={totalH} viewBox={`0 115 ${vbW} ${vbH}`}>
         <Defs>
           <SvgGradient id="jbGrad" x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#FCAF45" />
-            <Stop offset="0.35" stopColor="#F77737" />
-            <Stop offset="0.65" stopColor="#F56040" />
-            <Stop offset="1" stopColor="#E6683C" />
+            <Stop offset="0" stopColor="#1A1A1A" />
+            <Stop offset="0.25" stopColor="#DC2626" />
+            <Stop offset="0.5" stopColor="#F56040" />
+            <Stop offset="0.75" stopColor="#16A34A" />
+            <Stop offset="1" stopColor="#2563EB" />
           </SvgGradient>
         </Defs>
 
