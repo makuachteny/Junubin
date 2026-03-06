@@ -13,8 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
-import { GraffitiCommunity, GraffitiDrum, GraffitiSpray, GraffitiSparkles, GraffitiFlame, GraffitiLocation, GraffitiStar } from '../components/icons';
-import { SpraySplatter, GraffitiSectionDivider } from '../components/GraffitiAccents';
+import { GraffitiCommunity, GraffitiSparkles, GraffitiFlame, GraffitiLocation, GraffitiStar } from '../components/icons';
+import { GraffitiSectionDivider } from '../components/GraffitiAccents';
 import UnderlineTabs from '../components/UnderlineTabs';
 import PostCard from '../components/PostCard';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
@@ -208,11 +208,7 @@ export default function CommunityScreen({ navigation, route }) {
           <Ionicons name="options-outline" size={18} color={colors.black} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <View style={styles.headerTitleRow}>
-            <GraffitiDrum size={20} color={colors.accent} filled style={{ marginRight: 6, opacity: 0.7 }} />
-            <Text style={styles.headerTitle}>Community</Text>
-            <GraffitiSpray size={18} color={colors.accent} style={{ marginLeft: 6, opacity: 0.5 }} />
-          </View>
+          <Text style={styles.headerTitle}>Community</Text>
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
           <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
@@ -408,7 +404,7 @@ export default function CommunityScreen({ navigation, route }) {
             end={{ x: 1, y: 1 }}
             style={styles.fabGradient}
           >
-            <GraffitiSpray size={24} color="#FFF" filled />
+            <Ionicons name="add" size={28} color="#FFF" />
           </LinearGradient>
         </TouchableOpacity>
       )}
@@ -430,10 +426,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerCenter: {
-    alignItems: 'center',
-  },
-  headerTitleRow: {
-    flexDirection: 'row',
     alignItems: 'center',
   },
   headerTitle: {

@@ -67,7 +67,7 @@ function HomeTabs() {
   const styles = useMemo(() => getStyles(colors), [colors]);
   const likesPink = colors.accent;
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current; // Start on HomeTab (index 0)
-  const TAB_NAMES = ['HomeTab', 'LikesTab', 'CommunityTab', 'MessagesTab'];
+  const TAB_NAMES = ['HomeTab', 'CommunityTab', 'MessagesTab', 'LikesTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
 
   return (
@@ -96,15 +96,6 @@ function HomeTabs() {
           shadowRadius: 12,
           elevation: 10,
         },
-        tabBarBackground: () => (
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, flexDirection: 'row' }}>
-            <View style={{ flex: 1, backgroundColor: '#000000', height: 2, opacity: 0.5 }} />
-            <View style={{ flex: 1, backgroundColor: '#EF4444', height: 2, opacity: 0.5 }} />
-            <View style={{ flex: 1, backgroundColor: '#FFFFFF', height: 2, opacity: 0.3 }} />
-            <View style={{ flex: 1, backgroundColor: '#22C55E', height: 2, opacity: 0.5 }} />
-            <View style={{ flex: 1, backgroundColor: '#3B82F6', height: 2, opacity: 0.5 }} />
-          </View>
-        ),
         tabBarIcon: ({ focused }) => {
           const activeColor = route.name === 'LikesTab' ? likesPink : colors.tabActive;
           const iconColor = focused ? activeColor : colors.tabInactive;
@@ -175,12 +166,14 @@ function HomeTabs() {
 export default function AppNavigator() {
   const { colors } = useTheme();
   const { isAuthenticated, user } = useAuth();
-  const profile = user?.profile;
-  const profileComplete = profile?.profileComplete || profile?.accountPurpose;
+
+  // Authenticated users go straight to Main (even if profile is incomplete,
+  // they can finish it later — don't loop them through onboarding again)
+  const initialRoute = isAuthenticated ? 'Main' : 'Onboarding';
 
   return (
     <Stack.Navigator
-      initialRouteName={isAuthenticated ? (profileComplete ? 'Main' : 'ProfileSetup') : 'Onboarding'}
+      initialRouteName={initialRoute}
       screenOptions={{
         headerShown: false,
         cardStyleInterpolator: ({ current, layouts }) => ({

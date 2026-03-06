@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { useTheme, Typography, FontFamily } from '../theme';
 
 export default function UnderlineTabs({
@@ -12,7 +11,6 @@ export default function UnderlineTabs({
   activeColor,
 }) {
   const { colors, isDark } = useTheme();
-  const underlineColor = activeColor || colors.accent;
 
   const renderTabs = () => (
     <View style={[styles.row, !scrollable && styles.rowFill]}>
@@ -37,13 +35,6 @@ export default function UnderlineTabs({
             >
               {tab}
             </Text>
-            {isActive && (
-              <View style={styles.underlineWrap}>
-                <Svg width={28} height={6} viewBox="0 0 28 6">
-                  <Path d="M0 3l4-2 4 2 4-2 4 2 4-2 4 2 4-2" fill="none" stroke={underlineColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </View>
-            )}
           </TouchableOpacity>
         );
       })}
@@ -91,9 +82,5 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: 15,
     fontWeight: '600',
-  },
-  underlineWrap: {
-    marginTop: 4,
-    alignItems: 'center',
   },
 });

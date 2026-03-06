@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GraffitiChat, GraffitiTag } from '../components/icons';
-import { TribalDivider } from '../components/GraffitiAccents';
+
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme, Typography, FontFamily, getShadow, Gradients } from '../theme';
@@ -24,7 +24,6 @@ import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as matchesService from '../api/services/matchesService';
 import * as likesService from '../api/services/likesService';
-import { getEthnicIdentity } from '../utils/ethnicIdentity';
 import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
@@ -195,15 +194,15 @@ export default function MessagesScreen({ navigation }) {
               </LinearGradient>
             </TouchableOpacity>
             <View style={styles.msgInfo}>
-              <View style={styles.msgNameInline}>
-                <Text style={styles.msgName}>{item.name}</Text>
-                <View style={styles.likesYouBadge}>
-                  <Text style={styles.likesYouText}>Likes You</Text>
-                </View>
-              </View>
+              <Text style={styles.msgName}>{item.name}</Text>
               <Text style={styles.msgPreview}>Liked you recently, match now!</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
+            <View style={styles.likesYouRight}>
+              <View style={styles.likesYouBadge}>
+                <Text style={styles.likesYouText}>Likes You</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={14} color={colors.gray400} />
+            </View>
           </TouchableOpacity>
         </Animated.View>
       );
@@ -241,14 +240,6 @@ export default function MessagesScreen({ navigation }) {
           <View style={styles.msgInfo}>
             <View style={styles.msgNameRow}>
               <Text style={styles.msgName}>{item.name}</Text>
-              {!!item.ethnicity && (() => {
-                const eth = getEthnicIdentity(item.ethnicity);
-                return (
-                  <View style={[styles.msgEthnicDot, { backgroundColor: eth.color }]}>
-                    <Text style={styles.msgEthnicEmoji}>{eth.emoji}</Text>
-                  </View>
-                );
-              })()}
               {item.unread && prefs?.nonColorCues && (
                 <View style={styles.unreadBadge}>
                   <Text style={styles.unreadBadgeText}>Unread</Text>
@@ -342,7 +333,7 @@ export default function MessagesScreen({ navigation }) {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Chats</Text>
-          <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: -1 }} />
+
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
           <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
@@ -529,26 +520,9 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     justifyContent: 'flex-start',
     marginBottom: 4,
   },
-  msgNameInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
   msgName: {
     ...Typography.sectionLabel,
     color: colors.black,
-  },
-  msgEthnicDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 5,
-    marginRight: 'auto',
-  },
-  msgEthnicEmoji: {
-    fontSize: 10,
   },
   msgTime: {
     ...Typography.caption,
@@ -581,17 +555,17 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     color: colors.black,
   },
+  likesYouRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
   likesYouBadge: {
     backgroundColor: colors.accent,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,
-    marginLeft: 8,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
   },
   likesYouText: {
     ...Typography.captionBold,

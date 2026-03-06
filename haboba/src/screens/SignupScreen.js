@@ -19,7 +19,7 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../auth';
 import { useAccessibilityPreferences } from '../accessibility';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 import { GraffitiShield } from '../components/icons';
 
 const { width } = Dimensions.get('window');
@@ -127,14 +127,20 @@ const SignupScreen = ({ navigation }) => {
           phone: selectedMethod === 'phone' ? `+1${phone.replace(/\D/g, '')}` : undefined,
           code,
         });
-        // Returning user with complete profile → go straight to Main
-        const appProfile = result?.appUser?.profile;
-        if (appProfile?.profileComplete || appProfile?.accountPurpose) {
+        // Returning user with any profile data → go straight to Main
+        const appUser = result?.appUser;
+        const appProfile = appUser?.profile;
+        if (
+          appProfile?.profileComplete ||
+          appProfile?.accountPurpose ||
+          appProfile?.displayName ||
+          appUser?.displayName
+        ) {
           navigation.replace('Main');
           return;
         }
-        // Brand-new user — start onboarding survey
-        navigation.replace(prefs?.surveyCompleted ? 'ProfileSetup' : 'AccessibilitySurvey');
+        // Brand-new user → profile setup
+        navigation.replace('ProfileSetup');
       } catch (error) {
         Alert.alert('Verification failed', error.message || 'Invalid code.');
       }
@@ -268,7 +274,7 @@ const SignupScreen = ({ navigation }) => {
             {/* Logo */}
             <View style={styles.logoContainer}>
               <BrandLogo size="medium" light />
-              <TribalDivider width={100} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 8 }} />
+
             </View>
 
             {/* Spray accents */}

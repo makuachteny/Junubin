@@ -82,11 +82,18 @@ const ETHNIC_GROUPS = {
     label: 'Luo',
     icon: 'water',
   },
+  'South Sudanese': {
+    emoji: '\u{1F1F8}\u{1F1F8}',  // SS flag
+    color: '#22C55E',              // SS green
+    tint: 'rgba(34,197,94,0.10)',
+    label: 'South Sudanese',
+    icon: 'flag',
+  },
   Other: {
     emoji: '\u{1F30D}',       // globe
     color: '#F56040',         // app accent
     tint: 'rgba(245,96,64,0.10)',
-    label: 'Junub',
+    label: 'South Sudanese',
     icon: 'earth',
   },
 };

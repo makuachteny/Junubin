@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import { TribalDivider } from '../components/GraffitiAccents';
+
 
 export default function PreferenceSelectScreen({ navigation, route }) {
   const { prefKey, title, options = [], currentValue, prefType } = route.params || {};
@@ -68,7 +68,7 @@ export default function PreferenceSelectScreen({ navigation, route }) {
           <Text style={styles.contextText}>Fine-tune your matches</Text>
         </View>
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
-          <TribalDivider width={100} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
+
         </View>
 
         <Text style={styles.subtitle}>Choose one option</Text>

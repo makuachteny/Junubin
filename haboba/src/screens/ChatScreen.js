@@ -15,7 +15,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiSend, GraffitiShield } from '../components/icons';
+import { GraffitiSend } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -147,6 +147,7 @@ export default function ChatScreen({ navigation, route }) {
   const [showStickerTray, setShowStickerTray] = useState(false);
   const [showActionRow, setShowActionRow] = useState(false);
   const [showGamePicker, setShowGamePicker] = useState(route.params?.startGame || false);
+  const [hiddenFeatures, setHiddenFeatures] = useState({});
   const [activeGames, setActiveGames] = useState(new Map());
   const [gameResult, setGameResult] = useState(null);
   const flatListRef = useRef(null);
@@ -861,14 +862,6 @@ export default function ChatScreen({ navigation, route }) {
           </TouchableOpacity>
         </View>
       </View>
-      {/* South Sudan flag accent stripe */}
-      <View style={{ flexDirection: 'row', height: 2 }}>
-        <View style={{ flex: 1, backgroundColor: '#000000', opacity: 0.4 }} />
-        <View style={{ flex: 1, backgroundColor: '#EF4444', opacity: 0.4 }} />
-        <View style={{ flex: 1, backgroundColor: '#FFFFFF', opacity: 0.2 }} />
-        <View style={{ flex: 1, backgroundColor: '#22C55E', opacity: 0.4 }} />
-        <View style={{ flex: 1, backgroundColor: '#3B82F6', opacity: 0.4 }} />
-      </View>
 
       {/* Messages */}
       <FlatList
@@ -901,7 +894,11 @@ export default function ChatScreen({ navigation, route }) {
             </View>
 
             {/* ── Match Mission — progress card ── */}
+            {!hiddenFeatures.mission && (
             <View style={styles.missionsCard}>
+              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, mission: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color={colors.gray400} />
+              </TouchableOpacity>
               <View style={styles.missionsHeader}>
                 <View style={styles.missionsIconWrap}>
                   <Ionicons name="rocket" size={16} color={colors.accent} />
@@ -931,12 +928,17 @@ export default function ChatScreen({ navigation, route }) {
                 ))}
               </View>
             </View>
+            )}
 
             {/* ── Smart Icebreakers — horizontal pills ── */}
+            {!hiddenFeatures.icebreakers && (
             <View style={styles.sectionWrap}>
               <View style={styles.sectionTitleRow}>
                 <Ionicons name="chatbubbles" size={15} color={colors.accent} />
-                <Text style={styles.sectionTitle}>Icebreakers</Text>
+                <Text style={[styles.sectionTitle, { flex: 1 }]}>Icebreakers</Text>
+                <TouchableOpacity onPress={() => setHiddenFeatures(p => ({ ...p, icebreakers: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={16} color={colors.gray400} />
+                </TouchableOpacity>
               </View>
               <View style={styles.icebreakersRow}>
                 {icebreakers.map((line, i) => (
@@ -952,9 +954,14 @@ export default function ChatScreen({ navigation, route }) {
                 ))}
               </View>
             </View>
+            )}
 
             {/* ── Mini Game card ── */}
+            {!hiddenFeatures.quickPick && (
             <View style={styles.funCard}>
+              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, quickPick: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color={colors.gray400} />
+              </TouchableOpacity>
               <View style={styles.funHeader}>
                 <View style={[styles.funIconCircle, { backgroundColor: 'rgba(245,96,64,0.1)' }]}>
                   <Ionicons name="game-controller" size={16} color={colors.accent} />
@@ -976,9 +983,14 @@ export default function ChatScreen({ navigation, route }) {
                 </TouchableOpacity>
               </View>
             </View>
+            )}
 
             {/* ── Voice Vibe + Duo Poll card ── */}
+            {!hiddenFeatures.voiceVibes && (
             <View style={styles.funCard}>
+              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, voiceVibes: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color={colors.gray400} />
+              </TouchableOpacity>
               <View style={styles.funHeader}>
                 <View style={[styles.funIconCircle, { backgroundColor: 'rgba(131,58,180,0.1)' }]}>
                   <Ionicons name="mic" size={16} color={colors.royal} />
@@ -1013,9 +1025,14 @@ export default function ChatScreen({ navigation, route }) {
                 </TouchableOpacity>
               </View>
             </View>
+            )}
 
             {/* ── Co-watch / Co-listen card ── */}
+            {!hiddenFeatures.coWatch && (
             <View style={[styles.funCard, styles.funCardLast]}>
+              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, coWatch: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={16} color={colors.gray400} />
+              </TouchableOpacity>
               <View style={styles.funHeader}>
                 <View style={[styles.funIconCircle, { backgroundColor: 'rgba(0,149,246,0.1)' }]}>
                   <Ionicons name="headset" size={16} color={colors.info} />
@@ -1038,6 +1055,7 @@ export default function ChatScreen({ navigation, route }) {
                 </TouchableOpacity>
               </View>
             </View>
+            )}
           </View>
         }
       />
@@ -1342,6 +1360,19 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     ...Typography.caption,
     color: colors.gray400,
     marginTop: 5,
+  },
+  // ── Per-card dismiss button ──
+  cardDismiss: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   // ── Missions Card ──
   missionsCard: {

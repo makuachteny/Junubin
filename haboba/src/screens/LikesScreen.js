@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import { GraffitiLocation, GraffitiHeart, GraffitiShield } from '../components/icons';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 import Button from '../components/Button';
 import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
@@ -129,7 +129,7 @@ export default function LikesScreen({ navigation }) {
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
           <Text style={styles.headerTitle}>Likes</Text>
-          <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: -2 }} />
+
         </View>
         <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
           <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
@@ -209,42 +209,54 @@ export default function LikesScreen({ navigation }) {
 
             return (
               <Animated.View key={like.id} style={[styles.likeCard, cardAnimStyle]}>
-                <Image
-                  source={imageSource(like.images?.[0])}
-                  style={styles.likeImage}
-                  blurRadius={unlocked ? 0 : 25}
-                />
-                {/* Bottom gradient overlay */}
-                <View style={styles.gradientOverlay} />
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={StyleSheet.absoluteFill}
+                  onPress={() => {
+                    if (unlocked) {
+                      navigation.navigate('ProfileDetail', { profile: like, fromLikes: true });
+                    } else {
+                      navigation.navigate('Elite');
+                    }
+                  }}
+                >
+                  <Image
+                    source={imageSource(like.images?.[0])}
+                    style={styles.likeImage}
+                    blurRadius={unlocked ? 0 : 25}
+                  />
+                  {/* Bottom gradient overlay */}
+                  <View style={styles.gradientOverlay} />
 
-                {/* Card info */}
-                <View style={styles.likeInfo}>
-                  {/* Name + Age + Heart row */}
-                  <View style={styles.nameRow}>
-                    {unlocked ? (
-                      <Text style={styles.likeName} numberOfLines={1}>{like.name}</Text>
-                    ) : (
-                      <View style={styles.blurredName} />
-                    )}
-                    <Text style={styles.likeAge}>{like.age}</Text>
-                    <GraffitiHeart size={16} color={colors.rose} filled />
-                  </View>
+                  {/* Card info */}
+                  <View style={styles.likeInfo}>
+                    {/* Name + Age + Heart row */}
+                    <View style={styles.nameRow}>
+                      {unlocked ? (
+                        <Text style={styles.likeName} numberOfLines={1}>{like.name}</Text>
+                      ) : (
+                        <View style={styles.blurredName} />
+                      )}
+                      <Text style={styles.likeAge}>{like.age}</Text>
+                      <GraffitiHeart size={16} color={colors.rose} filled />
+                    </View>
 
-                  {/* Activity row */}
-                  <View style={styles.activityRow}>
-                    {like.activity === 'nearby' ? (
-                      <>
-                        <GraffitiLocation size={13} color="#FFFFFF" filled />
-                        <Text style={styles.activityText}>Nearby</Text>
-                      </>
-                    ) : (
-                      <>
-                        <View style={styles.activeDot} />
-                        <Text style={styles.activityText}>Recently Active</Text>
-                      </>
-                    )}
+                    {/* Activity row */}
+                    <View style={styles.activityRow}>
+                      {like.activity === 'nearby' ? (
+                        <>
+                          <GraffitiLocation size={13} color="#FFFFFF" filled />
+                          <Text style={styles.activityText}>Nearby</Text>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.activeDot} />
+                          <Text style={styles.activityText}>Recently Active</Text>
+                        </>
+                      )}
+                    </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               </Animated.View>
             );
           })}

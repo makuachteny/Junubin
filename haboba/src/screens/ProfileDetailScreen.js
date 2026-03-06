@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GraffitiHeart, GraffitiSparkles, GraffitiStickerIcon, GraffitiShield } from '../components/icons';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, getShadow } from '../theme';
@@ -53,6 +53,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const { colors, isDark } = useTheme();
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const profile = route.params?.profile || {};
+  const fromLikes = route.params?.fromLikes || false;
   const [photoIdx, setPhotoIdx] = useState(0);
   const { consumeSuperLike, superLikes, hasTier } = useSubscription();
   const { session } = useAuth();
@@ -65,6 +66,18 @@ const ProfileDetailScreen = ({ navigation, route }) => {
       }).catch((e) => { if (__DEV__) console.warn('Like swipe failed:', e); });
     }
     navigation.goBack();
+  };
+  const handleMatchAndChat = () => {
+    if (session && profile.id) {
+      discoverService.recordSwipe(profile.id, 'like').then(() => {
+        navigation.replace('Chat', { match: profile });
+      }).catch((e) => {
+        if (__DEV__) console.warn('Match swipe failed:', e);
+        navigation.replace('Chat', { match: profile });
+      });
+    } else {
+      navigation.replace('Chat', { match: profile });
+    }
   };
   const handleSuperLike = () => {
     if (superLikes <= 0) { Alert.alert('No Super Likes', 'You\'re out of Super Likes!', [{ text: 'Get More', onPress: () => { navigation.goBack(); navigation.navigate('Boost'); } }, { text: 'Cancel', style: 'cancel' }]); return; }
@@ -179,7 +192,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           </Animated.View>
 
           {/* Tribal divider accent */}
-          <TribalDivider width={200} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ alignSelf: 'center', marginBottom: 12 }} />
+
 
           {/* ── Prompt — the hero card ── */}
           <Animated.View style={{
@@ -296,32 +309,46 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           }],
         },
       ]}>
-        <TouchableOpacity style={s.passBtn} onPress={handlePass} activeOpacity={0.7}>
-          <Ionicons name="close" size={28} color={colors.rose} />
-        </TouchableOpacity>
-        <TouchableOpacity style={s.likeBtn} onPress={handleLike} activeOpacity={0.8}>
-          <GraffitiHeart size={22} color="#FFF" filled />
-          <Text style={s.likeBtnText}>Like</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={s.superBtn} onPress={handleSuperLike} activeOpacity={0.7}>
-          <GraffitiSparkles size={22} color={colors.accent} filled />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={s.challengeBtn}
-          onPress={() => {
-            if (!hasTier('plus')) {
-              Alert.alert('JuNubin+ Feature', 'In-chat games require JuNubin+ or higher.', [
-                { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-                { text: 'Cancel', style: 'cancel' },
-              ]);
-              return;
-            }
-            navigation.navigate('Chat', { match: profile, startGame: true });
-          }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="game-controller" size={20} color="#FFD700" />
-        </TouchableOpacity>
+        {fromLikes ? (
+          <>
+            <TouchableOpacity style={s.passBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+              <Ionicons name="close" size={28} color={colors.rose} />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.matchBtn} onPress={handleMatchAndChat} activeOpacity={0.8}>
+              <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" />
+              <Text style={s.likeBtnText}>Match & Chat</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={s.passBtn} onPress={handlePass} activeOpacity={0.7}>
+              <Ionicons name="close" size={28} color={colors.rose} />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.likeBtn} onPress={handleLike} activeOpacity={0.8}>
+              <GraffitiHeart size={22} color="#FFF" filled />
+              <Text style={s.likeBtnText}>Like</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.superBtn} onPress={handleSuperLike} activeOpacity={0.7}>
+              <GraffitiSparkles size={22} color={colors.accent} filled />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.challengeBtn}
+              onPress={() => {
+                if (!hasTier('plus')) {
+                  Alert.alert('JuNubin+ Feature', 'In-chat games require JuNubin+ or higher.', [
+                    { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]);
+                  return;
+                }
+                navigation.navigate('Chat', { match: profile, startGame: true });
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="game-controller" size={20} color="#FFD700" />
+            </TouchableOpacity>
+          </>
+        )}
       </Animated.View>
     </View>
   );
@@ -392,6 +419,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.95)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: 'rgba(255,255,255,0.08)' },
   passBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
   likeBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+  matchBtn: { flex: 1, height: 54, backgroundColor: '#22C55E', borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#22C55E', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
   likeBtnText: { color: '#FFF', fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.5 },
   superBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
   challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(255,215,0,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(255,215,0,0.25)' },

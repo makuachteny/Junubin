@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import UnderlineTabs from '../components/UnderlineTabs';
 import { GraffitiCrown, GraffitiFlame } from '../components/icons';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 import { GAME_CATALOG } from '../data/games';
 
 import { useSubscription } from '../payments';
@@ -115,7 +115,7 @@ export default function InteractivityHubScreen({ navigation }) {
               <GraffitiFlame size={18} color={colors.accent} filled />
               <Text style={styles.title}>Games & Fun</Text>
             </View>
-            <TribalDivider width={80} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 1 }} />
+
           </View>
           <View style={styles.backBtnSpacer} />
         </View>

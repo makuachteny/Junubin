@@ -16,13 +16,20 @@ export default function StoriesRow({ onStoryPress, onCreateStory, colors }) {
     >
       {/* Add Story */}
       <TouchableOpacity style={styles.storyItem} onPress={onCreateStory} activeOpacity={0.7}>
-        <View style={[styles.addCircle, { borderColor: colors.gray300, backgroundColor: colors.gray100 }]}>
-          <Ionicons name="add" size={24} color={colors.accent} />
-        </View>
+        <LinearGradient
+          colors={['#F97316', '#EA580C', '#F59E0B']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientRing}
+        >
+          <View style={styles.addCenter}>
+            <Ionicons name="add" size={28} color="#FFFFFF" />
+          </View>
+        </LinearGradient>
         <Text style={[styles.name, { color: colors.black }]}>Add Story</Text>
       </TouchableOpacity>
 
-      {/* Story circles */}
+      {/* Story cards — profile-style thumbnails */}
       {mockStories.map((story, index) => (
         <TouchableOpacity
           key={story.id}
@@ -31,7 +38,7 @@ export default function StoriesRow({ onStoryPress, onCreateStory, colors }) {
           activeOpacity={0.7}
         >
           <LinearGradient
-            colors={['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6']}
+            colors={['#F97316', '#EA580C', '#F59E0B']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradientRing}
@@ -53,29 +60,28 @@ const styles = StyleSheet.create({
   },
   storyItem: {
     alignItems: 'center',
-    width: 68,
+    width: 72,
   },
-  addCircle: {
-    width: 62,
-    height: 62,
+  addCenter: {
+    width: '100%',
+    height: '100%',
     borderRadius: 31,
-    borderWidth: 2,
-    borderStyle: 'dashed',
+    backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   gradientRing: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     padding: 3,
   },
   avatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: '100%',
+    height: '100%',
+    borderRadius: 31,
     borderWidth: 2,
-    borderColor: '#FFFFFF', // always white gap between gradient ring and avatar
+    borderColor: '#FFFFFF',
   },
   name: {
     fontSize: 11,

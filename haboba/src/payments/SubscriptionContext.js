@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PaymentService from './PaymentService';
 import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
+import { supabase } from '../config/supabase';
 import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
 
 const STORAGE_KEY = '@haboba_subscription';
@@ -197,6 +198,14 @@ export function SubscriptionProvider({ children }) {
       consumed = true;
       return { ...prev, coins: prev.coins - amount };
     });
+    // Sync deduction to backend (fire-and-forget)
+    if (consumed) {
+      supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+        if (authUser) {
+          supabase.rpc('deduct_coins', { user_auth_id: authUser.id, amount }).catch(() => {});
+        }
+      }).catch(() => {});
+    }
     return consumed;
   }, []);
 

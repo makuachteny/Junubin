@@ -52,7 +52,7 @@ const PRONOUN_OPTIONS = ['she/her/hers', 'he/him/his', 'they/them/theirs', 'ze/z
 const SEXUALITY_OPTIONS = ['Straight', 'Gay', 'Lesbian', 'Bisexual', 'Pansexual', 'Asexual', 'Queer', 'Prefer not to say'];
 const DATE_PREF_OPTIONS = ['Men', 'Women', 'Everyone'];
 const INTENTION_OPTIONS = ['Life partner', 'Long-term relationship', 'Short-term relationship', 'Figuring it out', 'Prefer not to say'];
-const ETHNICITY_OPTIONS = ['Dinka', 'Nuer', 'Shilluk', 'Bari', 'Zande', 'Acholi', 'Murle', 'Toposa', 'Lotuko', 'Madi', 'Luo', 'Other'];
+const ETHNICITY_OPTIONS = ['Dinka', 'Nuer', 'Shilluk', 'Bari', 'Zande', 'Acholi', 'Murle', 'Toposa', 'Lotuko', 'Madi', 'Luo', 'South Sudanese', 'Other'];
 const EDUCATION_OPTIONS = ['High school', 'Some college', 'Associate degree', 'Bachelor\'s degree', 'Master\'s degree', 'Doctorate', 'Trade school', 'Prefer not to say'];
 const CHILDREN_OPTIONS = ['No children', 'Have children', 'Want children someday', 'Don\'t want children', 'Open to children', 'Prefer not to say'];
 const INTEREST_OPTIONS = [
@@ -694,7 +694,7 @@ const ProfileSetupScreen = ({ navigation }) => {
                     }}
                     activeOpacity={0.8}
                   >
-                    <View style={[styles.purposeIconCircle, isActive && { backgroundColor: isActive ? opt.gradient[0] : colors.gray100 }]}>
+                    <View style={[styles.purposeIconCircle, isActive && { backgroundColor: opt.gradient[0] }]}>
                       <Ionicons name={opt.icon} size={26} color={isActive ? '#FFFFFF' : colors.gray500} />
                     </View>
                     <View style={{ flex: 1 }}>

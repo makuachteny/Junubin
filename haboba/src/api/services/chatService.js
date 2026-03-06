@@ -53,9 +53,10 @@ export async function sendMessage(conversationId, body, type = 'text') {
   if (!appUser) throw new Error('User not found');
 
   // Game messages carry JSON payloads — skip HTML stripping, allow larger body
+  // Strip all angle brackets and HTML entities for regular messages
   const sanitized = type === 'game'
     ? body.slice(0, 8000)
-    : body.replace(/<[^>]*>/g, '').slice(0, 4000);
+    : body.replace(/<[^>]*>?/g, '').replace(/&[a-z]+;/gi, '').slice(0, 4000);
 
   const { data: message, error } = await supabase
     .from('Message')
@@ -75,5 +76,6 @@ export async function sendMessage(conversationId, body, type = 'text') {
 function formatTime(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }

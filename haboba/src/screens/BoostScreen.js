@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { GraffitiFlame } from '../components/icons';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 import { GraffitiShield } from '../components/icons';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
@@ -101,7 +101,7 @@ export default function BoostScreen({ navigation }) {
       </View>
 
       <Text style={styles.title}>Get In The Spotlight</Text>
-      <TribalDivider width={100} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 8 }} />
+
       <Text style={styles.subtitle}>
         Put your profile at the top of the stack — be the first person seen in your area!
       </Text>
@@ -151,9 +151,7 @@ export default function BoostScreen({ navigation }) {
       </View>
 
       <View style={styles.divider}>
-        <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
         <Text style={styles.dividerText}>or upgrade</Text>
-        <TribalDivider width={60} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
       </View>
 
       {/* Junub upsell */}

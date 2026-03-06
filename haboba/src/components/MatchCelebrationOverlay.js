@@ -13,7 +13,7 @@ import { FontFamily, useTheme } from '../theme';
 import { GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame, GraffitiCrown, GraffitiShield } from './icons';
 import { imageSource } from '../utils/imageSource';
 import { hapticHeavy } from '../utils/haptics';
-import { TribalDivider, SpraySplatter } from './GraffitiAccents';
+import { SpraySplatter } from './GraffitiAccents';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const PHOTO_SIZE = 100;
@@ -206,7 +206,7 @@ const MatchCelebrationOverlay = ({
 
       {/* Title */}
       <Animated.View style={[styles.titleWrap, { transform: [{ scale: titleScale }] }]}>
-        <TribalDivider width={140} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 10 }} />
+
         <Text style={styles.title}>It's a Match!</Text>
         <Text style={styles.subtitle}>
           You and {matchedUser?.name || 'someone'} liked each other

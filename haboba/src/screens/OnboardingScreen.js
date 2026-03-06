@@ -21,8 +21,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily, useTheme } from '../theme';
 import LogoMark from '../components/LogoMark';
 import { useAccessibilityPreferences } from '../accessibility';
+import { useAuth } from '../auth';
 import { GraffitiShield, GraffitiCrown } from '../components/icons';
-import { SpraySplatter, TribalDivider } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
@@ -33,10 +34,18 @@ const PAGES = [{ id: 1 }, { id: 2 }, { id: 3 }];
 const OnboardingScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const { prefs } = useAccessibilityPreferences();
+  const { isAuthenticated } = useAuth();
   const [currentPage, setCurrentPage] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const scrollViewRef = useRef(null);
   const insets = useSafeAreaInsets();
+
+  // If user is already authenticated, skip onboarding entirely
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigation.replace('Main');
+    }
+  }, [isAuthenticated, navigation]);
 
   // ── Entrance animation ──
   const entrance = useRef(new Animated.Value(0)).current;
@@ -90,10 +99,6 @@ const OnboardingScreen = ({ navigation }) => {
 
   const goSignup = useCallback(() => navigation.navigate('Signup'), [navigation]);
   const handleLandingSkip = useCallback(() => {
-    if (__DEV__) {
-      navigation.replace('Main');
-      return;
-    }
     navigation.navigate('Signup');
   }, [navigation]);
 
@@ -204,7 +209,7 @@ const OnboardingScreen = ({ navigation }) => {
             </Animated.View>
 
             <Animated.View style={[s.heroTextBlock, { opacity: taglineOpacity, transform: [{ translateY: taglineY }] }]}>
-              <TribalDivider width={120} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 20 }} />
+
               <Text style={s.heroTagline}>Where Junubin</Text>
               <Text testID="onboarding-hero-connect" style={s.heroAccent}>connect.</Text>
               {/* South Sudan flag stripe */}

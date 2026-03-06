@@ -16,7 +16,7 @@ import PurchaseModal from '../components/PurchaseModal';
 import { useSubscription, PRODUCT_IDS } from '../payments';
 import { formatPerMonth } from '../payments/pricing';
 import { GraffitiCrown, GraffitiShield } from '../components/icons';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width } = Dimensions.get('window');
 
@@ -251,7 +251,7 @@ export default function EliteScreen({ navigation }) {
 
         {/* Tier branding with tribal accents */}
         <View style={styles.brandRow}>
-          <TribalDivider width={60} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} />
+
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 10 }}>
             {selectedTier === 'junub' ? (
               <GraffitiCrown size={18} color={colors.accent} filled />
@@ -260,7 +260,7 @@ export default function EliteScreen({ navigation }) {
             )}
             <Text style={styles.brandText}>{tierLabel}</Text>
           </View>
-          <TribalDivider width={60} height={6} colors={['#3B82F6', '#22C55E', '#EF4444']} />
+
         </View>
 
         {selectedTier === 'junub' && (

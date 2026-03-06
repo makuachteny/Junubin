@@ -185,7 +185,7 @@ describe('Purpose / Intention flow', () => {
     expect(getByText('Home Screen')).toBeTruthy();
   });
 
-  it('authenticated user without profile goes to ProfileSetup', () => {
+  it('authenticated user without profile goes to Main (discovery)', () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: null },
@@ -197,7 +197,7 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText("What's your first name?")).toBeTruthy();
+    expect(getByText('Home Screen')).toBeTruthy();
   });
 
   it('unauthenticated user sees Onboarding', () => {

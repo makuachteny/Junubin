@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { FontFamily } from '../theme';
 import LogoMark from '../components/LogoMark';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -123,7 +123,7 @@ export default function SplashScreen({ onFinish, authReady }) {
 
       {/* Bottom tagline + flag accent */}
       <Animated.View style={[styles.bottomSection, { opacity: logoFade }]}>
-        <TribalDivider width={140} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 12 }} />
+
         <Text style={styles.tagline}>Connect with your people</Text>
         {/* South Sudan flag stripe */}
         <View style={styles.flagStripe}>

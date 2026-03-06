@@ -5,7 +5,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { TribalDivider, GraffitiCorner } from './GraffitiAccents';
+import { GraffitiCorner } from './GraffitiAccents';
 
 export default function EmptyState({ icon, title, subtitle, actionLabel, onAction }) {
   const { colors } = useTheme();
@@ -23,7 +23,7 @@ export default function EmptyState({ icon, title, subtitle, actionLabel, onActio
       {subtitle ? (
         <Text style={[styles.subtitle, { color: colors.gray400 }]}>{subtitle}</Text>
       ) : null}
-      <TribalDivider width={120} height={6} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 12, marginBottom: 4 }} />
+
       {actionLabel && onAction ? (
         <TouchableOpacity
           style={[styles.actionBtn, { backgroundColor: colors.accent }]}

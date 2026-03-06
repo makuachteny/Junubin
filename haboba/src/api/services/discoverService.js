@@ -82,7 +82,7 @@ export async function getDailyLikeStatus() {
   const unlimited = tier !== 'free';
 
   const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  startOfDay.setUTCHours(0, 0, 0, 0);
 
   const { count } = await supabase
     .from('Swipe')

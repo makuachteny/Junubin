@@ -23,7 +23,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import { GraffitiSparkles } from '../components/icons';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 import { GraffitiShield } from '../components/icons';
 import Button from '../components/Button';
 import { useSubscription } from '../payments';
@@ -150,6 +150,7 @@ const PREF_OPTIONS = {
     { label: 'Azande', value: 'Azande', icon: 'flag-outline' },
     { label: 'Murle', value: 'Murle', icon: 'flag-outline' },
     { label: 'Acholi', value: 'Acholi', icon: 'flag-outline' },
+    { label: 'South Sudanese', value: 'South Sudanese', icon: 'flag-outline' },
   ],
   religion: [
     { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
@@ -467,7 +468,7 @@ export default function PreferencesScreen({ navigation, route }) {
           <Text style={styles.headerTitle}>
             {isSocial ? 'Socializing' : 'Dating'}
           </Text>
-          <TribalDivider width={80} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: -2 }} />
+
         </View>
         <TouchableOpacity onPress={handleDone}>
           <Text style={styles.doneText}>Done</Text>

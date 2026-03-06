@@ -19,7 +19,7 @@ import { POST_THEMES } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { GraffitiLocation } from '../components/icons';
-import { TribalDivider, SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from '../components/GraffitiAccents';
 import { buildPostContent } from '../utils/postComposer';
 
 const themeKeys = Object.keys(POST_THEMES);
@@ -122,7 +122,7 @@ export default function CreatePostScreen({ navigation }) {
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
           <Text style={styles.headerTitle}>New Post</Text>
-          <TribalDivider width={70} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginTop: 2 }} />
+
         </View>
         <TouchableOpacity
           style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
@@ -210,7 +210,7 @@ export default function CreatePostScreen({ navigation }) {
 
         {/* Add media */}
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
-          <TribalDivider width={120} height={5} colors={['#EF4444', '#22C55E', '#3B82F6']} />
+
         </View>
         <Text style={styles.sectionTitle}>Add to Post</Text>
         <View style={styles.mediaRow}>

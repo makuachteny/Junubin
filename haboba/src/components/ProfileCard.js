@@ -25,7 +25,6 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { hapticLight, hapticMedium } from '../utils/haptics';
-import { getEthnicIdentity } from '../utils/ethnicIdentity';
 import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -287,13 +286,13 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
             />
           )}
           {totalImages > 1 && (
-            <Animated.View style={[styles.progressBar, progressBarStyle]}>
+            <Animated.View style={[styles.dotsRow, progressBarStyle]}>
               {Array.from({ length: totalImages }).map((_, i) => (
                 <View
                   key={i}
                   style={[
-                    styles.progressSegment,
-                    i === currentImageIndex && styles.progressSegmentActive,
+                    styles.dot,
+                    i === currentImageIndex && styles.dotActive,
                   ]}
                 />
               ))}
@@ -317,20 +316,14 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
               <SpraySplatter size={32} color="#FFFFFF" opacity={0.06} />
             </View>
             {profile.distance != null && (
-              <Text style={styles.distanceText}>{profile.distance} miles away</Text>
+              <View style={styles.distanceRow}>
+                <Ionicons name="location-sharp" size={13} color="rgba(255,255,255,0.85)" />
+                <Text style={styles.distanceText}>{profile.distance} miles away</Text>
+              </View>
             )}
             <Text style={styles.name}>
               {profile.name}, {profile.age}
             </Text>
-            {!!profile.ethnicity && (() => {
-              const eth = getEthnicIdentity(profile.ethnicity);
-              return (
-                <View style={[styles.ethnicBadge, { backgroundColor: eth.color }]}>
-                  <Text style={styles.ethnicEmoji}>{eth.emoji}</Text>
-                  <Text style={styles.ethnicLabel}>{eth.label}</Text>
-                </View>
-              );
-            })()}
             {!!statusText && (
               <View style={styles.statusPill}>
                 <Text style={styles.statusEmoji}>{'\uD83D\uDC4B'}</Text>
@@ -392,20 +385,23 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  progressBar: {
+  dotsRow: {
     flexDirection: 'row',
-    gap: 4,
-    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
     paddingTop: hp(14),
     zIndex: 10,
   },
-  progressSegment: {
-    flex: 1,
-    height: 3,
-    borderRadius: 2,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  progressSegmentActive: {
+  dotActive: {
+    width: 22,
+    borderRadius: 4,
     backgroundColor: '#FFFFFF',
   },
   verifiedChip: {
@@ -446,36 +442,21 @@ const styles = StyleSheet.create({
     bottom: 80,
     zIndex: 5,
   },
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 4,
+  },
   distanceText: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.8)',
-    marginBottom: 4,
   },
   name: {
     fontSize: 32,
     fontWeight: '900',
     color: '#FFFFFF',
     fontFamily: FontFamily.black,
-  },
-  ethnicBadge: {
-    marginTop: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 5,
-  },
-  ethnicEmoji: {
-    fontSize: 13,
-  },
-  ethnicLabel: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    letterSpacing: 0.3,
   },
   statusPill: {
     marginTop: 6,

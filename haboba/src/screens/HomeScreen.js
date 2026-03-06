@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GraffitiCrown, GraffitiHeart, GraffitiShield, GraffitiTag } from '../components/icons';
-import { SpraySplatter, GraffitiCorner, TribalDivider } from '../components/GraffitiAccents';
+import { SpraySplatter, GraffitiCorner } from '../components/GraffitiAccents';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
@@ -122,7 +122,8 @@ const applyFilters = (profiles, toggleFilters, selections = {}) => {
         if (hVal === 81) {
           selectionPass = selectionPass && heightInInches >= 81;
         } else {
-          selectionPass = selectionPass && heightInInches === hVal;
+          // Allow ±2 inch range for a natural match
+          selectionPass = selectionPass && heightInInches >= hVal - 2 && heightInInches <= hVal + 2;
         }
       }
     }
@@ -246,6 +247,7 @@ const HomeScreen = ({ navigation }) => {
   const handleSwipe = useCallback((direction) => {
     const currentProfiles = profilesRef.current;
     const swipedProfile = currentProfiles[0];
+    if (!swipedProfile) return;
 
     // Check daily like limit for right-swipes (free users)
     if (direction === 'right' && likeStatus && likeStatus.remaining <= 0 && !hasUnlimitedLikes(tier || 'free')) {
@@ -580,7 +582,6 @@ const HomeScreen = ({ navigation }) => {
               <Text style={styles.emptySub}>
                 You've seen everyone nearby. Check back later or adjust your filters to see more people.
               </Text>
-              <TribalDivider width={200} height={8} colors={['#EF4444', '#22C55E', '#3B82F6']} style={{ marginBottom: 16 }} />
               <Button
                 title="Adjust Filters"
                 variant="primary"
