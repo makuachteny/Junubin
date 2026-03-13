@@ -25,6 +25,7 @@ import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
 import AdBanner from '../components/AdBanner';
 import { getEthnicIdentity } from '../utils/ethnicIdentity';
+import { useFollow } from '../hooks/useFollow';
 
 const SW = Dimensions.get('window').width;
 const PHOTO_H = SW * 1.3;
@@ -57,6 +58,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const [photoIdx, setPhotoIdx] = useState(0);
   const { consumeSuperLike, superLikes, hasTier } = useSubscription();
   const { session } = useAuth();
+  const { isFollowing, isFriend, counts: followCounts, toggleFollow } = useFollow(profile.id);
 
   const handlePass = () => { if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass').catch((e) => { if (__DEV__) console.warn('Pass swipe failed:', e); }); navigation.goBack(); };
   const handleLike = () => {
@@ -157,6 +159,42 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         </View>
 
         <View style={s.body}>
+          {/* ── Follow bar ── */}
+          <View style={s.followBar}>
+            <TouchableOpacity
+              style={s.followCountBtn}
+              onPress={() => navigation.navigate('FollowList', { userId: profile.id, userName: name, initialTab: 'Followers' })}
+            >
+              <Text style={s.followCountNum}>{followCounts.followers}</Text>
+              <Text style={s.followCountLabel}>Followers</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.followCountBtn}
+              onPress={() => navigation.navigate('FollowList', { userId: profile.id, userName: name, initialTab: 'Following' })}
+            >
+              <Text style={s.followCountNum}>{followCounts.following}</Text>
+              <Text style={s.followCountLabel}>Following</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                s.followActionBtn,
+                (isFollowing || isFriend)
+                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#22C55E' : colors.accent }
+                  : { backgroundColor: colors.accent },
+              ]}
+              onPress={toggleFollow}
+              activeOpacity={0.8}
+            >
+              {isFriend && <Ionicons name="people" size={14} color="#22C55E" style={{ marginRight: 4 }} />}
+              <Text style={[
+                s.followActionText,
+                { color: (isFollowing || isFriend) ? (isFriend ? '#22C55E' : colors.accent) : '#FFF' },
+              ]}>
+                {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* ── Quick facts row ── */}
           <Animated.View style={{
             opacity: factsAnim,
@@ -372,6 +410,19 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Body ──
   body: { paddingHorizontal: 18, marginTop: -4 },
+
+  // ── Follow bar ──
+  followBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16, marginTop: 4, paddingVertical: 8,
+  },
+  followCountBtn: { alignItems: 'center' },
+  followCountNum: { fontSize: 18, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.black },
+  followCountLabel: { fontSize: 11, fontFamily: FontFamily.medium, color: colors.gray500, marginTop: 1 },
+  followActionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 10, borderRadius: 22, marginLeft: 8,
+  },
+  followActionText: { fontSize: 14, fontWeight: '700', fontFamily: FontFamily.bold },
 
   // ── Quick facts ──
   factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, marginTop: 8 },

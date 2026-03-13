@@ -9,7 +9,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
@@ -18,6 +18,7 @@ import ProfileCompletenessCard from '../components/ProfileCompletenessCard';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
 import { useCurrentUser } from '../hooks';
+import { useMyFollowCounts } from '../hooks/useFollow';
 import { calculateCompleteness } from '../utils/profileCompleteness';
 
 export default function ProfileScreen({ navigation }) {
@@ -28,6 +29,7 @@ export default function ProfileScreen({ navigation }) {
   const { currentUser } = useCurrentUser();
 
   const displayUser = currentUser;
+  const followCounts = useMyFollowCounts(currentUser?.id);
 
   // Stats counter animation
   const statsAnim = useRef(new Animated.Value(0)).current;
@@ -52,9 +54,9 @@ export default function ProfileScreen({ navigation }) {
 
   const statItems = useMemo(() => [
     { icon: 'flash', iconColor: colors.accent, label: `${animatedCounts.spotlights} Spotlights`, screen: 'Boost' },
-    { icon: 'crown', iconColor: colors.accent, label: `${animatedCounts.superLikes} Super Likes`, screen: 'Elite' },
+    { icon: 'star', iconColor: colors.rose, label: `${animatedCounts.superLikes} Super Likes`, screen: 'Elite' },
     { icon: 'send', iconColor: colors.accent, label: `${animatedCounts.whispers} Whispers`, screen: null },
-  ], [animatedCounts.spotlights, animatedCounts.superLikes, animatedCounts.whispers, colors.accent]);
+  ], [animatedCounts.spotlights, animatedCounts.superLikes, animatedCounts.whispers, colors.accent, colors.rose]);
 
   const showJunubCTA = !hasTier('junub');
   const completeness = useMemo(() => calculateCompleteness(displayUser?._raw || displayUser), [displayUser]);
@@ -107,6 +109,33 @@ export default function ProfileScreen({ navigation }) {
         {/* Name */}
         <Text style={styles.name}>{displayUser.name}, {displayUser.age}</Text>
 
+        {/* Follow counts */}
+        <View style={styles.followRow}>
+          <TouchableOpacity
+            style={styles.followCountBtn}
+            onPress={() => navigation.navigate('FollowList', { userId: displayUser.id, userName: displayUser.name, initialTab: 'Followers' })}
+          >
+            <Text style={styles.followCountNum}>{followCounts.followers}</Text>
+            <Text style={styles.followCountLabel}>Followers</Text>
+          </TouchableOpacity>
+          <View style={styles.followDivider} />
+          <TouchableOpacity
+            style={styles.followCountBtn}
+            onPress={() => navigation.navigate('FollowList', { userId: displayUser.id, userName: displayUser.name, initialTab: 'Following' })}
+          >
+            <Text style={styles.followCountNum}>{followCounts.following}</Text>
+            <Text style={styles.followCountLabel}>Following</Text>
+          </TouchableOpacity>
+          <View style={styles.followDivider} />
+          <TouchableOpacity
+            style={styles.followCountBtn}
+            onPress={() => navigation.navigate('FollowList', { userId: displayUser.id, userName: displayUser.name, initialTab: 'Friends' })}
+          >
+            <Text style={styles.followCountNum}>{followCounts.followers > 0 ? Math.min(followCounts.followers, followCounts.following) : 0}</Text>
+            <Text style={styles.followCountLabel}>Friends</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Verification row */}
         <TouchableOpacity style={styles.verifyBtn} onPress={handleVerify}>
           <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
@@ -128,11 +157,7 @@ export default function ProfileScreen({ navigation }) {
               style={styles.statCard}
               onPress={() => item.screen && navigation.navigate(item.screen)}
             >
-              {item.icon === 'crown' ? (
-                <MaterialCommunityIcons name={item.icon} size={20} color={item.iconColor} />
-              ) : (
-                <Ionicons name={item.icon} size={20} color={item.iconColor} />
-              )}
+              <Ionicons name={item.icon} size={20} color={item.iconColor} />
               <Text style={styles.statText}>{item.label}</Text>
             </TouchableOpacity>
           ))}
@@ -244,6 +269,36 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
     marginTop: 12,
     letterSpacing: 0.3,
+  },
+  followRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 0,
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  followCountBtn: {
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+  },
+  followCountNum: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: colors.black,
+  },
+  followCountLabel: {
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
+    color: colors.gray400,
+    marginTop: 1,
+  },
+  followDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: colors.gray200,
   },
   verifyBtn: {
     flexDirection: 'row',

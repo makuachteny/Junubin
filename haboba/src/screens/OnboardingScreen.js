@@ -99,7 +99,7 @@ const OnboardingScreen = ({ navigation }) => {
 
   const goSignup = useCallback(() => navigation.navigate('Signup'), [navigation]);
   const handleLandingSkip = useCallback(() => {
-    navigation.navigate('Signup');
+    navigation.replace('Main');
   }, [navigation]);
 
   // ── Page animation factory ──
@@ -212,14 +212,6 @@ const OnboardingScreen = ({ navigation }) => {
 
               <Text style={s.heroTagline}>Where Junubin</Text>
               <Text testID="onboarding-hero-connect" style={s.heroAccent}>connect.</Text>
-              {/* South Sudan flag stripe */}
-              <View style={s.flagStripe}>
-                <View style={[s.flagBand, { backgroundColor: '#000000' }]} />
-                <View style={[s.flagBand, { backgroundColor: '#EF4444' }]} />
-                <View style={[s.flagBand, { backgroundColor: '#FFFFFF' }]} />
-                <View style={[s.flagBand, { backgroundColor: '#22C55E' }]} />
-                <View style={[s.flagBand, { backgroundColor: '#3B82F6' }]} />
-              </View>
             </Animated.View>
           </Animated.View>
 

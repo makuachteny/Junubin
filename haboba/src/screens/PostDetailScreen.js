@@ -17,6 +17,7 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import { POST_THEMES, mockComments } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
+import { useFollow } from '../hooks/useFollow';
 import { GraffitiSend } from '../components/icons';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import EmptyState from '../components/EmptyState';
@@ -35,7 +36,7 @@ export default function PostDetailScreen({ navigation, route }) {
   const [likeCount, setLikeCount] = useState(post.likes || 0);
   const [comments, setComments] = useState(initialComments);
   const [commentText, setCommentText] = useState('');
-  const [following, setFollowing] = useState(false);
+  const { isFollowing: following, isFriend, toggleFollow } = useFollow(post.user?.id);
   const [commentLikes, setCommentLikes] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -57,7 +58,7 @@ export default function PostDetailScreen({ navigation, route }) {
   };
 
   const handleFollow = () => {
-    setFollowing(!following);
+    toggleFollow();
   };
 
   const handleShare = () => {
@@ -123,8 +124,9 @@ export default function PostDetailScreen({ navigation, route }) {
               onPress={handleFollow}
               activeOpacity={0.8}
             >
+              {isFriend && <Ionicons name="people" size={12} color={theme.accent} style={{ marginRight: 3 }} />}
               <Text style={[styles.followBtnText, { color: following ? theme.accent : (isDarkCard ? '#000' : '#FFF') }]}>
-                {following ? 'Following' : 'Follow'}
+                {isFriend ? 'Friends' : following ? 'Following' : 'Follow'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -288,6 +290,8 @@ const getStyles = (colors) => StyleSheet.create({
     marginTop: 1,
   },
   followBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 7,
     borderRadius: 20,

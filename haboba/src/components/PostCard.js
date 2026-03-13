@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { POST_THEMES } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { SpraySplatter } from './GraffitiAccents';
+import { useFollow } from '../hooks/useFollow';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 32; // 16px margin each side
@@ -14,7 +15,7 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
   const fallbackReaction = useMemo(() => ({ liked: false, likeCount: post.likes }), [post.likes]);
   const [localReaction, setLocalReaction] = useState(fallbackReaction);
   const effectiveReaction = reactionState || localReaction;
-  const [following, setFollowing] = useState(false);
+  const { isFollowing: following, isFriend, toggleFollow } = useFollow(post.user?.id);
   const { colors } = useTheme();
   const navigation = useNavigation();
 
@@ -45,7 +46,7 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
   };
 
   const handleFollow = () => {
-    setFollowing(!following);
+    toggleFollow();
   };
 
   const handlePostPress = () => {
@@ -87,8 +88,9 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
           activeOpacity={0.8}
           onPress={handleFollow}
         >
+          {isFriend && <Ionicons name="people" size={12} color={theme.accent} style={{ marginRight: 3 }} />}
           <Text style={[styles.followText, { color: following ? theme.accent : (isDarkCard ? '#000' : '#FFF') }]}>
-            {following ? 'Following' : 'Follow'}
+            {isFriend ? 'Friends' : following ? 'Following' : 'Follow'}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -185,6 +187,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   followBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 7,
     borderRadius: 20,

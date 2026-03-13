@@ -74,6 +74,13 @@ export default function CreateStoryScreen({ navigation }) {
         >
           <Text style={[styles.modeBtnText, mode === 'photo' && { color: '#FFF' }]}>Photo</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.modeBtn, { backgroundColor: '#EF4444' }]}
+          onPress={() => { navigation.goBack(); navigation.navigate('GoLive'); }}
+        >
+          <Ionicons name="radio" size={14} color="#FFF" style={{ marginRight: 4 }} />
+          <Text style={[styles.modeBtnText, { color: '#FFF' }]}>Live</Text>
+        </TouchableOpacity>
       </View>
 
       {mode === 'text' ? (
@@ -144,6 +151,8 @@ const getStyles = (colors) => StyleSheet.create({
     paddingVertical: 12,
   },
   modeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,

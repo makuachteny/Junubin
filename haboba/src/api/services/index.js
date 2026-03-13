@@ -4,3 +4,4 @@ export * as discoverService from './discoverService';
 export * as matchesService from './matchesService';
 export * as likesService from './likesService';
 export * as chatService from './chatService';
+export * as followService from './followService';

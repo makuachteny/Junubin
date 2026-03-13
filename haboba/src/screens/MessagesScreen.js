@@ -273,6 +273,8 @@ export default function MessagesScreen({ navigation }) {
         colors={colors}
         onStoryPress={(story, index, storyList) => navigation.navigate('StoriesView', { story, storyIndex: index, storyList })}
         onCreateStory={() => navigation.navigate('CreateStory')}
+        onGoLive={() => navigation.navigate('GoLive')}
+        onViewLive={(liveData) => navigation.navigate('LiveView', { liveData })}
       />
 
       {/* ─── Ad Banner (free tier) ─── */}

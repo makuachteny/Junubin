@@ -377,16 +377,19 @@ const SignupScreen = ({ navigation }) => {
               <Text style={styles.termsLink}>Privacy Policy</Text>
             </Text>
 
-            {/* Next Button (BLK-style circle) */}
-            <View style={[styles.nextRow, { paddingBottom: insets.bottom + 20 }]}>
-              <TouchableOpacity
-                style={[styles.nextCircleBtn, inputError && styles.nextCircleBtnDisabled]}
-                onPress={handleSendCode}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="arrow-forward" size={28} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
+            {/* Next Button (BLK-style circle) — only visible when user has entered input */}
+            {((selectedMethod === 'phone' && phone.replace(/\D/g, '').length > 0) ||
+              (selectedMethod === 'email' && email.trim().length > 0)) && (
+              <View style={[styles.nextRow, { paddingBottom: insets.bottom + 20 }]}>
+                <TouchableOpacity
+                  style={[styles.nextCircleBtn, inputError && styles.nextCircleBtnDisabled]}
+                  onPress={handleSendCode}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-forward" size={28} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>

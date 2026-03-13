@@ -58,6 +58,9 @@ const EventDetailScreen = lazify(() => import('../screens/EventDetailScreen'));
 const CreateEventScreen = lazify(() => import('../screens/CreateEventScreen'));
 const InteractivityHubScreen = lazify(() => import('../screens/InteractivityHubScreen'));
 const GameSettingsScreen = lazify(() => import('../screens/GameSettingsScreen'));
+const GoLiveScreen = lazify(() => import('../screens/GoLiveScreen'));
+const LiveViewScreen = lazify(() => import('../screens/LiveViewScreen'));
+const FollowListScreen = lazify(() => import('../screens/FollowListScreen'));
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -300,6 +303,20 @@ export default function AppNavigator() {
         name="GameSettings"
         component={GameSettingsScreen}
         options={{ presentation: 'modal' }}
+      />
+      <Stack.Screen
+        name="GoLive"
+        component={GoLiveScreen}
+        options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="LiveView"
+        component={LiveViewScreen}
+        options={{ presentation: 'fullScreenModal', gestureEnabled: true }}
+      />
+      <Stack.Screen
+        name="FollowList"
+        component={FollowListScreen}
       />
     </Stack.Navigator>
   );
