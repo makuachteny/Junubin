@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
-import { supabase } from '../config/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase, supabaseUrl, supabaseAnonKey } from '../config/supabase';
 
 const AuthContext = createContext(null);
 
@@ -7,9 +8,16 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
+  const [devBypass, setDevBypass] = useState(false);
   const fetchingRef = useRef(false);
+  const DEV_BYPASS_ENABLED = process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH === 'true';
 
   useEffect(() => {
+    if (DEV_BYPASS_ENABLED) {
+      AsyncStorage.getItem('@dev_bypass_auth').then((val) => {
+        if (val === 'true') setDevBypass(true);
+      }).catch(() => {});
+    }
     // Get initial session — await user fetch so navigator has full data
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
@@ -34,6 +42,15 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  const ensureSupabaseConfig = useCallback(() => {
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Supabase config missing. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
+    }
+    if (!supabaseUrl.startsWith('https://')) {
+      throw new Error('Supabase URL must use https:// (ATS blocks insecure http on iOS).');
+    }
+  }, []);
+
   const fetchUser = useCallback(async (authId) => {
     if (fetchingRef.current) return null;
     fetchingRef.current = true;
@@ -55,6 +72,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const startOtp = useCallback(async ({ email, phone }) => {
+    ensureSupabaseConfig();
     if (email) {
       const { error } = await supabase.auth.signInWithOtp({ email });
       if (error) throw error;
@@ -66,9 +84,10 @@ export function AuthProvider({ children }) {
       return { message: 'OTP sent' };
     }
     throw new Error('Email or phone required');
-  }, []);
+  }, [ensureSupabaseConfig]);
 
   const loginWithOtp = useCallback(async ({ email, phone, code }) => {
+    ensureSupabaseConfig();
     let result;
     if (email) {
       result = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
@@ -88,7 +107,7 @@ export function AuthProvider({ children }) {
     }
 
     return { ...result.data, appUser };
-  }, [fetchUser]);
+  }, [fetchUser, ensureSupabaseConfig]);
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
@@ -111,14 +130,25 @@ export function AuthProvider({ children }) {
       user,
       session,
       ready,
-      isAuthenticated: !!session,
+      isAuthenticated: !!session || devBypass,
+      devBypass,
+      setDevBypass: async (next) => {
+        setDevBypass(!!next);
+        if (DEV_BYPASS_ENABLED) {
+          try {
+            await AsyncStorage.setItem('@dev_bypass_auth', next ? 'true' : 'false');
+          } catch {
+            // ignore persistence errors
+          }
+        }
+      },
       startOtp,
       loginWithOtp,
       logout,
       updateUser,
       refreshUser,
     }),
-    [user, session, ready, startOtp, loginWithOtp, logout, updateUser, refreshUser]
+    [user, session, ready, devBypass, startOtp, loginWithOtp, logout, updateUser, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

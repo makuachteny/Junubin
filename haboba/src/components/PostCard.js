@@ -105,7 +105,7 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
 
       {/* Subtle spray accent */}
       <View style={{ position: 'absolute', right: 8, top: 8 }} pointerEvents="none">
-        <SpraySplatter size={24} color="#22C55E" opacity={0.04} />
+        <SpraySplatter size={24} color="#009739" opacity={0.04} />
       </View>
 
       {/* Content */}

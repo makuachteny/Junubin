@@ -74,6 +74,42 @@ function getVariant(variant, colors, isDark) {
         },
         textColor: '#FFFFFF',
       };
+    case 'rose':
+      return {
+        container: {
+          backgroundColor: colors.rose,
+          shadowColor: colors.rose,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.35,
+          shadowRadius: 16,
+          elevation: 8,
+        },
+        textColor: '#FFFFFF',
+      };
+    case 'gold':
+      return {
+        container: {
+          backgroundColor: colors.gold,
+          shadowColor: colors.gold,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.30,
+          shadowRadius: 16,
+          elevation: 8,
+        },
+        textColor: '#1A1A1A',
+      };
+    case 'royal':
+      return {
+        container: {
+          backgroundColor: colors.royal,
+          shadowColor: colors.royal,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.35,
+          shadowRadius: 16,
+          elevation: 8,
+        },
+        textColor: '#FFFFFF',
+      };
     default:
       return { container: {}, textColor: colors.black };
   }

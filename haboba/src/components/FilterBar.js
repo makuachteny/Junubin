@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontFamily, useTheme, getShadow, Gradients } from '../theme';
+import { FontFamily, useTheme, getShadow, getSurface, Typography } from '../theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -54,9 +54,64 @@ for (let feet = 4; feet <= 6; feet++) {
 }
 HEIGHT_OPTIONS.push({ label: "6'9\"+", value: '81' });
 
-const FILTER_OPTIONS = {
+// Distance options (miles)
+const DISTANCE_OPTIONS = [
+  { label: '1 mile', value: '1' },
+  { label: '2 miles', value: '2' },
+  { label: '5 miles', value: '5' },
+  { label: '10 miles', value: '10' },
+  { label: '15 miles', value: '15' },
+  { label: '25 miles', value: '25' },
+  { label: '50 miles', value: '50' },
+  { label: '100 miles', value: '100' },
+  { label: 'Anywhere', value: 'any' },
+];
+
+// Ethnicity options (South Sudanese tribes)
+const ETHNICITY_OPTIONS = [
+  { label: 'Any ethnicity', value: 'any' },
+  { label: 'Dinka', value: 'Dinka' },
+  { label: 'Nuer', value: 'Nuer' },
+  { label: 'Bari', value: 'Bari' },
+  { label: 'Shilluk', value: 'Shilluk' },
+  { label: 'Azande', value: 'Azande' },
+  { label: 'Mundari', value: 'Mundari' },
+  { label: 'Acholi', value: 'Acholi' },
+  { label: 'Lotuko', value: 'Lotuko' },
+  { label: 'Toposa', value: 'Toposa' },
+  { label: 'Murle', value: 'Murle' },
+  { label: 'Madi', value: 'Madi' },
+  { label: 'Other', value: 'Other' },
+];
+
+// Education options
+const EDUCATION_OPTIONS = [
+  { label: 'Any education', value: 'any' },
+  { label: 'High school', value: 'High school' },
+  { label: "Associate's degree", value: "Associate's degree" },
+  { label: "Bachelor's degree", value: "Bachelor's degree" },
+  { label: "Master's degree", value: "Master's degree" },
+  { label: 'Doctorate', value: 'Doctorate' },
+  { label: 'Trade school', value: 'Trade school' },
+];
+
+// Children options
+const CHILDREN_OPTIONS = [
+  { label: "Doesn't matter", value: 'any' },
+  { label: 'No children', value: 'No children' },
+  { label: 'Has children', value: 'Has children' },
+  { label: 'Want children', value: 'Want children' },
+  { label: "Don't want children", value: "Don't want children" },
+  { label: 'Open to children', value: 'Open to children' },
+];
+
+const DEFAULT_FILTER_OPTIONS = {
   Age: AGE_OPTIONS,
   Height: HEIGHT_OPTIONS,
+  Distance: DISTANCE_OPTIONS,
+  Ethnicity: ETHNICITY_OPTIONS,
+  Education: EDUCATION_OPTIONS,
+  Children: CHILDREN_OPTIONS,
   'Dating Intentions': [
     { label: 'Serious relationship', value: 'serious' },
     { label: 'Marriage', value: 'marriage' },
@@ -70,13 +125,15 @@ const ITEM_HEIGHT = 48;
 const VISIBLE_ITEMS = 3;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
 
-const FILTERS = [
-  { label: 'Age', hasChevron: true },
-  { label: 'Height', hasChevron: true },
-  { label: 'Dating Intentions', hasChevron: true },
-  { label: 'Active today', hasChevron: false },
-  { label: 'New here', hasChevron: false },
-  { label: 'More', hasChevron: false },
+const DEFAULT_FILTERS = [
+  { label: 'Age', hasChevron: true, icon: 'calendar-outline' },
+  { label: 'Distance', hasChevron: true, icon: 'location-outline' },
+  { label: 'Ethnicity', hasChevron: true, icon: 'people-outline' },
+  { label: 'Height', hasChevron: true, icon: 'resize-outline' },
+  { label: 'Dating Intentions', hasChevron: true, icon: 'heart-outline' },
+  { label: 'Education', hasChevron: true, icon: 'school-outline' },
+  { label: 'Children', hasChevron: true, icon: 'happy-outline' },
+  { label: 'Verified', hasChevron: false, icon: 'checkmark-circle-outline' },
 ];
 
 // ─── Wheel Picker ───────────────────────────────────────────
@@ -207,7 +264,17 @@ const WheelPicker = ({ options, selectedValue, onSelect, colors, isDark }) => {
 };
 
 // ─── Filter Bar ─────────────────────────────────────────────
-const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterSelections = {}, onFilterSelect }) => {
+const FilterBar = ({
+  onFilterPress,
+  onSettingsPress,
+  activeFilters = [],
+  filterSelections = {},
+  onFilterSelect,
+  showSettingsButton = true,
+  filters = DEFAULT_FILTERS,
+  options = DEFAULT_FILTER_OPTIONS,
+  containerStyle,
+}) => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = getStyles(colors, isDark, insets);
@@ -276,7 +343,7 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
     });
   };
 
-  const handleClear = () => {
+  const handleReset = () => {
     if (openDropdown) {
       onFilterSelect && onFilterSelect(openDropdown, null);
     }
@@ -293,8 +360,8 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
   const getDisplayLabel = (filterLabel) => {
     const selection = filterSelections[filterLabel];
     if (!selection) return filterLabel;
-    const options = FILTER_OPTIONS[filterLabel];
-    const match = options?.find((o) => o.value === selection);
+    const optionList = options[filterLabel];
+    const match = optionList?.find((o) => o.value === selection);
     return match ? match.label : filterLabel;
   };
 
@@ -314,22 +381,24 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.filterIconButton}
-          onPress={onSettingsPress}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Filter settings"
-          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-        >
-          <Ionicons name="options-outline" size={18} color={isDark ? '#FFFFFF' : colors.black} />
-          {appliedCount > 0 && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{appliedCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+      <View style={[styles.container, containerStyle]}>
+        {showSettingsButton && (
+          <TouchableOpacity
+            style={styles.filterIconButton}
+            onPress={onSettingsPress}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Filter settings"
+            hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+          >
+            <Ionicons name="options-outline" size={18} color={isDark ? '#FFFFFF' : colors.black} />
+            {appliedCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{appliedCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
 
         <ScrollView
           horizontal
@@ -337,7 +406,7 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
           style={styles.scrollView}
           contentContainerStyle={styles.pillContainer}
         >
-          {FILTERS.map((filter, index) => {
+          {filters.map((filter, index) => {
             const hasSelection = !!filterSelections[filter.label];
             const isActive = isFilterActive(filter.label) || hasSelection;
             const isOpen = openDropdown === filter.label;
@@ -356,6 +425,14 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
                 accessibilityLabel={`Filter by ${filter.label}`}
                 accessibilityState={{ selected: isActive }}
               >
+                {filter.icon && (
+                  <Ionicons
+                    name={filter.icon}
+                    size={14}
+                    color={isActive ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.85)' : colors.gray600)}
+                    style={styles.pillIcon}
+                  />
+                )}
                 <Text
                   style={[
                     styles.pillText,
@@ -418,7 +495,7 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
             {/* Wheel Picker */}
             <View style={styles.pickerWrap}>
               <WheelPicker
-                options={FILTER_OPTIONS[openDropdown] || []}
+                options={options[openDropdown] || []}
                 selectedValue={pendingSelection}
                 onSelect={(opt) => handleWheelSelect(openDropdown, opt)}
                 colors={colors}
@@ -453,10 +530,10 @@ const FilterBar = ({ onFilterPress, onSettingsPress, activeFilters = [], filterS
               {filterSelections[openDropdown] && (
                 <TouchableOpacity
                   style={styles.clearBtn}
-                  onPress={handleClear}
+                  onPress={handleReset}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.clearText}>Clear</Text>
+                  <Text style={styles.clearText}>Reset</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
@@ -485,21 +562,21 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
     backgroundColor: 'transparent',
   },
   filterIconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.96)',
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.2)' : colors.separator,
+    borderColor: isDark ? colors.gray800 : colors.separator,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
-    ...getShadow('md', isDark),
+    marginRight: 10,
+    ...getShadow('sm', isDark),
   },
   filterBadge: {
     position: 'absolute',
@@ -527,33 +604,37 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   pillContainer: {
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    paddingRight: 8,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 22,
+    paddingVertical: 8,
+    borderRadius: 18,
     justifyContent: 'center',
-    minHeight: 40,
+    minHeight: 34,
   },
   pillActive: {
     backgroundColor: colors.accent,
     ...getShadow('md', isDark, colors.accent),
   },
   pillInactive: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.96)',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.28)' : 'rgba(38,38,38,0.14)',
+    borderColor: isDark ? colors.gray800 : 'rgba(38,38,38,0.14)',
     ...getShadow('sm', isDark),
   },
   pillOpen: {
     borderColor: colors.accent,
     borderWidth: 1,
   },
+  pillIcon: {
+    marginRight: 5,
+  },
   pillText: {
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: FontFamily.semibold,
   },
   pillTextActive: {
@@ -579,7 +660,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   // ─── Overlay ───
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
 
   // ─── Bottom Sheet ───
@@ -588,11 +669,11 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: isDark ? 'rgba(30,30,32,0.92)' : 'rgba(250,248,245,0.94)',
+    ...getSurface('modal', colors, isDark),
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
-    ...getShadow('xl', isDark),
+    paddingTop: 6,
   },
   handleRow: {
     alignItems: 'center',
@@ -608,19 +689,14 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
 
   // ─── Sheet Content ───
   sheetTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
+    ...Typography.h2,
     color: isDark ? '#FFFFFF' : colors.black,
     textAlign: 'center',
     marginTop: 8,
-    letterSpacing: -0.3,
   },
   sheetSubtitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: colors.accent,
+    ...Typography.bodySmall,
+    color: colors.gray500,
     textAlign: 'center',
     marginTop: 6,
     marginBottom: 16,
@@ -694,7 +770,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   applyBtn: {
     flex: 1,
-    backgroundColor: isDark ? '#FFFFFF' : colors.gray800,
+    backgroundColor: colors.accent,
     borderRadius: 999,
     paddingVertical: 18,
     alignItems: 'center',
@@ -708,7 +784,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: isDark ? colors.gray800 : '#FFFFFF',
+    color: '#FFFFFF',
     letterSpacing: 0.3,
   },
 });

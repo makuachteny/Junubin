@@ -137,7 +137,7 @@ export default function CreatePostScreen({ navigation }) {
       <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
         {/* Ambient spray accents */}
         <View style={{ position: 'absolute', right: 8, top: 10 }} pointerEvents="none">
-          <SpraySplatter size={30} color="#22C55E" opacity={0.05} />
+          <SpraySplatter size={30} color="#009739" opacity={0.05} />
         </View>
         {/* User info */}
         <View style={styles.userRow}>
@@ -225,7 +225,7 @@ export default function CreatePostScreen({ navigation }) {
             style={[styles.mediaBtn, activeComposerSection === 'location' && styles.mediaBtnActive]}
             onPress={() => setActiveComposerSection((prev) => (prev === 'location' ? null : 'location'))}
           >
-            <GraffitiLocation size={22} color="#3B82F6" filled />
+            <GraffitiLocation size={22} color="#0047AB" filled />
             <Text style={styles.mediaBtnText}>Location</Text>
           </TouchableOpacity>
           <TouchableOpacity

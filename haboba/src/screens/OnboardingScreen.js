@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // JuNubin — Cinematic Onboarding
 // Full-bleed, dramatic, movie-poster energy.
-// Instagram-warm palette with gradient accents.
+// Warm palette with gradient accents.
 // ═══════════════════════════════════════════════════════════
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -27,7 +27,7 @@ import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
-const ACCENT = '#F56040';
+const ACCENT = '#E8613C';
 
 const PAGES = [{ id: 1 }, { id: 2 }, { id: 3 }];
 
@@ -98,9 +98,11 @@ const OnboardingScreen = ({ navigation }) => {
   }, [currentPage]);
 
   const goSignup = useCallback(() => navigation.navigate('Signup'), [navigation]);
+  const { setDevBypass } = useAuth();
   const handleLandingSkip = useCallback(() => {
-    navigation.replace('Main');
-  }, [navigation]);
+    // Enable dev bypass; AppNavigator will swap to the authenticated stack.
+    setDevBypass(true);
+  }, [setDevBypass]);
 
   // ── Page animation factory ──
   const anim = (idx) => {
@@ -119,14 +121,14 @@ const OnboardingScreen = ({ navigation }) => {
   // ── Background zoom ──
   const imgScale = scrollX.interpolate({
     inputRange: [0, W * 2],
-    outputRange: [1, 1.08],
+    outputRange: [1, 1.06],
     extrapolate: 'clamp',
   });
 
   // ── Gradient darkens as you progress ──
   const gradientOpacity = scrollX.interpolate({
     inputRange: [0, W, W * 2],
-    outputRange: [0.88, 0.94, 1],
+    outputRange: [0.85, 0.9, 0.95],
     extrapolate: 'clamp',
   });
 
@@ -140,30 +142,34 @@ const OnboardingScreen = ({ navigation }) => {
   const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.6] });
   const pulseX = pulse.interpolate({ inputRange: [0, 1], outputRange: [0, 6] });
 
+  // Bottom area height for proper content spacing
+  const bottomH = insets.bottom + 180;
+
   return (
     <View style={s.root}>
-      {/* ── Background image ── */}
+      {/* ── Background image — edge-to-edge cover ── */}
       <Animated.View style={[s.bgWrap, { transform: [{ scale: imgScale }] }]}>
         <Image source={LANDING_IMAGE} style={s.bgImage} resizeMode="cover" />
       </Animated.View>
 
-      {/* ── Gradient overlay ── */}
+      {/* ── Gradient overlay — smoother, less harsh ── */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradientOpacity }]}>
         <LinearGradient
           colors={[
             'rgba(0, 0, 0, 0)',
-            'rgba(0, 0, 0, 0.10)',
-            'rgba(0, 0, 0, 0.50)',
-            'rgba(0, 0, 0, 0.88)',
-            'rgba(0, 0, 0, 0.97)',
+            'rgba(0, 0, 0, 0.03)',
+            'rgba(0, 0, 0, 0.18)',
+            'rgba(0, 0, 0, 0.52)',
+            'rgba(0, 0, 0, 0.82)',
+            'rgba(0, 0, 0, 0.94)',
           ]}
-          locations={[0, 0.25, 0.5, 0.72, 0.9]}
+          locations={[0, 0.15, 0.35, 0.55, 0.75, 0.92]}
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
 
       {/* ── Top bar ── */}
-      <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
+      <View style={[s.topBar, { paddingTop: insets.top + 12 }]}>
         <Animated.View
           style={{
             opacity: scrollX.interpolate({ inputRange: [0, W * 0.5], outputRange: [0, 1], extrapolate: 'clamp' }),
@@ -194,7 +200,7 @@ const OnboardingScreen = ({ navigation }) => {
         contentContainerStyle={{ width: W * PAGES.length }}
       >
         {/* ──── PAGE 1: THE POSTER ──── */}
-        <View style={s.pg}>
+        <View style={[s.pg, { paddingBottom: bottomH + 24 }]}>
           <Animated.View
             style={[
               s.heroWrap,
@@ -209,7 +215,6 @@ const OnboardingScreen = ({ navigation }) => {
             </Animated.View>
 
             <Animated.View style={[s.heroTextBlock, { opacity: taglineOpacity, transform: [{ translateY: taglineY }] }]}>
-
               <Text style={s.heroTagline}>Where Junubin</Text>
               <Text testID="onboarding-hero-connect" style={s.heroAccent}>connect.</Text>
             </Animated.View>
@@ -220,6 +225,7 @@ const OnboardingScreen = ({ navigation }) => {
             style={[
               s.scrollHint,
               {
+                bottom: bottomH - 20,
                 opacity: Animated.multiply(a0.opacity, pulseOpacity),
                 transform: [{ translateX: pulseX }],
               },
@@ -231,8 +237,8 @@ const OnboardingScreen = ({ navigation }) => {
         </View>
 
         {/* ──── PAGE 2: THE STORY ──── */}
-        <View style={s.pg}>
-          <Animated.View style={[s.storyWrap, { opacity: a1.opacity, transform: [{ translateY: a1.slideUp }] }]}>
+        <View style={[s.pg, { paddingBottom: bottomH + 24 }]}>
+          <Animated.View style={[s.contentWrap, { opacity: a1.opacity, transform: [{ translateY: a1.slideUp }] }]}>
             <Animated.Text style={[s.eyebrow, { transform: [{ translateX: a1.slideX }] }]}>
               OUR STORY
             </Animated.Text>
@@ -242,7 +248,7 @@ const OnboardingScreen = ({ navigation }) => {
                 Heritage{'\n'}Brought Us{'\n'}
                 <Text style={s.bigTitleGlow}>Together</Text>
               </Text>
-              <GraffitiShield size={36} color="#22C55E" filled style={{ opacity: 0.25, marginLeft: 8, marginTop: 8 }} />
+              <GraffitiShield size={32} color="#009739" filled style={{ opacity: 0.2, marginLeft: 6, marginTop: 6 }} />
             </View>
 
             <View style={s.rule} />
@@ -255,15 +261,15 @@ const OnboardingScreen = ({ navigation }) => {
 
             <Animated.View style={[s.pillRow, { transform: [{ translateX: a1.slideX }] }]}>
               <View style={s.pill}>
-                <GraffitiShield size={14} color="#EF4444" filled />
+                <GraffitiShield size={14} color="#CE1126" filled />
                 <Text style={s.pillText}>Dating</Text>
               </View>
               <View style={s.pill}>
-                <GraffitiCrown size={14} color="#22C55E" filled />
+                <GraffitiCrown size={14} color="#009739" filled />
                 <Text style={s.pillText}>Social</Text>
               </View>
               <View style={s.pill}>
-                <Ionicons name="earth" size={13} color="#3B82F6" />
+                <Ionicons name="earth" size={13} color="#0047AB" />
                 <Text style={s.pillText}>Diaspora</Text>
               </View>
             </Animated.View>
@@ -271,21 +277,21 @@ const OnboardingScreen = ({ navigation }) => {
         </View>
 
         {/* ──── PAGE 3: THE INVITATION ──── */}
-        <View style={s.pg}>
+        <View style={[s.pg, { paddingBottom: bottomH + 24 }]}>
           {/* Ambient spray accents */}
-          <Animated.View style={[{ position: 'absolute', right: 20, top: H * 0.35 }, { opacity: a2.opacity }]} pointerEvents="none">
-            <SpraySplatter size={70} color="#22C55E" opacity={0.08} />
+          <Animated.View style={[{ position: 'absolute', right: 24, top: H * 0.32 }, { opacity: a2.opacity }]} pointerEvents="none">
+            <SpraySplatter size={70} color="#009739" opacity={0.08} />
           </Animated.View>
-          <Animated.View style={[{ position: 'absolute', left: 10, top: H * 0.25 }, { opacity: a2.opacity }]} pointerEvents="none">
-            <SpraySplatter size={50} color="#EF4444" opacity={0.06} />
+          <Animated.View style={[{ position: 'absolute', left: 16, top: H * 0.24 }, { opacity: a2.opacity }]} pointerEvents="none">
+            <SpraySplatter size={50} color="#CE1126" opacity={0.06} />
           </Animated.View>
 
-          <Animated.View style={[s.inviteWrap, { opacity: a2.opacity, transform: [{ translateY: a2.slideUp }] }]}>
+          <Animated.View style={[s.contentWrap, { opacity: a2.opacity, transform: [{ translateY: a2.slideUp }] }]}>
             <Animated.Text style={[s.eyebrow, { transform: [{ translateX: a2.slideX }] }]}>
               EVERYWHERE
             </Animated.Text>
 
-            <View style={{ marginBottom: 20 }}>
+            <View style={{ marginBottom: 24 }}>
               <Text style={s.cityBright}>Juba.</Text>
               <Text style={s.cityMid}>London.</Text>
               <Text style={s.cityFade}>Minneapolis.</Text>
@@ -304,7 +310,7 @@ const OnboardingScreen = ({ navigation }) => {
       </ScrollView>
 
       {/* ── Bottom controls ── */}
-      <View style={[s.bottom, { paddingBottom: insets.bottom + 16 }]}>
+      <View style={[s.bottom, { paddingBottom: insets.bottom + 20 }]}>
         {/* Progress capsules */}
         <View style={s.progressRow}>
           {PAGES.map((_, i) => {
@@ -333,11 +339,11 @@ const OnboardingScreen = ({ navigation }) => {
 
             <View style={s.altRow}>
               <TouchableOpacity style={s.altBtn} onPress={goSignup} activeOpacity={0.7}>
-                <Ionicons name="call-outline" size={17} color="rgba(255,255,255,0.75)" />
+                <Ionicons name="call-outline" size={17} color="rgba(255,255,255,0.8)" />
                 <Text style={s.altText}>Phone</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.altBtn} onPress={goSignup} activeOpacity={0.7}>
-                <Ionicons name="mail-outline" size={17} color="rgba(255,255,255,0.75)" />
+                <Ionicons name="mail-outline" size={17} color="rgba(255,255,255,0.8)" />
                 <Text style={s.altText}>Email</Text>
               </TouchableOpacity>
             </View>
@@ -366,48 +372,46 @@ const OnboardingScreen = ({ navigation }) => {
 };
 
 // ═══════════════════════════════════════════════════════════
+const CONTENT_PAD = 28;
+
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000000' },
 
-  // ── Background ──
+  // ── Background — true edge-to-edge cover ──
   bgWrap: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
   bgImage: {
-    width: W * 1.4,
-    height: H * 1.1,
-    marginLeft: -(W * 0.2),
-    marginTop: -(H * 0.05),
+    width: W,
+    height: H,
   },
 
   // ── Top bar ──
   topBar: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: CONTENT_PAD,
   },
   skipText: {
     fontSize: 15, fontWeight: '500', fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.5)', letterSpacing: 0.3,
+    color: 'rgba(255,255,255,0.6)', letterSpacing: 0.3,
   },
 
   // ── Page base ──
-  pg: { width: W, height: H, justifyContent: 'flex-end', paddingBottom: 210 },
+  pg: { width: W, height: H, justifyContent: 'flex-end' },
+
+  // ── Shared content wrapper (consistent left-aligned padding) ──
+  contentWrap: { paddingHorizontal: CONTENT_PAD },
 
   // ══ PAGE 1 — Hero ══
-  heroWrap: { alignItems: 'center', paddingHorizontal: 32 },
-  heroTextBlock: { alignItems: 'center', marginTop: 24 },
-  flagStripe: {
-    flexDirection: 'row', height: 3, width: 100,
-    marginTop: 14, borderRadius: 2, overflow: 'hidden', opacity: 0.5,
-  },
-  flagBand: { flex: 1, height: 3 },
+  heroWrap: { alignItems: 'center', paddingHorizontal: CONTENT_PAD },
+  heroTextBlock: { alignItems: 'center', marginTop: 28 },
   bigTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
   heroTagline: {
     fontSize: 22, fontWeight: '300', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.65)', textAlign: 'center',
-    letterSpacing: 4, textTransform: 'uppercase', marginBottom: 4,
+    color: 'rgba(255,255,255,0.7)', textAlign: 'center',
+    letterSpacing: 4, textTransform: 'uppercase', marginBottom: 6,
   },
   heroAccent: {
     fontSize: 44, fontWeight: '800', fontFamily: FontFamily.extrabold,
@@ -415,7 +419,7 @@ const s = StyleSheet.create({
     fontStyle: 'italic',
   },
   scrollHint: {
-    position: 'absolute', bottom: 180, right: 28,
+    position: 'absolute', right: CONTENT_PAD,
     flexDirection: 'row', alignItems: 'center', gap: 3,
   },
   scrollHintText: {
@@ -423,60 +427,56 @@ const s = StyleSheet.create({
     color: 'rgba(255,255,255,0.35)', letterSpacing: 2,
   },
 
-  // ══ PAGE 2 — Story ══
-  storyWrap: { paddingHorizontal: 32 },
-
   // ══ Shared text styles ══
   eyebrow: {
     fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold,
-    color: ACCENT, letterSpacing: 3.5, marginBottom: 16,
+    color: ACCENT, letterSpacing: 3.5, marginBottom: 18,
   },
   bigTitle: {
-    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
-    color: '#FFFFFF', lineHeight: 50, letterSpacing: -1.5, marginBottom: 20,
-    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 16,
+    fontSize: 42, fontWeight: '900', fontFamily: FontFamily.black,
+    color: '#FFFFFF', lineHeight: 48, letterSpacing: -1.2, marginBottom: 22,
+    textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 12,
   },
   bigTitleGlow: {
     color: ACCENT,
   },
   bodyText: {
     fontSize: 16, fontWeight: '400', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.55)', lineHeight: 26, letterSpacing: 0.1, marginBottom: 28,
+    color: 'rgba(255,255,255,0.7)', lineHeight: 26, letterSpacing: 0.15, marginBottom: 28,
   },
   rule: {
     width: 28, height: 2.5, borderRadius: 2,
-    backgroundColor: ACCENT, marginBottom: 20, opacity: 0.6,
+    backgroundColor: ACCENT, marginBottom: 22, opacity: 0.6,
   },
-  pillRow: { flexDirection: 'row', gap: 8 },
+  pillRow: { flexDirection: 'row', gap: 10 },
   pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 16, borderRadius: 24,
+    flexDirection: 'row', alignItems: 'center', gap: 7,
+    paddingVertical: 9, paddingHorizontal: 18, borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.10)',
   },
   pillText: {
     fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.75)',
   },
 
   // ══ PAGE 3 — Invitation ══
-  inviteWrap: { paddingHorizontal: 32 },
   cityBright: {
-    fontSize: 46, fontWeight: '900', fontFamily: FontFamily.black,
-    color: '#FFFFFF', lineHeight: 54, letterSpacing: -1.5,
-    textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 12,
+    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
+    color: '#FFFFFF', lineHeight: 52, letterSpacing: -1.2,
+    textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10,
   },
   cityMid: {
-    fontSize: 46, fontWeight: '900', fontFamily: FontFamily.black,
-    color: 'rgba(255,255,255,0.6)', lineHeight: 54, letterSpacing: -1.5,
+    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
+    color: 'rgba(255,255,255,0.55)', lineHeight: 52, letterSpacing: -1.2,
   },
   cityFade: {
-    fontSize: 46, fontWeight: '900', fontFamily: FontFamily.black,
-    color: 'rgba(255,255,255,0.3)', lineHeight: 54, letterSpacing: -1.5,
+    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
+    color: 'rgba(255,255,255,0.28)', lineHeight: 52, letterSpacing: -1.2,
   },
   cityFaintest: {
-    fontSize: 46, fontWeight: '900', fontFamily: FontFamily.black,
-    color: 'rgba(255,255,255,0.14)', lineHeight: 54, letterSpacing: -1.5,
+    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
+    color: 'rgba(255,255,255,0.12)', lineHeight: 52, letterSpacing: -1.2,
   },
   homeAccent: {
     color: ACCENT, fontWeight: '700', fontFamily: FontFamily.bold,
@@ -485,11 +485,11 @@ const s = StyleSheet.create({
   // ── Bottom ──
   bottom: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 24, zIndex: 20,
+    paddingHorizontal: CONTENT_PAD, zIndex: 20,
   },
   progressRow: {
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    gap: 6, marginBottom: 24,
+    gap: 6, marginBottom: 28,
   },
   dot: {
     width: 6, height: 6, borderRadius: 3,
@@ -504,7 +504,7 @@ const s = StyleSheet.create({
   nextBtnOuter: {
     width: 60, height: 60, borderRadius: 30,
     alignSelf: 'center', overflow: 'hidden',
-    shadowColor: ACCENT, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.45, shadowRadius: 20, elevation: 10,
+    shadowColor: ACCENT, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 10,
   },
   nextBtnGradient: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
@@ -513,7 +513,7 @@ const s = StyleSheet.create({
   // CTA
   ctaWrap: {
     borderRadius: 28, overflow: 'hidden', marginBottom: 14,
-    shadowColor: ACCENT, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 24, elevation: 14,
+    shadowColor: ACCENT, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 20, elevation: 14,
   },
   ctaGradient: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
@@ -529,24 +529,24 @@ const s = StyleSheet.create({
   },
 
   // Alt
-  altRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  altRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   altBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, paddingVertical: 14, borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
     borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.10)',
   },
   altText: {
     fontSize: 15, fontWeight: '600', fontFamily: FontFamily.semibold,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.75)',
   },
 
   // Terms
   terms: {
     fontSize: 11, fontWeight: '400', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 12, lineHeight: 17,
+    color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10, lineHeight: 17,
   },
-  termsLink: { color: 'rgba(255,255,255,0.35)', fontWeight: '600', fontFamily: FontFamily.semibold },
+  termsLink: { color: 'rgba(255,255,255,0.4)', fontWeight: '600', fontFamily: FontFamily.semibold },
 });
 
 export default OnboardingScreen;

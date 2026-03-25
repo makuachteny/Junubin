@@ -963,7 +963,7 @@ export default function ChatScreen({ navigation, route }) {
                 <Ionicons name="close" size={16} color={colors.gray400} />
               </TouchableOpacity>
               <View style={styles.funHeader}>
-                <View style={[styles.funIconCircle, { backgroundColor: 'rgba(245,96,64,0.1)' }]}>
+                <View style={[styles.funIconCircle, { backgroundColor: 'rgba(0,151,57,0.1)' }]}>
                   <Ionicons name="game-controller" size={16} color={colors.accent} />
                 </View>
                 <View style={{ flex: 1 }}>

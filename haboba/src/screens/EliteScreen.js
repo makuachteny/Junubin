@@ -271,7 +271,7 @@ export default function EliteScreen({ navigation }) {
 
         {/* Ambient spray accents */}
         <View style={{ position: 'absolute', right: 10, top: 80 }} pointerEvents="none">
-          <SpraySplatter size={50} color="#22C55E" opacity={0.06} />
+          <SpraySplatter size={50} color="#009739" opacity={0.06} />
         </View>
 
         {alreadyHasTier && (

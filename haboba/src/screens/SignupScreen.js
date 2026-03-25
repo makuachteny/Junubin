@@ -19,8 +19,6 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../auth';
 import { useAccessibilityPreferences } from '../accessibility';
-import { SpraySplatter } from '../components/GraffitiAccents';
-import { GraffitiShield } from '../components/icons';
 
 const { width } = Dimensions.get('window');
 
@@ -64,6 +62,15 @@ const SignupScreen = ({ navigation }) => {
   };
 
   const [inputError, setInputError] = useState('');
+  const formatAuthError = (error) => {
+    const msg = error?.message || String(error || '');
+    if (/Supabase config missing/i.test(msg)) return msg;
+    if (/Supabase URL must use https/i.test(msg)) return msg;
+    if (/Network request failed/i.test(msg)) {
+      return 'Network request failed. Check your internet connection and confirm your Supabase URL/key are set correctly.';
+    }
+    return msg || 'Please try again.';
+  };
 
   const validateInput = () => {
     if (selectedMethod === 'phone') {
@@ -97,7 +104,7 @@ const SignupScreen = ({ navigation }) => {
       });
       setStep('verify');
     } catch (error) {
-      Alert.alert('Could not send code', error.message || 'Please try again.');
+      Alert.alert('Could not send code', formatAuthError(error));
     }
   };
 
@@ -136,13 +143,12 @@ const SignupScreen = ({ navigation }) => {
           appProfile?.displayName ||
           appUser?.displayName
         ) {
-          navigation.replace('Main');
           return;
         }
         // Brand-new user → profile setup
         navigation.replace('ProfileSetup');
       } catch (error) {
-        Alert.alert('Verification failed', error.message || 'Invalid code.');
+        Alert.alert('Verification failed', formatAuthError(error));
       }
     }
   };
@@ -158,7 +164,7 @@ const SignupScreen = ({ navigation }) => {
         setVerificationCode(['', '', '', '', '', '']);
         codeRefs.current[0]?.focus();
       } catch (error) {
-        Alert.alert('Could not resend', error.message || 'Please try again.');
+        Alert.alert('Could not resend', formatAuthError(error));
       }
     })();
   };
@@ -277,18 +283,9 @@ const SignupScreen = ({ navigation }) => {
 
             </View>
 
-            {/* Spray accents */}
-            <View style={{ position: 'absolute', right: 10, top: 120 }} pointerEvents="none">
-              <SpraySplatter size={50} color="#22C55E" opacity={0.08} />
-            </View>
-            <View style={{ position: 'absolute', left: 5, bottom: 200 }} pointerEvents="none">
-              <SpraySplatter size={40} color="#EF4444" opacity={0.06} />
-            </View>
-
             {/* Heading */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={styles.heading}>Create your{'\n'}account</Text>
-              <GraffitiShield size={28} color="#22C55E" filled style={{ opacity: 0.3, marginTop: 10 }} />
             </View>
             <Text style={styles.subheading}>
               Join AnaJunubin and connect with South Sudanese worldwide.
@@ -568,7 +565,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // Next button (BLK circle style)
   nextRow: {
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   nextCircleBtn: {
     width: 64,
@@ -663,7 +661,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontFamily: FontFamily.bold,
   },
   verifyButtonWrap: {
-    alignItems: 'flex-end',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, getShadow } from '../theme';
+import { useTheme, Typography, FontFamily, getShadow, Layout } from '../theme';
 import { GraffitiLocation, GraffitiHeart, GraffitiShield } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
 import Button from '../components/Button';
@@ -19,17 +19,236 @@ import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
 import EmptyState from '../components/EmptyState';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
+import SkeletonShimmer from '../components/SkeletonShimmer';
 import { mockLikes } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
+import FilterBar from '../components/FilterBar';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as likesService from '../api/services/likesService';
+import FlagBackground from '../components/FlagBackground';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_GAP = 12;
 const CARD_WIDTH = (SCREEN_W - 32 - CARD_GAP) / 2; // 16px padding each side
 const CARD_HEIGHT = CARD_WIDTH * 1.45;
+
+const AGE_OPTIONS = [
+  { label: '18 – 20', value: '18-20' },
+  { label: '21 – 25', value: '21-25' },
+  { label: '26 – 30', value: '26-30' },
+  { label: '31 – 35', value: '31-35' },
+  { label: '36 – 40', value: '36-40' },
+  { label: '41 – 50', value: '41-50' },
+  { label: '50+', value: '50+' },
+];
+
+const DISTANCE_OPTIONS = [
+  { label: '5 mi', value: '5' },
+  { label: '10 mi', value: '10' },
+  { label: '25 mi', value: '25' },
+  { label: '50 mi', value: '50' },
+  { label: '100 mi', value: '100' },
+  { label: 'Anywhere', value: 'any' },
+];
+
+const ETHNICITY_OPTIONS = [
+  { label: 'Any ethnicity', value: 'any' },
+  { label: 'Dinka', value: 'Dinka' },
+  { label: 'Nuer', value: 'Nuer' },
+  { label: 'Bari', value: 'Bari' },
+  { label: 'Shilluk', value: 'Shilluk' },
+  { label: 'Azande', value: 'Azande' },
+  { label: 'Mundari', value: 'Mundari' },
+  { label: 'Acholi', value: 'Acholi' },
+  { label: 'Lotuko', value: 'Lotuko' },
+  { label: 'Toposa', value: 'Toposa' },
+  { label: 'Murle', value: 'Murle' },
+  { label: 'Madi', value: 'Madi' },
+  { label: 'Other', value: 'Other' },
+];
+
+const HEIGHT_OPTIONS = [];
+for (let feet = 4; feet <= 6; feet++) {
+  const startIn = feet === 4 ? 10 : 0;
+  const endIn = feet === 6 ? 8 : 11;
+  for (let inches = startIn; inches <= endIn; inches++) {
+    HEIGHT_OPTIONS.push({ label: `${feet}'${inches}"`, value: String(feet * 12 + inches) });
+  }
+}
+HEIGHT_OPTIONS.push({ label: "6'9\"+", value: '81' });
+
+const EDUCATION_OPTIONS = [
+  { label: 'Any education', value: 'any' },
+  { label: 'High school', value: 'High school' },
+  { label: "Associate's degree", value: "Associate's degree" },
+  { label: "Bachelor's degree", value: "Bachelor's degree" },
+  { label: "Master's degree", value: "Master's degree" },
+  { label: 'Doctorate', value: 'Doctorate' },
+  { label: 'Trade school', value: 'Trade school' },
+];
+
+const CHILDREN_OPTIONS = [
+  { label: "Doesn't matter", value: 'any' },
+  { label: 'No children', value: 'No children' },
+  { label: 'Has children', value: 'Has children' },
+  { label: 'Want children', value: 'Want children' },
+  { label: "Don't want children", value: "Don't want children" },
+  { label: 'Open to children', value: 'Open to children' },
+];
+
+const LIKE_FILTERS = [
+  { label: 'Age', hasChevron: true, icon: 'calendar-outline' },
+  { label: 'Distance', hasChevron: true, icon: 'location-outline' },
+  { label: 'Ethnicity', hasChevron: true, icon: 'people-outline' },
+  { label: 'Height', hasChevron: true, icon: 'resize-outline' },
+  { label: 'Education', hasChevron: true, icon: 'school-outline' },
+  { label: 'Children', hasChevron: true, icon: 'happy-outline' },
+  { label: 'Verified', hasChevron: false, icon: 'checkmark-circle-outline' },
+  { label: 'Active today', hasChevron: false },
+  { label: 'Nearby', hasChevron: false },
+  { label: 'Super Likes', hasChevron: false },
+  { label: 'Whispers', hasChevron: false },
+  { label: 'New', hasChevron: false },
+];
+
+const LIKE_FILTER_OPTIONS = {
+  Age: AGE_OPTIONS,
+  Distance: DISTANCE_OPTIONS,
+  Ethnicity: ETHNICITY_OPTIONS,
+  Height: HEIGHT_OPTIONS,
+  Education: EDUCATION_OPTIONS,
+  Children: CHILDREN_OPTIONS,
+};
+
+const parseDistanceMiles = (distance) => {
+  if (!distance) return null;
+  if (typeof distance === 'number') return distance;
+  const match = String(distance).match(/(\d+(\.\d+)?)/);
+  return match ? Number(match[1]) : null;
+};
+
+const applyLikeFilters = (likes, toggleFilters, selections = {}) => {
+  const hasToggle = toggleFilters?.length > 0;
+  const hasSelection = Object.values(selections).some(Boolean);
+  if (!hasToggle && !hasSelection) return likes;
+
+  return likes.filter((like) => {
+    let pass = true;
+
+    if (selections.Age) {
+      const ageVal = selections.Age;
+      if (ageVal === '50+') {
+        pass = pass && (like.age || 0) >= 50;
+      } else {
+        const parts = ageVal.split('-');
+        const min = Number(parts[0]);
+        const max = Number(parts[1]);
+        if (!Number.isNaN(min) && !Number.isNaN(max)) {
+          pass = pass && like.age >= min && like.age <= max;
+        }
+      }
+    }
+
+    if (selections.Distance) {
+      const dVal = selections.Distance;
+      if (dVal !== 'any') {
+        const maxMiles = Number(dVal);
+        const miles = parseDistanceMiles(like.distance);
+        if (!Number.isNaN(maxMiles) && miles != null) {
+          pass = pass && miles <= maxMiles;
+        } else if (!Number.isNaN(maxMiles) && miles == null) {
+          pass = false;
+        }
+      }
+    }
+
+    if (selections.Ethnicity) {
+      const eth = selections.Ethnicity;
+      if (eth !== 'any') {
+        pass = pass && (like.ethnicity || '').toLowerCase() === eth.toLowerCase();
+      }
+    }
+
+    if (selections.Height) {
+      const hVal = Number(selections.Height);
+      if (!Number.isNaN(hVal)) {
+        const heightStr = like.height || '';
+        const match = heightStr.match(/(\d+)'(\d+)/);
+        if (match) {
+          const totalInches = Number(match[1]) * 12 + Number(match[2]);
+          if (hVal === 81) {
+            pass = pass && totalInches >= 81;
+          } else {
+            pass = pass && totalInches >= hVal - 2 && totalInches <= hVal + 2;
+          }
+        } else {
+          pass = false;
+        }
+      }
+    }
+
+    if (selections.Education) {
+      const edu = selections.Education;
+      if (edu !== 'any') {
+        pass = pass && (like.education || '').toLowerCase() === edu.toLowerCase();
+      }
+    }
+
+    if (selections.Children) {
+      const ch = selections.Children;
+      if (ch !== 'any') {
+        pass = pass && (like.children || '').toLowerCase().includes(ch.toLowerCase());
+      }
+    }
+
+    if (toggleFilters?.length) {
+      toggleFilters.forEach((filter) => {
+        switch (filter) {
+          case 'Verified':
+            pass = pass && !!like.verified;
+            break;
+          case 'Active today':
+            if (like.activity) {
+              pass = pass && like.activity === 'active';
+            } else if (like.likedAt) {
+              const likedAt = new Date(like.likedAt).getTime();
+              const now = Date.now();
+              pass = pass && (now - likedAt) <= 24 * 60 * 60 * 1000;
+            } else {
+              pass = false;
+            }
+            break;
+          case 'Nearby': {
+            const miles = parseDistanceMiles(like.distance);
+            pass = pass && miles != null && miles <= 5;
+            break;
+          }
+          case 'Super Likes':
+            pass = pass && (like.likeType === 'super_like' || like.isSuperLike);
+            break;
+          case 'Whispers':
+            pass = pass && !!(like.hasWhisper || like.whisperText || like.whisper);
+            break;
+          case 'New':
+            if (like.likedAt) {
+              const likedAt = new Date(like.likedAt).getTime();
+              const now = Date.now();
+              pass = pass && (now - likedAt) <= 24 * 60 * 60 * 1000;
+            } else {
+              pass = false;
+            }
+            break;
+          default:
+            break;
+        }
+      });
+    }
+
+    return pass;
+  });
+};
 
 export default function LikesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -41,6 +260,8 @@ export default function LikesScreen({ navigation }) {
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
   const [refreshing, setRefreshing] = useState(false);
+  const [activeFilters, setActiveFilters] = useState([]);
+  const [filterSelections, setFilterSelections] = useState({});
   const contentAnim = useRef(new Animated.Value(0)).current;
   const cardAnimsRef = useRef([]);
   const hasAnimatedCardsRef = useRef(false);
@@ -88,10 +309,15 @@ export default function LikesScreen({ navigation }) {
     }).start();
   }, [contentAnim]);
 
-  // Staggered scale+fade for grid cards (first render only)
+  // Reset animation when filters change
   useEffect(() => {
-    if (hasAnimatedCardsRef.current || likes.length === 0) return;
-    const anims = likes.map(() => new Animated.Value(0));
+    hasAnimatedCardsRef.current = false;
+  }, [activeFilters, filterSelections]);
+
+  // Staggered scale+fade for grid cards
+  useEffect(() => {
+    if (hasAnimatedCardsRef.current || filteredLikes.length === 0) return;
+    const anims = filteredLikes.map(() => new Animated.Value(0));
     cardAnimsRef.current = anims;
     hasAnimatedCardsRef.current = true;
     const staggered = anims.map((anim, i) =>
@@ -104,12 +330,41 @@ export default function LikesScreen({ navigation }) {
       })
     );
     Animated.stagger(0, staggered).start();
-  }, [likes]);
+  }, [filteredLikes]);
+
+  const handleFilterPress = useCallback((filterName) => {
+    if (filterName === 'More') {
+      navigation?.navigate?.('Preferences');
+      return;
+    }
+    setActiveFilters((prev) =>
+      prev.includes(filterName)
+        ? prev.filter((f) => f !== filterName)
+        : [...prev, filterName]
+    );
+  }, [navigation]);
+
+  const handleFilterSelect = useCallback((filterName, value) => {
+    setFilterSelections((prev) => {
+      const next = { ...prev };
+      if (value === null) {
+        delete next[filterName];
+      } else {
+        next[filterName] = value;
+      }
+      return next;
+    });
+  }, []);
+
+  const filteredLikes = useMemo(
+    () => applyLikeFilters(likes, activeFilters, filterSelections),
+    [likes, activeFilters, filterSelections]
+  );
 
   const unlocked = canSeeWhoLikesYou();
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header row */}
       <Animated.View
         style={[
@@ -136,6 +391,19 @@ export default function LikesScreen({ navigation }) {
         </TouchableOpacity>
       </Animated.View>
 
+      {/* Filter bar */}
+      <FilterBar
+        onFilterPress={handleFilterPress}
+        onSettingsPress={() => navigation.navigate('Preferences')}
+        activeFilters={activeFilters}
+        filterSelections={filterSelections}
+        onFilterSelect={handleFilterSelect}
+        showSettingsButton={false}
+        filters={LIKE_FILTERS}
+        options={LIKE_FILTER_OPTIONS}
+        containerStyle={{ paddingHorizontal: 16, marginTop: Layout.filterGap }}
+      />
+
       <Animated.ScrollView
         style={[
           styles.content,
@@ -150,16 +418,26 @@ export default function LikesScreen({ navigation }) {
           <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
+        {isLoading ? (
+          <View style={styles.likesGrid}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <View key={`like-skel-${idx}`} style={styles.likeSkeletonCard}>
+                <SkeletonShimmer width="100%" height={CARD_HEIGHT} borderRadius={16} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <>
         {/* Ambient spray accents */}
         <View style={{ position: 'absolute', right: 8, top: 20 }} pointerEvents="none">
-          <SpraySplatter size={35} color="#22C55E" opacity={0.06} />
+          <SpraySplatter size={35} color={colors.rose} opacity={0.08} />
         </View>
         <View style={{ position: 'absolute', left: 4, bottom: 100 }} pointerEvents="none">
-          <SpraySplatter size={40} color="#EF4444" opacity={0.05} />
+          <SpraySplatter size={40} color={colors.rose} opacity={0.05} />
         </View>
 
         {/* Like count */}
-        <Text style={styles.likesCount}>{likes.length} Like{likes.length !== 1 ? 's' : ''}</Text>
+        <Text style={styles.likesCount}>{filteredLikes.length} Like{filteredLikes.length !== 1 ? 's' : ''}</Text>
 
         {/* Upgrade text */}
         {unlocked ? (
@@ -185,17 +463,17 @@ export default function LikesScreen({ navigation }) {
         <AdBanner colors={colors} style={{ marginBottom: 12 }} />
 
         {/* Empty state */}
-        {likes.length === 0 && !isLoading && (
+        {filteredLikes.length === 0 && !isLoading && (
           <EmptyState
             icon="heart"
-            title="No likes yet"
-            subtitle="Keep swiping to get noticed!"
+            title={likes.length === 0 ? 'No likes yet' : 'No results'}
+            subtitle={likes.length === 0 ? 'Keep swiping to get noticed!' : 'Try adjusting your filters.'}
           />
         )}
 
         {/* Card grid */}
         <View style={styles.likesGrid}>
-          {likes.map((like, idx) => {
+          {filteredLikes.map((like, idx) => {
             const cardAnim = cardAnimsRef.current[idx];
             const cardAnimStyle = cardAnim ? {
               opacity: cardAnim,
@@ -262,10 +540,12 @@ export default function LikesScreen({ navigation }) {
           })}
 
         </View>
+          </>
+        )}
       </Animated.ScrollView>
 
       {/* Fixed CTA button — stays at bottom, does not scroll */}
-      {!unlocked && likes.length > 0 && (
+      {!unlocked && filteredLikes.length > 0 && (
         <View style={styles.ctaFixed}>
           <TouchableOpacity
             style={styles.ctaButton}
@@ -276,7 +556,7 @@ export default function LikesScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </FlagBackground>
   );
 }
 
@@ -290,22 +570,20 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 56,
+    height: Layout.headerHeight,
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
+    ...Typography.screenTitle,
     color: colors.black,
     textAlign: 'center',
-    letterSpacing: 0.3,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.rose,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
@@ -331,7 +609,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.accent,
+    color: colors.rose,
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 6,
@@ -359,6 +637,12 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.gray300,
+  },
+  likeSkeletonCard: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   likeImage: {
     width: '100%',
@@ -449,15 +733,15 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     zIndex: 10,
   },
   ctaButton: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.rose,
     paddingHorizontal: 40,
     paddingVertical: 18,
     borderRadius: 40,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowColor: colors.rose,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 8,
   },
   ctaText: {
     fontSize: 17,

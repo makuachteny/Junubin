@@ -11,11 +11,11 @@ import EmptyState from '../components/EmptyState';
 import SkeletonShimmer from '../components/SkeletonShimmer';
 
 const CATEGORY_COLORS = {
-  Social: '#3B82F6',
-  Dating: '#F56040',
-  Diaspora: '#7C4DFF',
+  Social: '#0047AB',
+  Dating: '#E8613C',
+  Diaspora: '#0047AB',
   Cultural: '#F59E0B',
-  Sports: '#22C55E',
+  Sports: '#E8613C',
   Arts: '#EC4899',
 };
 

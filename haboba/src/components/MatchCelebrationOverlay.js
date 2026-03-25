@@ -41,7 +41,8 @@ const BURST_VECTORS = [
 ];
 
 const PARTICLE_COMPONENTS = [GraffitiHeart, GraffitiSparkles, GraffitiStar, GraffitiFlame, GraffitiCrown, GraffitiShield];
-const PARTICLE_COLORS = ['#EF4444', '#22C55E', '#3B82F6', '#FFD700', '#F56040', '#22C55E'];
+// South Sudan flag colors: Red, Green, Blue, Gold Star, Black, White
+const PARTICLE_COLORS = ['#CE1126', '#009739', '#0047AB', '#FCCD12', '#1A1A1A', '#FFFFFF'];
 
 const MatchCelebrationOverlay = ({
   visible,
@@ -214,19 +215,19 @@ const MatchCelebrationOverlay = ({
         {/* Flag stripe */}
         <View style={styles.flagStripe}>
           <View style={[styles.flagBand, { backgroundColor: '#000000' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#EF4444' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#CE1126' }]} />
           <View style={[styles.flagBand, { backgroundColor: '#FFFFFF' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#22C55E' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#3B82F6' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#009739' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#0047AB' }]} />
         </View>
       </Animated.View>
 
       {/* Spray accents */}
       <View style={styles.splatterLeft} pointerEvents="none">
-        <SpraySplatter size={50} color="#22C55E" opacity={0.1} />
+        <SpraySplatter size={50} color="#009739" opacity={0.1} />
       </View>
       <View style={styles.splatterRight} pointerEvents="none">
-        <SpraySplatter size={50} color="#EF4444" opacity={0.08} />
+        <SpraySplatter size={50} color="#CE1126" opacity={0.08} />
       </View>
 
       {/* Buttons */}
@@ -275,7 +276,7 @@ const styles = StyleSheet.create({
     height: PHOTO_SIZE + 6,
     borderRadius: (PHOTO_SIZE + 6) / 2,
     borderWidth: 3,
-    borderColor: '#F56040',
+    borderColor: '#E8613C',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flexDirection: 'row',
-    backgroundColor: '#F56040',
+    backgroundColor: '#E8613C',
     borderRadius: 28,
     paddingVertical: 16,
     alignItems: 'center',

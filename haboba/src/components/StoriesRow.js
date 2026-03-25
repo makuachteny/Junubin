@@ -31,7 +31,7 @@ function LiveBadge() {
 function LiveRing({ children }) {
   return (
     <LinearGradient
-      colors={['#EF4444', '#F97316', '#EF4444']}
+      colors={['#CE1126', '#F97316', '#CE1126']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
       style={styles.liveGradientRing}
@@ -41,7 +41,7 @@ function LiveRing({ children }) {
   );
 }
 
-export default function StoriesRow({ onStoryPress, onCreateStory, onGoLive, onViewLive, colors }) {
+export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, colors }) {
   // Sort: live users first
   const sortedStories = [...mockStories].sort((a, b) => {
     if (a.isLive && !b.isLive) return -1;
@@ -55,9 +55,9 @@ export default function StoriesRow({ onStoryPress, onCreateStory, onGoLive, onVi
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.row}
     >
-      {/* Add Story / Go Live */}
+      {/* Create */}
       <View style={styles.addGroup}>
-        <TouchableOpacity style={styles.storyItem} onPress={onCreateStory} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.storyItem} onPress={onCreatePress} activeOpacity={0.7}>
           <LinearGradient
             colors={['#F97316', '#EA580C', '#F59E0B']}
             start={{ x: 0, y: 0 }}
@@ -65,24 +65,10 @@ export default function StoriesRow({ onStoryPress, onCreateStory, onGoLive, onVi
             style={styles.gradientRing}
           >
             <View style={styles.addCenter}>
-              <Ionicons name="add" size={28} color="#FFFFFF" />
+              <Ionicons name="add" size={26} color="#FFFFFF" />
             </View>
           </LinearGradient>
-          <Text style={[styles.name, { color: colors.black }]}>Add Story</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.storyItem} onPress={onGoLive} activeOpacity={0.7}>
-          <LinearGradient
-            colors={['#EF4444', '#DC2626', '#F97316']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.gradientRing}
-          >
-            <View style={styles.liveCenter}>
-              <Ionicons name="radio" size={24} color="#FFFFFF" />
-            </View>
-          </LinearGradient>
-          <Text style={[styles.name, { color: colors.accent || '#EF4444' }]}>Go Live</Text>
+          <Text style={[styles.name, { color: colors.black }]}>Create</Text>
         </TouchableOpacity>
       </View>
 
@@ -124,7 +110,7 @@ export default function StoriesRow({ onStoryPress, onCreateStory, onGoLive, onVi
               </LinearGradient>
             )}
             <Text
-              style={[styles.name, { color: isLive ? '#EF4444' : colors.black }]}
+              style={[styles.name, { color: isLive ? '#CE1126' : colors.black }]}
               numberOfLines={1}
             >
               {story.userName}
@@ -140,42 +126,34 @@ const styles = StyleSheet.create({
   row: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    gap: 14,
+    gap: 12,
   },
   addGroup: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
   },
   storyItem: {
     alignItems: 'center',
-    width: 72,
+    width: 66,
   },
   addCenter: {
     width: '100%',
     height: '100%',
-    borderRadius: 31,
+    borderRadius: 28,
     backgroundColor: 'rgba(0,0,0,0.25)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  liveCenter: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 31,
-    backgroundColor: 'rgba(239,68,68,0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   gradientRing: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     padding: 3,
   },
   liveGradientRing: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     padding: 3,
   },
   liveAvatarWrap: {
@@ -184,7 +162,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 31,
+    borderRadius: 28,
     borderWidth: 2,
     borderColor: '#FFFFFF',
   },
@@ -192,7 +170,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     alignSelf: 'center',
-    backgroundColor: '#EF4444',
+    backgroundColor: '#CE1126',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,

@@ -197,7 +197,7 @@ function GamesTab({ styles, colors, isDark, navigation, hasTier, connections }) 
 
       {/* Daily Challenge */}
       <Text style={styles.sectionLabel}>Daily Challenge</Text>
-      <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: '#FFD700' }]}>
+      <View style={[styles.card, { borderLeftWidth: 3, borderLeftColor: '#FCCD12' }]}>
         <View style={styles.cardRow}>
           <Text style={styles.cardEmoji}>{DAILY_CHALLENGE.emoji}</Text>
           <View style={{ flex: 1 }}>
@@ -243,7 +243,7 @@ function ChallengesTab({ styles, colors, streak, challengesDone, setChallengesDo
     <>
       {/* Weekly streak */}
       <View style={styles.streakCard}>
-        <Ionicons name="flame" size={28} color="#F56040" />
+        <Ionicons name="flame" size={28} color="#E8613C" />
         <View style={{ flex: 1 }}>
           <Text style={styles.streakTitle}>{streak} / 5 Weekly Streak</Text>
           <View style={styles.streakBar}>
@@ -442,7 +442,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   cardTitle: { ...Typography.bodySemibold, color: colors.black, fontSize: 15 },
   cardDesc: { ...Typography.caption, color: colors.gray400, marginTop: 2 },
   rewardBadge: {
-    backgroundColor: '#FFD70020',
+    backgroundColor: '#FCCD1220',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,

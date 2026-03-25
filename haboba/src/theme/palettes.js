@@ -1,55 +1,62 @@
 // ═══════════════════════════════════════════════════════════
-// AnaJunubin — Instagram-Inspired Palette
-// Monochrome foundation with Instagram's warm gradient accent.
-// Primary accent drawn from the iconic story ring gradient.
-// OLED-optimized dark mode.
+// AnaJunubin — South Sudan Palette
+// A vibrant blend of the South Sudan flag: Black, Red, Green,
+// White, Blue, and Gold star. Primary accent is warm Sunset
+// Orange; Rose is vibrant Pink for the Likes page. Flag colors
+// (green, blue, gold, red) appear as supporting accents
+// throughout the UI. OLED-optimized dark mode.
 // ═══════════════════════════════════════════════════════════
 
 export const LightPalette = {
   // ── Text ──
-  primary: '#262626',
+  primary: '#1A1A1A',
   primaryDark: '#000000',
-  primaryLight: '#363636',
+  primaryLight: '#2D2D2D',
 
   // ── Surfaces ──
-  cream: '#FFFFFF',
-  creamDark: '#FAFAFA',
+  cream: '#FFFAF7',
+  creamDark: '#FFF5F0',
   creamLight: '#FFFFFF',
 
-  // ── Accent — Instagram Warm Orange ──
-  accent: '#F56040',
-  accentDark: '#E6683C',
+  // ── Accent — Sunset Orange (warm blend of flag red + gold) ──
+  accent: '#E8613C',
+  accentDark: '#D14E2B',
   accentLight: '#FDE8E2',
 
-  // ── Rose — Instagram Heart Red ──
-  rose: '#ED4956',
-  roseDark: '#D32F2F',
-  roseLight: '#FDEDEF',
+  // ── Rose — Vibrant Pink (Likes page) ──
+  rose: '#E84393',
+  roseDark: '#C7357D',
+  roseLight: '#FDE7F3',
+
+  // ── Flag Green ──
+  green: '#009739',
+  greenDark: '#007A2E',
+  greenLight: '#E0F5E8',
 
   // ── Functional ──
-  success: '#58C322',
-  warning: '#FCAF45',
-  error: '#ED4956',
-  info: '#0095F6',
+  success: '#009739',
+  warning: '#FCCD12',
+  error: '#CE1126',
+  info: '#0047AB',
 
   // ── Core neutrals ──
   white: '#FFFFFF',
-  black: '#262626',
+  black: '#1A1A1A',
 
-  // ── Neutral grays (Instagram light) ──
-  gray: '#8E8E8E',
-  grayLight: '#DBDBDB',
-  grayLighter: '#EFEFEF',
-  grayLightest: '#FAFAFA',
-  gray100: '#FAFAFA',
-  gray200: '#EFEFEF',
-  gray300: '#DBDBDB',
-  gray400: '#8E8E8E',
-  gray500: '#737373',
-  gray600: '#555555',
-  gray700: '#363636',
-  gray800: '#262626',
-  gray900: '#121212',
+  // ── Neutral grays (warm-tinted) ──
+  gray: '#8A8580',
+  grayLight: '#DDD8D4',
+  grayLighter: '#EDEAE7',
+  grayLightest: '#F7F5F3',
+  gray100: '#F7F5F3',
+  gray200: '#EDEAE7',
+  gray300: '#DDD8D4',
+  gray400: '#8A8580',
+  gray500: '#6B6560',
+  gray600: '#4D4844',
+  gray700: '#2D2926',
+  gray800: '#1C1917',
+  gray900: '#0F0D0C',
 
   // ── Overlays ──
   overlay: 'rgba(0, 0, 0, 0.65)',
@@ -57,144 +64,155 @@ export const LightPalette = {
 
   // ── Cards ──
   cardBg: '#FFFFFF',
-  cardBorder: '#DBDBDB',
+  cardBorder: '#DDD8D4',
 
   // ── Tab bar ──
-  tabActive: '#262626',
-  tabInactive: '#8E8E8E',
+  tabActive: '#1A1A1A',
+  tabInactive: '#8A8580',
 
-  // ── Gold — Instagram Amber ──
-  gold: '#FCAF45',
-  goldDark: '#F77737',
-  goldLight: '#FFDC80',
+  // ── Gold — South Sudan Star Gold ──
+  gold: '#FCCD12',
+  goldDark: '#D4A800',
+  goldLight: '#FFF7CC',
 
-  // ── Royal — Instagram Purple ──
-  royal: '#833AB4',
-  royalDark: '#5851DB',
-  royalLight: '#C9A0DC',
+  // ── Royal — South Sudan Flag Blue ──
+  royal: '#0047AB',
+  royalDark: '#003580',
+  royalLight: '#A3C4F3',
+
+  // ── Flag Red ──
+  flagRed: '#CE1126',
 
   // ── Separator ──
-  separator: '#DBDBDB',
+  separator: '#DDD8D4',
 
   // ── Semantic surface tokens ──
   surface: '#FFFFFF',
-  surfaceMuted: '#FAFAFA',
-  surfaceHover: '#EFEFEF',
-  inputBg: '#EFEFEF',
-  inputBorder: '#DBDBDB',
-  accentSurface: 'rgba(245, 96, 64, 0.06)',
-  textSecondary: '#8E8E8E',
-  textTertiary: '#737373',
+  surfaceMuted: '#F7F5F3',
+  surfaceHover: '#EDEAE7',
+  inputBg: '#F3F0ED',
+  inputBorder: '#DDD8D4',
+  accentSurface: 'rgba(232, 97, 60, 0.06)',
+  textSecondary: '#8A8580',
+  textTertiary: '#6B6560',
 
-  // ── Accent tints (derived from #F56040) ──
-  accentTint04: 'rgba(245, 96, 64, 0.04)',
-  accentTint05: 'rgba(245, 96, 64, 0.05)',
-  accentTint06: 'rgba(245, 96, 64, 0.06)',
-  accentTint08: 'rgba(245, 96, 64, 0.08)',
-  accentTint10: 'rgba(245, 96, 64, 0.10)',
-  accentTint12: 'rgba(245, 96, 64, 0.12)',
-  accentTint15: 'rgba(245, 96, 64, 0.15)',
-  accentTint25: 'rgba(245, 96, 64, 0.25)',
+  // ── Accent tints (derived from #E8613C) ──
+  accentTint04: 'rgba(232, 97, 60, 0.04)',
+  accentTint05: 'rgba(232, 97, 60, 0.05)',
+  accentTint06: 'rgba(232, 97, 60, 0.06)',
+  accentTint08: 'rgba(232, 97, 60, 0.08)',
+  accentTint10: 'rgba(232, 97, 60, 0.10)',
+  accentTint12: 'rgba(232, 97, 60, 0.12)',
+  accentTint15: 'rgba(232, 97, 60, 0.15)',
+  accentTint25: 'rgba(232, 97, 60, 0.25)',
 
-  // ── Rose tints (derived from #ED4956) ──
-  roseTint12: 'rgba(237, 73, 86, 0.12)',
-  roseTint20: 'rgba(237, 73, 86, 0.20)',
-  roseTint35: 'rgba(237, 73, 86, 0.35)',
+  // ── Rose tints (derived from #E84393) ──
+  roseTint12: 'rgba(232, 67, 147, 0.12)',
+  roseTint20: 'rgba(232, 67, 147, 0.20)',
+  roseTint35: 'rgba(232, 67, 147, 0.35)',
 };
 
 export const DarkPalette = {
   // ── Text (bright on dark) ──
-  primary: '#F5F5F5',
+  primary: '#F5F0ED',
   primaryDark: '#FFFFFF',
-  primaryLight: '#C7C7C7',
+  primaryLight: '#C7C2BE',
 
-  // ── Surfaces — OLED-optimized pure black ──
+  // ── Surfaces — OLED-optimized ──
   cream: '#000000',
   creamDark: '#000000',
-  creamLight: '#121212',
+  creamLight: '#0F0D0C',
 
-  // ── Accent — Instagram Warm Orange ──
-  accent: '#F56040',
-  accentDark: '#E6683C',
+  // ── Accent — Sunset Orange (brightened for dark) ──
+  accent: '#F06D47',
+  accentDark: '#E8613C',
   accentLight: '#FDE8E2',
 
-  // ── Rose — Instagram Heart Red ──
-  rose: '#ED4956',
-  roseDark: '#FF6B6B',
-  roseLight: '#FDEDEF',
+  // ── Rose — Vibrant Pink (brightened for dark) ──
+  rose: '#F05AA5',
+  roseDark: '#FF6DB5',
+  roseLight: '#FDE7F3',
+
+  // ── Flag Green ──
+  green: '#00B844',
+  greenDark: '#009739',
+  greenLight: '#E0F5E8',
 
   // ── Functional ──
-  success: '#58C322',
-  warning: '#FCAF45',
-  error: '#ED4956',
-  info: '#0095F6',
+  success: '#00B844',
+  warning: '#FCCD12',
+  error: '#F05252',
+  info: '#4D8FDB',
 
   // ── Core neutrals (flipped) ──
   white: '#000000',
-  black: '#F5F5F5',
+  black: '#F5F0ED',
 
-  // ── Neutral grays (Instagram dark — inverted scale) ──
-  gray: '#8E8E8E',
-  grayLight: '#363636',
-  grayLighter: '#262626',
-  grayLightest: '#1C1C1C',
-  gray100: '#121212',
-  gray200: '#1C1C1C',
-  gray300: '#262626',
-  gray400: '#737373',
-  gray500: '#8E8E8E',
-  gray600: '#C7C7C7',
-  gray700: '#DBDBDB',
-  gray800: '#EFEFEF',
-  gray900: '#F5F5F5',
+  // ── Neutral grays (inverted, warm-tinted) ──
+  gray: '#8A8580',
+  grayLight: '#2D2926',
+  grayLighter: '#1C1917',
+  grayLightest: '#141210',
+  gray100: '#0F0D0C',
+  gray200: '#141210',
+  gray300: '#1C1917',
+  gray400: '#6B6560',
+  gray500: '#8A8580',
+  gray600: '#C7C2BE',
+  gray700: '#DDD8D4',
+  gray800: '#EDEAE7',
+  gray900: '#F5F0ED',
 
   // ── Overlays ──
   overlay: 'rgba(0, 0, 0, 0.80)',
   overlayLight: 'rgba(0, 0, 0, 0.45)',
 
   // ── Cards ──
-  cardBg: '#121212',
-  cardBorder: '#262626',
+  cardBg: '#0F0D0C',
+  cardBorder: '#1C1917',
 
   // ── Tab bar ──
   tabActive: '#FFFFFF',
-  tabInactive: '#8E8E8E',
+  tabInactive: '#8A8580',
 
-  // ── Gold — Instagram Amber ──
-  gold: '#FCAF45',
-  goldDark: '#F77737',
-  goldLight: '#FFDC80',
+  // ── Gold — South Sudan Star Gold ──
+  gold: '#FCCD12',
+  goldDark: '#D4A800',
+  goldLight: '#FFF7CC',
 
-  // ── Royal — Instagram Purple ──
-  royal: '#833AB4',
-  royalDark: '#5851DB',
-  royalLight: '#C9A0DC',
+  // ── Royal — South Sudan Flag Blue ──
+  royal: '#4D8FDB',
+  royalDark: '#3575C2',
+  royalLight: '#A3C4F3',
+
+  // ── Flag Red ──
+  flagRed: '#F05252',
 
   // ── Separator ──
-  separator: '#262626',
+  separator: '#1C1917',
 
   // ── Semantic surface tokens ──
-  surface: '#121212',
+  surface: '#0F0D0C',
   surfaceMuted: '#000000',
-  surfaceHover: '#1C1C1C',
-  inputBg: '#262626',
-  inputBorder: '#363636',
-  accentSurface: 'rgba(245, 96, 64, 0.10)',
-  textSecondary: '#8E8E8E',
-  textTertiary: '#737373',
+  surfaceHover: '#141210',
+  inputBg: '#1C1917',
+  inputBorder: '#2D2926',
+  accentSurface: 'rgba(240, 109, 71, 0.10)',
+  textSecondary: '#8A8580',
+  textTertiary: '#6B6560',
 
-  // ── Accent tints (derived from #F56040) ──
-  accentTint04: 'rgba(245, 96, 64, 0.04)',
-  accentTint05: 'rgba(245, 96, 64, 0.05)',
-  accentTint06: 'rgba(245, 96, 64, 0.06)',
-  accentTint08: 'rgba(245, 96, 64, 0.08)',
-  accentTint10: 'rgba(245, 96, 64, 0.10)',
-  accentTint12: 'rgba(245, 96, 64, 0.12)',
-  accentTint15: 'rgba(245, 96, 64, 0.15)',
-  accentTint25: 'rgba(245, 96, 64, 0.25)',
+  // ── Accent tints (derived from #F06D47) ──
+  accentTint04: 'rgba(240, 109, 71, 0.04)',
+  accentTint05: 'rgba(240, 109, 71, 0.05)',
+  accentTint06: 'rgba(240, 109, 71, 0.06)',
+  accentTint08: 'rgba(240, 109, 71, 0.08)',
+  accentTint10: 'rgba(240, 109, 71, 0.10)',
+  accentTint12: 'rgba(240, 109, 71, 0.12)',
+  accentTint15: 'rgba(240, 109, 71, 0.15)',
+  accentTint25: 'rgba(240, 109, 71, 0.25)',
 
-  // ── Rose tints (derived from #ED4956) ──
-  roseTint12: 'rgba(237, 73, 86, 0.12)',
-  roseTint20: 'rgba(237, 73, 86, 0.20)',
-  roseTint35: 'rgba(237, 73, 86, 0.35)',
+  // ── Rose tints (derived from #F05AA5) ──
+  roseTint12: 'rgba(240, 90, 165, 0.12)',
+  roseTint20: 'rgba(240, 90, 165, 0.20)',
+  roseTint35: 'rgba(240, 90, 165, 0.35)',
 };

@@ -8,7 +8,7 @@ import Svg, { Path, Circle, G } from 'react-native-svg';
 
 // ─── Spray Paint Splatter ───
 // A cluster of paint dots that can accent corners or empty spaces
-export function SpraySplatter({ size = 40, color = '#F56040', opacity = 0.15, style }) {
+export function SpraySplatter({ size = 40, color = '#009739', opacity = 0.15, style }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 40 40" style={style}>
       <G opacity={opacity}>
@@ -31,7 +31,7 @@ export function SpraySplatter({ size = 40, color = '#F56040', opacity = 0.15, st
 
 // ─── Paint Drip ───
 // Vertical drip accent for borders and edges
-export function PaintDrip({ height = 30, color = '#F56040', opacity = 0.2, style }) {
+export function PaintDrip({ height = 30, color = '#009739', opacity = 0.2, style }) {
   const w = height * 0.3;
   return (
     <Svg width={w} height={height} viewBox="0 0 10 30" style={style}>
@@ -47,9 +47,9 @@ export function PaintDrip({ height = 30, color = '#F56040', opacity = 0.2, style
 // ─── Tribal Zigzag Divider ───
 // South Sudanese-inspired geometric pattern divider
 export function TribalDivider({ width = 300, height = 12, colors: divColors, style }) {
-  const c1 = divColors?.[0] || '#EF4444';
-  const c2 = divColors?.[1] || '#22C55E';
-  const c3 = divColors?.[2] || '#3B82F6';
+  const c1 = divColors?.[0] || '#CE1126';
+  const c2 = divColors?.[1] || '#009739';
+  const c3 = divColors?.[2] || '#0047AB';
   const segW = 20;
   const count = Math.ceil(width / segW);
 
@@ -77,7 +77,7 @@ export function TribalDivider({ width = 300, height = 12, colors: divColors, sty
 
 // ─── Graffiti Corner Frame ───
 // Rough spray-painted corner marks for cards and containers
-export function GraffitiCorner({ size = 24, color = '#F56040', position = 'topLeft', style }) {
+export function GraffitiCorner({ size = 24, color = '#009739', position = 'topLeft', style }) {
   const rotate = {
     topLeft: '0',
     topRight: '90',
@@ -108,7 +108,7 @@ export function GraffitiCorner({ size = 24, color = '#F56040', position = 'topLe
 
 // ─── Spray Dot Row ───
 // Horizontal row of fading dots, like spray paint mist
-export function SprayDotRow({ width = 200, dotColor = '#F56040', style }) {
+export function SprayDotRow({ width = 200, dotColor = '#009739', style }) {
   const dots = [];
   const count = Math.floor(width / 8);
   for (let i = 0; i < count; i++) {
@@ -129,13 +129,13 @@ export function SprayDotRow({ width = 200, dotColor = '#F56040', style }) {
 // ─── Combined Section Divider ───
 // Full-width section divider with tribal zigzag and spray accents
 export function GraffitiSectionDivider({ colors: themeColors, style }) {
-  const accent = themeColors?.accent || '#F56040';
+  const accent = themeColors?.accent || '#009739';
   return (
     <View style={[dividerStyles.container, style]}>
       <TribalDivider
         width={280}
         height={10}
-        colors={['#EF4444', '#22C55E', '#3B82F6']}
+        colors={['#CE1126', '#009739', '#0047AB']}
       />
       <View style={dividerStyles.dotRow}>
         <SpraySplatter size={16} color={accent} opacity={0.12} />

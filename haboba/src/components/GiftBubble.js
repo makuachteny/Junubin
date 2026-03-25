@@ -7,7 +7,7 @@ export default function GiftBubble({ gift, isMe, time, colors }) {
   return (
     <View style={[styles.container, isMe ? styles.me : styles.them]}>
       <LinearGradient
-        colors={['#FFD700', '#FFA000']}
+        colors={['#FCCD12', '#FFA000']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}

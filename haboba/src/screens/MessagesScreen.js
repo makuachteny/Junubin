@@ -10,13 +10,15 @@ import {
   Alert,
   Animated,
   TextInput,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiChat, GraffitiTag } from '../components/icons';
+import { GraffitiChat } from '../components/icons';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, Typography, FontFamily, getShadow, Gradients } from '../theme';
+import { useTheme, Typography, FontFamily, getShadow, Gradients, Layout } from '../theme';
 import { mockMatches, mockLikes } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
@@ -32,6 +34,7 @@ import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
 import { mockStories } from '../data/mockStories';
 import { useAccessibilityPreferences } from '../accessibility';
+import FlagBackground from '../components/FlagBackground';
 
 export default function MessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -50,6 +53,7 @@ export default function MessagesScreen({ navigation }) {
   const hasAnimatedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
 
   const fetchMatches = useCallback(() => {
     if (!session) {
@@ -185,7 +189,7 @@ export default function MessagesScreen({ navigation }) {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={Gradients.accent}
+                colors={Gradients.pink}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.avatarRing}
@@ -272,8 +276,7 @@ export default function MessagesScreen({ navigation }) {
       <StoriesRow
         colors={colors}
         onStoryPress={(story, index, storyList) => navigation.navigate('StoriesView', { story, storyIndex: index, storyList })}
-        onCreateStory={() => navigation.navigate('CreateStory')}
-        onGoLive={() => navigation.navigate('GoLive')}
+        onCreatePress={() => setShowCreateSheet(true)}
         onViewLive={(liveData) => navigation.navigate('LiveView', { liveData })}
       />
 
@@ -310,7 +313,7 @@ export default function MessagesScreen({ navigation }) {
   ), [colors, isDark, styles, searchQuery, likes, navigation, hasTier]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
       {/* ─── Header ─── */}
       <Animated.View
         style={[
@@ -374,7 +377,51 @@ export default function MessagesScreen({ navigation }) {
           }
         />
       )}
-    </View>
+
+      {/* ─── Create Bottom Sheet ─── */}
+      <Modal
+        visible={showCreateSheet}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCreateSheet(false)}
+      >
+        <View style={styles.sheetOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreateSheet(false)} />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Create</Text>
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => {
+                setShowCreateSheet(false);
+                navigation.navigate('CreateStory');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle-outline" size={20} color={colors.accent} />
+              <View style={styles.sheetTextWrap}>
+                <Text style={styles.sheetRowTitle}>Add Story</Text>
+                <Text style={styles.sheetRowSub}>Share a moment with your followers</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetRow}
+              onPress={() => {
+                setShowCreateSheet(false);
+                navigation.navigate('GoLive');
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="radio-outline" size={20} color="#CE1126" />
+              <View style={styles.sheetTextWrap}>
+                <Text style={styles.sheetRowTitle}>Go Live</Text>
+                <Text style={styles.sheetRowSub}>Start a live session now</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </FlagBackground>
   );
 }
 
@@ -387,7 +434,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   // ─── Header ───
   header: {
     width: '100%',
-    height: 56,
+    height: Layout.headerHeight,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -410,11 +457,9 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
+    ...Typography.screenTitle,
     color: colors.black,
     textAlign: 'center',
-    letterSpacing: 0.3,
   },
   headerAvatar: {
     width: 36,
@@ -564,7 +609,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginLeft: 8,
   },
   likesYouBadge: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.rose,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,
@@ -576,6 +621,53 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     letterSpacing: 0.3,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
+  },
+
+  // ─── Create Sheet ───
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 18,
+    paddingTop: 10,
+    paddingBottom: 20,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gray300,
+    marginBottom: 8,
+  },
+  sheetTitle: {
+    ...Typography.h4,
+    color: colors.black,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+  },
+  sheetTextWrap: {
+    flex: 1,
+  },
+  sheetRowTitle: {
+    ...Typography.bodySmallMedium,
+    color: colors.black,
+  },
+  sheetRowSub: {
+    ...Typography.caption,
+    color: colors.gray500,
+    marginTop: 2,
   },
 
   // ─── Empty state ───

@@ -1,14 +1,12 @@
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
-import { View, StyleSheet, Platform, ActivityIndicator, Animated, Dimensions } from 'react-native';
-import { useTheme, FontFamily } from '../theme';
-import { GraffitiHeart, GraffitiLocation, GraffitiChat, GraffitiCommunity } from '../components/icons';
+import { View, StyleSheet, Platform, ActivityIndicator, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../theme';
 import { useAuth } from '../auth';
 import { hapticSelection } from '../utils/haptics';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-const TAB_COUNT = 4;
 
 // Screens - Onboarding flow (eager — auth flow)
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -25,7 +23,7 @@ function lazify(importFn) {
   const LazyComponent = React.lazy(importFn);
   return function LazyScreen(props) {
     return (
-      <React.Suspense fallback={<View style={styles.bootLoading}><ActivityIndicator size="large" color="#F56040" /></View>}>
+      <React.Suspense fallback={<View style={styles.bootLoading}><ActivityIndicator size="large" color="#009739" /></View>}>
         <LazyComponent {...props} />
       </React.Suspense>
     );
@@ -61,14 +59,16 @@ const GameSettingsScreen = lazify(() => import('../screens/GameSettingsScreen'))
 const GoLiveScreen = lazify(() => import('../screens/GoLiveScreen'));
 const LiveViewScreen = lazify(() => import('../screens/LiveViewScreen'));
 const FollowListScreen = lazify(() => import('../screens/FollowListScreen'));
+const FindFriendsScreen = lazify(() => import('../screens/FindFriendsScreen'));
 
 const Tab = createBottomTabNavigator();
-const Stack = createStackNavigator();
+const AuthStack = createStackNavigator();
+const MainStack = createStackNavigator();
 
 function HomeTabs() {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
-  const likesPink = colors.accent;
+  const likesPink = colors.rose;
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current; // Start on HomeTab (index 0)
   const TAB_NAMES = ['HomeTab', 'CommunityTab', 'MessagesTab', 'LikesTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
@@ -105,25 +105,25 @@ function HomeTabs() {
           const idx = TAB_NAMES.indexOf(route.name);
           const scaleValue = idx >= 0 ? tabScales[idx] : new Animated.Value(1);
 
-          let IconComponent;
+          let iconName = 'compass';
           switch (route.name) {
             case 'HomeTab':
-              IconComponent = GraffitiLocation;
+              iconName = focused ? 'compass' : 'compass-outline';
               break;
             case 'LikesTab':
-              IconComponent = GraffitiHeart;
+              iconName = focused ? 'heart' : 'heart-outline';
               break;
             case 'CommunityTab':
-              IconComponent = GraffitiCommunity;
+              iconName = focused ? 'people' : 'people-outline';
               break;
             case 'MessagesTab':
-              IconComponent = GraffitiChat;
+              iconName = focused ? 'chatbubbles' : 'chatbubbles-outline';
               break;
           }
 
           return (
             <Animated.View style={[styles.tabIcon, focused && styles.tabIconFocused, { transform: [{ scale: scaleValue }] }]}>
-              {IconComponent && <IconComponent size={26} color={iconColor} filled={focused} />}
+              <Ionicons name={iconName} size={24} color={iconColor} />
               {focused && <View style={[styles.activeDot, { backgroundColor: activeColor }]} />}
             </Animated.View>
           );
@@ -166,17 +166,10 @@ function HomeTabs() {
   );
 }
 
-export default function AppNavigator() {
-  const { colors } = useTheme();
-  const { isAuthenticated, user } = useAuth();
-
-  // Authenticated users go straight to Main (even if profile is incomplete,
-  // they can finish it later — don't loop them through onboarding again)
-  const initialRoute = isAuthenticated ? 'Main' : 'Onboarding';
-
+function AuthNavigator({ initialRouteName = 'Onboarding' }) {
   return (
-    <Stack.Navigator
-      initialRouteName={initialRoute}
+    <AuthStack.Navigator
+      initialRouteName={initialRouteName}
       screenOptions={{
         headerShown: false,
         cardStyleInterpolator: ({ current, layouts }) => ({
@@ -194,132 +187,185 @@ export default function AppNavigator() {
         }),
       }}
     >
-      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-      <Stack.Screen name="Signup" component={SignupScreen} />
-      <Stack.Screen name="AccessibilitySurvey" component={AccessibilitySurveyScreen} />
-      <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
-      <Stack.Screen name="Main" component={HomeTabs} />
+      <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
+      <AuthStack.Screen name="Signup" component={SignupScreen} />
+      <AuthStack.Screen name="AccessibilitySurvey" component={AccessibilitySurveyScreen} />
+      <AuthStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
+    </AuthStack.Navigator>
+  );
+}
+
+function MainNavigator({ initialRouteName = 'Main' }) {
+  return (
+    <MainStack.Navigator
+      initialRouteName={initialRouteName}
+      screenOptions={{
+        headerShown: false,
+        cardStyleInterpolator: ({ current, layouts }) => ({
+          cardStyle: {
+            opacity: current.progress,
+            transform: [
+              {
+                translateX: current.progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [layouts.screen.width * 0.08, 0],
+                }),
+              },
+            ],
+          },
+        }),
+      }}
+    >
+      <MainStack.Screen name="Main" component={HomeTabs} />
+      <MainStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
       {/* Main app and modals */}
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen
+      <MainStack.Screen name="Profile" component={ProfileScreen} />
+      <MainStack.Screen
         name="ProfileDetail"
         component={ProfileDetailScreen}
         options={{ presentation: 'modal', gestureEnabled: true }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="Settings"
         component={SettingsScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="Preferences"
         component={PreferencesScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="Boost"
         component={BoostScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="Elite"
         component={EliteScreen}
         options={{ presentation: 'modal' }}
       />
       {/* New screens */}
-      <Stack.Screen name="Chat" component={ChatScreen} />
-      <Stack.Screen
+      <MainStack.Screen name="Chat" component={ChatScreen} />
+      <MainStack.Screen
         name="CreatePost"
         component={CreatePostScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="PostDetail"
         component={PostDetailScreen}
         options={{ presentation: 'modal', gestureEnabled: true }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="GroupDetail"
         component={GroupDetailScreen}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="EditProfile"
         component={EditProfileScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="Notifications"
         component={NotificationsScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="SettingsInfo"
         component={SettingsInfoScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="PreferenceSelect"
         component={PreferenceSelectScreen}
         options={{ gestureEnabled: true }}
       />
       {/* New feature screens */}
-      <Stack.Screen
+      <MainStack.Screen
         name="Call"
         component={CallScreen}
         options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="PhotoVerification"
         component={PhotoVerificationScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen name="Referral" component={ReferralScreen} />
-      <Stack.Screen
+      <MainStack.Screen name="Referral" component={ReferralScreen} />
+      <MainStack.Screen
         name="StoriesView"
         component={StoriesViewScreen}
         options={{ presentation: 'fullScreenModal', gestureEnabled: true }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="CreateStory"
         component={CreateStoryScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen name="Events" component={EventsScreen} />
-      <Stack.Screen
+      <MainStack.Screen name="Events" component={EventsScreen} />
+      <MainStack.Screen
         name="EventDetail"
         component={EventDetailScreen}
         options={{ presentation: 'modal', gestureEnabled: true }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="CreateEvent"
         component={CreateEventScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="InteractivityHub"
         component={InteractivityHubScreen}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="GameSettings"
         component={GameSettingsScreen}
         options={{ presentation: 'modal' }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="GoLive"
         component={GoLiveScreen}
         options={{ presentation: 'fullScreenModal', gestureEnabled: false }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="LiveView"
         component={LiveViewScreen}
         options={{ presentation: 'fullScreenModal', gestureEnabled: true }}
       />
-      <Stack.Screen
+      <MainStack.Screen
         name="FollowList"
         component={FollowListScreen}
       />
-    </Stack.Navigator>
+      <MainStack.Screen
+        name="FindFriends"
+        component={FindFriendsScreen}
+        options={{ presentation: 'modal' }}
+      />
+    </MainStack.Navigator>
   );
+}
+
+export default function AppNavigator() {
+  const { isAuthenticated, user, ready, devBypass } = useAuth();
+
+  if (!ready) return null;
+
+  const profile = user?.profile;
+  const hasProfile =
+    profile?.profileComplete ||
+    profile?.accountPurpose ||
+    profile?.displayName ||
+    user?.displayName;
+  const needsProfileSetup = isAuthenticated && !hasProfile && !devBypass;
+
+  if (!isAuthenticated) {
+    return <AuthNavigator initialRouteName="Onboarding" />;
+  }
+
+  return needsProfileSetup
+    ? <MainNavigator initialRouteName="ProfileSetup" />
+    : <MainNavigator initialRouteName="Main" />;
 }
 
 const getStyles = (colors) => StyleSheet.create({

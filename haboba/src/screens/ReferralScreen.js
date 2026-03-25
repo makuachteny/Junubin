@@ -8,10 +8,10 @@ import Button from '../components/Button';
 import * as referralService from '../utils/referralService';
 
 const REWARD_TIERS = [
-  { count: 1, reward: '5 Super Likes', icon: 'star', color: '#3B82F6' },
+  { count: 1, reward: '5 Super Likes', icon: 'star', color: '#0047AB' },
   { count: 3, reward: '1 Spotlight', icon: 'flash', color: '#F59E0B' },
-  { count: 5, reward: '1 Week Plus', icon: 'crown', color: '#F56040' },
-  { count: 10, reward: '100 Coins', icon: 'logo-bitcoin', color: '#22C55E' },
+  { count: 5, reward: '1 Week Plus', icon: 'crown', color: '#E8613C' },
+  { count: 10, reward: '100 Coins', icon: 'logo-bitcoin', color: '#E8613C' },
 ];
 
 export default function ReferralScreen({ navigation }) {
@@ -97,7 +97,7 @@ export default function ReferralScreen({ navigation }) {
               <Text style={styles.tierReward}>{tier.reward}</Text>
             </View>
             {referralCount >= tier.count ? (
-              <Ionicons name="checkmark-circle" size={22} color="#22C55E" />
+              <Ionicons name="checkmark-circle" size={22} color="#E8613C" />
             ) : (
               <Ionicons name="ellipse-outline" size={22} color={colors.gray300} />
             )}

@@ -12,12 +12,10 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiCrown, GraffitiHeart, GraffitiShield, GraffitiTag } from '../components/icons';
-import { SpraySplatter, GraffitiCorner } from '../components/GraffitiAccents';
+import { Image as ExpoImage } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import { LinearGradient } from 'expo-linear-gradient';
+import { useTheme, Typography, FontFamily, getShadow, getSurface, Layout } from '../theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import FilterBar from '../components/FilterBar';
 import ProfileCard from '../components/ProfileCard';
@@ -37,8 +35,9 @@ import * as discoverService from '../api/services/discoverService';
 import { hapticHeavy } from '../utils/haptics';
 
 import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightScheduler';
+import FlagBackground from '../components/FlagBackground';
 
-const MIN_DATING_CARDS = 10;
+const MIN_DECK_CARDS = 10;
 const shuffleArray = (arr) => {
   const shuffled = [...arr];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -48,13 +47,19 @@ const shuffleArray = (arr) => {
   return shuffled;
 };
 
-const buildDatingDeck = () => {
-  const base = mockProfiles.filter((p) => p && p.id && p.name && p.images?.length >= 1);
+const buildDeck = (mode = 'Dating') => {
+  const base = mockProfiles.filter((p) => {
+    if (!p || !p.id || !p.name || !p.images?.length) return false;
+    // Filter by mode: 'Both' profiles show in either mode
+    if (mode === 'Dating') return p.mode === 'Dating' || p.mode === 'Both';
+    if (mode === 'Social') return p.mode === 'Social' || p.mode === 'Both';
+    return true;
+  });
   if (base.length === 0) return [];
-  const deck = base.length >= MIN_DATING_CARDS ? [...base] : (() => {
+  const deck = base.length >= MIN_DECK_CARDS ? [...base] : (() => {
     const filled = [...base];
     let i = 0;
-    while (filled.length < MIN_DATING_CARDS) {
+    while (filled.length < MIN_DECK_CARDS) {
       const source = base[i % base.length];
       filled.push({ ...source, id: `${source.id}-clone-${i}` });
       i += 1;
@@ -62,6 +67,59 @@ const buildDatingDeck = () => {
     return filled;
   })();
   return shuffleArray(deck);
+};
+
+// Social-mode filter options (replace dating-specific ones)
+const SOCIAL_FILTERS = [
+  { label: 'Vibe', hasChevron: true, icon: 'sparkles-outline' },
+  { label: 'Distance', hasChevron: true, icon: 'location-outline' },
+  { label: 'Ethnicity', hasChevron: true, icon: 'people-outline' },
+  { label: 'Interests', hasChevron: true, icon: 'color-palette-outline' },
+  { label: 'Verified', hasChevron: false, icon: 'checkmark-circle-outline' },
+];
+
+const SOCIAL_FILTER_OPTIONS = {
+  Vibe: [
+    { label: 'Friendship', value: 'Friendship' },
+    { label: 'Networking', value: 'Networking' },
+    { label: 'Creative collab', value: 'Creative collab' },
+    { label: 'Activity partners', value: 'Activity partners' },
+    { label: 'Community', value: 'Community' },
+    { label: 'Mentorship', value: 'Mentorship' },
+    { label: 'Any vibe', value: 'any' },
+  ],
+  Distance: [
+    { label: '1 mile', value: '1' },
+    { label: '5 miles', value: '5' },
+    { label: '10 miles', value: '10' },
+    { label: '25 miles', value: '25' },
+    { label: '50 miles', value: '50' },
+    { label: '100 miles', value: '100' },
+    { label: 'Anywhere', value: 'any' },
+  ],
+  Ethnicity: [
+    { label: 'Any ethnicity', value: 'any' },
+    { label: 'Dinka', value: 'Dinka' },
+    { label: 'Nuer', value: 'Nuer' },
+    { label: 'Bari', value: 'Bari' },
+    { label: 'Shilluk', value: 'Shilluk' },
+    { label: 'Azande', value: 'Azande' },
+    { label: 'Mundari', value: 'Mundari' },
+    { label: 'Other', value: 'Other' },
+  ],
+  Interests: [
+    { label: 'Any interest', value: 'any' },
+    { label: 'Tech', value: 'Tech' },
+    { label: 'Music', value: 'Music' },
+    { label: 'Fashion', value: 'Fashion' },
+    { label: 'Fitness', value: 'Fitness' },
+    { label: 'Art', value: 'Art' },
+    { label: 'Community', value: 'Community' },
+    { label: 'Culture', value: 'Culture' },
+    { label: 'Faith', value: 'Faith' },
+    { label: 'Photography', value: 'Photography' },
+    { label: 'Cooking', value: 'Cooking' },
+  ],
 };
 
 const extractHeightInInches = (heightValue) => {
@@ -86,13 +144,15 @@ const applyFilters = (profiles, toggleFilters, selections = {}) => {
     const heightInInches = extractHeightInInches(profile.height);
     const intention = (profile.intention || profile.lookingFor || '').toLowerCase();
 
-    // Check toggle filters (Active today, New here)
+    // Check toggle filters (Active today, New here, Verified)
     const togglePass = !hasToggle || toggleFilters.every((filter) => {
       switch (filter) {
         case 'Active today':
           return profile.distance <= 5;
         case 'New here':
           return Number(profile.id) >= 8;
+        case 'Verified':
+          return profile.verified === true;
         default:
           return true;
       }
@@ -137,6 +197,54 @@ const applyFilters = (profiles, toggleFilters, selections = {}) => {
       }
     }
 
+    if (selections.Distance) {
+      const dVal = selections.Distance;
+      if (dVal !== 'any') {
+        const maxDist = Number(dVal);
+        if (!Number.isNaN(maxDist)) {
+          selectionPass = selectionPass && (profile.distance || 0) <= maxDist;
+        }
+      }
+    }
+
+    if (selections.Ethnicity) {
+      const eth = selections.Ethnicity;
+      if (eth !== 'any') {
+        selectionPass = selectionPass && (profile.ethnicity || '').toLowerCase() === eth.toLowerCase();
+      }
+    }
+
+    if (selections.Education) {
+      const edu = selections.Education;
+      if (edu !== 'any') {
+        selectionPass = selectionPass && (profile.education || '').toLowerCase() === edu.toLowerCase();
+      }
+    }
+
+    if (selections.Children) {
+      const ch = selections.Children;
+      if (ch !== 'any') {
+        selectionPass = selectionPass && (profile.children || '').toLowerCase().includes(ch.toLowerCase());
+      }
+    }
+
+    // Social-mode filters
+    if (selections.Vibe) {
+      const vibe = selections.Vibe;
+      if (vibe !== 'any') {
+        const socialInt = (profile.socialIntention || profile.intention || '').toLowerCase();
+        selectionPass = selectionPass && socialInt.includes(vibe.toLowerCase());
+      }
+    }
+
+    if (selections.Interests) {
+      const interest = selections.Interests;
+      if (interest !== 'any') {
+        const profileInterests = (profile.interests || []).map((i) => i.toLowerCase());
+        selectionPass = selectionPass && profileInterests.includes(interest.toLowerCase());
+      }
+    }
+
     return togglePass && selectionPass;
   });
 };
@@ -147,7 +255,7 @@ const HomeScreen = ({ navigation }) => {
   const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier, tier } = useSubscription();
   const { session, user: authUser } = useAuth();
   const { currentUser } = useCurrentUser();
-  const [profiles, setProfiles] = useState(() => buildDatingDeck());
+  const [profiles, setProfiles] = useState(() => buildDeck('Dating'));
   const [unfilteredProfiles, setUnfilteredProfiles] = useState(null); // holds API or base profiles before filtering
   const [activeFilters, setActiveFilters] = useState([]);
   const [filterSelections, setFilterSelections] = useState({});
@@ -165,8 +273,17 @@ const HomeScreen = ({ navigation }) => {
   const [likeStatus, setLikeStatus] = useState(null); // { used, limit, remaining }
   const [showWhisperComposer, setShowWhisperComposer] = useState(false);
   const [whisperDraft, setWhisperDraft] = useState('');
-  const [showPromoCard, setShowPromoCard] = useState(false);
-  const [showBoostPrompt, setShowBoostPrompt] = useState(false);
+  const setModeAndPersist = useCallback((nextMode) => {
+    setMode(nextMode);
+    // Reset filters when switching modes — dating and social have different filter sets
+    setActiveFilters([]);
+    setFilterSelections({});
+    // Rebuild local deck for the new mode
+    const newDeck = buildDeck(nextMode);
+    setUnfilteredProfiles(null);
+    setProfiles(newDeck);
+    AsyncStorage.setItem('@haboba_mode', nextMode).catch(() => {});
+  }, []);
   // Check if spotlight should show
   useEffect(() => {
     canShowSpotlight().then((canShow) => {
@@ -230,18 +347,18 @@ const HomeScreen = ({ navigation }) => {
   useFocusEffect(
     useCallback(() => {
       const unsubscribe = navigation.addListener('tabPress', () => {
-        const baseDeck = unfilteredProfiles || buildDatingDeck();
+        const baseDeck = unfilteredProfiles || buildDeck(mode);
         setProfiles(applyFilters(baseDeck, activeFilters, filterSelections));
       });
       return unsubscribe;
-    }, [navigation, activeFilters, filterSelections, unfilteredProfiles])
+    }, [navigation, activeFilters, filterSelections, unfilteredProfiles, mode])
   );
 
   useEffect(() => {
-    const baseDeck = unfilteredProfiles || buildDatingDeck();
+    const baseDeck = unfilteredProfiles || buildDeck(mode);
     const filteredDeck = applyFilters(baseDeck, activeFilters, filterSelections);
     setProfiles(filteredDeck);
-  }, [activeFilters, filterSelections, unfilteredProfiles]);
+  }, [activeFilters, filterSelections, unfilteredProfiles, mode]);
 
 
   const handleSwipe = useCallback((direction) => {
@@ -262,21 +379,10 @@ const HomeScreen = ({ navigation }) => {
     setProfiles((prev) => prev.slice(1));
 
 
-    // Show interstitial ad every 5 swipes for free users
+    // Show interstitial ad every 10 swipes for free users
     swipeCountRef.current += 1;
-    if (swipeCountRef.current % 5 === 0 && !hasTier('plus')) {
+    if (swipeCountRef.current % 10 === 0 && !hasTier('plus')) {
       setShowInterstitial(true);
-    }
-
-    // Show promo card every 20 swipes
-    if (swipeCountRef.current % 20 === 0 && !hasTier('plus')) {
-      setShowPromoCard(true);
-    }
-
-    // Show boost prompt every 15 swipes (offset from promo)
-    if (swipeCountRef.current % 15 === 0 && swipeCountRef.current % 20 !== 0 && !hasTier('plus')) {
-      setShowBoostPrompt(true);
-      setTimeout(() => setShowBoostPrompt(false), 5000);
     }
 
     // Record swipe via API (fire-and-forget)
@@ -317,7 +423,18 @@ const HomeScreen = ({ navigation }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, likeStatus, tier, navigation, mode]);
 
-  const currentProfile = profiles.length > 0 ? profiles[0] : null;
+  // In Social mode, swap in social-specific fields so the card shows the right info
+  const adaptProfileForMode = useCallback((p) => {
+    if (!p || mode !== 'Social') return p;
+    return {
+      ...p,
+      bio: p.socialBio || p.bio,
+      intention: p.socialIntention || p.intention,
+      lookingFor: p.socialIntention || p.lookingFor,
+    };
+  }, [mode]);
+
+  const currentProfile = profiles.length > 0 ? adaptProfileForMode(profiles[0]) : null;
   const hasValidProfile = !!(currentProfile && currentProfile.name && currentProfile.images?.length);
 
   const handleExpand = useCallback((profile) => {
@@ -478,20 +595,20 @@ const HomeScreen = ({ navigation }) => {
       const uri = typeof firstImg === 'string' ? firstImg : firstImg?.uri;
       if (uri && uri.startsWith('http') && !prefetchedRef.current.has(uri)) {
         prefetchedRef.current.add(uri);
-        Image.prefetch(uri).catch(() => {});
+        ExpoImage.prefetch(uri).catch(() => {});
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProfile?.id]);
 
   // Next card in the stack (pre-rendered so its image is already decoded)
-  const nextProfile = profiles.length > 1 ? profiles[1] : null;
+  const nextProfile = profiles.length > 1 ? adaptProfileForMode(profiles[1]) : null;
   const hasNextProfile = !!(nextProfile && nextProfile.name && nextProfile.images?.length);
   // Next card is always at full opacity/scale — it sits behind the current card
   // so it's only visible during swiping. No animated reveal needed.
 
   return (
-    <View style={styles.screen}>
+    <FlagBackground style={styles.screen}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* ─── DATING AREA ─── */}
@@ -557,30 +674,18 @@ const HomeScreen = ({ navigation }) => {
         ) : (
           <View style={styles.empty}>
             <View style={styles.emptyBanner}>
-              {/* Graffiti corner frames */}
-              <View style={styles.emptyCornerTL}>
-                <GraffitiCorner size={28} color={colors.accent} position="topLeft" />
-              </View>
-              <View style={styles.emptyCornerTR}>
-                <GraffitiCorner size={28} color="#22C55E" position="topRight" />
-              </View>
-              <View style={styles.emptyCornerBL}>
-                <GraffitiCorner size={28} color="#3B82F6" position="bottomLeft" />
-              </View>
-              <View style={styles.emptyCornerBR}>
-                <GraffitiCorner size={28} color="#EF4444" position="bottomRight" />
-              </View>
-
               <View style={styles.emptyIconRow}>
-                <GraffitiShield size={22} color={colors.accent} filled />
                 <View style={styles.emptyCircle}>
-                  <GraffitiHeart size={30} color={colors.accent} />
+                  <Ionicons name="people-outline" size={28} color={colors.accent} />
                 </View>
-                <GraffitiTag size={22} color={colors.accent} />
               </View>
-              <Text style={styles.emptyTitle}>No more profiles</Text>
+              <Text style={styles.emptyTitle}>
+                {mode === 'Social' ? 'No more people' : 'No more profiles'}
+              </Text>
               <Text style={styles.emptySub}>
-                You've seen everyone nearby. Check back later or adjust your filters to see more people.
+                {mode === 'Social'
+                  ? 'You\'ve seen everyone looking to socialize nearby. Check back later or adjust your filters.'
+                  : 'You\'ve seen everyone nearby. Check back later or adjust your filters to see more people.'}
               </Text>
               <Button
                 title="Adjust Filters"
@@ -590,86 +695,105 @@ const HomeScreen = ({ navigation }) => {
                 onPress={() => navigation?.navigate?.('Preferences')}
                 style={{ paddingHorizontal: 32 }}
               />
+              {!hasTier('plus') && (
+                <TouchableOpacity
+                  style={styles.upgradeInline}
+                  onPress={() => navigation?.navigate?.('Elite')}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.upgradeInlineText}>Upgrade to see more profiles</Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.gray600} />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
       </View>
 
-      {/* ─── TOP BAR — floats over card ─── */}
-      <Animated.View
-        style={[styles.topBar, { top: insets.top }]}
-        pointerEvents="box-none"
-      >
-        {/* Spray splatter accent — decorative */}
-        <View style={styles.topBarSplatter} pointerEvents="none">
-          <SpraySplatter size={50} color={colors.accent} opacity={0.08} />
-        </View>
-
-        {/* Left — Crown Badge (SS flag colors, Instagram-style) — tappable → Boost */}
-        <TouchableOpacity
-          onPress={() => navigation?.navigate?.('Boost')}
-          activeOpacity={0.8}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={styles.headerSideSlot}
+      {/* ─── OVERLAY (Header + Filters) ─── */}
+      <View style={styles.overlay} pointerEvents="box-none">
+        {/* ─── TOP BAR — floats over card ─── */}
+        <Animated.View
+          style={[styles.topBar, { top: insets.top }]}
+          pointerEvents="box-none"
         >
-          <LinearGradient
-            colors={['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.crownBadge}
+          {/* Left — Spotlight/Boost */}
+          <TouchableOpacity
+            onPress={() => navigation?.navigate?.('Boost')}
+            activeOpacity={0.85}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.headerIconBtn}
           >
-            <GraffitiCrown size={16} color="#FFFFFF" filled />
-          </LinearGradient>
-        </TouchableOpacity>
+            <Ionicons name="flash" size={18} color={colors.accent} />
+          </TouchableOpacity>
 
-        {/* Center — Mode title */}
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>{mode === 'Social' ? 'Socializing' : 'Discover'}</Text>
-        </View>
+          {/* Center — Title + Mode toggle */}
+          <View style={styles.headerCenter}>
+            <View style={styles.modeToggle}>
+              {['Dating', 'Social'].map((label) => {
+                const active = mode === label;
+                return (
+                  <TouchableOpacity
+                    key={label}
+                    style={[styles.modeOption, active && styles.modeOptionActive]}
+                    onPress={() => setModeAndPersist(label)}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.modeOptionText, active && styles.modeOptionTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
 
-        {/* Right — Profile avatar */}
-        <TouchableOpacity
-          onPress={() => navigation?.navigate?.('Profile')}
-          activeOpacity={0.8}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={styles.headerSideSlot}
+          {/* Right — Profile avatar */}
+          <TouchableOpacity
+            onPress={() => navigation?.navigate?.('Profile')}
+            activeOpacity={0.85}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={styles.headerSideSlot}
+          >
+            <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
+          </TouchableOpacity>
+        </Animated.View>
+
+        {/* ─── FILTER BAR — below top bar ─── */}
+        <Animated.View
+          style={[
+            styles.filterBarWrap,
+            {
+            top: insets.top + Layout.headerHeight + 2,
+              opacity: topMotion,
+              transform: [
+                {
+                  translateY: topMotion.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+          pointerEvents="box-none"
         >
-          <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
-        </TouchableOpacity>
-      </Animated.View>
-
-      {/* ─── FILTER BAR — below top bar ─── */}
-      <Animated.View
-        style={[
-          styles.filterBarWrap,
-          {
-            top: insets.top + 56,
-            opacity: topMotion,
-            transform: [
-              {
-                translateY: topMotion.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [-10, 0],
-                }),
-              },
-            ],
-          },
-        ]}
-        pointerEvents="box-none"
-      >
-        <FilterBar
-          onFilterPress={handleFilterPress}
-          onSettingsPress={handleSettingsPress}
-          activeFilters={activeFilters}
-          filterSelections={filterSelections}
-          onFilterSelect={handleFilterSelect}
-        />
-      </Animated.View>
+          <FilterBar
+            onFilterPress={handleFilterPress}
+            onSettingsPress={handleSettingsPress}
+            activeFilters={activeFilters}
+            filterSelections={filterSelections}
+            onFilterSelect={handleFilterSelect}
+            filters={mode === 'Social' ? SOCIAL_FILTERS : undefined}
+            options={mode === 'Social' ? SOCIAL_FILTER_OPTIONS : undefined}
+          />
+        </Animated.View>
+      </View>
 
       {/* ─── LIKE COUNTER — subtle indicator near bottom ─── */}
       {likeStatus && !hasUnlimitedLikes(tier || 'free') && likeStatus.remaining < likeStatus.limit && (
         <View style={styles.likeCounter}>
-          <GraffitiHeart size={12} color={likeStatus.remaining <= 5 ? colors.accent : 'rgba(255,255,255,0.6)'} filled />
+          <Ionicons name="heart" size={12} color={likeStatus.remaining <= 5 ? colors.accent : 'rgba(255,255,255,0.6)'} />
           <Text style={[styles.likeCounterText, likeStatus.remaining <= 5 && { color: colors.accent }]}>
             {likeStatus.remaining} likes left today
           </Text>
@@ -741,53 +865,6 @@ const HomeScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* ─── BOOST PROMPT (every 15 swipes) ─── */}
-      {showBoostPrompt && (
-        <TouchableOpacity
-          style={styles.boostBanner}
-          onPress={() => { setShowBoostPrompt(false); navigation?.navigate?.('Boost'); }}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="flash" size={16} color="#FFD700" />
-          <Text style={styles.boostBannerText}>Try Spotlight to get 10x more views</Text>
-          <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.7)" />
-        </TouchableOpacity>
-      )}
-
-      {/* ─── PROMO CARD (every 20 swipes) ─── */}
-      <Modal
-        visible={showPromoCard}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPromoCard(false)}
-      >
-        <View style={styles.promoOverlay}>
-          <LinearGradient
-            colors={[colors.accent, colors.rose || '#E1306C', '#7C4DFF']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.promoCard}
-          >
-            <Text style={styles.promoEmoji}>✨</Text>
-            <Text style={styles.promoTitle}>Upgrade to JuNubin+</Text>
-            <Text style={styles.promoFeature}>Unlimited likes & rewinds</Text>
-            <Text style={styles.promoFeature}>See who likes you</Text>
-            <Text style={styles.promoFeature}>Ad-free experience</Text>
-            <Text style={styles.promoFeature}>Priority in discover</Text>
-            <TouchableOpacity
-              style={styles.promoBtn}
-              onPress={() => { setShowPromoCard(false); navigation?.navigate?.('Elite'); }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.promoBtnText}>See Plans</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowPromoCard(false)} style={styles.promoDismiss}>
-              <Text style={styles.promoDismissText}>Not Now</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </Modal>
-
       {/* ─── INTERSTITIAL AD (free tier, every 5 swipes) ─── */}
       <InterstitialAd
         visible={showInterstitial}
@@ -795,7 +872,7 @@ const HomeScreen = ({ navigation }) => {
         onUpgrade={() => { setShowInterstitial(false); navigation?.navigate?.('Elite'); }}
         colors={colors}
       />
-    </View>
+    </FlagBackground>
   );
 };
 
@@ -807,7 +884,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   cardArea: {
     flex: 1,
     paddingHorizontal: 6,
-    paddingTop: insets.top + 100,
+    paddingTop: insets.top + Layout.headerHeight + Layout.filterGap + 36,
     paddingBottom: 4,
     position: 'relative',
   },
@@ -822,24 +899,42 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     overflow: 'hidden',
   },
 
+  // ── Overlay layer — header + filters ──
+  overlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    zIndex: 20,
+    pointerEvents: 'box-none',
+  },
   // ── Top bar — floats over card ──
   topBar: {
     position: 'absolute',
     left: 0,
     right: 0,
-    height: 56,
+    height: Layout.headerHeight,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 0,
+    paddingBottom: 2,
     zIndex: 20,
     backgroundColor: 'transparent',
   },
   headerSideSlot: {
-    width: 36,
+    width: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    ...getShadow('sm', isDark),
   },
   avatar: {
     width: 36,
@@ -851,32 +946,36 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     ...getShadow('md', isDark),
   },
 
-  headerTitleWrap: {
+  headerCenter: {
     alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
-    color: colors.black,
-    textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  headerTagAccent: {
-    marginTop: -2,
-    opacity: 0.7,
-  },
-  topBarSplatter: {
-    position: 'absolute',
-    right: -8,
-    top: -12,
-  },
-  crownBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
     justifyContent: 'center',
+  },
+  modeToggle: {
+    flexDirection: 'row',
     alignItems: 'center',
-    ...getShadow('md', isDark),
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 16,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  modeOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  modeOptionActive: {
+    backgroundColor: colors.accent,
+  },
+  modeOptionText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+    color: colors.gray600,
+  },
+  modeOptionTextActive: {
+    color: '#FFFFFF',
+    fontFamily: FontFamily.semibold,
   },
 
   // ── Filter bar ──
@@ -918,18 +1017,11 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     maxWidth: 680,
     alignSelf: 'center',
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    backgroundColor: colors.white,
+    ...getSurface('card', colors, isDark),
     paddingHorizontal: 20,
     paddingVertical: 24,
     alignItems: 'center',
-    ...getShadow('lg', isDark),
   },
-  emptyCornerTL: { position: 'absolute', top: 8, left: 8 },
-  emptyCornerTR: { position: 'absolute', top: 8, right: 8 },
-  emptyCornerBL: { position: 'absolute', bottom: 8, left: 8 },
-  emptyCornerBR: { position: 'absolute', bottom: 8, right: 8 },
   emptyIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -960,6 +1052,16 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     lineHeight: 22,
     marginBottom: 24,
     maxWidth: 320,
+  },
+  upgradeInline: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  upgradeInlineText: {
+    ...Typography.bodySmallMedium,
+    color: colors.gray600,
   },
 
   // ── Like counter ──
@@ -997,10 +1099,9 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     paddingHorizontal: 20,
   },
   whisperCard: {
-    backgroundColor: colors.white,
+    ...getSurface('modal', colors, isDark),
     borderRadius: 20,
     padding: 16,
-    ...getShadow('lg', isDark),
   },
   whisperTitle: {
     ...Typography.h3,
@@ -1062,87 +1163,6 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   whisperSendText: {
     ...Typography.bodySmallMedium,
     color: '#FFFFFF',
-  },
-
-  // ── Boost Prompt Banner ──
-  boostBanner: {
-    position: 'absolute',
-    top: insets.top + 56 + 48,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    zIndex: 22,
-  },
-  boostBannerText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    color: '#FFFFFF',
-  },
-
-  // ── Promo Card ──
-  promoOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 30,
-  },
-  promoCard: {
-    width: '100%',
-    borderRadius: 24,
-    paddingHorizontal: 28,
-    paddingVertical: 32,
-    alignItems: 'center',
-    gap: 6,
-  },
-  promoEmoji: {
-    fontSize: 40,
-    marginBottom: 8,
-  },
-  promoTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
-    color: '#FFFFFF',
-    marginBottom: 12,
-  },
-  promoFeature: {
-    fontSize: 15,
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 24,
-  },
-  promoBtn: {
-    marginTop: 18,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 36,
-    paddingVertical: 14,
-    borderRadius: 24,
-  },
-  promoBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: colors.accent,
-  },
-  promoDismiss: {
-    marginTop: 10,
-    paddingVertical: 6,
-  },
-  promoDismissText: {
-    fontSize: 14,
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.7)',
   },
 
 });

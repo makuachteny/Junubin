@@ -179,16 +179,16 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               style={[
                 s.followActionBtn,
                 (isFollowing || isFriend)
-                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#22C55E' : colors.accent }
+                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#E8613C' : colors.accent }
                   : { backgroundColor: colors.accent },
               ]}
               onPress={toggleFollow}
               activeOpacity={0.8}
             >
-              {isFriend && <Ionicons name="people" size={14} color="#22C55E" style={{ marginRight: 4 }} />}
+              {isFriend && <Ionicons name="people" size={14} color="#E8613C" style={{ marginRight: 4 }} />}
               <Text style={[
                 s.followActionText,
-                { color: (isFollowing || isFriend) ? (isFriend ? '#22C55E' : colors.accent) : '#FFF' },
+                { color: (isFollowing || isFriend) ? (isFriend ? '#E8613C' : colors.accent) : '#FFF' },
               ]}>
                 {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
               </Text>
@@ -297,9 +297,9 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               transform: [{ translateY: sectionsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
             }}>
               <View style={s.section}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={s.sectionHeaderRow}>
                   <GraffitiShield size={16} color={colors.accent} filled />
-                  <Text style={s.sectionLabel}>Identity</Text>
+                  <Text style={s.sectionLabelInline}>Identity</Text>
                 </View>
                 <View style={s.stickerRow}>
                   {stickers.map((st, i) => {
@@ -383,7 +383,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               }}
               activeOpacity={0.7}
             >
-              <Ionicons name="game-controller" size={20} color="#FFD700" />
+              <Ionicons name="game-controller" size={20} color="#FCCD12" />
             </TouchableOpacity>
           </>
         )}
@@ -451,6 +451,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // ── Sections ──
   section: { marginBottom: 20 },
   sectionLabel: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray400, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  sectionLabelInline: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray400, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 0, lineHeight: 14 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
   interestPill: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.white, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.gray200 },
@@ -470,10 +472,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.95)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: 'rgba(255,255,255,0.08)' },
   passBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
   likeBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
-  matchBtn: { flex: 1, height: 54, backgroundColor: '#22C55E', borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#22C55E', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+  matchBtn: { flex: 1, height: 54, backgroundColor: '#E8613C', borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#E8613C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
   likeBtnText: { color: '#FFF', fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.5 },
   superBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
-  challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(255,215,0,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(255,215,0,0.25)' },
+  challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(252,205,18,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(252,205,18,0.25)' },
 });
 
 export default ProfileDetailScreen;

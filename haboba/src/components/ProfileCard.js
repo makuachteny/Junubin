@@ -7,11 +7,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, FontFamily, ms, hp } from '../theme';
+import { Image as ExpoImage } from 'expo-image';
+import { FontFamily, ms, hp, useTheme, getSurface } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -25,7 +25,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { hapticLight, hapticMedium } from '../utils/haptics';
-import { SpraySplatter } from '../components/GraffitiAccents';
+import { SpraySplatter } from './GraffitiAccents';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -53,6 +53,8 @@ const EXIT_SPRING = {
 };
 
 const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, onDoubleTap, style }, ref) => {
+  const { colors, isDark } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const thresholdCrossed = useSharedValue(0); // 0 = not crossed, 1 = crossed
@@ -191,15 +193,15 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
     };
   });
 
-  const accentColor = Colors.accent;
-  const grayColor = Colors.gray400;
+  const likeColor = colors.accent;   // Orange — like
+  const passColor = colors.gray400;  // Muted gray — pass
   const glowStyle = useAnimatedStyle(() => {
     'worklet';
     const absX = Math.abs(translateX.value);
     const borderW = interpolate(absX, [0, 150], [0, 3.5], Extrapolation.CLAMP);
-    // Gold for right, gray for left
+    // Orange glow for right (like), gray for left (pass)
     const isRight = translateX.value >= 0;
-    const color = isRight ? accentColor : grayColor;
+    const color = isRight ? likeColor : passColor;
     return {
       borderWidth: borderW,
       borderColor: absX > 5 ? color : 'transparent',
@@ -277,12 +279,12 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
             <Text style={styles.fallbackInitial}>{getInitial()}</Text>
           </View>
           {imageUrl && !hasImageError && (
-            <Image
+            <ExpoImage
               source={imageSource(imageUrl)}
               style={styles.image}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
               onError={handleImageError}
-              fadeDuration={0}
             />
           )}
           {totalImages > 1 && (
@@ -300,7 +302,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
           )}
           {profile.verified && (
             <View style={styles.verifiedChip}>
-              <Ionicons name="checkmark-circle" size={14} color={Colors.accent} />
+              <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
               <Text style={styles.verifiedText}>Verified</Text>
             </View>
           )}
@@ -351,23 +353,18 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
 
 ProfileCard.displayName = 'ProfileCard';
 
-const styles = StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   card: {
     borderRadius: ms(24),
     overflow: 'hidden',
-    backgroundColor: '#000000',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 14,
+    ...getSurface('card', colors, isDark),
   },
   imageWrapper: {
     flex: 1,
   },
   imageFallback: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#111',
+    backgroundColor: colors.gray900,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -375,7 +372,7 @@ const styles = StyleSheet.create({
     fontSize: ms(60),
     fontWeight: '900',
     fontFamily: FontFamily.black,
-    color: Colors.accent,
+    color: colors.accent,
     opacity: 0.2,
   },
   image: {
@@ -406,12 +403,12 @@ const styles = StyleSheet.create({
   },
   verifiedChip: {
     position: 'absolute',
-    top: 104,
+    top: 88,
     right: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -498,8 +495,8 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: Colors.accent,
-    backgroundColor: Colors.accentTint25,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint25,
   },
   currentlyIntoPillText: {
     color: '#FFFFFF',

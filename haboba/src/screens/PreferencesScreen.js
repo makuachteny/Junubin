@@ -70,8 +70,8 @@ const SOCIAL_PREFS = [
 
 // Icon tint colors based on category
 const ICON_TINTS = {
-  accent: { light: 'rgba(245, 96, 64, 0.10)', dark: 'rgba(245, 96, 64, 0.14)', iconLight: '#F56040', iconDark: '#F56040' },
-  warm: { light: 'rgba(245, 96, 64, 0.10)', dark: 'rgba(245, 96, 64, 0.14)', iconLight: '#F56040', iconDark: '#F56040' },
+  accent: { light: 'rgba(232, 97, 60, 0.10)', dark: 'rgba(232, 97, 60, 0.14)', iconLight: '#E8613C', iconDark: '#E8613C' },
+  warm: { light: 'rgba(232, 97, 60, 0.10)', dark: 'rgba(232, 97, 60, 0.14)', iconLight: '#E8613C', iconDark: '#E8613C' },
   gold: { light: 'rgba(249, 168, 37, 0.10)', dark: 'rgba(255, 213, 79, 0.14)', iconLight: '#F9A825', iconDark: '#FFD54F' },
   neutral: { light: 'rgba(115, 115, 115, 0.08)', dark: 'rgba(142, 142, 142, 0.12)', iconLight: '#737373', iconDark: '#8E8E8E' },
 };
@@ -365,7 +365,7 @@ export default function PreferencesScreen({ navigation, route }) {
       }
     }
 
-    navigation.goBack();
+    navigation.navigate('Main', { screen: 'HomeTab' });
   };
 
   const openMemberPref = (pref) => {
@@ -470,8 +470,8 @@ export default function PreferencesScreen({ navigation, route }) {
           </Text>
 
         </View>
-        <TouchableOpacity onPress={handleDone}>
-          <Text style={styles.doneText}>Done</Text>
+        <TouchableOpacity onPress={handleDone} style={styles.doneBtn}>
+          <Text style={styles.doneText} numberOfLines={1}>Done</Text>
         </TouchableOpacity>
       </View>
 
@@ -545,7 +545,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {/* ── SOCIAL PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
-              <GraffitiShield size={14} color="#22C55E" />
+              <GraffitiShield size={14} color="#E8613C" />
               <Text style={styles.sectionHeader}>Socializing Preferences</Text>
               <View style={styles.sectionCountPill}>
                 <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
@@ -562,7 +562,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {/* ── MEMBER PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
-              <GraffitiShield size={14} color="#EF4444" />
+              <GraffitiShield size={14} color="#CE1126" />
               <Text style={styles.sectionHeader}>Member Preferences</Text>
               <View style={styles.sectionCountPill}>
                 <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
@@ -712,6 +712,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     ...Typography.bodySemibold,
     color: colors.accent,
   },
+  doneBtn: {
+    minWidth: 64,
+    alignItems: 'flex-end',
+  },
   content: {
     padding: 16,
     paddingBottom: 40,
@@ -722,7 +726,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     borderColor: isDark ? 'rgba(245, 96, 64, 0.22)' : colors.accentTint12,
-    backgroundColor: isDark ? 'rgba(245, 96, 64, 0.10)' : 'rgba(245, 96, 64, 0.06)',
+    backgroundColor: isDark ? 'rgba(232, 97, 60, 0.10)' : 'rgba(245, 96, 64, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 12,
     marginBottom: 18,

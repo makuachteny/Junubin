@@ -23,15 +23,12 @@ export default function PreferenceSelectScreen({ navigation, route }) {
 
   const handleSelect = (value) => {
     setSelected(value);
-    navigation.navigate('Preferences', {
-      updatedPref: { key: prefKey, value, type: prefType },
-    });
   };
 
   const handleDone = () => {
     // Navigate back to Preferences with the current selection
     navigation.navigate('Preferences', {
-      updatedPref: { key: prefKey, value: selected, type: prefType },
+      updatedPref: { key: prefKey, value: selected ?? currentValue, type: prefType },
     });
   };
 
@@ -52,7 +49,7 @@ export default function PreferenceSelectScreen({ navigation, route }) {
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           style={styles.doneBtn}
         >
-          <Text style={styles.doneText}>Done</Text>
+          <Text style={styles.doneText} numberOfLines={1}>Done</Text>
         </TouchableOpacity>
       </View>
 
@@ -141,7 +138,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'flex-start',
   },
   doneBtn: {
-    width: 40,
+    width: 64,
+    minWidth: 64,
     alignItems: 'flex-end',
   },
   doneText: {

@@ -169,7 +169,7 @@ export default function GameBubble({
           <View style={[styles.roundBadge, { backgroundColor: '#F4433615' }]}>
             <Text style={[styles.roundText, { color: '#F44336' }]}>{emoji} Timed Out</Text>
           </View>
-          <Text style={[styles.timedOutText, { color: '#D32F2F' }]}>
+          <Text style={[styles.timedOutText, { color: '#A80D1E' }]}>
             Partner didn't respond in time
           </Text>
           {onPlayAgain && (

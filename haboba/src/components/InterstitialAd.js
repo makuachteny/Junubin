@@ -16,8 +16,8 @@ export default function InterstitialAd({ visible, onClose, onUpgrade, colors }) 
             <Ionicons name="close" size={24} color={colors?.gray400 || '#999'} />
           </TouchableOpacity>
 
-          <View style={[styles.adIcon, { backgroundColor: colors?.accentTint10 || 'rgba(245,96,64,0.1)' }]}>
-            <Ionicons name="megaphone" size={40} color={colors?.accent || '#F56040'} />
+          <View style={[styles.adIcon, { backgroundColor: colors?.accentTint10 || 'rgba(232,97,60,0.1)' }]}>
+            <Ionicons name="megaphone" size={40} color={colors?.accent || '#E8613C'} />
           </View>
 
           <Text style={[styles.title, { color: colors?.black }]}>Enjoying JuNubin?</Text>
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(245,96,64,0.1)',
+    backgroundColor: 'rgba(232,97,60,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,

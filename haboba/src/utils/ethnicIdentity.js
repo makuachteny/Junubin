@@ -84,15 +84,15 @@ const ETHNIC_GROUPS = {
   },
   'South Sudanese': {
     emoji: '\u{1F1F8}\u{1F1F8}',  // SS flag
-    color: '#22C55E',              // SS green
-    tint: 'rgba(34,197,94,0.10)',
+    color: '#009739',              // SS green
+    tint: 'rgba(0,151,57,0.10)',
     label: 'South Sudanese',
     icon: 'flag',
   },
   Other: {
     emoji: '\u{1F30D}',       // globe
-    color: '#F56040',         // app accent
-    tint: 'rgba(245,96,64,0.10)',
+    color: '#009739',         // app accent
+    tint: 'rgba(0,151,57,0.10)',
     label: 'South Sudanese',
     icon: 'earth',
   },

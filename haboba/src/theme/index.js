@@ -1,6 +1,6 @@
 // AnaJunubin — Unified Theme
-// Savanna Gold Core (Warm Gold · Pink · Gray) + Energetic Accents (Orange · Gold · Green)
-// Crown-themed, culturally rooted
+// South Sudan Flag Blend: Orange accent · Pink rose · Green · Blue · Gold · Red · Black
+// Warm sunset orange as primary, pink for likes, flag colors as vibrant accents
 // Primary typeface: DM Sans
 
 import { LightPalette, DarkPalette } from './palettes';
@@ -80,21 +80,63 @@ export const ZIndex = {
   system: 9999,
 };
 
+export const Layout = {
+  headerHeight: 56,
+  filterGap: 8,
+};
+
+export const getSurface = (variant, colors, isDark) => {
+  switch (variant) {
+    case 'card':
+      return {
+        backgroundColor: isDark ? colors.gray900 : colors.white,
+        borderColor: isDark ? colors.gray800 : colors.gray200,
+        borderWidth: 1,
+        ...getShadow('md', isDark),
+      };
+    case 'modal':
+      return {
+        backgroundColor: isDark ? colors.gray900 : colors.white,
+        borderColor: isDark ? colors.gray800 : colors.gray200,
+        borderWidth: 1,
+        ...getShadow('lg', isDark),
+      };
+    case 'floating':
+      return {
+        backgroundColor: isDark ? colors.gray900 : colors.white,
+        borderColor: isDark ? colors.gray800 : 'rgba(0,0,0,0.08)',
+        borderWidth: 1,
+        ...getShadow('sm', isDark),
+      };
+    default:
+      return {
+        backgroundColor: isDark ? colors.gray900 : colors.white,
+        borderColor: isDark ? colors.gray800 : colors.gray200,
+        borderWidth: 1,
+        ...getShadow('sm', isDark),
+      };
+  }
+};
+
 export const Gradients = {
-  primary: ['#121212', '#000000'],
-  accent: ['#F77737', '#F56040', '#E6683C'],
-  rose: ['#ED4956', '#E1306C'],
-  royal: ['#833AB4', '#5851DB', '#405DE6'],
-  splash: ['#000000', '#080808', '#000000'],
+  primary: ['#0F0D0C', '#000000'],
+  accent: ['#F06D47', '#E8613C', '#D14E2B'],
+  rose: ['#F05AA5', '#E84393'],
+  royal: ['#0047AB', '#003580', '#002B66'],
+  splash: ['#000000', '#0F0D0C', '#000000'],
   card: ['transparent', 'rgba(0, 0, 0, 0.75)'],
-  // Instagram story ring gradient
-  storyRing: ['#F09433', '#E6683C', '#DC2743', '#CC2366', '#BC1888'],
-  // Full Instagram brand gradient
-  instagram: ['#405DE6', '#5851DB', '#833AB4', '#C13584', '#E1306C', '#FD1D1D', '#F56040', '#F77737', '#FCAF45', '#FFDC80'],
-  // Warm action gradient (buttons, CTAs)
-  warm: ['#F77737', '#F56040'],
-  // South Sudan flag gradient (Black, Red, White, Green, Blue)
-  southSudan: ['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6'],
-  // South Sudan flag gradient (vibrant, for rings and borders)
-  flagRing: ['#1A1A1A', '#DC2626', '#F5F5F5', '#16A34A', '#2563EB'],
+  // South Sudan flag ring gradient (Black → Red → Gold → Green → Blue)
+  storyRing: ['#1A1A1A', '#CE1126', '#FCCD12', '#009739', '#0047AB'],
+  // Full South Sudan brand gradient
+  southSudan: ['#000000', '#CE1126', '#FFFFFF', '#009739', '#0047AB'],
+  // Warm action gradient (orange → red)
+  warm: ['#F06D47', '#E8613C'],
+  // Flag ring (vibrant, for rings and borders)
+  flagRing: ['#1A1A1A', '#CE1126', '#FCCD12', '#009739', '#0047AB'],
+  // Gold accent gradient
+  gold: ['#FCCD12', '#D4A800'],
+  // Green accent gradient
+  green: ['#00B844', '#009739'],
+  // Pink gradient (likes)
+  pink: ['#F05AA5', '#E84393', '#C7357D'],
 };

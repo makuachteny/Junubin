@@ -24,7 +24,7 @@ const BURST_VECTORS = [
 ];
 
 const PARTICLE_COMPONENTS = [GraffitiSparkles, GraffitiStar, GraffitiFlame];
-const PARTICLE_COLORS = ['#FFD700', '#F56040', '#ED4956', '#7C4DFF'];
+const PARTICLE_COLORS = ['#FCCD12', '#009739', '#CE1126', '#0047AB'];
 
 const GameResultOverlay = ({ visible, session, matchName, onPlayAgain, onClose }) => {
   const { colors } = useTheme();
@@ -107,18 +107,18 @@ const GameResultOverlay = ({ visible, session, matchName, onPlayAgain, onClose }
             <View style={styles.triviaScores}>
               <View style={styles.scoreColumn}>
                 <Text style={styles.playerLabel}>You</Text>
-                <Text style={[styles.bigScore, result.winner === 'me' && { color: '#FFD700' }]}>
+                <Text style={[styles.bigScore, result.winner === 'me' && { color: '#FCCD12' }]}>
                   {result.myScore}
                 </Text>
-                {result.winner === 'me' && <Ionicons name="trophy" size={20} color="#FFD700" />}
+                {result.winner === 'me' && <Ionicons name="trophy" size={20} color="#FCCD12" />}
               </View>
               <Text style={styles.divider}>vs</Text>
               <View style={styles.scoreColumn}>
                 <Text style={styles.playerLabel}>{matchName || 'Them'}</Text>
-                <Text style={[styles.bigScore, result.winner === 'them' && { color: '#FFD700' }]}>
+                <Text style={[styles.bigScore, result.winner === 'them' && { color: '#FCCD12' }]}>
                   {result.theirScore}
                 </Text>
-                {result.winner === 'them' && <Ionicons name="trophy" size={20} color="#FFD700" />}
+                {result.winner === 'them' && <Ionicons name="trophy" size={20} color="#FCCD12" />}
               </View>
             </View>
             <Text style={styles.outOf}>out of {result.total}</Text>

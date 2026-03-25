@@ -216,7 +216,7 @@ export default function GoLiveScreen({ navigation }) {
 
           <View style={s.preLiveContent}>
             <View style={s.preLiveIconWrap}>
-              <LinearGradient colors={['#EF4444', '#F97316']} style={s.preLiveIcon}>
+              <LinearGradient colors={['#CE1126', '#F97316']} style={s.preLiveIcon}>
                 <Ionicons name="videocam" size={36} color="#FFF" />
               </LinearGradient>
             </View>
@@ -235,7 +235,7 @@ export default function GoLiveScreen({ navigation }) {
 
             <TouchableOpacity style={s.goLiveBtn} onPress={handleGoLive} activeOpacity={0.85}>
               <LinearGradient
-                colors={['#EF4444', '#F97316']}
+                colors={['#CE1126', '#F97316']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={s.goLiveBtnGradient}
@@ -397,7 +397,7 @@ const s = StyleSheet.create({
     fontSize: 15, fontFamily: FontFamily.regular, color: 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 22,
   },
   permissionBtn: {
-    backgroundColor: '#EF4444', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 28, marginTop: 8,
+    backgroundColor: '#CE1126', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 28, marginTop: 8,
   },
   permissionBtnText: { fontSize: 16, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
   permissionBack: { marginTop: 8, padding: 8 },
@@ -415,7 +415,7 @@ const s = StyleSheet.create({
   preLiveIconWrap: { marginBottom: 24 },
   preLiveIcon: {
     width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center',
-    shadowColor: '#EF4444', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 20,
+    shadowColor: '#CE1126', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 20,
   },
   preLiveTitle: {
     fontSize: 32, fontWeight: '900', fontFamily: FontFamily.black, color: '#FFF', marginBottom: 8,
@@ -449,7 +449,7 @@ const s = StyleSheet.create({
 
   liveBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6,
+    backgroundColor: '#CE1126', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6,
   },
   liveDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#FFF' },
   liveText: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', letterSpacing: 1 },
@@ -469,9 +469,9 @@ const s = StyleSheet.create({
     width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)',
     justifyContent: 'center', alignItems: 'center',
   },
-  controlBtnMuted: { backgroundColor: 'rgba(239,68,68,0.5)' },
+  controlBtnMuted: { backgroundColor: 'rgba(206,17,38,0.5)' },
   endBtn: {
-    backgroundColor: '#EF4444', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: '#CE1126', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
   },
   endBtnText: { fontSize: 14, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
 
@@ -500,7 +500,7 @@ const s = StyleSheet.create({
   commentUser: {
     fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: '#F97316', marginBottom: 1,
   },
-  commentUserMe: { color: '#22C55E' },
+  commentUserMe: { color: '#E8613C' },
   commentText: { fontSize: 13, fontFamily: FontFamily.regular, color: '#FFF', lineHeight: 18 },
 
   // Bottom bar
@@ -517,7 +517,7 @@ const s = StyleSheet.create({
     fontSize: 14, fontFamily: FontFamily.regular,
   },
   sendBtn: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: '#EF4444',
+    width: 40, height: 40, borderRadius: 20, backgroundColor: '#CE1126',
     justifyContent: 'center', alignItems: 'center',
   },
   quickReactions: {

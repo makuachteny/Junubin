@@ -166,7 +166,7 @@ export default function StoriesViewScreen({ navigation, route }) {
       {story.type === 'image' ? (
         <Image source={imageSource(story.uri)} style={styles.fullImage} resizeMode="cover" />
       ) : (
-        <View style={[styles.textBg, { backgroundColor: story.bgColor || '#3B82F6' }]}>
+        <View style={[styles.textBg, { backgroundColor: story.bgColor || '#0047AB' }]}>
           <Text style={styles.storyText}>{story.text}</Text>
         </View>
       )}
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   dotPast: {
-    backgroundColor: '#22C55E',
+    backgroundColor: '#E8613C',
   },
   dotActive: {
     width: 24,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     right: 0,
-    backgroundColor: '#22C55E',
+    backgroundColor: '#E8613C',
     borderRadius: 4,
     transformOrigin: 'left',
   },
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#22C55E',
+    borderColor: '#E8613C',
   },
   userName: {
     flex: 1,
@@ -430,8 +430,8 @@ const styles = StyleSheet.create({
     borderRadius: 23,
   },
   reactChipActive: {
-    backgroundColor: 'rgba(245,96,64,0.95)',
-    borderColor: 'rgba(245,96,64,1)',
+    backgroundColor: 'rgba(232,97,60,0.95)',
+    borderColor: 'rgba(232,97,60,1)',
   },
   reactEmoji: {
     fontSize: 18,
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#EF4444',
+    backgroundColor: '#E8613C',
   },
   threadPreview: {
     position: 'absolute',

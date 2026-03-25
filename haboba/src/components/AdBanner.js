@@ -15,7 +15,7 @@ export default function AdBanner({ style, colors }) {
     <View style={[styles.banner, { backgroundColor: colors.gray100, borderColor: colors.separator }, style]}>
       {/* SS flag accent stripe */}
       <View style={styles.flagStripe} pointerEvents="none">
-        {['#000000', '#EF4444', '#FFFFFF', '#22C55E', '#3B82F6'].map((c, i) => (
+        {['#000000', '#CE1126', '#FFFFFF', '#009739', '#0047AB'].map((c, i) => (
           <View key={i} style={{ flex: 1, backgroundColor: c, opacity: 0.35 }} />
         ))}
       </View>

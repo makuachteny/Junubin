@@ -294,7 +294,7 @@ const s = StyleSheet.create({
     flex: 1, justifyContent: 'center', alignItems: 'center',
   },
   videoAvatar: {
-    width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#EF4444', marginBottom: 16,
+    width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#CE1126', marginBottom: 16,
   },
   videoStreamText: {
     fontSize: 18, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF', marginBottom: 4,
@@ -319,20 +319,20 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 24, paddingRight: 12, paddingVertical: 4, paddingLeft: 4,
   },
   streamerAvatar: {
-    width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#EF4444',
+    width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#CE1126',
   },
   streamerName: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
   streamerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   liveBadgeSmall: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#EF4444', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    backgroundColor: '#CE1126', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
   },
   liveDotSmall: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#FFF' },
   liveTextSmall: { fontSize: 9, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', letterSpacing: 0.5 },
   viewerText: { fontSize: 11, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.6)' },
 
   followBtn: {
-    backgroundColor: '#EF4444', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16,
+    backgroundColor: '#CE1126', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16,
   },
   followBtnActive: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   followBtnText: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
@@ -372,7 +372,7 @@ const s = StyleSheet.create({
     marginBottom: 6, alignSelf: 'flex-start', maxWidth: '90%',
   },
   commentUser: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: '#F97316', marginBottom: 1 },
-  commentUserMe: { color: '#22C55E' },
+  commentUserMe: { color: '#E8613C' },
   commentText: { fontSize: 13, fontFamily: FontFamily.regular, color: '#FFF', lineHeight: 18 },
 
   // Bottom bar
@@ -386,7 +386,7 @@ const s = StyleSheet.create({
     fontSize: 14, fontFamily: FontFamily.regular,
   },
   sendBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: '#EF4444',
+    width: 36, height: 36, borderRadius: 18, backgroundColor: '#CE1126',
     justifyContent: 'center', alignItems: 'center',
   },
   quickReaction: {

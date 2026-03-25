@@ -152,6 +152,7 @@ export default function SettingsScreen({ navigation }) {
 
   const menuItems = useMemo(() => [
     { label: 'Invite Friends', icon: 'gift-outline', onPress: () => navigation.navigate('Referral') },
+    { label: 'Find Friends', icon: 'people-circle-outline', onPress: () => navigation.navigate('FindFriends') },
     { label: 'Verify Your Photo', icon: 'camera-outline', onPress: () => navigation.navigate('PhotoVerification') },
     { label: 'FAQ', icon: 'help-circle-outline', onPress: () => handleInfoPagePress('faq') },
     { label: 'Contact Us', icon: 'mail-outline', onPress: () => handleInfoPagePress('contact') },

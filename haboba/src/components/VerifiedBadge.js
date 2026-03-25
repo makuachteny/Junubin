@@ -4,7 +4,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const STATUS_CONFIG = {
-  verified: { icon: 'checkmark-circle', color: '#22C55E', label: 'Verified' },
+  verified: { icon: 'checkmark-circle', color: '#009739', label: 'Verified' },
   pending: { icon: 'time', color: '#F59E0B', label: 'Pending' },
   unverified: { icon: 'shield-outline', color: '#9CA3AF', label: 'Unverified' },
 };

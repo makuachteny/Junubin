@@ -41,7 +41,7 @@ export const mockStories = [
     avatar: AVATARS.p3,
     isLive: true, // Currently live
     stories: [
-      { id: 's2a', type: 'text', text: 'New in London! Any Junubin here? \uD83C\uDF0D', bgColor: '#3B82F6', duration: 5000, createdAt: Date.now() - 7200000 },
+      { id: 's2a', type: 'text', text: 'New in London! Any Junubin here? \uD83C\uDF0D', bgColor: '#0047AB', duration: 5000, createdAt: Date.now() - 7200000 },
     ],
   },
   {
@@ -51,7 +51,7 @@ export const mockStories = [
     avatar: AVATARS.p5,
     stories: [
       { id: 's3a', type: 'image', uri: AVATARS.p5, duration: 5000, createdAt: Date.now() - 1800000 },
-      { id: 's3b', type: 'text', text: 'Weekend vibes \u2728', bgColor: '#7C4DFF', duration: 5000, createdAt: Date.now() - 1200000 },
+      { id: 's3b', type: 'text', text: 'Weekend vibes \u2728', bgColor: '#0047AB', duration: 5000, createdAt: Date.now() - 1200000 },
     ],
   },
   {
@@ -70,7 +70,7 @@ export const mockStories = [
     avatar: AVATARS.p9,
     isLive: true, // Currently live
     stories: [
-      { id: 's5a', type: 'text', text: 'Who wants to grab coffee in Juba? \u2615', bgColor: '#F56040', duration: 5000, createdAt: Date.now() - 600000 },
+      { id: 's5a', type: 'text', text: 'Who wants to grab coffee in Juba? \u2615', bgColor: '#009739', duration: 5000, createdAt: Date.now() - 600000 },
     ],
   },
 ];

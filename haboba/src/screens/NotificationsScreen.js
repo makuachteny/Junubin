@@ -18,11 +18,11 @@ import EmptyState from '../components/EmptyState';
 import SkeletonShimmer from '../components/SkeletonShimmer';
 
 const ICON_MAP = {
-  like: { name: 'heart', color: '#ED4956' },
-  match: { name: 'heart-circle', color: '#ED4956' },
+  like: { name: 'heart', color: '#E84393' },
+  match: { name: 'heart-circle', color: '#E84393' },
   comment: { name: 'chatbubble', color: '#6B8DB5' },
   follow: { name: 'person-add', color: '#6B9E5B' },
-  like_post: { name: 'thumbs-up', color: '#F56040' },
+  like_post: { name: 'thumbs-up', color: '#E8613C' },
   group: { name: 'people', color: '#8B5CF6' },
   superlike: { name: 'star', color: '#FFC107' },
 };

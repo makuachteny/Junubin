@@ -65,10 +65,10 @@ export default function CallScreen({ navigation, route }) {
 
       {/* Ambient spray accents */}
       <View style={{ position: 'absolute', left: 10, top: 100 }} pointerEvents="none">
-        <SpraySplatter size={40} color="#22C55E" opacity={0.06} />
+        <SpraySplatter size={40} color="#009739" opacity={0.06} />
       </View>
       <View style={{ position: 'absolute', right: 15, bottom: 180 }} pointerEvents="none">
-        <SpraySplatter size={45} color="#EF4444" opacity={0.05} />
+        <SpraySplatter size={45} color="#CE1126" opacity={0.05} />
       </View>
 
       {/* Controls */}

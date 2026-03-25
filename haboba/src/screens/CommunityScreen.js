@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, getShadow } from '../theme';
+import { useTheme, Typography, FontFamily, getShadow, Layout } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GraffitiCommunity, GraffitiSparkles, GraffitiFlame, GraffitiLocation, GraffitiStar } from '../components/icons';
 import { GraffitiSectionDivider } from '../components/GraffitiAccents';
@@ -26,6 +26,7 @@ import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { mockEvents } from '../data/mockEvents';
 import { applyCommunityFilters } from '../utils/communityFilters';
+import FlagBackground from '../components/FlagBackground';
 
 const TABS = ['Feed', 'Groups', 'Events'];
 
@@ -189,7 +190,7 @@ export default function CommunityScreen({ navigation, route }) {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
       {/* ─── Header ─── */}
       <Animated.View
         style={[
@@ -399,7 +400,7 @@ export default function CommunityScreen({ navigation, route }) {
           onPress={() => navigation.navigate('CreatePost')}
         >
           <LinearGradient
-            colors={['#000000', '#EF4444', '#22C55E']}
+            colors={['#000000', '#CE1126', '#009739']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.fabGradient}
@@ -408,7 +409,7 @@ export default function CommunityScreen({ navigation, route }) {
           </LinearGradient>
         </TouchableOpacity>
       )}
-    </View>
+    </FlagBackground>
   );
 }
 
@@ -422,18 +423,16 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 56,
+    height: Layout.headerHeight,
     backgroundColor: colors.white,
   },
   headerCenter: {
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
+    ...Typography.screenTitle,
     color: colors.black,
     textAlign: 'center',
-    letterSpacing: 0.3,
   },
   avatar: {
     width: 36,
@@ -458,6 +457,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ─── Filter Bar ───
   filterBarWrap: {
+    paddingTop: Layout.filterGap,
     paddingBottom: 6,
   },
   filterBarContent: {

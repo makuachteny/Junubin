@@ -31,17 +31,17 @@ function FollowButton({ userId, colors }) {
         styles.followBtn,
         isFilled
           ? { backgroundColor: colors.accent }
-          : { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#22C55E' : colors.accent },
+          : { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#E8613C' : colors.accent },
       ]}
       onPress={toggleFollow}
       disabled={loading}
       activeOpacity={0.8}
     >
-      {isFriend && <Ionicons name="people" size={12} color="#22C55E" style={{ marginRight: 3 }} />}
+      {isFriend && <Ionicons name="people" size={12} color="#E8613C" style={{ marginRight: 3 }} />}
       <Text
         style={[
           styles.followBtnText,
-          { color: isFilled ? '#FFF' : (isFriend ? '#22C55E' : colors.accent) },
+          { color: isFilled ? '#FFF' : (isFriend ? '#E8613C' : colors.accent) },
         ]}
       >
         {label}

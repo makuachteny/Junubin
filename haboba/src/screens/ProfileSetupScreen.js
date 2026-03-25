@@ -77,7 +77,7 @@ const PURPOSE_OPTIONS = [
     icon: 'heart',
     label: 'Dating',
     description: 'Find meaningful connections and meet someone special.',
-    gradient: ['#F56040', '#FF3868'],
+    gradient: ['#E8613C', '#FF3868'],
   },
   {
     key: 'socialize',

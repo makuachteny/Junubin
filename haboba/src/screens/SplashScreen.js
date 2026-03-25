@@ -115,10 +115,10 @@ export default function SplashScreen({ onFinish, authReady }) {
 
       {/* Spray accents — decorative */}
       <Animated.View style={[styles.splatterTopRight, { opacity: logoFade }]} pointerEvents="none">
-        <SpraySplatter size={60} color="#22C55E" opacity={0.1} />
+        <SpraySplatter size={60} color="#009739" opacity={0.1} />
       </Animated.View>
       <Animated.View style={[styles.splatterBottomLeft, { opacity: logoFade }]} pointerEvents="none">
-        <SpraySplatter size={50} color="#EF4444" opacity={0.08} />
+        <SpraySplatter size={50} color="#CE1126" opacity={0.08} />
       </Animated.View>
 
       {/* Bottom tagline + flag accent */}
@@ -128,10 +128,10 @@ export default function SplashScreen({ onFinish, authReady }) {
         {/* South Sudan flag stripe */}
         <View style={styles.flagStripe}>
           <View style={[styles.flagBand, { backgroundColor: '#000000' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#EF4444' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#CE1126' }]} />
           <View style={[styles.flagBand, { backgroundColor: '#FFFFFF' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#22C55E' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#3B82F6' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#009739' }]} />
+          <View style={[styles.flagBand, { backgroundColor: '#0047AB' }]} />
         </View>
       </Animated.View>
     </View>

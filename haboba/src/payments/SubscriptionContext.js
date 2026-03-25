@@ -252,7 +252,7 @@ export function SubscriptionProvider({ children }) {
   if (!loaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#F56040" />
+        <ActivityIndicator size="large" color="#E8613C" />
       </View>
     );
   }

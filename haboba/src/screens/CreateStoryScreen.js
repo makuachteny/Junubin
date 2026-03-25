@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Typography, FontFamily } from '../theme';
 import Button from '../components/Button';
 
-const BG_COLORS = ['#3B82F6', '#7C4DFF', '#F56040', '#ED4956', '#22C55E', '#EC4899'];
+const BG_COLORS = ['#0047AB', '#0047AB', '#009739', '#CE1126', '#009739', '#EC4899'];
 
 export default function CreateStoryScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -75,7 +75,7 @@ export default function CreateStoryScreen({ navigation }) {
           <Text style={[styles.modeBtnText, mode === 'photo' && { color: '#FFF' }]}>Photo</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.modeBtn, { backgroundColor: '#EF4444' }]}
+          style={[styles.modeBtn, { backgroundColor: '#CE1126' }]}
           onPress={() => { navigation.goBack(); navigation.navigate('GoLive'); }}
         >
           <Ionicons name="radio" size={14} color="#FFF" style={{ marginRight: 4 }} />

@@ -87,10 +87,10 @@ export default function BoostScreen({ navigation }) {
 
       {/* Ambient spray accents */}
       <View style={{ position: 'absolute', right: 16, top: 120 }} pointerEvents="none">
-        <SpraySplatter size={35} color="#22C55E" opacity={0.06} />
+        <SpraySplatter size={35} color="#009739" opacity={0.06} />
       </View>
       <View style={{ position: 'absolute', left: 12, bottom: 160 }} pointerEvents="none">
-        <SpraySplatter size={40} color="#EF4444" opacity={0.05} />
+        <SpraySplatter size={40} color="#CE1126" opacity={0.05} />
       </View>
 
       {/* Lightning icon with glow + pulse rings */}
