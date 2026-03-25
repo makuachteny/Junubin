@@ -20,6 +20,7 @@ import { useSubscription } from '../payments';
 import { useCurrentUser } from '../hooks';
 import { useMyFollowCounts } from '../hooks/useFollow';
 import { calculateCompleteness } from '../utils/profileCompleteness';
+import FlagBackground from '../components/FlagBackground';
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -74,7 +75,7 @@ export default function ProfileScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showJunubCTA ? 0 : insets.bottom }]}>
+    <FlagBackground style={[styles.container, { paddingTop: insets.top, paddingBottom: showJunubCTA ? 0 : insets.bottom }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -192,7 +193,7 @@ export default function ProfileScreen({ navigation }) {
           </View>
         </View>
       )}
-    </View>
+    </FlagBackground>
   );
 }
 

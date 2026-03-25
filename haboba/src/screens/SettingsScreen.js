@@ -21,6 +21,7 @@ import { CommonActions } from '@react-navigation/native';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
+import FlagBackground from '../components/FlagBackground';
 
 const TIER_LABELS = { free: 'Free', plus: 'JuNubin+', junub: 'Junub' };
 
@@ -180,7 +181,7 @@ export default function SettingsScreen({ navigation }) {
   ], [isDark, ads, tier]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
@@ -358,7 +359,7 @@ export default function SettingsScreen({ navigation }) {
         message={modal.message}
         onDismiss={() => setModal((m) => ({ ...m, visible: false }))}
       />
-    </View>
+    </FlagBackground>
   );
 }
 

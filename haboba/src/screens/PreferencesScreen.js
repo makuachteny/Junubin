@@ -365,6 +365,14 @@ export default function PreferencesScreen({ navigation, route }) {
       }
     }
 
+    if (route?.params?.returnTo === 'Discover') {
+      navigation.navigate('Main', { screen: 'HomeTab' });
+      return;
+    }
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+      return;
+    }
     navigation.navigate('Main', { screen: 'HomeTab' });
   };
 

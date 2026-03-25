@@ -28,6 +28,7 @@ import { useRealtime } from '../api/hooks/useRealtime';
 import OnlinePulseDot from '../components/OnlinePulseDot';
 import ChatImageBubble from '../components/ChatImageBubble';
 import ChatAudioBubble from '../components/ChatAudioBubble';
+import FlagBackground from '../components/FlagBackground';
 import ChatReactionPicker from '../components/ChatReactionPicker';
 import GiftPicker from '../components/GiftPicker';
 import GiftBubble from '../components/GiftBubble';
@@ -826,8 +827,9 @@ export default function ChatScreen({ navigation, route }) {
   }, [colors, styles, prefs, handleLongPressMessage, activeGames, handleGameAnswer, handleGamePlayAgain, match.name]);
 
   return (
+    <FlagBackground style={styles.container}>
     <KeyboardAvoidingView
-      style={styles.container}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 10 : 0}
     >
@@ -1240,6 +1242,7 @@ export default function ChatScreen({ navigation, route }) {
         onClose={() => setGameResult(null)}
       />
     </KeyboardAvoidingView>
+    </FlagBackground>
   );
 }
 
