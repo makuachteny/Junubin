@@ -45,9 +45,9 @@ describe('AccessibilitySurveyScreen', () => {
 
   it('saves answers and routes to profile setup', async () => {
     const navigation = { replace: jest.fn() };
-    const { getByText } = render(<AccessibilitySurveyScreen navigation={navigation} />);
+    const { getByTestId } = render(<AccessibilitySurveyScreen navigation={navigation} />);
 
-    fireEvent.press(getByText('Save Preferences'));
+    fireEvent.press(getByTestId('accessibility-save'));
 
     await waitFor(() => {
       expect(mockSaveSurveyResponses).toHaveBeenCalled();

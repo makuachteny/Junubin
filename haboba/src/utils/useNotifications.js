@@ -6,11 +6,14 @@ import {
   addNotificationReceivedListener,
 } from './notifications';
 
-export function useNotifications(navigationRef) {
+export function useNotifications(navigationRef, isAuthenticated = true) {
   const responseListenerRef = useRef(null);
   const notificationListenerRef = useRef(null);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      return () => {};
+    }
     // Register on mount
     registerForPushNotifications().catch(() => {});
 
@@ -47,5 +50,5 @@ export function useNotifications(navigationRef) {
       responseListenerRef.current?.remove();
       notificationListenerRef.current?.remove();
     };
-  }, [navigationRef]);
+  }, [navigationRef, isAuthenticated]);
 }

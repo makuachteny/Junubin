@@ -68,7 +68,7 @@ const MainStack = createStackNavigator();
 function HomeTabs() {
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
-  const likesPink = colors.rose;
+  const likesPink = colors.accent;
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current; // Start on HomeTab (index 0)
   const TAB_NAMES = ['HomeTab', 'CommunityTab', 'MessagesTab', 'LikesTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;

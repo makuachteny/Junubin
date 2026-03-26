@@ -16,7 +16,6 @@ import { imageSource } from '../utils/imageSource';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import EmptyState from '../components/EmptyState';
 import SkeletonShimmer from '../components/SkeletonShimmer';
-import FlagBackground from '../components/FlagBackground';
 
 const ICON_MAP = {
   like: { name: 'heart', color: '#E84393' },
@@ -146,7 +145,7 @@ export default function NotificationsScreen({ navigation }) {
   };
 
   return (
-    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -187,7 +186,7 @@ export default function NotificationsScreen({ navigation }) {
           }
         />
       )}
-    </FlagBackground>
+    </View>
   );
 }
 

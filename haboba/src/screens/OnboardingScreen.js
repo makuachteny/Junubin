@@ -355,7 +355,7 @@ const OnboardingScreen = ({ navigation }) => {
             </Text>
           </>
         ) : (
-          <TouchableOpacity style={s.nextBtnOuter} onPress={goNext} activeOpacity={0.85}>
+          <TouchableOpacity testID="onboarding-next" style={s.nextBtnOuter} onPress={goNext} activeOpacity={0.85}>
             <LinearGradient
               colors={[colors.accent, colors.accent, colors.accentDark]}
               start={{ x: 0, y: 0 }}

@@ -26,7 +26,6 @@ import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { mockEvents } from '../data/mockEvents';
 import { applyCommunityFilters } from '../utils/communityFilters';
-import FlagBackground from '../components/FlagBackground';
 
 const TABS = ['Feed', 'Groups', 'Events'];
 
@@ -190,7 +189,7 @@ export default function CommunityScreen({ navigation, route }) {
   );
 
   return (
-    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ─── Header ─── */}
       <Animated.View
         style={[
@@ -409,7 +408,7 @@ export default function CommunityScreen({ navigation, route }) {
           </LinearGradient>
         </TouchableOpacity>
       )}
-    </FlagBackground>
+    </View>
   );
 }
 

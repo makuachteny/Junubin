@@ -16,7 +16,6 @@ import PurchaseModal from '../components/PurchaseModal';
 import BoostPulseRing from '../components/BoostPulseRing';
 import { useSubscription, PRODUCT_IDS } from '../payments';
 import { formatPerUnit } from '../payments/pricing';
-import FlagBackground from '../components/FlagBackground';
 
 // Fallback packs (USD) — replaced by localized prices when RevenueCat is active
 const PACKS_FALLBACK = [
@@ -78,7 +77,7 @@ export default function BoostScreen({ navigation }) {
   };
 
   return (
-    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Close button */}
       <TouchableOpacity style={styles.closeBtn} onPress={() => navigation.goBack()}>
         <View style={styles.closeBtnBg}>
@@ -183,7 +182,7 @@ export default function BoostScreen({ navigation }) {
           if (modal.type === 'success') navigation.goBack();
         }}
       />
-    </FlagBackground>
+    </View>
   );
 }
 

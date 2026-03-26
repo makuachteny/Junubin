@@ -91,11 +91,21 @@ export default function AccessibilitySurveyScreen({ navigation }) {
           ))}
         </View>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={handleContinue} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={handleContinue}
+          activeOpacity={0.85}
+          testID="accessibility-save"
+        >
           <Text style={styles.primaryBtnText}>Save Preferences</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.skipBtn}
+          onPress={handleSkip}
+          activeOpacity={0.7}
+          testID="accessibility-skip"
+        >
           <Text style={styles.skipText}>Skip for now</Text>
         </TouchableOpacity>
       </ScrollView>

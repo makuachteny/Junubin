@@ -27,7 +27,6 @@ import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as likesService from '../api/services/likesService';
-import FlagBackground from '../components/FlagBackground';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const CARD_GAP = 12;
@@ -364,7 +363,7 @@ export default function LikesScreen({ navigation }) {
   const unlocked = canSeeWhoLikesYou();
 
   return (
-    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header row */}
       <Animated.View
         style={[
@@ -430,10 +429,10 @@ export default function LikesScreen({ navigation }) {
           <>
         {/* Ambient spray accents */}
         <View style={{ position: 'absolute', right: 8, top: 20 }} pointerEvents="none">
-          <SpraySplatter size={35} color={colors.rose} opacity={0.08} />
+          <SpraySplatter size={35} color={colors.accent} opacity={0.06} />
         </View>
         <View style={{ position: 'absolute', left: 4, bottom: 100 }} pointerEvents="none">
-          <SpraySplatter size={40} color={colors.rose} opacity={0.05} />
+          <SpraySplatter size={40} color={colors.accent} opacity={0.05} />
         </View>
 
         {/* Like count */}
@@ -516,7 +515,7 @@ export default function LikesScreen({ navigation }) {
                         <View style={styles.blurredName} />
                       )}
                       <Text style={styles.likeAge}>{like.age}</Text>
-                      <GraffitiHeart size={16} color={colors.rose} filled />
+                      <GraffitiHeart size={16} color={colors.roseLight} filled />
                     </View>
 
                     {/* Activity row */}
@@ -556,7 +555,7 @@ export default function LikesScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       )}
-    </FlagBackground>
+    </View>
   );
 }
 
@@ -583,7 +582,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.rose,
+    borderColor: colors.accent,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
@@ -609,7 +608,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.rose,
+    color: colors.accent,
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 6,
@@ -733,15 +732,15 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     zIndex: 10,
   },
   ctaButton: {
-    backgroundColor: colors.rose,
+    backgroundColor: colors.accent,
     paddingHorizontal: 40,
     paddingVertical: 18,
     borderRadius: 40,
-    shadowColor: colors.rose,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   ctaText: {
     fontSize: 17,

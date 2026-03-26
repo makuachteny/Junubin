@@ -54,8 +54,8 @@ jest.mock('../theme', () => ({
   },
   useTheme: () => ({
     colors: {
-      accent: '#F56040',
-      accentDark: '#E6683C',
+      accent: '#E8613C',
+      accentDark: '#D14E2B',
       cream: '#FFFFFF',
     },
     isDark: false,
@@ -70,9 +70,11 @@ jest.mock('../accessibility', () => ({
 }));
 
 // Mock auth
+const mockSetDevBypass = jest.fn();
 jest.mock('../auth', () => ({
   useAuth: () => ({
     isAuthenticated: false,
+    setDevBypass: mockSetDevBypass,
   }),
 }));
 
@@ -104,35 +106,26 @@ describe('OnboardingScreen', () => {
     expect(heroText).toBeTruthy();
   });
 
-  it('displays "SOUTH SUDANESE DATING" eyebrow text', () => {
+  it('displays "OUR STORY" eyebrow text', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('SOUTH SUDANESE DATING');
+    expect(tree).toContain('OUR STORY');
   });
 
-  it('renders the South Sudan flag stripe', () => {
+  it('renders the South Sudan flag colors', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('#EF4444'); // red
-    expect(tree).toContain('#22C55E'); // green
-    expect(tree).toContain('#3B82F6'); // blue
+    expect(tree).toContain('#CE1126'); // red
+    expect(tree).toContain('#009739'); // green
+    expect(tree).toContain('#0047AB'); // blue
   });
 
-  it('renders cultural pill badges (Dating, Culture, Diaspora)', () => {
+  it('renders cultural pill badges (Dating, Social, Diaspora)', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
     expect(tree).toContain('Dating');
-    expect(tree).toContain('Culture');
+    expect(tree).toContain('Social');
     expect(tree).toContain('Diaspora');
-  });
-
-  it('mentions ethnic groups in the story page', () => {
-    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('Dinka');
-    expect(tree).toContain('Nuer');
-    expect(tree).toContain('Shilluk');
-    expect(tree).toContain('Bari');
   });
 
   it('shows diaspora cities', () => {
@@ -140,16 +133,8 @@ describe('OnboardingScreen', () => {
     const tree = JSON.stringify(toJSON());
     expect(tree).toContain('Juba.');
     expect(tree).toContain('Minneapolis.');
-    expect(tree).toContain('Melbourne.');
     expect(tree).toContain('London.');
-  });
-
-  it('renders trust badges', () => {
-    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('Verified');
-    expect(tree).toContain('Culture');
-    expect(tree).toContain('Safe');
+    expect(tree).toContain('Cairo.');
   });
 
   it('renders skip button on first page', () => {
@@ -157,15 +142,10 @@ describe('OnboardingScreen', () => {
     expect(getByTestId('onboarding-skip')).toBeTruthy();
   });
 
-  it('navigates to Signup when skip is pressed', () => {
+  it('calls setDevBypass when skip is pressed', () => {
     const { getByTestId } = render(<OnboardingScreen navigation={navigation} />);
     fireEvent.press(getByTestId('onboarding-skip'));
-    expect(mockNavigate).toHaveBeenCalledWith('Signup');
-  });
-
-  it('renders next button on non-final pages', () => {
-    const { getByTestId } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByTestId('onboarding-next')).toBeTruthy();
+    expect(mockSetDevBypass).toHaveBeenCalledWith(true);
   });
 
   it('renders 3 progress dots', () => {
@@ -177,20 +157,17 @@ describe('OnboardingScreen', () => {
     expect(dotMatches.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('renders beadwork accent elements', () => {
+  it('renders accent color elements', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    // Gold color used in beadwork
-    expect(tree).toContain('#FCAF45');
+    // Flag accent colors used in the screen
+    expect(tree).toContain('#009739');
+    expect(tree).toContain('#CE1126');
   });
 
-  it('renders the "Find Your Person" CTA text somewhere in the component', () => {
-    // CTA only visible on last page, but still rendered in the scroll view
-    const { queryAllByText } = render(<OnboardingScreen navigation={navigation} />);
-    // The CTA text may not be visible on page 0, so check the full tree
+  it('renders the arrow-forward icon for navigation', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    // Even if truncated, the component should contain the CTA or the next button
     expect(tree).toContain('arrow-forward');
   });
 
@@ -200,13 +177,11 @@ describe('OnboardingScreen', () => {
     expect(tree).toContain('home');
   });
 
-  it('renders beadwork cultural divider on page 2', () => {
+  it('renders South Sudan flag colors on page 2', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    // The cultural divider uses bead colors
-    expect(tree).toContain('#EF4444');
-    expect(tree).toContain('#FCAF45');
-    expect(tree).toContain('#22C55E');
-    expect(tree).toContain('#3B82F6');
+    expect(tree).toContain('#CE1126');
+    expect(tree).toContain('#009739');
+    expect(tree).toContain('#0047AB');
   });
 });

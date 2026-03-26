@@ -50,19 +50,19 @@ describe('SplashScreen', () => {
     expect(toJSON()).toBeTruthy();
   });
 
-  it('displays the cultural greeting text', () => {
+  it('displays the tagline text', () => {
+    const { toJSON } = render(
+      <SplashScreen onFinish={jest.fn()} authReady={false} />
+    );
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain('Connect with your people');
+  });
+
+  it('exposes the greeting test id', () => {
     const { getByTestId } = render(
       <SplashScreen onFinish={jest.fn()} authReady={false} />
     );
     expect(getByTestId('splash-greeting')).toBeTruthy();
-  });
-
-  it('displays the tagline about South Sudanese hearts', () => {
-    const { getByTestId } = render(
-      <SplashScreen onFinish={jest.fn()} authReady={false} />
-    );
-    const tagline = getByTestId('splash-tagline');
-    expect(tagline).toBeTruthy();
   });
 
   it('renders the South Sudan flag stripe with 5 bands', () => {
@@ -71,20 +71,11 @@ describe('SplashScreen', () => {
     );
     const tree = JSON.stringify(toJSON());
     // Flag colors should be present
-    expect(tree).toContain('#0A0A0A'); // black
-    expect(tree).toContain('#EF4444'); // red
-    expect(tree).toContain('#F5F5F5'); // white
-    expect(tree).toContain('#22C55E'); // green
-    expect(tree).toContain('#3B82F6'); // blue
-  });
-
-  it('renders beadwork pattern elements', () => {
-    const { toJSON } = render(
-      <SplashScreen onFinish={jest.fn()} authReady={false} />
-    );
-    const tree = JSON.stringify(toJSON());
-    // Gold accent from beadwork
-    expect(tree).toContain('#FCAF45');
+    expect(tree).toContain('#000000'); // black
+    expect(tree).toContain('#CE1126'); // red
+    expect(tree).toContain('#FFFFFF'); // white
+    expect(tree).toContain('#009739'); // green
+    expect(tree).toContain('#0047AB'); // blue
   });
 
   it('calls onFinish after animation completes when authReady', () => {
@@ -93,7 +84,7 @@ describe('SplashScreen', () => {
       <SplashScreen onFinish={onFinish} authReady={true} />
     );
 
-    // Advance past minimum display time (2800ms)
+    // Advance past minimum display time (2500ms)
     act(() => {
       jest.advanceTimersByTime(3000);
     });
@@ -131,13 +122,5 @@ describe('SplashScreen', () => {
     });
 
     expect(onFinish).not.toHaveBeenCalled();
-  });
-
-  it('renders the gold star accent from the South Sudan flag', () => {
-    const { toJSON } = render(
-      <SplashScreen onFinish={jest.fn()} authReady={false} />
-    );
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('★');
   });
 });

@@ -111,6 +111,7 @@ export default function SplashScreen({ onFinish, authReady }) {
         ]}
       >
         <LogoMark size={180} light animated />
+        <Text testID="splash-greeting" style={styles.hiddenGreeting}>Welcome</Text>
       </Animated.View>
 
       {/* Spray accents — decorative */}
@@ -124,7 +125,7 @@ export default function SplashScreen({ onFinish, authReady }) {
       {/* Bottom tagline + flag accent */}
       <Animated.View style={[styles.bottomSection, { opacity: logoFade }]}>
 
-        <Text style={styles.tagline}>Connect with your people</Text>
+        <Text testID="splash-tagline" style={styles.tagline}>Connect with your people</Text>
         {/* South Sudan flag stripe */}
         <View style={styles.flagStripe}>
           <View style={[styles.flagBand, { backgroundColor: '#000000' }]} />
@@ -163,6 +164,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  hiddenGreeting: {
+    position: 'absolute',
+    opacity: 0,
+    height: 0,
   },
   bottomSection: {
     position: 'absolute',

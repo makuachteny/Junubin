@@ -1,8 +1,6 @@
-import React from 'react';
 import { renderHook } from '@testing-library/react-native';
 import { useNotifications } from '../utils/useNotifications';
 
-// Mock notifications module
 const mockRegister = jest.fn(() => Promise.resolve(null));
 const mockAddResponseListener = jest.fn(() => ({ remove: jest.fn() }));
 const mockAddReceivedListener = jest.fn(() => ({ remove: jest.fn() }));
@@ -18,22 +16,26 @@ describe('useNotifications', () => {
     jest.clearAllMocks();
   });
 
-  it('does not register for notifications when not authenticated', () => {
+  it('registers for push notifications on mount', () => {
     const navRef = { current: null };
-    renderHook(() => useNotifications(navRef, false));
-    expect(mockRegister).not.toHaveBeenCalled();
-  });
-
-  it('registers for notifications when authenticated', () => {
-    const navRef = { current: null };
-    renderHook(() => useNotifications(navRef, true));
+    renderHook(() => useNotifications(navRef));
     expect(mockRegister).toHaveBeenCalledTimes(1);
   });
 
-  it('sets up notification listeners', () => {
+  it('sets up response and received listeners', () => {
     const navRef = { current: null };
-    renderHook(() => useNotifications(navRef, true));
+    renderHook(() => useNotifications(navRef));
     expect(mockAddResponseListener).toHaveBeenCalledTimes(1);
     expect(mockAddReceivedListener).toHaveBeenCalledTimes(1);
+  });
+
+  it('cleans up listeners on unmount', () => {
+    const removeFn = jest.fn();
+    mockAddResponseListener.mockReturnValue({ remove: removeFn });
+    mockAddReceivedListener.mockReturnValue({ remove: removeFn });
+    const navRef = { current: null };
+    const { unmount } = renderHook(() => useNotifications(navRef));
+    unmount();
+    expect(removeFn).toHaveBeenCalledTimes(2);
   });
 });

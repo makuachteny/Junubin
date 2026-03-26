@@ -26,7 +26,7 @@ export const LightPalette = {
   // ── Rose — Vibrant Pink (Likes page) ──
   rose: '#E84393',
   roseDark: '#C7357D',
-  roseLight: '#FDE7F3',
+  roseLight: '#F9A8D4',
 
   // ── Flag Green ──
   green: '#009739',
@@ -131,7 +131,7 @@ export const DarkPalette = {
   // ── Rose — Vibrant Pink (brightened for dark) ──
   rose: '#F05AA5',
   roseDark: '#FF6DB5',
-  roseLight: '#FDE7F3',
+  roseLight: '#F9A8D4',
 
   // ── Flag Green ──
   green: '#00B844',

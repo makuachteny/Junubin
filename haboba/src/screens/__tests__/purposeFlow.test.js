@@ -97,14 +97,14 @@ const COLORS = {
   gray: '#666', gray100: '#F0F0F0', gray200: '#DDD', gray300: '#CCC',
   gray400: '#A0A0A0', gray500: '#888', gray600: '#666', gray700: '#444',
   gray900: '#1A1A1A',
-  accent: '#F56040', accentDark: '#D94A2E',
+  accent: '#E8613C', accentDark: '#D14E2B',
   accentTint04: '#FEF6F4', accentTint06: '#FEF3F0', accentTint08: '#FEF0EC',
   accentTint10: '#FDE7E1', accentTint12: '#FDDDD5', accentTint15: '#FDD4CA',
   accentTint25: '#FBC0B1',
   surface: '#FFF', separator: '#E7E7E7', cardBg: '#FFF', cardBorder: '#E0E0E0',
   inputBg: '#F8F8F8', inputBorder: '#E0E0E0',
   tabActive: '#111', tabInactive: '#9A9A9A',
-  error: '#C95D4F', success: '#22C55E', rose: '#E53935', gold: '#F9A825',
+  error: '#CE1126', success: '#009739', rose: '#E84393', gold: '#FCCD12',
 };
 
 describe('Purpose / Intention flow', () => {
@@ -185,7 +185,7 @@ describe('Purpose / Intention flow', () => {
     expect(getByText('Home Screen')).toBeTruthy();
   });
 
-  it('authenticated user without profile goes to Main (discovery)', () => {
+  it('authenticated user without profile goes to ProfileSetup', () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: null },
@@ -197,7 +197,7 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Home Screen')).toBeTruthy();
+    expect(getByText("What's your first name?")).toBeTruthy();
   });
 
   it('unauthenticated user sees Onboarding', () => {

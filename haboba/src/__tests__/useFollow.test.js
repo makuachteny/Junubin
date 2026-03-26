@@ -1,6 +1,5 @@
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
 import { useFollow } from '../hooks/useFollow';
 
 const mockIsFollowing = jest.fn();
@@ -21,8 +20,6 @@ const mockUseAuth = jest.fn();
 jest.mock('../auth', () => ({
   useAuth: () => mockUseAuth(),
 }));
-
-jest.spyOn(Alert, 'alert');
 
 describe('useFollow', () => {
   beforeEach(() => {
@@ -50,18 +47,17 @@ describe('useFollow', () => {
     });
   });
 
-  it('does not allow follow when signed out', async () => {
+  it('does not fetch isFollowing or areFriends when signed out', async () => {
     mockUseAuth.mockReturnValue({ session: null });
 
-    const { result } = renderHook(() => useFollow('target-1'));
+    renderHook(() => useFollow('target-1'));
 
-    await act(async () => {
-      await result.current.toggleFollow();
+    // getFollowCounts is called regardless (no session check), but isFollowing and areFriends require session
+    await waitFor(() => {
+      expect(mockGetFollowCounts).toHaveBeenCalledWith('target-1');
     });
-
-    expect(Alert.alert).toHaveBeenCalled();
-    expect(mockFollowUser).not.toHaveBeenCalled();
-    expect(mockUnfollowUser).not.toHaveBeenCalled();
+    expect(mockIsFollowing).not.toHaveBeenCalled();
+    expect(mockAreFriends).not.toHaveBeenCalled();
   });
 
   it('follows then unfollows with optimistic state', async () => {

@@ -1,6 +1,7 @@
 // AnaJunubin — useFollow Hook
 // Manages follow state for a target user with optimistic updates
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import * as followService from '../api/services/followService';
 import { useAuth } from '../auth';
 
@@ -70,6 +71,10 @@ export function useFollow(targetUserId, initialFollowing = null) {
 
   const toggleFollow = useCallback(async () => {
     if (loading || !targetUserId) return;
+    if (!session) {
+      Alert.alert('Sign in required', 'Please sign in to follow people.');
+      return;
+    }
     const wasFollowing = isFollowing;
     setLoading(true);
 

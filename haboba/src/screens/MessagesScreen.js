@@ -34,7 +34,6 @@ import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
 import { mockStories } from '../data/mockStories';
 import { useAccessibilityPreferences } from '../accessibility';
-import FlagBackground from '../components/FlagBackground';
 
 export default function MessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -189,7 +188,7 @@ export default function MessagesScreen({ navigation }) {
               activeOpacity={0.8}
             >
               <LinearGradient
-                colors={Gradients.pink}
+                colors={Gradients.accent}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={styles.avatarRing}
@@ -313,7 +312,7 @@ export default function MessagesScreen({ navigation }) {
   ), [colors, isDark, styles, searchQuery, likes, navigation, hasTier]);
 
   return (
-    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ─── Header ─── */}
       <Animated.View
         style={[
@@ -421,7 +420,7 @@ export default function MessagesScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </FlagBackground>
+    </View>
   );
 }
 
@@ -609,7 +608,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginLeft: 8,
   },
   likesYouBadge: {
-    backgroundColor: colors.rose,
+    backgroundColor: colors.accent,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,

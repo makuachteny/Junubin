@@ -35,7 +35,6 @@ import * as discoverService from '../api/services/discoverService';
 import { hapticHeavy } from '../utils/haptics';
 
 import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightScheduler';
-import FlagBackground from '../components/FlagBackground';
 
 const MIN_DECK_CARDS = 10;
 const shuffleArray = (arr) => {
@@ -608,7 +607,7 @@ const HomeScreen = ({ navigation }) => {
   // so it's only visible during swiping. No animated reveal needed.
 
   return (
-    <FlagBackground style={styles.screen}>
+    <View style={styles.screen}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
       {/* ─── DATING AREA ─── */}
@@ -872,7 +871,7 @@ const HomeScreen = ({ navigation }) => {
         onUpgrade={() => { setShowInterstitial(false); navigation?.navigate?.('Elite'); }}
         colors={colors}
       />
-    </FlagBackground>
+    </View>
   );
 };
 

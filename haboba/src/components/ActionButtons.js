@@ -1,7 +1,5 @@
 // AnaJunubin — Action Buttons
-// smiley(toggle reactions) · rewind · superlike · like · send
-// Each button carries a South Sudan flag color:
-//   Like = Flag Green, SuperLike = Gold Star, Rewind = Flag Blue, Pass = Flag Red
+// smiley(toggle reactions) · rewind · crown · heart · send
 // Tapping the smiley toggles affection emojis that slide out,
 // replacing the other action buttons.
 
@@ -131,8 +129,8 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
           style={[styles.mainRow, { opacity: mainOpacity }]}
           pointerEvents={reactionsOpen ? 'none' : 'auto'}
         >
-          <TouchableOpacity style={[styles.btn, styles.btnRewind]} onPress={() => { hapticLight(); onRewind?.(); }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Rewind">
-            <GraffitiUndo size={28} color={colors.royal} />
+          <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={() => { hapticLight(); onRewind?.(); }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Rewind">
+            <GraffitiUndo size={28} color={colors.gray600} />
           </TouchableOpacity>
 
           <View style={styles.superLikeWrap}>
@@ -151,12 +149,12 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
                     ],
                   }]}
                 >
-                  <GraffitiSparkles size={12} color={colors.gold} filled />
+                  <GraffitiSparkles size={12} color={colors.accent} filled />
                 </Animated.View>
               );
             })}
-            <TouchableOpacity style={[styles.btn, styles.btnSuperLike]} onPress={handleSuperLikePress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Super like">
-              <GraffitiSparkles size={26} color={colors.gold} filled />
+            <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={handleSuperLikePress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Super like">
+              <GraffitiSparkles size={26} color={colors.accent} filled />
             </TouchableOpacity>
           </View>
 
@@ -166,8 +164,8 @@ const ActionButtons = ({ onRewind, onPass, onLike, onSuperLike, onMessage, onRea
             </TouchableOpacity>
           </Animated.View>
 
-          <TouchableOpacity style={[styles.btn, styles.btnMessage]} onPress={() => { hapticLight(); onMessage?.(); }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Send message">
-            <GraffitiSend size={24} color={colors.rose} />
+          <TouchableOpacity style={[styles.btn, styles.btnRegular]} onPress={() => { hapticLight(); onMessage?.(); }} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel="Send message">
+            <GraffitiSend size={24} color={colors.gray600} />
           </TouchableOpacity>
         </Animated.View>
 
@@ -239,31 +237,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     borderRadius: 999,
   },
-  // Rewind — Flag Blue tint
-  btnRewind: {
+  btnRegular: {
     width: 54,
     height: 54,
     backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-    borderWidth: 2,
-    borderColor: isDark ? 'rgba(0, 71, 171, 0.35)' : 'rgba(0, 71, 171, 0.18)',
-    ...getShadow('md', isDark),
-  },
-  // Super Like — Gold Star tint
-  btnSuperLike: {
-    width: 54,
-    height: 54,
-    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-    borderWidth: 2,
-    borderColor: isDark ? 'rgba(252, 205, 18, 0.40)' : 'rgba(252, 205, 18, 0.30)',
-    ...getShadow('md', isDark, colors.gold),
-  },
-  // Message — Pink tint
-  btnMessage: {
-    width: 54,
-    height: 54,
-    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-    borderWidth: 2,
-    borderColor: isDark ? 'rgba(232, 67, 147, 0.30)' : 'rgba(232, 67, 147, 0.15)',
     ...getShadow('md', isDark),
   },
   superLikeWrap: {
@@ -276,16 +253,15 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     position: 'absolute',
     zIndex: 3,
   },
-  // Like — Sunset Orange (main action)
   likeBtnOuter: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
   },
   likeBtn: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',

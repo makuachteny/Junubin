@@ -23,7 +23,7 @@ const LANDING_IMAGE = require('./src/assets/landing.jpeg');
 
 function AppInner() {
   const { colors, isDark } = useTheme();
-  const { ready: authReady } = useAuth();
+  const { ready: authReady, isAuthenticated } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
   const navigationRef = useRef(null);
   // Push notification deep-linking
@@ -72,7 +72,7 @@ export default function App() {
     return (
       <ImageBackground source={LANDING_IMAGE} style={styles.loadingImage} resizeMode="cover">
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#C4956A" />
+          <ActivityIndicator size="large" color="#E8613C" />
         </View>
       </ImageBackground>
     );

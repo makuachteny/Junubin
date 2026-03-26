@@ -17,7 +17,6 @@ import { useSubscription, PRODUCT_IDS } from '../payments';
 import { formatPerMonth } from '../payments/pricing';
 import { GraffitiCrown, GraffitiShield } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
-import FlagBackground from '../components/FlagBackground';
 
 const { width } = Dimensions.get('window');
 
@@ -185,7 +184,7 @@ export default function EliteScreen({ navigation }) {
   const alreadyHasTier = hasTier(selectedTier);
 
   return (
-    <FlagBackground style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Close */}
       <TouchableOpacity style={[styles.closeBtn, { top: insets.top + 8 }]} onPress={() => navigation.goBack()}>
         <View style={styles.closeBtnGlass}>
@@ -403,7 +402,7 @@ export default function EliteScreen({ navigation }) {
           if (modal.type === 'success') navigation.goBack();
         }}
       />
-    </FlagBackground>
+    </View>
   );
 }
 
