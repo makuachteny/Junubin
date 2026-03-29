@@ -125,6 +125,10 @@ export default function CommunityScreen({ navigation, route }) {
         <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
+      <View style={styles.filterBarWrap}>
+        {renderFilterBar()}
+      </View>
+      {renderActiveMeta()}
       {/* My Groups — horizontal scroll */}
       <Text style={styles.sectionTitle}>My Groups</Text>
       <ScrollView
@@ -188,6 +192,72 @@ export default function CommunityScreen({ navigation, route }) {
     </ScrollView>
   );
 
+  const renderFilterBar = () => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterBarContent}
+    >
+      {COMMUNITY_FILTERS.map((filter) => {
+        const isActive = filter.accent || activeFilters.includes(filter.id);
+        const iconColor = isActive ? '#FFFFFF' : colors.gray600;
+        const GRAFFITI_MAP = {
+          sparkles: GraffitiSparkles,
+          flame: GraffitiFlame,
+          location: GraffitiLocation,
+          community: GraffitiCommunity,
+          star: GraffitiStar,
+        };
+        const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
+        return (
+          <TouchableOpacity
+            key={filter.id}
+            style={[
+              styles.filterPill,
+              isActive && filter.accent && styles.filterPillAccent,
+              isActive && !filter.accent && styles.filterPillActive,
+            ]}
+            onPress={() => handleFilterPress(filter.id)}
+            activeOpacity={0.8}
+          >
+            {GraffitiComp ? (
+              <GraffitiComp size={14} color={iconColor} filled={isActive} />
+            ) : (
+              <Ionicons
+                name={filter.icon}
+                size={14}
+                color={iconColor}
+              />
+            )}
+            <Text
+              style={[
+                styles.filterPillText,
+                isActive
+                  ? styles.filterPillTextActive
+                  : { color: colors.gray600 },
+              ]}
+            >
+              {filter.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
+
+  const renderActiveMeta = () => (
+    activeFilters.length > 0 ? (
+      <View style={styles.activeFilterMeta}>
+        <Text style={styles.activeFilterMetaText}>
+          {activeFilters.length} filter{activeFilters.length > 1 ? 's' : ''} active
+        </Text>
+        <TouchableOpacity onPress={() => setActiveFilters([])} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+          <Text style={styles.clearFiltersText}>Clear</Text>
+        </TouchableOpacity>
+      </View>
+    ) : null
+  );
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ─── Header ─── */}
@@ -215,68 +285,6 @@ export default function CommunityScreen({ navigation, route }) {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* ─── Filter Bar ─── */}
-      <Animated.View
-        style={[
-          styles.filterBarWrap,
-          {
-            opacity: contentAnim,
-            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }],
-          },
-        ]}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterBarContent}
-        >
-          {COMMUNITY_FILTERS.map((filter) => {
-            const isActive = filter.accent || activeFilters.includes(filter.id);
-            const iconColor = isActive ? '#FFFFFF' : colors.gray600;
-            const GRAFFITI_MAP = {
-              sparkles: GraffitiSparkles,
-              flame: GraffitiFlame,
-              location: GraffitiLocation,
-              community: GraffitiCommunity,
-              star: GraffitiStar,
-            };
-            const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
-            return (
-              <TouchableOpacity
-                key={filter.id}
-                style={[
-                  styles.filterPill,
-                  isActive && filter.accent && styles.filterPillAccent,
-                  isActive && !filter.accent && styles.filterPillActive,
-                ]}
-                onPress={() => handleFilterPress(filter.id)}
-                activeOpacity={0.8}
-              >
-                {GraffitiComp ? (
-                  <GraffitiComp size={14} color={iconColor} filled={isActive} />
-                ) : (
-                  <Ionicons
-                    name={filter.icon}
-                    size={14}
-                    color={iconColor}
-                  />
-                )}
-                <Text
-                  style={[
-                    styles.filterPillText,
-                    isActive
-                      ? styles.filterPillTextActive
-                      : { color: colors.gray600 },
-                  ]}
-                >
-                  {filter.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </Animated.View>
-
       {/* ─── Tabs ─── */}
       <Animated.View
         style={{
@@ -288,16 +296,6 @@ export default function CommunityScreen({ navigation, route }) {
       >
         <UnderlineTabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
       </Animated.View>
-      {activeFilters.length > 0 && (
-        <View style={styles.activeFilterMeta}>
-          <Text style={styles.activeFilterMetaText}>
-            {activeFilters.length} filter{activeFilters.length > 1 ? 's' : ''} active
-          </Text>
-          <TouchableOpacity onPress={() => setActiveFilters([])} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-            <Text style={styles.clearFiltersText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-      )}
 
       {/* ─── Content ─── */}
       <Animated.View
@@ -334,7 +332,15 @@ export default function CommunityScreen({ navigation, route }) {
               refreshControl={
                 <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
               }
-              ListHeaderComponent={<AdBanner colors={colors} />}
+              ListHeaderComponent={(
+                <View>
+                  <View style={styles.filterBarWrap}>
+                    {renderFilterBar()}
+                  </View>
+                  {renderActiveMeta()}
+                  <AdBanner colors={colors} />
+                </View>
+              )}
               ListEmptyComponent={
                 <EmptyState
                   icon="chatbubbles-outline"
@@ -348,6 +354,10 @@ export default function CommunityScreen({ navigation, route }) {
           )
         ) : activeTab === 'Events' ? (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.groupsContent}>
+            <View style={styles.filterBarWrap}>
+              {renderFilterBar()}
+            </View>
+            {renderActiveMeta()}
             <TouchableOpacity
               style={[styles.eventsCtaCard, { backgroundColor: colors.accentTint08, borderColor: colors.accentTint15 }]}
               onPress={() => navigation.navigate('Events')}
@@ -453,7 +463,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
     ...getShadow('md', isDark),
   },
-
   // ─── Filter Bar ───
   filterBarWrap: {
     paddingTop: Layout.filterGap,

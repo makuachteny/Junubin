@@ -17,7 +17,6 @@ import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import { useSubscription } from '../payments';
-import { CommonActions } from '@react-navigation/native';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
@@ -60,7 +59,7 @@ function PressableRow({ style, onPress, children }) {
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
-  const { logout, session } = useAuth();
+  const { logout, session, setDevBypass } = useAuth();
   const { currentUser } = useCurrentUser();
   const mode = currentUser.preferences?.mode || 'Dating';
   const [showMe, setShowMe] = useState(currentUser.preferences?.showMe ?? true);
@@ -129,13 +128,8 @@ export default function SettingsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             await logout();
+            await setDevBypass(false);
             await reset();
-            navigation.dispatch(
-              CommonActions.reset({
-                index: 0,
-                routes: [{ name: 'Onboarding' }],
-              })
-            );
           },
         },
       ]

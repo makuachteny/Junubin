@@ -22,14 +22,126 @@ import { FontFamily, useTheme } from '../theme';
 import LogoMark from '../components/LogoMark';
 import { useAccessibilityPreferences } from '../accessibility';
 import { useAuth } from '../auth';
-import { GraffitiShield, GraffitiCrown } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
 const ACCENT = '#E8613C';
 
-const PAGES = [{ id: 1 }, { id: 2 }, { id: 3 }];
+const PAGES = [{ id: 1 }, { id: 2 }];
+
+const CITIES = [
+  'Juba.',
+  'London.',
+  'Minneapolis.',
+  'Cairo.',
+  'Nairobi.',
+  'Sydney.',
+  'Kampala.',
+  'Melbourne.',
+  'Des Moines.',
+  'Omaha.',
+  'Dallas.',
+  'Khartoum.',
+  'Addis Ababa.',
+  'Toronto.',
+  'Phoenix.',
+  'Kansas City.',
+  'Nashville.',
+  'Columbus.',
+  'Brisbane.',
+  'Perth.',
+  'Winnipeg.',
+  'Edmonton.',
+  'Manchester.',
+  'Birmingham.',
+  'Amsterdam.',
+  'Oslo.',
+  'Juba.',
+  'London.',
+  'Minneapolis.',
+  'Cairo.',
+];
+const CITY_LINE_HEIGHT = 52;
+const VISIBLE_CITIES = 4;
+
+const CITY_OPACITIES = [1, 0.55, 0.28, 0.12];
+
+const CityScroller = ({ isActive }) => {
+  const scrollAnim = useRef(new Animated.Value(0)).current;
+  const animRef = useRef(null);
+
+  useEffect(() => {
+    if (!isActive) {
+      scrollAnim.setValue(0);
+      if (animRef.current) animRef.current.stop();
+      return;
+    }
+
+    // Total scrollable cities (minus the visible window that's duplicated at end)
+    const totalSteps = CITIES.length - VISIBLE_CITIES;
+    const totalDistance = totalSteps * CITY_LINE_HEIGHT;
+
+    // Start after a brief pause, then scroll continuously
+    const timer = setTimeout(() => {
+      animRef.current = Animated.loop(
+        Animated.timing(scrollAnim, {
+          toValue: -totalDistance,
+          duration: totalSteps * 1400,
+          useNativeDriver: true,
+        }),
+      );
+      animRef.current.start();
+    }, 800);
+
+    return () => {
+      clearTimeout(timer);
+      if (animRef.current) animRef.current.stop();
+    };
+  }, [isActive, scrollAnim]);
+
+  // Interpolate per-city opacity based on scroll position
+  // Each city gets whiter (opacity → 1) as it reaches the top of the window
+  const cityAnimatedOpacities = CITIES.map((_, i) => {
+    const cityY = i * CITY_LINE_HEIGHT; // absolute Y of this city
+    // scrollAnim is negative, so effective position = cityY + scrollAnim
+    // When at top of window: position ≈ 0 → full white
+    // When at bottom: position ≈ (VISIBLE_CITIES-1)*LINE_HEIGHT → faint
+    return scrollAnim.interpolate({
+      inputRange: [
+        -(cityY + 3 * CITY_LINE_HEIGHT),
+        -(cityY + 2 * CITY_LINE_HEIGHT),
+        -(cityY + CITY_LINE_HEIGHT),
+        -cityY,
+      ],
+      outputRange: [0.12, 0.28, 0.55, 1],
+      extrapolate: 'clamp',
+    });
+  });
+
+  return (
+    <View style={{ height: VISIBLE_CITIES * CITY_LINE_HEIGHT, overflow: 'hidden', marginBottom: 24 }}>
+      <Animated.View style={{ transform: [{ translateY: scrollAnim }] }}>
+        {CITIES.map((city, i) => (
+          <Animated.Text
+            key={`${city}-${i}`}
+            style={{
+              fontSize: 44,
+              fontWeight: '900',
+              fontFamily: FontFamily.black,
+              color: 'white',
+              opacity: cityAnimatedOpacities[i],
+              lineHeight: CITY_LINE_HEIGHT,
+              letterSpacing: -1.2,
+            }}
+          >
+            {city}
+          </Animated.Text>
+        ))}
+      </Animated.View>
+    </View>
+  );
+};
 
 const OnboardingScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -116,19 +228,18 @@ const OnboardingScreen = ({ navigation }) => {
   };
   const a0 = anim(0);
   const a1 = anim(1);
-  const a2 = anim(2);
 
   // ── Background zoom ──
   const imgScale = scrollX.interpolate({
-    inputRange: [0, W * 2],
+    inputRange: [0, W],
     outputRange: [1, 1.06],
     extrapolate: 'clamp',
   });
 
   // ── Gradient darkens as you progress ──
   const gradientOpacity = scrollX.interpolate({
-    inputRange: [0, W, W * 2],
-    outputRange: [0.85, 0.9, 0.95],
+    inputRange: [0, W],
+    outputRange: [0.85, 0.95],
     extrapolate: 'clamp',
   });
 
@@ -236,67 +347,22 @@ const OnboardingScreen = ({ navigation }) => {
           </Animated.View>
         </View>
 
-        {/* ──── PAGE 2: THE STORY ──── */}
-        <View style={[s.pg, { paddingBottom: bottomH + 24 }]}>
-          <Animated.View style={[s.contentWrap, { opacity: a1.opacity, transform: [{ translateY: a1.slideUp }] }]}>
-            <Animated.Text style={[s.eyebrow, { transform: [{ translateX: a1.slideX }] }]}>
-              OUR STORY
-            </Animated.Text>
-
-            <View style={s.bigTitleRow}>
-              <Text style={s.bigTitle}>
-                Heritage{'\n'}Brought Us{'\n'}
-                <Text style={s.bigTitleGlow}>Together</Text>
-              </Text>
-              <GraffitiShield size={32} color="#009739" filled style={{ opacity: 0.2, marginLeft: 6, marginTop: 6 }} />
-            </View>
-
-            <View style={s.rule} />
-
-            <Text style={s.bodyText}>
-              Find love. Find your people.{'\n'}
-              Swipe into something real or{'\n'}
-              rally the crew for Saturday.
-            </Text>
-
-            <Animated.View style={[s.pillRow, { transform: [{ translateX: a1.slideX }] }]}>
-              <View style={s.pill}>
-                <GraffitiShield size={14} color="#CE1126" filled />
-                <Text style={s.pillText}>Dating</Text>
-              </View>
-              <View style={s.pill}>
-                <GraffitiCrown size={14} color="#009739" filled />
-                <Text style={s.pillText}>Social</Text>
-              </View>
-              <View style={s.pill}>
-                <Ionicons name="earth" size={13} color="#0047AB" />
-                <Text style={s.pillText}>Diaspora</Text>
-              </View>
-            </Animated.View>
-          </Animated.View>
-        </View>
-
-        {/* ──── PAGE 3: THE INVITATION ──── */}
+        {/* ──── PAGE 2: THE INVITATION ──── */}
         <View style={[s.pg, { paddingBottom: bottomH + 24 }]}>
           {/* Ambient spray accents */}
-          <Animated.View style={[{ position: 'absolute', right: 24, top: H * 0.32 }, { opacity: a2.opacity }]} pointerEvents="none">
+          <Animated.View style={[{ position: 'absolute', right: 24, top: H * 0.32 }, { opacity: a1.opacity }]} pointerEvents="none">
             <SpraySplatter size={70} color="#009739" opacity={0.08} />
           </Animated.View>
-          <Animated.View style={[{ position: 'absolute', left: 16, top: H * 0.24 }, { opacity: a2.opacity }]} pointerEvents="none">
+          <Animated.View style={[{ position: 'absolute', left: 16, top: H * 0.24 }, { opacity: a1.opacity }]} pointerEvents="none">
             <SpraySplatter size={50} color="#CE1126" opacity={0.06} />
           </Animated.View>
 
-          <Animated.View style={[s.contentWrap, { opacity: a2.opacity, transform: [{ translateY: a2.slideUp }] }]}>
-            <Animated.Text style={[s.eyebrow, { transform: [{ translateX: a2.slideX }] }]}>
+          <Animated.View style={[s.contentWrap, { opacity: a1.opacity, transform: [{ translateY: a1.slideUp }] }]}>
+            <Animated.Text style={[s.eyebrow, { transform: [{ translateX: a1.slideX }] }]}>
               EVERYWHERE
             </Animated.Text>
 
-            <View style={{ marginBottom: 24 }}>
-              <Text style={s.cityBright}>Juba.</Text>
-              <Text style={s.cityMid}>London.</Text>
-              <Text style={s.cityFade}>Minneapolis.</Text>
-              <Text style={s.cityFaintest}>Cairo.</Text>
-            </View>
+            <CityScroller isActive={currentPage === 1} />
 
             <View style={s.rule} />
 

@@ -390,19 +390,6 @@ export default function LikesScreen({ navigation }) {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Filter bar */}
-      <FilterBar
-        onFilterPress={handleFilterPress}
-        onSettingsPress={() => navigation.navigate('Preferences')}
-        activeFilters={activeFilters}
-        filterSelections={filterSelections}
-        onFilterSelect={handleFilterSelect}
-        showSettingsButton={false}
-        filters={LIKE_FILTERS}
-        options={LIKE_FILTER_OPTIONS}
-        containerStyle={{ paddingHorizontal: 16, marginTop: Layout.filterGap }}
-      />
-
       <Animated.ScrollView
         style={[
           styles.content,
@@ -417,6 +404,18 @@ export default function LikesScreen({ navigation }) {
           <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
+        {/* Filter bar (scrolls with content) */}
+        <FilterBar
+          onFilterPress={handleFilterPress}
+          onSettingsPress={() => navigation.navigate('Preferences')}
+          activeFilters={activeFilters}
+          filterSelections={filterSelections}
+          onFilterSelect={handleFilterSelect}
+          showSettingsButton={false}
+          filters={LIKE_FILTERS}
+          options={LIKE_FILTER_OPTIONS}
+          containerStyle={{ marginTop: Layout.filterGap, marginBottom: 6, marginLeft: -12, marginRight: -12 }}
+        />
         {isLoading ? (
           <View style={styles.likesGrid}>
             {Array.from({ length: 6 }).map((_, idx) => (
@@ -515,7 +514,7 @@ export default function LikesScreen({ navigation }) {
                         <View style={styles.blurredName} />
                       )}
                       <Text style={styles.likeAge}>{like.age}</Text>
-                      <GraffitiHeart size={16} color={colors.roseLight} filled />
+                      <GraffitiHeart size={16} color="#FF69B4" filled />
                     </View>
 
                     {/* Activity row */}
