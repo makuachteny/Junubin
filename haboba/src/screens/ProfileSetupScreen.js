@@ -32,7 +32,7 @@ const { width } = Dimensions.get('window');
 // ─── Step Definitions ───
 // Generic steps come first, then the purpose toggle, then dating-only steps
 const ALL_STEPS = [
-  { key: 'name', title: "What's your first name?", icon: 'person', subtitle: 'This is how you\'ll appear on AnaJubin.' },
+  { key: 'name', title: "What's your first name?", icon: 'person', subtitle: 'This is how you\'ll appear on JuNubin.' },
   { key: 'birthday', title: 'When were you born?', icon: 'calendar', subtitle: 'Your age will be shown on your profile.' },
   { key: 'gender', title: 'What\'s your gender?', icon: 'body', subtitle: 'Select the option that best describes you.' },
   { key: 'pronouns', title: 'What are your pronouns?', icon: 'chatbubbles', subtitle: 'Select up to 4. This will be visible on your profile.' },
@@ -292,7 +292,7 @@ const ProfileSetupScreen = ({ navigation }) => {
           const md = today.getMonth() - dob.getMonth();
           if (md < 0 || (md === 0 && today.getDate() < dob.getDate())) age--;
           if (age < 18) {
-            setFieldError('You must be at least 18 years old to use AnaJubin.');
+            setFieldError('You must be at least 18 years old to use JuNubin.');
           } else if (age > 120) {
             setFieldError('Please enter a valid date of birth.');
           }
@@ -361,7 +361,7 @@ const ProfileSetupScreen = ({ navigation }) => {
         let age = today.getFullYear() - dob.getFullYear();
         const monthDiff = today.getMonth() - dob.getMonth();
         if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
-        if (age < 18) return 'You must be at least 18 years old to use AnaJubin.';
+        if (age < 18) return 'You must be at least 18 years old to use JuNubin.';
         if (age > 120) return 'Please enter a valid date of birth.';
         return null;
       }
@@ -513,7 +513,7 @@ const ProfileSetupScreen = ({ navigation }) => {
               maxLength={10}
               autoFocus
             />
-            <Text style={styles.helperText}>You must be 18 or older to use AnaJubin.</Text>
+            <Text style={styles.helperText}>You must be 18 or older to use JuNubin.</Text>
           </View>
         );
 

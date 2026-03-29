@@ -311,7 +311,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    ...Typography.sectionLabel,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.black,
   },
   saveBtn: {

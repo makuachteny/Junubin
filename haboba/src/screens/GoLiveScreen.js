@@ -222,7 +222,7 @@ export default function GoLiveScreen({ navigation }) {
             </View>
 
             <Text style={s.preLiveTitle}>Go Live</Text>
-            <Text style={s.preLiveSub}>Share a moment with the Junubin community</Text>
+            <Text style={s.preLiveSub}>Share a moment with the JuNubin community</Text>
 
             <TextInput
               style={s.titleInput}

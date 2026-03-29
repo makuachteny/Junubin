@@ -77,6 +77,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'US',
+    languages: ['English', 'Dinka'],
   },
   {
     id: '2',
@@ -105,6 +107,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'US',
+    languages: ['English', 'Arabic'],
   },
   {
     id: '3',
@@ -133,6 +137,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'US',
+    languages: ['English', 'Nuer'],
   },
   {
     id: '4',
@@ -161,6 +167,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'CA',
+    languages: ['English', 'Bari'],
   },
   {
     id: '5',
@@ -187,6 +195,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Associate's degree",
     children: 'No children',
+    country: 'US',
+    languages: ['English', 'Dinka', 'Arabic'],
   },
   {
     id: '6',
@@ -215,6 +225,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'US',
+    languages: ['English', 'Shilluk'],
   },
   {
     id: '7',
@@ -243,6 +255,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'US',
+    languages: ['English', 'Dinka'],
   },
   {
     id: '8',
@@ -269,6 +283,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'AU',
+    languages: ['English', 'Dinka'],
   },
   {
     id: '9',
@@ -297,6 +313,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "High school",
     children: 'No children',
+    country: 'GB',
+    languages: ['English', 'Nuer'],
   },
   {
     id: '10',
@@ -325,6 +343,8 @@ export const mockProfiles = [
     pronouns: 'she/her',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'US',
+    languages: ['English', 'Dinka'],
   },
   {
     id: '11',
@@ -353,6 +373,8 @@ export const mockProfiles = [
     pronouns: 'he/him',
     education: "High school",
     children: 'No children',
+    country: 'SS',
+    languages: ['English', 'Dinka', 'Arabic'],
   },
   {
     id: '12',
@@ -381,6 +403,8 @@ export const mockProfiles = [
     pronouns: 'he/him',
     education: "Bachelor's degree",
     children: 'No children',
+    country: 'KE',
+    languages: ['English', 'Shilluk'],
   },
   {
     id: '13',
@@ -409,26 +433,28 @@ export const mockProfiles = [
     pronouns: 'he/him',
     education: "Bachelor's degree",
     children: 'Want children someday',
+    country: 'US',
+    languages: ['English', 'Dinka'],
   },
 ];
 
 // ── People who liked the current user (linked to real profiles) ──
 export const mockLikes = [
-  { id: 'like1', name: 'Nyibol', age: 30, images: [PHOTOS.p8], distance: '2 mi', verified: true, activity: 'nearby', likeType: 'super_like', likedAt: '2026-03-25T10:12:00.000Z', hasWhisper: true },
-  { id: 'like2', name: 'Akuol', age: 31, images: [PHOTOS.p10], distance: '5 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-24T18:42:00.000Z' },
-  { id: 'like3', name: 'Akech', age: 24, images: [PHOTOS.p6], distance: '7 mi', verified: false, activity: 'nearby', likeType: 'like', likedAt: '2026-03-20T09:00:00.000Z' },
-  { id: 'like4', name: 'Achol', age: 25, images: [PHOTOS.p9], distance: '2 mi', verified: true, activity: 'active', likeType: 'super_like', likedAt: '2026-03-25T07:30:00.000Z' },
-  { id: 'like5', name: 'Adau', age: 24, images: [PHOTOS.p1], distance: '3 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-23T14:10:00.000Z', hasWhisper: true },
-  { id: 'like6', name: 'Abuk', age: 27, images: [PHOTOS.p2], distance: '2 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-22T11:05:00.000Z' },
-  { id: 'like7', name: 'Nyirou', age: 26, images: [PHOTOS.p3], distance: '8 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-21T16:20:00.000Z' },
-  { id: 'like8', name: 'Athieng', age: 25, images: [PHOTOS.p4], distance: '5 mi', verified: true, activity: 'active', likeType: 'super_like', likedAt: '2026-03-24T08:40:00.000Z' },
-  { id: 'like9', name: 'Yar', age: 21, images: [PHOTOS.p5], distance: '4 mi', verified: false, activity: 'nearby', likeType: 'like', likedAt: '2026-03-18T12:00:00.000Z' },
-  { id: 'like10', name: 'Nyandeng', age: 23, images: [PHOTOS.p7], distance: '3 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-25T01:15:00.000Z' },
-  { id: 'like11', name: 'Makuei', age: 28, images: [PHOTOS.p11], distance: '6 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-19T17:45:00.000Z' },
-  { id: 'like12', name: 'Atem', age: 26, images: [PHOTOS.p12], distance: '3 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-24T22:10:00.000Z' },
-  { id: 'like13', name: 'Garang', age: 29, images: [PHOTOS.p13], distance: '7 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-23T05:30:00.000Z' },
-  { id: 'like14', name: 'Nyibol', age: 20, images: [PHOTOS.p8], distance: '1 mi', verified: true, activity: 'active', likeType: 'super_like', likedAt: '2026-03-25T12:00:00.000Z' },
-  { id: 'like15', name: 'Akuol', age: 28, images: [PHOTOS.p10], distance: '4 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-22T03:25:00.000Z' },
+  { id: 'like1', name: 'Nyibol', age: 30, images: [PHOTOS.p8], distance: '2 mi', verified: true, activity: 'nearby', likeType: 'super_like', likedAt: '2026-03-25T10:12:00.000Z', hasWhisper: true, country: 'AU', languages: ['English', 'Dinka'] },
+  { id: 'like2', name: 'Akuol', age: 31, images: [PHOTOS.p10], distance: '5 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-24T18:42:00.000Z', country: 'US', languages: ['English', 'Dinka'] },
+  { id: 'like3', name: 'Akech', age: 24, images: [PHOTOS.p6], distance: '7 mi', verified: false, activity: 'nearby', likeType: 'like', likedAt: '2026-03-20T09:00:00.000Z', country: 'US', languages: ['English', 'Shilluk'] },
+  { id: 'like4', name: 'Achol', age: 25, images: [PHOTOS.p9], distance: '2 mi', verified: true, activity: 'active', likeType: 'super_like', likedAt: '2026-03-25T07:30:00.000Z', country: 'GB', languages: ['English', 'Nuer'] },
+  { id: 'like5', name: 'Adau', age: 24, images: [PHOTOS.p1], distance: '3 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-23T14:10:00.000Z', hasWhisper: true, country: 'US', languages: ['English', 'Dinka'] },
+  { id: 'like6', name: 'Abuk', age: 27, images: [PHOTOS.p2], distance: '2 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-22T11:05:00.000Z', country: 'US', languages: ['English', 'Arabic'] },
+  { id: 'like7', name: 'Nyirou', age: 26, images: [PHOTOS.p3], distance: '8 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-21T16:20:00.000Z', country: 'AU', languages: ['English', 'Nuer'] },
+  { id: 'like8', name: 'Athieng', age: 25, images: [PHOTOS.p4], distance: '5 mi', verified: true, activity: 'active', likeType: 'super_like', likedAt: '2026-03-24T08:40:00.000Z', country: 'CA', languages: ['English', 'Bari'] },
+  { id: 'like9', name: 'Yar', age: 21, images: [PHOTOS.p5], distance: '4 mi', verified: false, activity: 'nearby', likeType: 'like', likedAt: '2026-03-18T12:00:00.000Z', country: 'US', languages: ['English', 'Dinka', 'Arabic'] },
+  { id: 'like10', name: 'Nyandeng', age: 23, images: [PHOTOS.p7], distance: '3 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-25T01:15:00.000Z', country: 'US', languages: ['English', 'Dinka'] },
+  { id: 'like11', name: 'Makuei', age: 28, images: [PHOTOS.p11], distance: '6 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-19T17:45:00.000Z', country: 'SS', languages: ['English', 'Dinka', 'Arabic'] },
+  { id: 'like12', name: 'Atem', age: 26, images: [PHOTOS.p12], distance: '3 mi', verified: true, activity: 'active', likeType: 'like', likedAt: '2026-03-24T22:10:00.000Z', country: 'KE', languages: ['English', 'Shilluk'] },
+  { id: 'like13', name: 'Garang', age: 29, images: [PHOTOS.p13], distance: '7 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-23T05:30:00.000Z', country: 'US', languages: ['English', 'Dinka'] },
+  { id: 'like14', name: 'Nyibol', age: 20, images: [PHOTOS.p8], distance: '1 mi', verified: true, activity: 'active', likeType: 'super_like', likedAt: '2026-03-25T12:00:00.000Z', country: 'AU', languages: ['English', 'Dinka'] },
+  { id: 'like15', name: 'Akuol', age: 28, images: [PHOTOS.p10], distance: '4 mi', verified: true, activity: 'nearby', likeType: 'like', likedAt: '2026-03-22T03:25:00.000Z', country: 'US', languages: ['English', 'Dinka'] },
 ];
 
 // ── Matched connections for Messages screen (linked to real profiles) ──

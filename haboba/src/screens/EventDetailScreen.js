@@ -5,6 +5,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import Button from '../components/Button';
+import { useSubscription } from '../payments';
+
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${DAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
+}
 
 export default function EventDetailScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
@@ -12,6 +23,11 @@ export default function EventDetailScreen({ navigation, route }) {
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const event = route.params?.event || {};
   const [isAttending, setIsAttending] = useState(false);
+  const { coins, consumeCoins } = useSubscription();
+
+  const isFree = event.isFree !== false;
+  const ticketPrice = event.ticketPrice || 0;
+  const ticketsRemaining = event.ticketsRemaining ?? 0;
 
   const handleRSVP = () => {
     setIsAttending(!isAttending);
@@ -20,6 +36,50 @@ export default function EventDetailScreen({ navigation, route }) {
       isAttending ? 'You\'ve cancelled your RSVP.' : `You're attending "${event.title}". See you there!`
     );
   };
+
+  const handleBuyTicket = () => {
+    if (isAttending) {
+      setIsAttending(false);
+      Alert.alert('Cancelled', 'You\'ve cancelled your ticket.');
+      return;
+    }
+    if (ticketsRemaining <= 0) {
+      Alert.alert('Sold Out', 'Sorry, there are no tickets remaining for this event.');
+      return;
+    }
+    Alert.alert(
+      'Confirm Purchase',
+      `Buy a ticket for "${event.title}" for ${ticketPrice} coins?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Buy Ticket',
+          onPress: () => {
+            const success = consumeCoins(ticketPrice);
+            if (success) {
+              setIsAttending(true);
+              Alert.alert('Ticket Purchased!', `You're attending "${event.title}". See you there!`);
+            } else {
+              Alert.alert(
+                'Not Enough Coins',
+                `You need ${ticketPrice} coins but only have ${coins}. Get more coins to purchase this ticket.`,
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Get Coins', onPress: () => navigation.navigate('Elite') },
+                ]
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const buttonTitle = isAttending
+    ? 'Cancel RSVP'
+    : isFree
+      ? 'RSVP \u2014 Free'
+      : `Buy Ticket \u2014 $${ticketPrice}`;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -36,11 +96,19 @@ export default function EventDetailScreen({ navigation, route }) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>{event.title}</Text>
 
+        {/* Ticket price badge */}
+        <View style={[styles.priceBadge, isFree ? styles.priceBadgeFree : styles.priceBadgePaid]}>
+          <Ionicons name={isFree ? 'gift-outline' : 'ticket-outline'} size={18} color={isFree ? '#2e7d32' : colors.accent} />
+          <Text style={[styles.priceText, isFree ? styles.priceTextFree : styles.priceTextPaid]}>
+            {isFree ? 'Free Event' : `$${ticketPrice.toFixed(2)}`}
+          </Text>
+        </View>
+
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
             <Ionicons name="calendar-outline" size={20} color={colors.accent} />
             <View>
-              <Text style={styles.infoLabel}>{event.date}</Text>
+              <Text style={styles.infoLabel}>{formatDate(event.date)}</Text>
               <Text style={styles.infoSub}>{event.time}</Text>
             </View>
           </View>
@@ -52,17 +120,23 @@ export default function EventDetailScreen({ navigation, route }) {
             <Ionicons name="people-outline" size={20} color={colors.accent} />
             <Text style={styles.infoLabel}>{(event.attendees || 0) + (isAttending ? 1 : 0)} attending</Text>
           </View>
+          <View style={styles.infoRow}>
+            <Ionicons name="ticket-outline" size={20} color={ticketsRemaining <= 10 ? '#d32f2f' : colors.accent} />
+            <Text style={[styles.infoLabel, ticketsRemaining <= 10 && { color: '#d32f2f' }]}>
+              {ticketsRemaining <= 0 ? 'Sold out' : `${ticketsRemaining} tickets left`}
+            </Text>
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>About</Text>
         <Text style={styles.description}>{event.description}</Text>
 
         <Button
-          title={isAttending ? 'Cancel RSVP' : 'RSVP - I\'m Going!'}
+          title={buttonTitle}
           variant={isAttending ? 'outline' : 'primary'}
           size="lg"
           fullWidth
-          onPress={handleRSVP}
+          onPress={isFree ? handleRSVP : handleBuyTicket}
         />
       </ScrollView>
     </View>
@@ -79,13 +153,28 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     height: 56,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.black,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.black,
-    letterSpacing: 0.3,
   },
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-  title: { ...Typography.h2, color: colors.black, marginTop: 8, marginBottom: 16 },
+  title: { ...Typography.h2, color: colors.black, marginTop: 8, marginBottom: 12 },
+  priceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 16,
+  },
+  priceBadgeFree: { backgroundColor: '#e8f5e9' },
+  priceBadgePaid: { backgroundColor: isDark ? 'rgba(206,17,38,0.15)' : '#fce4ec' },
+  priceText: { fontSize: 16, fontFamily: FontFamily.bold },
+  priceTextFree: { color: '#2e7d32' },
+  priceTextPaid: { color: colors.accent },
   infoCard: {
     borderRadius: 16,
     backgroundColor: colors.cardBg,

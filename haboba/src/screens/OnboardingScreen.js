@@ -373,17 +373,12 @@ const OnboardingScreen = ({ navigation }) => {
         {currentPage === PAGES.length - 1 ? (
           <>
             <TouchableOpacity style={s.ctaWrap} onPress={goSignup} activeOpacity={0.9}>
-              <LinearGradient
-                colors={['#CE1126', '#009739']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.ctaGradient}
-              >
+              <View style={s.ctaGradient}>
                 <Text style={s.ctaText}>Get Started</Text>
                 <View style={s.ctaArrow}>
-                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                  <Ionicons name="arrow-forward" size={18} color="#1A1A1A" />
                 </View>
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
 
             <View style={s.altRow}>
@@ -405,14 +400,9 @@ const OnboardingScreen = ({ navigation }) => {
           </>
         ) : (
           <TouchableOpacity testID="onboarding-next" style={s.nextBtnOuter} onPress={goNext} activeOpacity={0.85}>
-            <LinearGradient
-              colors={['#CE1126', '#009739']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={s.nextBtnGradient}
-            >
-              <Ionicons name="arrow-forward" size={24} color="#FFF" />
-            </LinearGradient>
+            <View style={s.nextBtnGradient}>
+              <Ionicons name="arrow-forward" size={24} color="#1A1A1A" />
+            </View>
           </TouchableOpacity>
         )}
       </View>
@@ -585,24 +575,25 @@ const s = StyleSheet.create({
   },
   nextBtnGradient: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#FFFFFF', borderRadius: 30,
   },
 
   // CTA
   ctaWrap: {
     borderRadius: 28, overflow: 'hidden', marginBottom: 14,
-    shadowColor: ACCENT, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 20, elevation: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
   },
   ctaGradient: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 12, paddingVertical: 17,
+    gap: 12, paddingVertical: 17, backgroundColor: '#FFFFFF', borderRadius: 28,
   },
   ctaText: {
     fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold,
-    color: '#FFF', letterSpacing: 0.3,
+    color: '#1A1A1A', letterSpacing: 0.3,
   },
   ctaArrow: {
     width: 28, height: 28, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.08)', justifyContent: 'center', alignItems: 'center',
   },
 
   // Alt

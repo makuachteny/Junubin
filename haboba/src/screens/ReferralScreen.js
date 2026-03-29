@@ -53,7 +53,7 @@ export default function ReferralScreen({ navigation }) {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Join me on AnaJubin! Use my referral code ${referralCode} when you sign up.`,
+        message: `Join me on JuNubin! Use my referral code ${referralCode} when you sign up.`,
       });
     } catch {}
   };
@@ -143,10 +143,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     height: 56,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.black,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.black,
-    letterSpacing: 0.3,
   },
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   hero: { alignItems: 'center', paddingVertical: 24, gap: 8 },

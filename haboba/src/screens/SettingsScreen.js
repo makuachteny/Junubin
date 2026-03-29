@@ -167,7 +167,7 @@ export default function SettingsScreen({ navigation }) {
     { label: 'Looking For', value: lookingFor },
     { label: 'Distance', value: `${currentUser.preferences?.distance || 50} mi` },
     { label: 'Age Range', value: `${currentUser.preferences?.ageRange?.[0] || 21}-${currentUser.preferences?.ageRange?.[1] || 30}` },
-    { label: 'Show Me on AnaJubin', value: showMe ? 'On' : 'Off' },
+    { label: 'Show Me on JuNubin', value: showMe ? 'On' : 'Off' },
   ], [mode, lookingFor, showMe]);
   const appChanges = useMemo(() => [
     { label: 'Theme', value: isDark ? 'Dark' : 'Light' },
@@ -229,7 +229,7 @@ export default function SettingsScreen({ navigation }) {
 
           {!hasTier('plus') && (
             <Button
-              title="GET HABOBA+"
+              title="GET JUNUBIN+"
               subtitle="Unlimited Likes and Rewinds"
               variant="outline"
               size="md"
@@ -271,7 +271,7 @@ export default function SettingsScreen({ navigation }) {
 
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.menuLabel}>Show me on AnaJubin</Text>
+              <Text style={styles.menuLabel}>Show me on JuNubin</Text>
               <Text style={styles.switchDesc}>
                 While turned off, you will not be shown in the card stack.
               </Text>
@@ -397,8 +397,15 @@ export default function SettingsScreen({ navigation }) {
               {
                 text: 'Delete Account',
                 style: 'destructive',
-                onPress: () => {
-                  Alert.alert('Account Scheduled for Deletion', 'Your account will be deleted within 30 days. Log in again to cancel.');
+                onPress: async () => {
+                  try {
+                    if (session) {
+                      await profileService.updateProfile({ deletedAt: new Date().toISOString() });
+                    }
+                  } catch {}
+                  await logout();
+                  await setDevBypass(false);
+                  await reset();
                 },
               },
             ]
@@ -446,14 +453,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderBottomWidth: 0,
   },
   headerTitle: {
-    fontSize: 28,
-    fontWeight: '900',
-    fontFamily: FontFamily.black,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.black,
-    letterSpacing: -0.8,
     flex: 1,
     textAlign: 'center',
-    letterSpacing: 0.3,
   },
   doneText: {
     ...Typography.bodySemibold,

@@ -17,7 +17,7 @@ describe('ProfileCard', () => {
     const { getByText } = render(
       <ProfileCard profile={profile} onSwipe={jest.fn()} />
     );
-    expect(getByText('Test User, 26')).toBeTruthy();
+    expect(getByText(/Test User, 26/)).toBeTruthy();
   });
 
   it('renders verified badge when verified', () => {

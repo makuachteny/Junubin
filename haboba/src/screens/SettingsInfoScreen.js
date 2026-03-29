@@ -16,7 +16,7 @@ const INFO_PAGES = {
     sections: [
       {
         heading: 'Primary Email',
-        body: 'support@anajubin.app',
+        body: 'support@eastside.app',
       },
       {
         heading: 'Support Hours',
@@ -46,11 +46,11 @@ const INFO_PAGES = {
     sections: [
       {
         heading: 'Support',
-        body: 'support@anajubin.app',
+        body: 'support@eastside.app',
       },
       {
         heading: 'Business',
-        body: 'partnerships@anajubin.app',
+        body: 'partnerships@eastside.app',
       },
     ],
   },
@@ -59,7 +59,7 @@ const INFO_PAGES = {
     sections: [
       {
         heading: 'Usage',
-        body: 'Use AnaJubin respectfully. Harassment, impersonation, and illegal activity are prohibited.',
+        body: 'Use JuNubin respectfully. Harassment, impersonation, and illegal activity are prohibited.',
       },
       {
         heading: 'Account',

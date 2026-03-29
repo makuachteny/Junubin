@@ -24,6 +24,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { hapticLight, hapticMedium } from '../utils/haptics';
+import { getFlag } from '../data/countries';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -300,7 +301,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
           <View style={styles.infoOverlay}>
             <View style={styles.nameRow}>
               <Text style={styles.nameText}>
-                {profile.name}, {profile.age}
+                {profile.name}, {profile.age} {getFlag(profile.country)}
               </Text>
               {profile.verified && (
                 <Ionicons name="checkmark-circle" size={16} color="#FCCD12" />

@@ -1,4 +1,4 @@
-// AnaJunubin — Profile Detail Screen
+// JuNubin — Profile Detail Screen
 
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
@@ -24,6 +24,7 @@ import * as discoverService from '../api/services/discoverService';
 import AdBanner from '../components/AdBanner';
 import { getEthnicIdentity } from '../utils/ethnicIdentity';
 import { useFollow } from '../hooks/useFollow';
+import { getCountryByCode } from '../data/countries';
 
 const SW = Dimensions.get('window').width;
 const PHOTO_H = SW * 1.3;
@@ -135,9 +136,9 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const pA = promptAnswer || bio || about || 'Going on a late drive and getting food while we talk.';
   const gallery = (() => { const src = (images || []).filter(Boolean); if (!src.length) return []; const f = [...src]; let i = 0; while (f.length < 6) { f.push(src[i % src.length]); i++; } return f; })();
 
-  // Quick facts — compact inline items
+  // Quick facts — compact inline items (age already shown in name overlay, skip it)
+  const countryInfo = getCountryByCode(profile.country);
   const quickFacts = [
-    age && `${age}`,
     pronouns,
     height,
     distance && `${distance} mi`,
@@ -174,7 +175,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           {/* Name overlays the bottom of the photo */}
           <View style={s.nameOverlay}>
             <View style={s.nameRow}>
-              <Text style={s.nameText}>{name}, {age}</Text>
+              <Text style={s.nameText}>{name}, {age} {countryInfo?.flag || ''}</Text>
               {verified && <Ionicons name="checkmark-circle" size={20} color={colors.black} style={{ marginLeft: 5 }} />}
             </View>
             {(job || school || education) && (
@@ -252,27 +253,21 @@ const ProfileDetailScreen = ({ navigation, route }) => {
                   <Text style={s.factText}>{children}</Text>
                 </View>
               ) : null}
+              {/* Identity stickers inline (skip ethnicity dupes and hobby stickers) */}
+              {stickers.filter(st => {
+                const lbl = st.label.toLowerCase();
+                if (ethnicity && lbl === ethnicity.toLowerCase()) return false;
+                const hobbyWords = ['photo', 'water', 'music', 'cooking', 'travel', 'art', 'sports', 'gaming', 'reading', 'fitness', 'dance', 'fashion', 'film', 'yoga', 'hiking'];
+                if (hobbyWords.some(h => lbl.includes(h))) return false;
+                return true;
+              }).map((st, i) => (
+                <View key={`st-${i}`} style={s.factPill}>
+                  <Text style={{ fontSize: 13 }}>{st.emoji}</Text>
+                  <Text style={s.factText}>{st.label}</Text>
+                </View>
+              ))}
             </View>
           </Animated.View>
-
-          {/* ── Identity — inline pills ── */}
-          {stickers.length > 0 && (
-            <Animated.View style={{
-              opacity: factsAnim,
-              transform: [{ translateY: factsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
-            }}>
-              <View style={s.identitySection}>
-                <View style={s.pillRow}>
-                  {stickers.map((st, i) => (
-                    <View key={i} style={s.identityPill}>
-                      <Text style={s.identityEmoji}>{st.emoji}</Text>
-                      <Text style={s.identityLabel}>{st.label}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </Animated.View>
-          )}
         </View>
 
         {/* ── Photo 2 ── */}
@@ -285,7 +280,10 @@ const ProfileDetailScreen = ({ navigation, route }) => {
             transform: [{ scale: promptAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }],
           }}>
             <View style={s.promptCard}>
-              <Text style={s.promptQ}>{pQ}</Text>
+              <View style={s.sectionHeader}>
+                <Ionicons name="chatbubble-outline" size={14} color={colors.gray500} />
+                <Text style={s.promptQ}>{pQ}</Text>
+              </View>
               <Text style={s.promptA}>{pA}</Text>
             </View>
           </Animated.View>
@@ -299,7 +297,10 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           {(about || bio) ? (
             <Animated.View style={{ opacity: aboutAnim }}>
               <View style={s.aboutSection}>
-                <Text style={s.aboutLabel}>About</Text>
+                <View style={s.sectionHeader}>
+                  <Ionicons name="person-outline" size={16} color={colors.gray500} />
+                  <Text style={s.aboutLabel}>About</Text>
+                </View>
                 <Text style={s.aboutText}>{about || bio}</Text>
               </View>
             </Animated.View>
@@ -310,16 +311,25 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         <InlinePhoto index={3} />
 
         <View style={s.sectionBody}>
-          {/* ── Interests ── */}
-          {interests.length > 0 && (
+          {/* ── Interests (includes hobby stickers) ── */}
+          {(interests.length > 0 || stickers.length > 0) && (() => {
+            const hobbyWords = ['photo', 'water', 'music', 'cooking', 'travel', 'art', 'sports', 'gaming', 'reading', 'fitness', 'dance', 'fashion', 'film', 'yoga', 'hiking'];
+            const hobbyStickers = stickers.filter(st => hobbyWords.some(h => st.label.toLowerCase().includes(h)));
+            const hobbyLabels = hobbyStickers.map(st => `${st.emoji} ${st.label}`);
+            const allInterests = [...interests, ...hobbyLabels.filter(h => !interests.includes(h))];
+            if (allInterests.length === 0) return null;
+            return (
             <Animated.View style={{
               opacity: sectionsAnim,
               transform: [{ translateY: sectionsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
             }}>
               <View style={s.section}>
-                <Text style={s.sectionLabel}>Interests</Text>
+                <View style={s.sectionHeader}>
+                  <Ionicons name="heart-outline" size={16} color={colors.gray500} />
+                  <Text style={s.sectionLabel}>Interests</Text>
+                </View>
                 <View style={s.pillRow}>
-                  {interests.map((item, i) => (
+                  {allInterests.map((item, i) => (
                     <View key={i} style={s.interestPill}>
                       <Text style={s.interestText}>{item}</Text>
                     </View>
@@ -327,7 +337,8 @@ const ProfileDetailScreen = ({ navigation, route }) => {
                 </View>
               </View>
             </Animated.View>
-          )}
+            );
+          })()}
         </View>
 
         {/* ── Photo 5 ── */}
@@ -341,7 +352,10 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               transform: [{ translateY: sectionsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
             }}>
               <View style={s.section}>
-                <Text style={s.sectionLabel}>Currently Into</Text>
+                <View style={s.sectionHeader}>
+                  <Ionicons name="flash-outline" size={16} color={colors.gray500} />
+                  <Text style={s.sectionLabel}>Currently Into</Text>
+                </View>
                 <View style={s.pillRow}>
                   {currentlyInto.map((item, i) => (
                     <View key={i} style={s.intoPill}>
@@ -434,7 +448,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   backBtn: { position: 'absolute', left: 14, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
   photoGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 160 },
   inlinePhotoCard: { marginHorizontal: 18, borderRadius: 20, overflow: 'hidden', marginVertical: 0, height: (SW - 36) * 1.25, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 },
-  nameOverlay: { position: 'absolute', bottom: 16, left: 20, right: 20, zIndex: 5 },
+  nameOverlay: { position: 'absolute', bottom: 16, left: 18, right: 18, zIndex: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
   nameText: { fontSize: 30, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
   subtitleText: { fontSize: 14, color: 'rgba(255,255,255,0.8)', fontFamily: FontFamily.semibold, marginTop: 4, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
@@ -473,12 +487,13 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: colors.black,
   },
-  promptQ: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray500, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 14 },
+  promptQ: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray500, letterSpacing: 1.2, textTransform: 'uppercase' },
   promptA: { fontSize: 21, lineHeight: 32, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.black },
 
   // ── About ──
   aboutSection: { marginBottom: 4, paddingLeft: 2 },
-  aboutLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.gray500, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  aboutLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.gray500, letterSpacing: 1, textTransform: 'uppercase' },
   aboutText: { fontSize: 16, lineHeight: 26, color: isDark ? colors.gray600 : colors.gray700, fontFamily: FontFamily.regular },
 
   // ── Identity — inline pills ──
@@ -489,7 +504,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Sections ──
   section: { marginBottom: 4 },
-  sectionLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.gray500, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
+  sectionLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.gray500, letterSpacing: 1, textTransform: 'uppercase' },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
   interestPill: {
@@ -502,7 +517,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   intoText: { color: colors.black, fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold },
 
   // ── Action Bar ──
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: colors.separator },
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 18, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: colors.separator },
   passBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
   likeBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
   matchBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },

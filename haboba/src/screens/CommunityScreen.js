@@ -530,21 +530,16 @@ function LiveTab({ navigation }) {
         </View>
 
         <View style={liveStyles.viewerBadge}>
-          <Ionicons name="eye" size={10} color="#FFFFFF" />
+          <Ionicons name="eye" size={9} color="#FFFFFF" />
           <Text style={liveStyles.viewerText}>{formatCount(item.viewers)}</Text>
-        </View>
-
-        {/* Category tag */}
-        <View style={liveStyles.categoryTag}>
-          <Text style={liveStyles.categoryText}>{item.category}</Text>
         </View>
 
         {/* Bottom info */}
         <View style={liveStyles.cardInfo}>
-          <Text style={liveStyles.cardName}>{item.name}, {item.age}
-            {item.verified && '  '}
-          </Text>
-          {item.verified && <Ionicons name="checkmark-circle" size={12} color="#4DA6FF" style={{ position: 'absolute', right: 8, bottom: 28 }} />}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={liveStyles.cardName}>{item.name}, {item.age}</Text>
+            {item.verified && <Ionicons name="checkmark-circle" size={12} color="#4DA6FF" />}
+          </View>
           <Text style={liveStyles.cardCaption} numberOfLines={1}>{item.caption}</Text>
         </View>
 
@@ -595,61 +590,46 @@ const liveStyles = StyleSheet.create({
   },
   liveBadge: {
     position: 'absolute',
-    top: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(206,17,38,0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  liveDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: '#FFFFFF',
-  },
-  liveText: {
-    fontSize: 9,
-    fontWeight: '900',
-    fontFamily: 'DMSans-ExtraBold',
-    color: '#FFFFFF',
-    letterSpacing: 1,
-  },
-  viewerBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
+    top: 8,
+    left: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 10,
+    backgroundColor: 'rgba(206,17,38,0.9)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
-  viewerText: {
-    fontSize: 10,
-    fontWeight: '700',
-    fontFamily: 'DMSans-Bold',
+  liveDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  liveText: {
+    fontSize: 8,
+    fontWeight: '900',
+    fontFamily: 'DMSans-ExtraBold',
     color: '#FFFFFF',
+    letterSpacing: 0.8,
   },
-  categoryTag: {
+  viewerBadge: {
     position: 'absolute',
-    top: 36,
-    left: 10,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingHorizontal: 8,
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
   },
-  categoryText: {
+  viewerText: {
     fontSize: 9,
-    fontWeight: '600',
-    fontFamily: 'DMSans-SemiBold',
-    color: 'rgba(255,255,255,0.8)',
+    fontWeight: '700',
+    fontFamily: 'DMSans-Bold',
+    color: '#FFFFFF',
   },
   cardInfo: {
     position: 'absolute',

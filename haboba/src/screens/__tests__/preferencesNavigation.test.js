@@ -97,7 +97,7 @@ describe('PreferencesScreen navigation', () => {
     fireEvent.press(getByText('Done'));
 
     await waitFor(() => {
-      expect(navigation.navigate).toHaveBeenCalledWith('Main', { screen: 'HomeTab' });
+      expect(navigation.goBack).toHaveBeenCalled();
     });
   });
 });

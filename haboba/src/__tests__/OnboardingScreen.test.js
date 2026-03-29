@@ -14,6 +14,7 @@ jest.mock('react-native-svg', () => {
   const Defs = (props) => React.createElement(View, props);
   const Stop = (props) => React.createElement(View, props);
   const LinearGradient = (props) => React.createElement(View, props);
+  const Rect = (props) => React.createElement(View, props);
   return {
     __esModule: true,
     default: Svg,
@@ -21,6 +22,7 @@ jest.mock('react-native-svg', () => {
     Path,
     G,
     Circle,
+    Rect,
     Text: SvgText,
     Defs,
     Stop,

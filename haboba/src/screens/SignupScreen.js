@@ -12,13 +12,20 @@ import {
   Platform,
   Alert,
   ImageBackground,
+  Modal,
+  Pressable,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../auth';
 import { useAccessibilityPreferences } from '../accessibility';
+import { HOME_COUNTRY, DIASPORA_COUNTRIES } from '../data/countries';
+
+const PHONE_COUNTRIES = [HOME_COUNTRY, ...DIASPORA_COUNTRIES].filter(c => c.phoneCode);
 
 const { width } = Dimensions.get('window');
 
@@ -33,6 +40,8 @@ const SignupScreen = ({ navigation }) => {
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
   const [phoneActive, setPhoneActive] = useState(false);
   const [emailActive, setEmailActive] = useState(false);
+  const [countryCode, setCountryCode] = useState(HOME_COUNTRY);
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
   const insets = useSafeAreaInsets();
   const { startOtp, loginWithOtp } = useAuth();
   const { prefs } = useAccessibilityPreferences();
@@ -100,7 +109,7 @@ const SignupScreen = ({ navigation }) => {
       Keyboard.dismiss();
       await startOtp({
         email: selectedMethod === 'email' ? email.trim().toLowerCase() : undefined,
-        phone: selectedMethod === 'phone' ? `+1${phoneDigits}` : undefined,
+        phone: selectedMethod === 'phone' ? `${countryCode.phoneCode}${phoneDigits}` : undefined,
       });
       setStep('verify');
     } catch (error) {
@@ -262,7 +271,11 @@ const SignupScreen = ({ navigation }) => {
       style={styles.backgroundImage}
       resizeMode="cover"
     >
-      <View style={styles.overlay} />
+      <LinearGradient
+        colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
+        locations={[0, 0.2, 0.4, 0.7, 1]}
+        style={StyleSheet.absoluteFill}
+      />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -279,7 +292,7 @@ const SignupScreen = ({ navigation }) => {
 
             {/* Logo */}
             <View style={styles.logoContainer}>
-              <BrandLogo size="medium" light />
+              <BrandLogo size="large" light />
 
             </View>
 
@@ -288,7 +301,7 @@ const SignupScreen = ({ navigation }) => {
               <Text style={styles.heading}>Create your{'\n'}account</Text>
             </View>
             <Text style={styles.subheading}>
-              Join AnaJunubin and connect with South Sudanese worldwide.
+              Join JuNubin and connect with South Sudanese worldwide.
             </Text>
 
             {/* Method Toggle */}
@@ -300,7 +313,7 @@ const SignupScreen = ({ navigation }) => {
                 <Ionicons
                   name="phone-portrait"
                   size={16}
-                  color={selectedMethod === 'phone' ? (isDark ? '#1A1A1A' : '#FFFFFF') : 'rgba(255,255,255,0.5)'}
+                  color={selectedMethod === 'phone' ? '#1A1A1A' : 'rgba(255,255,255,0.5)'}
                 />
                 <Text style={[styles.methodTabText, selectedMethod === 'phone' && styles.methodTabTextActive]}>
                   Phone
@@ -313,7 +326,7 @@ const SignupScreen = ({ navigation }) => {
                 <Ionicons
                   name="mail"
                   size={16}
-                  color={selectedMethod === 'email' ? (isDark ? '#1A1A1A' : '#FFFFFF') : 'rgba(255,255,255,0.5)'}
+                  color={selectedMethod === 'email' ? '#1A1A1A' : 'rgba(255,255,255,0.5)'}
                 />
                 <Text style={[styles.methodTabText, selectedMethod === 'email' && styles.methodTabTextActive]}>
                   Email
@@ -324,9 +337,14 @@ const SignupScreen = ({ navigation }) => {
             {/* Phone Input */}
             {selectedMethod === 'phone' && (
               <View style={styles.inputGroup}>
-                <View style={[styles.countryCode, phoneActive && styles.countryCodeActive]}>
-                  <Text style={styles.countryCodeText}>+1</Text>
-                </View>
+                <TouchableOpacity
+                  style={[styles.countryCode, phoneActive && styles.countryCodeActive]}
+                  onPress={() => setShowCountryPicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.countryCodeText}>{countryCode.flag} {countryCode.phoneCode}</Text>
+                  <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.5)" />
+                </TouchableOpacity>
                 <TextInput
                   style={[styles.input, phoneActive && styles.inputActive]}
                   placeholder="(555) 123-4567"
@@ -383,13 +401,36 @@ const SignupScreen = ({ navigation }) => {
                   onPress={handleSendCode}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="arrow-forward" size={28} color={isDark ? '#1A1A1A' : '#FFFFFF'} />
+                  <Ionicons name="arrow-forward" size={28} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
             )}
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
+      {/* Country Code Picker */}
+      <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
+        <Pressable style={styles.pickerOverlay} onPress={() => setShowCountryPicker(false)}>
+          <View style={styles.pickerSheet} onStartShouldSetResponder={() => true}>
+            <Text style={styles.pickerTitle}>Select Country</Text>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+              {PHONE_COUNTRIES.map((c) => (
+                <TouchableOpacity
+                  key={c.code}
+                  style={[styles.pickerRow, countryCode.code === c.code && styles.pickerRowActive]}
+                  onPress={() => { setCountryCode(c); setShowCountryPicker(false); }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.pickerFlag}>{c.flag}</Text>
+                  <Text style={styles.pickerName}>{c.name}</Text>
+                  <Text style={styles.pickerCode}>{c.phoneCode}</Text>
+                  {countryCode.code === c.code && <Ionicons name="checkmark" size={18} color="#009739" />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </ImageBackground>
   );
 };
@@ -402,7 +443,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(26, 22, 18, 0.45)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
   },
   container: {
     flex: 1,
@@ -437,7 +478,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 20,
   },
   heading: {
     fontSize: 34,
@@ -481,7 +522,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderRadius: 12,
   },
   methodTabActive: {
-    backgroundColor: colors.black,
+    backgroundColor: '#FFFFFF',
   },
   methodTabText: {
     fontSize: 14,
@@ -490,7 +531,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.5)',
   },
   methodTabTextActive: {
-    color: isDark ? '#1A1A1A' : '#FFFFFF',
+    color: '#1A1A1A',
   },
 
   // Input
@@ -500,20 +541,23 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     gap: 12,
   },
   countryCode: {
-    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
     paddingVertical: 16,
     borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   countryCodeActive: {
-    borderColor: colors.black,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   countryCodeText: {
     ...Typography.bodySemibold,
-    color: colors.black,
+    color: '#FFFFFF',
   },
   input: {
     flex: 1,
@@ -522,7 +566,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     ...Typography.body,
     color: '#FFFFFF',
   },
@@ -530,8 +574,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
   },
   inputActive: {
-    borderColor: colors.black,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
 
   // Inline error
@@ -572,10 +616,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.black,
+    backgroundColor: '#1A1A1A',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.black,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
@@ -663,6 +707,53 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   verifyButtonWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Country picker
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: '#1A1A1A',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 40,
+  },
+  pickerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  pickerRowActive: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  pickerFlag: {
+    fontSize: 22,
+  },
+  pickerName: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: FontFamily.medium,
+    color: '#FFFFFF',
+  },
+  pickerCode: {
+    fontSize: 14,
+    fontFamily: FontFamily.semibold,
+    color: 'rgba(255,255,255,0.5)',
   },
 });
 

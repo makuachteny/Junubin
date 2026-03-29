@@ -1,4 +1,4 @@
-// AnaJunubin — Find Friends from Contacts
+// JuNubin — Find Friends from Contacts
 // Accesses device contacts to find people already on the app
 // and invite those who aren't.
 
@@ -128,7 +128,7 @@ const FindFriendsScreen = ({ navigation }) => {
   const handleInvite = useCallback(async (contact) => {
     try {
       await Share.share({
-        message: `Hey ${contact.name}! Join me on JuNubin — the app for South Sudanese to connect, date, and build community. Download it here: https://junubin.app/invite`,
+        message: `Hey ${contact.name}! Join me on JuNubin — the app for South Sudanese to connect, date, and build community. Download it here: https://eastside.app/invite`,
       });
       setInvitedNumbers((prev) => new Set(prev).add(contact.phone));
     } catch (_) {
@@ -139,7 +139,7 @@ const FindFriendsScreen = ({ navigation }) => {
   const handleInviteAll = useCallback(async () => {
     try {
       await Share.share({
-        message: 'Join me on JuNubin — the app for South Sudanese to connect, date, and build community. Download it here: https://junubin.app/invite',
+        message: 'Join me on JuNubin — the app for South Sudanese to connect, date, and build community. Download it here: https://eastside.app/invite',
       });
     } catch (_) {
       // User cancelled

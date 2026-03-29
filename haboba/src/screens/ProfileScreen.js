@@ -12,7 +12,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
@@ -80,31 +79,26 @@ export default function ProfileScreen({ navigation }) {
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: showJunubCTA ? 0 : insets.bottom }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={28} color={colors.black} />
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
-        <BrandLogo size="small" />
-        <View style={{ width: 28 }} />
+        <Text style={styles.headerTitle}>Profile</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
+          <Ionicons name="settings-outline" size={22} color={colors.black} />
+        </TouchableOpacity>
       </View>
 
-      {/* Hero banner — clean, no overlapping icons */}
-      <View style={styles.heroSection}>
-        <Image source={imageSource(displayUser.images?.[0])} style={styles.heroImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.75)']}
-          locations={[0, 0.5, 1]}
-          style={styles.heroGradient}
-        />
-        <View style={styles.heroInfo}>
+      {/* Content */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} bounces={false}>
+        {/* Profile avatar + name */}
+        <View style={styles.heroSection}>
+          <Image source={imageSource(displayUser.images?.[0])} style={styles.heroImage} resizeMode="cover" />
           <Text style={styles.heroName}>{displayUser.name}, {displayUser.age}</Text>
           {displayUser.bio ? (
             <Text style={styles.heroBio} numberOfLines={1}>{displayUser.bio}</Text>
           ) : null}
         </View>
-      </View>
 
-      {/* Content */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} bounces={false}>
         {/* Follow counts */}
         <View style={styles.followRow}>
           <TouchableOpacity
@@ -214,43 +208,31 @@ const getStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   heroSection: {
-    width: '100%',
-    height: 280,
-    position: 'relative',
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    overflow: 'hidden',
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 16,
   },
   heroImage: {
-    width: '100%',
-    height: '100%',
+    width: 120,
+    height: 120,
+    borderRadius: 28,
     backgroundColor: colors.gray300,
-  },
-  heroGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 160,
-  },
-  heroInfo: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
+    marginBottom: 12,
   },
   heroName: {
-    fontSize: 30,
-    fontWeight: '900',
-    fontFamily: FontFamily.black,
-    color: '#FFFFFF',
-    letterSpacing: -0.5,
+    fontSize: 24,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: colors.black,
+    letterSpacing: -0.3,
   },
   heroBio: {
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.gray500,
     marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 40,
   },
   content: {
     flex: 1,

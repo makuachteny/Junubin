@@ -222,7 +222,7 @@ export default function EliteScreen({ navigation }) {
           )}
           {[
             { key: 'plus', label: 'JuNubin+' },
-            { key: 'junub', label: 'Junub' },
+            { key: 'junub', label: 'Premium' },
           ].map((t) => (
             <TouchableOpacity
               key={t.key}
@@ -265,7 +265,7 @@ export default function EliteScreen({ navigation }) {
 
         {selectedTier === 'junub' && (
           <Text style={styles.junubMeaning}>
-            "Junub" means South — for South Sudanese everywhere
+            Junub — for South Sudanese everywhere
           </Text>
         )}
 

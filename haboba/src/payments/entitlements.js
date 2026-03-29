@@ -1,4 +1,4 @@
-// AnaJunubin — Entitlement Helpers
+// JuNubin — Entitlement Helpers
 // Pure functions for checking subscription access outside of React components
 // Tiers: free → plus (JuNubin+) → junub (premium)
 

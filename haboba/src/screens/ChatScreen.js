@@ -853,10 +853,10 @@ export default function ChatScreen({ navigation, route }) {
 
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={handleVoiceCall} style={styles.headerIcon}>
-            <Ionicons name="call" size={20} color={colors.royal} />
+            <Ionicons name="call" size={20} color={colors.black} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleVideoCall} style={styles.headerIcon}>
-            <Ionicons name="videocam" size={22} color={colors.royal} />
+            <Ionicons name="videocam" size={22} color={colors.black} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon}>
             <Ionicons name="ellipsis-vertical" size={20} color={colors.gray} />
@@ -1274,7 +1274,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: colors.gray300,
     backgroundColor: colors.gray300,
   },
   headerOnlineDot: {

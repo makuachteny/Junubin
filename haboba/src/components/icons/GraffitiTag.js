@@ -4,7 +4,7 @@ import Svg, { Path } from 'react-native-svg';
 function GraffitiTag({ size = 24, color = '#000', filled = false, style }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" style={style}>
-      {/* Graffiti-style "J" tag with drip — represents JuNubin */}
+      {/* Graffiti-style "E" tag with drip — represents JuNubin */}
       <Path
         d="M7 4c3.5-.2 6.5-.1 10 0"
         fill="none"

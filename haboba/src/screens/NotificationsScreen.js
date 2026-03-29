@@ -208,11 +208,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.black,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.black,
     textAlign: 'center',
-    letterSpacing: 0.3,
   },
   markRead: {
     ...Typography.caption,
