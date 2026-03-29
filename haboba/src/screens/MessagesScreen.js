@@ -405,7 +405,7 @@ export default function MessagesScreen({ navigation }) {
               }}
               activeOpacity={0.8}
             >
-              <Ionicons name="add-circle-outline" size={20} color={colors.accent} />
+              <Ionicons name="add-circle-outline" size={20} color={colors.green} />
               <View style={styles.sheetTextWrap}>
                 <Text style={styles.sheetRowTitle}>Add Story</Text>
                 <Text style={styles.sheetRowSub}>Share a moment with your followers</Text>
@@ -450,9 +450,11 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginBottom: 6,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
+    fontSize: 28,
+    fontFamily: FontFamily.black,
+    fontWeight: '900',
     color: colors.black,
+    letterSpacing: -0.8,
   },
   headerRight: {
     flexDirection: 'row',
@@ -464,7 +466,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.green,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
@@ -485,8 +487,8 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderColor: colors.separator,
   },
   categoryChipActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.green,
+    borderColor: colors.green,
   },
   categoryChipText: {
     fontSize: 13,
@@ -573,7 +575,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     position: 'absolute',
     bottom: -4,
     right: -4,
@@ -615,12 +617,12 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint10,
+    borderColor: colors.green,
+    backgroundColor: colors.greenLight,
   },
   unreadBadgeText: {
     ...Typography.captionBold,
-    color: colors.accent,
+    color: colors.green,
     fontSize: 10,
     letterSpacing: 0.2,
   },
@@ -636,7 +638,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginLeft: 8,
   },
   likesYouBadge: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,

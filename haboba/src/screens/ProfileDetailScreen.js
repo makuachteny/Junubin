@@ -122,7 +122,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
 
   return (
     <View style={s.root}>
-      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} bounces>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} bounces={false}>
         {/* ── Photo with gradient bleed ── */}
         <View style={s.photoWrap}>
           <FlatList data={gallery} horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={16} onScroll={onScroll} keyExtractor={(_, i) => `p${i}`} maxToRenderPerBatch={3} renderItem={({ item }) => <PhotoItem uri={item} name={name} width={SW} />} />
@@ -453,9 +453,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Sections ──
   section: { marginBottom: 22 },
-  sectionLabel: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.script, color: colors.green, letterSpacing: 0.3, marginBottom: 12 },
+  sectionLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.green, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
   sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  sectionLabelInline: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.script, color: colors.green, letterSpacing: 0.3, marginBottom: 0, lineHeight: 16 },
+  sectionLabelInline: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.green, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 0, lineHeight: 16 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
   interestPill: {

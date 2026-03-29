@@ -141,7 +141,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   headerTitle: {
     fontSize: 34,
-    fontFamily: FontFamily.script,
+    fontFamily: FontFamily.black,
     color: colors.black,
     letterSpacing: 0.3,
   },

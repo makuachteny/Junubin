@@ -427,10 +427,10 @@ export default function LikesScreen({ navigation }) {
           <>
         {/* Ambient spray accents */}
         <View style={{ position: 'absolute', right: 8, top: 20 }} pointerEvents="none">
-          <SpraySplatter size={35} color={colors.accent} opacity={0.06} />
+          <SpraySplatter size={35} color={colors.green} opacity={0.06} />
         </View>
         <View style={{ position: 'absolute', left: 4, bottom: 100 }} pointerEvents="none">
-          <SpraySplatter size={40} color={colors.accent} opacity={0.05} />
+          <SpraySplatter size={40} color={colors.green} opacity={0.05} />
         </View>
 
         {/* Like count */}
@@ -566,9 +566,11 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
+    fontSize: 28,
+    fontFamily: FontFamily.black,
+    fontWeight: '900',
     color: colors.black,
+    letterSpacing: -0.8,
   },
   headerRight: {
     flexDirection: 'row',
@@ -580,7 +582,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.green,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },

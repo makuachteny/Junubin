@@ -307,7 +307,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   headerTitle: {
     fontSize: 34,
-    fontFamily: FontFamily.script,
+    fontFamily: FontFamily.black,
     color: colors.black,
     flex: 1,
     textAlign: 'center',

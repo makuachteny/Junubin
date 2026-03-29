@@ -51,11 +51,19 @@ Deno.serve(async (req: Request) => {
     if (type === "like" || type === "super_like") {
       const { data: currentUser } = await supabase
         .from("User")
-        .select("subscriptionTier")
+        .select("subscriptionTier, promoTier, promoEndsAt")
         .eq("id", userId)
         .single();
 
-      const tier = currentUser?.subscriptionTier || "free";
+      const baseTier = currentUser?.subscriptionTier || "free";
+      const tierRank: Record<string, number> = { free: 0, plus: 1, junub: 2 };
+      const promoActive =
+        currentUser?.promoTier &&
+        currentUser?.promoEndsAt &&
+        new Date(currentUser.promoEndsAt).getTime() > Date.now();
+      const promoTier = currentUser?.promoTier || "free";
+      const tier =
+        promoActive && (tierRank[promoTier] > tierRank[baseTier]) ? promoTier : baseTier;
       if (tier === "free") {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);

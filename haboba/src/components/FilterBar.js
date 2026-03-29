@@ -585,7 +585,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
@@ -654,7 +654,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     height: 6,
     borderRadius: 3,
     marginLeft: 6,
-    backgroundColor: isDark ? '#FFFFFF' : colors.accent,
+    backgroundColor: isDark ? '#FFFFFF' : colors.green,
   },
 
   // ─── Overlay ───
@@ -724,8 +724,8 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     marginRight: 14,
   },
   checkboxChecked: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.green,
+    borderColor: colors.green,
   },
   dealbreakerTextWrap: {
     flex: 1,
@@ -770,7 +770,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   applyBtn: {
     flex: 1,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     borderRadius: 999,
     paddingVertical: 18,
     alignItems: 'center',

@@ -481,7 +481,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   tierTabText: {
     fontSize: 16,
-    fontFamily: FontFamily.script,
+    fontFamily: FontFamily.black,
   },
 
   // Brand
@@ -497,7 +497,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.accent,
   },
   brandText: {
-    fontFamily: FontFamily.script,
+    fontFamily: FontFamily.black,
     fontSize: 42,
     color: colors.accent,
     letterSpacing: 0.5,

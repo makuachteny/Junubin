@@ -1,5 +1,5 @@
 // AnaJunubin — Ad Banner (placeholder for free tier)
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontFamily } from '../theme';
@@ -8,6 +8,10 @@ import { useSubscription } from '../payments';
 export default function AdBanner({ style, colors }) {
   const { isSubscribed, adsEnabled } = useSubscription();
   const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (adsEnabled) setDismissed(false);
+  }, [adsEnabled]);
 
   // Hide ads for subscribed users
   if (isSubscribed() || dismissed || adsEnabled === false) return null;

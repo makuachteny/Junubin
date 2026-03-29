@@ -247,7 +247,7 @@ function HomeTabs() {
                   />
                   <View>
                     <Text style={[tabStyles.sheetOptionLabel, isActive && tabStyles.sheetOptionLabelActive]}>
-                      {mode}
+                      {mode === 'Social' ? 'Socialize' : mode}
                     </Text>
                     <Text style={tabStyles.sheetOptionDesc}>
                       {mode === 'Dating' ? 'Find meaningful connections' : 'Meet friends & join communities'}

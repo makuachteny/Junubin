@@ -246,8 +246,8 @@ const OnboardingScreen = ({ navigation }) => {
   // ── Logo entrance ──
   const logoScale = entrance.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
   const logoOpacity = entrance.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.3, 1] });
-  const taglineY = entrance.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
-  const taglineOpacity = entrance.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
+  const ornamentY = entrance.interpolate({ inputRange: [0, 1], outputRange: [32, 0] });
+  const ornamentOpacity = entrance.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
 
   // ── Pulse values ──
   const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.6] });
@@ -321,8 +321,9 @@ const OnboardingScreen = ({ navigation }) => {
               },
             ]}
           >
+            <View style={s.heroHalo} pointerEvents="none" />
             <Animated.View style={{ opacity: logoOpacity }}>
-              <LogoMark size={120} light animated />
+              <LogoMark size={120} light animated showSub={false} />
             </Animated.View>
 
             <Animated.View style={[s.heroTextBlock, { opacity: taglineOpacity, transform: [{ translateY: taglineY }] }]}>
@@ -471,19 +472,33 @@ const s = StyleSheet.create({
   contentWrap: { paddingHorizontal: CONTENT_PAD },
 
   // ══ PAGE 1 — Hero ══
-  heroWrap: { alignItems: 'center', paddingHorizontal: CONTENT_PAD },
+  heroWrap: { alignItems: 'center', paddingHorizontal: CONTENT_PAD, marginTop: H * 0.1, gap: 14 },
+  heroHalo: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: 'rgba(0,151,57,0.12)',
+    shadowColor: '#009739',
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.35,
+    shadowRadius: 32,
+  },
   heroTextBlock: { alignItems: 'center', marginTop: 28 },
-  bigTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
   heroTagline: {
     fontSize: 22, fontWeight: '300', fontFamily: FontFamily.regular,
     color: 'rgba(255,255,255,0.7)', textAlign: 'center',
     letterSpacing: 4, textTransform: 'uppercase', marginBottom: 6,
   },
   heroAccent: {
-    fontSize: 44, fontWeight: '800', fontFamily: FontFamily.extrabold,
+    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
     color: '#FFFFFF', textAlign: 'center', letterSpacing: -1,
-    fontStyle: 'italic',
   },
+  heroRule: { width: 120, height: 2, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.32)' },
+  heroGlyphRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  heroDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.4)' },
+  heroDotAccent: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#009739' },
+  bigTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
   scrollHint: {
     position: 'absolute', right: CONTENT_PAD,
     flexDirection: 'row', alignItems: 'center', gap: 3,

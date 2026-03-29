@@ -738,7 +738,7 @@ const HomeScreen = ({ navigation }) => {
         >
           {/* Left — Mode label */}
           <View style={styles.headerLeft}>
-            <Text style={styles.headerModeLabel}>{mode}</Text>
+            <Text style={styles.headerModeLabel}>{mode === 'Social' ? 'Socialize' : mode}</Text>
           </View>
 
           {/* Right — Boost + Avatar */}
@@ -949,9 +949,11 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     alignItems: 'center',
   },
   headerModeLabel: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
+    fontSize: 28,
+    fontFamily: FontFamily.black,
+    fontWeight: '900',
     color: '#FFFFFF',
+    letterSpacing: -0.8,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 6,

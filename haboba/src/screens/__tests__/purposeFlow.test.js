@@ -116,9 +116,24 @@ describe('Purpose / Intention flow', () => {
       user: null, logout: jest.fn(), updateUser: jest.fn(),
     });
     mockUseSubscription.mockReturnValue({
-      tier: 'free', hasTier: () => false, consumeCoins: () => true,
-      restorePurchases: jest.fn(), cancelSubscription: jest.fn(),
-      isSubscribed: () => false, purchaseInProgress: false, reset: jest.fn(),
+      tier: 'free',
+      effectiveTier: 'free',
+      promoTier: null,
+      promoEndsAt: null,
+      adsEnabled: true,
+      hasTier: () => false,
+      consumeCoins: () => true,
+      addCoins: jest.fn(),
+      addSpotlights: jest.fn(),
+      addSuperLikes: jest.fn(),
+      addWhispers: jest.fn(),
+      setAdsEnabled: jest.fn(),
+      grantPromoTier: jest.fn(),
+      restorePurchases: jest.fn(),
+      cancelSubscription: jest.fn(),
+      isSubscribed: () => false,
+      purchaseInProgress: false,
+      reset: jest.fn(),
     });
     mockUseCurrentUser.mockReturnValue({ currentUser: null });
   });
@@ -211,6 +226,6 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('South Sudanese.')).toBeTruthy();
+    expect(getByText('Skip')).toBeTruthy();
   });
 });

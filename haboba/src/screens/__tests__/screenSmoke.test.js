@@ -163,11 +163,21 @@ describe('screen smoke tests', () => {
 
     mockUseSubscription.mockReturnValue({
       tier: 'free',
+      effectiveTier: 'free',
+      promoTier: null,
+      promoEndsAt: null,
       spotlights: 0,
       superLikes: 0,
       coins: 100,
+      adsEnabled: true,
       hasTier: () => false,
       consumeCoins: () => true,
+      addCoins: jest.fn(),
+      addSpotlights: jest.fn(),
+      addSuperLikes: jest.fn(),
+      addWhispers: jest.fn(),
+      setAdsEnabled: jest.fn(),
+      grantPromoTier: jest.fn(),
       restorePurchases: jest.fn(async () => ({ success: true })),
       cancelSubscription: jest.fn(),
       isSubscribed: () => false,
@@ -191,7 +201,7 @@ describe('screen smoke tests', () => {
   it('renders Onboarding screen', () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() };
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('South Sudanese.')).toBeTruthy();
+    expect(getByText('Skip')).toBeTruthy();
   });
 
   it('renders Chat screen', () => {

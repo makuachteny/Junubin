@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontFamily: FontFamily.script,
+    fontFamily: FontFamily.black,
     fontSize: 36,
     color: '#FFFFFF',
     textAlign: 'center',

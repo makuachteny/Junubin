@@ -115,8 +115,18 @@ describe('Chat interactive actions', () => {
     });
     mockUseSubscription.mockReturnValue({
       hasTier: () => true,
+      effectiveTier: 'plus',
+      promoTier: null,
+      promoEndsAt: null,
       coins: 200,
+      adsEnabled: true,
       consumeCoins: () => true,
+      addCoins: jest.fn(),
+      addSpotlights: jest.fn(),
+      addSuperLikes: jest.fn(),
+      addWhispers: jest.fn(),
+      setAdsEnabled: jest.fn(),
+      grantPromoTier: jest.fn(),
     });
     mockUseAuth.mockReturnValue({
       session: null,
@@ -175,8 +185,18 @@ describe('Chat interactive actions', () => {
   it('sticker action prompts upgrade for non-premium users', () => {
     mockUseSubscription.mockReturnValue({
       hasTier: () => false,
+      effectiveTier: 'free',
+      promoTier: null,
+      promoEndsAt: null,
       coins: 200,
+      adsEnabled: true,
       consumeCoins: () => true,
+      addCoins: jest.fn(),
+      addSpotlights: jest.fn(),
+      addSuperLikes: jest.fn(),
+      addWhispers: jest.fn(),
+      setAdsEnabled: jest.fn(),
+      grantPromoTier: jest.fn(),
     });
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };

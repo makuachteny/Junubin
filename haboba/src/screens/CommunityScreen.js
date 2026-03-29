@@ -143,7 +143,7 @@ export default function CommunityScreen({ navigation, route }) {
             onPress={() => navigation.navigate('GroupDetail', { group })}
           >
             <View style={styles.myGroupIcon}>
-              <GraffitiCommunity size={20} color={colors.accent} filled />
+              <GraffitiCommunity size={20} color={colors.green} filled />
             </View>
             <Text style={styles.myGroupName} numberOfLines={1}>{group.name}</Text>
             <Text style={styles.myGroupMembers}>{group.members} members</Text>
@@ -171,7 +171,7 @@ export default function CommunityScreen({ navigation, route }) {
           onPress={() => navigation.navigate('GroupDetail', { group })}
         >
           <View style={styles.discoverIcon}>
-            <GraffitiCommunity size={22} color={colors.accent} filled />
+            <GraffitiCommunity size={22} color={colors.green} filled />
           </View>
           <View style={styles.discoverInfo}>
             <Text style={styles.discoverName}>{group.name}</Text>
@@ -373,16 +373,16 @@ export default function CommunityScreen({ navigation, route }) {
             </View>
             {renderActiveMeta()}
             <TouchableOpacity
-              style={[styles.eventsCtaCard, { backgroundColor: colors.accentTint08, borderColor: colors.accentTint15 }]}
+              style={[styles.eventsCtaCard, { backgroundColor: colors.greenLight, borderColor: colors.greenLight }]}
               onPress={() => navigation.navigate('Events')}
               activeOpacity={0.8}
             >
-              <Ionicons name="calendar" size={24} color={colors.accent} />
+              <Ionicons name="calendar" size={24} color={colors.green} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.eventsCtaTitle, { color: colors.black }]}>Upcoming Events</Text>
                 <Text style={[styles.eventsCtaSub, { color: colors.gray }]}>{filteredEvents.length} events near you</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.accent} />
+              <Ionicons name="chevron-forward" size={20} color={colors.green} />
             </TouchableOpacity>
             {filteredEvents.slice(0, 3).map((evt) => (
               <TouchableOpacity
@@ -391,8 +391,8 @@ export default function CommunityScreen({ navigation, route }) {
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('EventDetail', { event: evt })}
               >
-                <View style={[styles.discoverIcon, { backgroundColor: colors.accentTint10 }]}>
-                  <Ionicons name="calendar-outline" size={22} color={colors.accent} />
+                <View style={[styles.discoverIcon, { backgroundColor: colors.greenLight }]}>
+                  <Ionicons name="calendar-outline" size={22} color={colors.green} />
                 </View>
                 <View style={styles.discoverInfo}>
                   <Text style={[styles.discoverName, { color: colors.black }]}>{evt.title}</Text>
@@ -450,9 +450,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.script,
+    fontSize: 28,
+    fontFamily: FontFamily.black,
+    fontWeight: '900',
     color: colors.black,
+    letterSpacing: -0.8,
   },
   headerRight: {
     flexDirection: 'row',
@@ -464,7 +466,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.green,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
@@ -489,8 +491,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   filterPillAccent: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.green,
+    borderColor: colors.green,
   },
   filterPillActive: {
     backgroundColor: colors.black,
@@ -521,7 +523,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   clearFiltersText: {
     ...Typography.captionBold,
-    color: colors.accent,
+    color: colors.green,
   },
   feedList: {
     paddingBottom: 80,
@@ -556,7 +558,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.accentTint10,
+    backgroundColor: colors.greenLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -584,7 +586,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: colors.accentTint10,
+    backgroundColor: colors.greenLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,

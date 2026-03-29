@@ -65,6 +65,16 @@ describe('PreferencesScreen navigation', () => {
 
     mockUseSubscription.mockReturnValue({
       hasTier: () => false,
+      effectiveTier: 'free',
+      promoTier: null,
+      promoEndsAt: null,
+      adsEnabled: true,
+      addCoins: jest.fn(),
+      addSpotlights: jest.fn(),
+      addSuperLikes: jest.fn(),
+      addWhispers: jest.fn(),
+      setAdsEnabled: jest.fn(),
+      grantPromoTier: jest.fn(),
     });
 
     mockUseAuth.mockReturnValue({ session: null });
