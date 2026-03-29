@@ -899,8 +899,6 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   cardLayer: {
     flex: 1,
-    marginHorizontal: 2,
-    marginTop: 4,
   },
   // Visible deck stack
   currentCard: {
@@ -909,30 +907,16 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   deckPeek1: {
     ...StyleSheet.absoluteFillObject,
-    top: 8,
-    left: 8,
-    right: 8,
-    borderRadius: 24,
-    overflow: 'hidden',
-    transform: [{ scale: 0.96 }],
     zIndex: 2,
-    opacity: 0.7,
   },
   deckPeek2: {
     ...StyleSheet.absoluteFillObject,
-    top: 16,
-    left: 14,
-    right: 14,
-    borderRadius: 24,
-    overflow: 'hidden',
-    transform: [{ scale: 0.92 }],
     zIndex: 1,
-    opacity: 0.4,
   },
   deckPeekCard: {
     flex: 1,
     backgroundColor: colors.gray300,
-    borderRadius: 24,
+    borderRadius: 16,
   },
 
   // ── Overlay layer — header + filters ──
@@ -963,7 +947,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     alignItems: 'center',
   },
   headerModeLabel: {
-    fontSize: 28,
+    fontSize: 30,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,
@@ -997,7 +981,6 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 18,
-    paddingHorizontal: 4,
   },
 
   // ── Dating area ──

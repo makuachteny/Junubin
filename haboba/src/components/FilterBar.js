@@ -560,7 +560,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     backgroundColor: 'transparent',
   },
   filterIconButton: {

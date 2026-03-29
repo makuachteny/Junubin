@@ -59,7 +59,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const { isFollowing, isFriend, counts: followCounts, toggleFollow } = useFollow(profile.id);
 
   const goBackWithSwipe = (direction) => {
-    navigation.navigate({ name: 'Main', params: { screen: 'Home', params: { swipeAction: direction, swipedProfileId: profile.id } }, merge: true });
+    navigation.navigate({ name: 'Main', params: { screen: 'HomeTab', params: { swipeAction: direction, swipedProfileId: profile.id } }, merge: true });
   };
 
   const handlePass = () => {

@@ -14,7 +14,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
-import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
 import ProfileCompletenessCard from '../components/ProfileCompletenessCard';
 import { imageSource } from '../utils/imageSource';
@@ -138,10 +137,6 @@ export default function ProfileScreen({ navigation }) {
             <Ionicons name="bookmark-outline" size={20} color={colors.black} />
             <Text style={styles.quickActionText}>Saved</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate('Settings')}>
-            <Ionicons name="settings-outline" size={20} color={colors.black} />
-            <Text style={styles.quickActionText}>Settings</Text>
-          </TouchableOpacity>
         </View>
 
         <ProfileCompletenessCard
@@ -204,8 +199,14 @@ const getStyles = (colors) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    height: 48,
     backgroundColor: colors.white,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.black,
   },
   heroSection: {
     alignItems: 'center',

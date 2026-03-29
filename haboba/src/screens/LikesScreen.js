@@ -626,7 +626,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,
@@ -658,7 +658,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
-    paddingHorizontal: 4,
+    paddingHorizontal: 12,
     marginBottom: 8,
     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
     borderRadius: 16,
@@ -719,7 +719,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   likeCard: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: 20,
+    borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: colors.gray300,
     borderWidth: 1,

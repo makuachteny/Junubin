@@ -53,6 +53,9 @@ const MatchCelebrationOverlay = ({
 }) => {
   const { colors } = useTheme();
   const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const orbitProgress = useRef(new Animated.Value(0)).current;
+  const orbitScale = useRef(new Animated.Value(1)).current;
+  const orbitOpacity = useRef(new Animated.Value(1)).current;
   const leftPhoto = useRef(new Animated.Value(-SCREEN_W / 2)).current;
   const rightPhoto = useRef(new Animated.Value(SCREEN_W / 2)).current;
   const titleScale = useRef(new Animated.Value(0)).current;
@@ -62,8 +65,11 @@ const MatchCelebrationOverlay = ({
   useEffect(() => {
     if (visible) {
       hapticHeavy();
-      // Reset
+      // Reset all
       overlayOpacity.setValue(0);
+      orbitProgress.setValue(0);
+      orbitScale.setValue(1);
+      orbitOpacity.setValue(1);
       leftPhoto.setValue(-SCREEN_W / 2);
       rightPhoto.setValue(SCREEN_W / 2);
       titleScale.setValue(0);
@@ -72,52 +78,31 @@ const MatchCelebrationOverlay = ({
 
       Animated.sequence([
         // Fade in overlay
-        Animated.timing(overlayOpacity, {
-          toValue: 1,
-          duration: 250,
-          useNativeDriver: true,
-        }),
-        // Slide photos in with spring
+        Animated.timing(overlayOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+        // Orbit the 3 action icons, shrink to center
         Animated.parallel([
-          Animated.spring(leftPhoto, {
-            toValue: 0,
-            tension: 60,
-            friction: 8,
-            useNativeDriver: true,
-          }),
-          Animated.spring(rightPhoto, {
-            toValue: 0,
-            tension: 60,
-            friction: 8,
-            useNativeDriver: true,
-          }),
+          Animated.timing(orbitProgress, { toValue: 1, duration: 1200, useNativeDriver: true }),
+          Animated.timing(orbitScale, { toValue: 0, duration: 1200, useNativeDriver: true }),
         ]),
-        // Title pop + burst (16 particles, 1500ms, 50ms stagger)
+        // Hide orbit icons
+        Animated.timing(orbitOpacity, { toValue: 0, duration: 100, useNativeDriver: true }),
+        // Slide photos in + burst
         Animated.parallel([
-          Animated.spring(titleScale, {
-            toValue: 1,
-            tension: 80,
-            friction: 6,
-            useNativeDriver: true,
-          }),
+          Animated.spring(leftPhoto, { toValue: 0, tension: 60, friction: 8, useNativeDriver: true }),
+          Animated.spring(rightPhoto, { toValue: 0, tension: 60, friction: 8, useNativeDriver: true }),
+        ]),
+        // Title pop + burst particles
+        Animated.parallel([
+          Animated.spring(titleScale, { toValue: 1, tension: 80, friction: 6, useNativeDriver: true }),
           ...burstAnims.map((anim, i) =>
-            Animated.timing(anim, {
-              toValue: 1,
-              duration: 1500,
-              delay: i * 50,
-              useNativeDriver: true,
-            })
+            Animated.timing(anim, { toValue: 1, duration: 1500, delay: i * 50, useNativeDriver: true })
           ),
         ]),
-        // Show buttons
-        Animated.timing(buttonsOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
+        // Show action buttons
+        Animated.timing(buttonsOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
       ]).start();
     }
-  }, [visible, overlayOpacity, leftPhoto, rightPhoto, titleScale, buttonsOpacity, burstAnims]);
+  }, [visible, overlayOpacity, orbitProgress, orbitScale, orbitOpacity, leftPhoto, rightPhoto, titleScale, buttonsOpacity, burstAnims]);
 
   if (!visible) return null;
 
@@ -126,6 +111,63 @@ const MatchCelebrationOverlay = ({
 
   return (
     <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
+      {/* Orbiting action icons — Pass, Super Like, Like spinning to center */}
+      <Animated.View style={[styles.orbitContainer, { opacity: orbitOpacity, transform: [{ scale: orbitScale }] }]}>
+        {[
+          { icon: 'close', bg: 'rgba(255,255,255,0.15)', color: '#FFFFFF', offset: 0 },
+          { icon: 'star', bg: '#FCCD12', color: '#FFFFFF', offset: 1 },
+          { icon: 'heart', bg: '#CE1126', color: '#FFFFFF', offset: 2 },
+        ].map((btn, i) => {
+          const angle = orbitProgress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [i * (2 * Math.PI / 3), i * (2 * Math.PI / 3) + Math.PI * 3],
+          });
+          const radius = orbitProgress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [80, 0],
+          });
+          return (
+            <Animated.View
+              key={i}
+              style={[styles.orbitIcon, {
+                backgroundColor: btn.bg,
+                transform: [
+                  { translateX: Animated.multiply(radius, Animated.multiply(angle, 0).interpolate({ inputRange: [0, 0], outputRange: [0, 0] })) },
+                  { translateX: Animated.multiply(
+                    radius,
+                    orbitProgress.interpolate({
+                      inputRange: [0, 0.25, 0.5, 0.75, 1],
+                      outputRange: [
+                        Math.cos(i * (2 * Math.PI / 3)),
+                        Math.cos(i * (2 * Math.PI / 3) + Math.PI * 0.75),
+                        Math.cos(i * (2 * Math.PI / 3) + Math.PI * 1.5),
+                        Math.cos(i * (2 * Math.PI / 3) + Math.PI * 2.25),
+                        0,
+                      ],
+                    })
+                  )},
+                  { translateY: Animated.multiply(
+                    radius,
+                    orbitProgress.interpolate({
+                      inputRange: [0, 0.25, 0.5, 0.75, 1],
+                      outputRange: [
+                        Math.sin(i * (2 * Math.PI / 3)),
+                        Math.sin(i * (2 * Math.PI / 3) + Math.PI * 0.75),
+                        Math.sin(i * (2 * Math.PI / 3) + Math.PI * 1.5),
+                        Math.sin(i * (2 * Math.PI / 3) + Math.PI * 2.25),
+                        0,
+                      ],
+                    })
+                  )},
+                ],
+              }]}
+            >
+              <Ionicons name={btn.icon} size={22} color={btn.color} />
+            </Animated.View>
+          );
+        })}
+      </Animated.View>
+
       {/* Heart / sparkle burst */}
       <View style={styles.burstContainer}>
         {BURST_VECTORS.map((vec, i) => {
@@ -252,6 +294,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 100,
+  },
+  orbitContainer: {
+    position: 'absolute',
+    top: '40%',
+    alignSelf: 'center',
+    width: 1,
+    height: 1,
+    zIndex: 110,
+  },
+  orbitIcon: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -25,
+    marginTop: -25,
   },
   burstContainer: {
     position: 'absolute',

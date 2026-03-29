@@ -499,7 +499,7 @@ export const mockPosts = [
     likes: 23,
     comments: 31,
     timestamp: '5h ago',
-    cardTheme: 'blush',
+    cardTheme: 'savanna',
   },
   {
     id: 'post3',

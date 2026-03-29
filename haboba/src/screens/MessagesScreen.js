@@ -454,7 +454,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginBottom: 6,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,

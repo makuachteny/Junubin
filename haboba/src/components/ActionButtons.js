@@ -51,7 +51,7 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, onRea
         accessibilityRole="button"
         accessibilityLabel="Pass"
       >
-        <Ionicons name="close" size={30} color={colors.gray500} />
+        <Ionicons name="close" size={28} color={colors.gray500} />
       </TouchableOpacity>
 
       {/* Super Like — center, elevated */}
@@ -82,7 +82,7 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, onRea
           accessibilityRole="button"
           accessibilityLabel="Super like"
         >
-          <GraffitiStar size={28} color="#FFFFFF" filled />
+          <GraffitiStar size={26} color="#FFFFFF" filled />
         </TouchableOpacity>
       </View>
 
@@ -94,7 +94,7 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, onRea
         accessibilityRole="button"
         accessibilityLabel="Like"
       >
-        <GraffitiHeart size={28} color="#FFFFFF" filled />
+        <GraffitiHeart size={26} color="#FFFFFF" filled />
       </TouchableOpacity>
     </View>
   );
@@ -103,49 +103,40 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, onRea
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-    gap: 24,
+    gap: 20,
   },
   btn: {
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 999,
   },
-  // Pass — smaller, muted
   passBtn: {
-    width: 56,
-    height: 56,
-    backgroundColor: isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
-    marginBottom: 0,
-    ...getShadow('md', isDark),
+    width: 58,
+    height: 58,
+    backgroundColor: isDark ? colors.gray300 : '#F0F0F0',
   },
-  // Super Like — elevated center, gold
   superLikeWrap: {
-    width: 68,
-    height: 68,
+    width: 66,
+    height: 66,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 14,
   },
   superLikeBtn: {
-    width: 68,
-    height: 68,
+    width: 66,
+    height: 66,
     backgroundColor: '#FCCD12',
-    ...getShadow('lg', isDark, '#FCCD12'),
   },
   burstSpark: {
     position: 'absolute',
     zIndex: 3,
   },
-  // Like — red heart
   likeBtn: {
-    width: 56,
-    height: 56,
+    width: 58,
+    height: 58,
     backgroundColor: '#CE1126',
-    marginBottom: 0,
-    ...getShadow('lg', isDark, '#CE1126'),
   },
 });
 

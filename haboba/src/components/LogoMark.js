@@ -14,15 +14,15 @@ export default function LogoMark({ size = 120, light = false }) {
   const { colors, isDark } = useTheme();
   const fill = light ? '#FFFFFF' : isDark ? '#FFFFFF' : colors.primary;
   const showSub = size >= 80;
-  const totalH = showSub ? size * 1.1 : size;
+  const totalH = showSub ? size * 1.2 : size;
 
-  // JB script only (no crown). ViewBox adjusted to center the letters.
-  const vbW = 220;
-  const vbH = showSub ? 180 : 140;
+  // JB script only (no crown). ViewBox shows full JB letters.
+  const vbW = 200;
+  const vbH = showSub ? 170 : 130;
 
   return (
     <View style={{ width: size, height: totalH, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={totalH} viewBox={`0 120 ${vbW} ${vbH}`}>
+      <Svg width={size} height={totalH} viewBox={`10 118 ${vbW} ${vbH}`}>
         <Defs />
 
         {/* ═══ "JB" SCRIPT — Instagram / Billabong style ═══ */}
@@ -118,7 +118,7 @@ export default function LogoMark({ size = 120, light = false }) {
         {showSub && (
           <SvgText
             x="110"
-            y="258"
+            y="252"
             textAnchor="middle"
             fontFamily="DancingScript-Bold"
             fontSize="30"

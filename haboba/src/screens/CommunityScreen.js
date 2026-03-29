@@ -667,7 +667,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 30,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,
@@ -761,8 +761,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingBottom: 12,
   },
   myGroupsRow: {
-    paddingLeft: 16,
-    paddingRight: 8,
+    paddingHorizontal: 16,
     gap: 12,
   },
   myGroupCard: {

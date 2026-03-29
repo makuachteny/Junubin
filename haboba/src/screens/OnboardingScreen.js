@@ -287,7 +287,7 @@ const OnboardingScreen = ({ navigation }) => {
         >
           <LogoMark size={32} light />
         </Animated.View>
-        {currentPage < PAGES.length - 1 && (
+        {__DEV__ && currentPage < PAGES.length - 1 && (
           <TouchableOpacity
             testID="onboarding-skip"
             onPress={handleLandingSkip}

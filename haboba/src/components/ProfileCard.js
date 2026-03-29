@@ -87,7 +87,6 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
     .onUpdate((e) => {
       'worklet';
       translateX.value = e.translationX;
-      translateY.value = e.translationY * 0.25;
       const absX = Math.abs(e.translationX);
       if (absX > SWIPE_DISTANCE_THRESHOLD && thresholdCrossed.value === 0) {
         thresholdCrossed.value = 1;
@@ -173,30 +172,37 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
 
   const cardAnimatedStyle = useAnimatedStyle(() => {
     'worklet';
-    const rotate = interpolate(
-      translateX.value,
-      [-screenWidth, 0, screenWidth],
-      [-12, 0, 12],
-    );
     return {
       transform: [
         { translateX: translateX.value },
-        { translateY: translateY.value },
-        { rotate: `${rotate}deg` },
       ],
     };
+  });
+
+  // LIKE stamp opacity
+  const likeStampStyle = useAnimatedStyle(() => {
+    'worklet';
+    const opacity = interpolate(translateX.value, [0, 80, 150], [0, 0.4, 1], Extrapolation.CLAMP);
+    return { opacity: Math.max(opacity, 0) };
+  });
+
+  // NOPE stamp opacity
+  const nopeStampStyle = useAnimatedStyle(() => {
+    'worklet';
+    const opacity = interpolate(translateX.value, [-150, -80, 0], [1, 0.4, 0], Extrapolation.CLAMP);
+    return { opacity: Math.max(opacity, 0) };
   });
 
   // Directional color wash — green from right for like, gray from left for pass
   const likeWashStyle = useAnimatedStyle(() => {
     'worklet';
-    const opacity = interpolate(translateX.value, [0, 150], [0, 0.35], Extrapolation.CLAMP);
+    const opacity = interpolate(translateX.value, [0, 150], [0, 0.25], Extrapolation.CLAMP);
     return { opacity: Math.max(opacity, 0) };
   });
 
   const passWashStyle = useAnimatedStyle(() => {
     'worklet';
-    const opacity = interpolate(translateX.value, [-150, 0], [0.3, 0], Extrapolation.CLAMP);
+    const opacity = interpolate(translateX.value, [-150, 0], [0.25, 0], Extrapolation.CLAMP);
     return { opacity: Math.max(opacity, 0) };
   });
 
@@ -262,10 +268,18 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
             />
           )}
 
+          {/* LIKE / NOPE stamps */}
+          <Animated.View style={[styles.likeStamp, likeStampStyle]} pointerEvents="none">
+            <Text style={styles.likeStampText}>LIKE</Text>
+          </Animated.View>
+          <Animated.View style={[styles.nopeStamp, nopeStampStyle]} pointerEvents="none">
+            <Text style={styles.nopeStampText}>NOPE</Text>
+          </Animated.View>
+
           {/* Directional color wash overlays */}
           <Animated.View style={[styles.likeWash, likeWashStyle]} pointerEvents="none">
             <LinearGradient
-              colors={['transparent', 'rgba(0, 151, 57, 0.5)']}
+              colors={['transparent', 'rgba(0, 151, 57, 0.4)']}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
               style={StyleSheet.absoluteFill}
@@ -273,13 +287,12 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
           </Animated.View>
           <Animated.View style={[styles.passWash, passWashStyle]} pointerEvents="none">
             <LinearGradient
-              colors={['rgba(100, 100, 100, 0.5)', 'transparent']}
+              colors={['rgba(100, 100, 100, 0.4)', 'transparent']}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
-
 
           {/* Spotlight badge */}
           {isSpotlight && (
@@ -342,7 +355,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   card: {
     borderRadius: ms(24),
     overflow: 'hidden',
-    ...getSurface('card', colors, isDark),
+    backgroundColor: colors.gray900,
     borderWidth: 0,
   },
   imageWrapper: {
@@ -377,6 +390,66 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   passWash: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 2,
+  },
+
+  // Segmented progress bar
+  progressBar: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    gap: 4,
+    zIndex: 10,
+  },
+  progressSegment: {
+    flex: 1,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  progressSegmentActive: {
+    backgroundColor: '#FFFFFF',
+  },
+
+  // LIKE / NOPE stamps
+  likeStamp: {
+    position: 'absolute',
+    top: 80,
+    left: 24,
+    zIndex: 10,
+    borderWidth: 3,
+    borderColor: '#009739',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    transform: [{ rotate: '-15deg' }],
+  },
+  likeStampText: {
+    fontSize: 32,
+    fontWeight: '900',
+    fontFamily: FontFamily.black,
+    color: '#009739',
+    letterSpacing: 2,
+  },
+  nopeStamp: {
+    position: 'absolute',
+    top: 80,
+    right: 24,
+    zIndex: 10,
+    borderWidth: 3,
+    borderColor: '#CE1126',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    transform: [{ rotate: '15deg' }],
+  },
+  nopeStampText: {
+    fontSize: 32,
+    fontWeight: '900',
+    fontFamily: FontFamily.black,
+    color: '#CE1126',
+    letterSpacing: 2,
   },
 
   // Bottom gradient
