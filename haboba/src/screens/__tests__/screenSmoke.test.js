@@ -191,7 +191,7 @@ describe('screen smoke tests', () => {
   it('renders Onboarding screen', () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() };
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('connect.')).toBeTruthy();
+    expect(getByText('South Sudanese.')).toBeTruthy();
   });
 
   it('renders Chat screen', () => {

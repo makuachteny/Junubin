@@ -29,7 +29,6 @@ import * as likesService from '../api/services/likesService';
 import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
-import StoriesRow from '../components/StoriesRow';
 import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
 import { mockStories } from '../data/mockStories';
@@ -53,6 +52,7 @@ export default function MessagesScreen({ navigation }) {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const [activeCategory, setActiveCategory] = useState('All');
 
   const fetchMatches = useCallback(() => {
     if (!session) {
@@ -130,15 +130,17 @@ export default function MessagesScreen({ navigation }) {
     navigation.navigate('Chat', { match: like });
   };
 
-  // Build combined conversation list: likes first, then matches
+  // Build combined conversation list with category + search filtering
   const conversationData = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     const likeItems = likes.map((like) => ({ ...like, type: 'like' }));
     const matchItems = matches.map((match) => ({ ...match, type: 'match' }));
-    const all = [...likeItems, ...matchItems];
-    if (!q) return all;
-    return all.filter((item) => item.name?.toLowerCase().includes(q));
-  }, [likes, matches, searchQuery]);
+    let all = [...likeItems, ...matchItems];
+    if (activeCategory === 'Matches') all = matchItems;
+    else if (activeCategory === 'Likes') all = likeItems;
+    if (q) all = all.filter((item) => item.name?.toLowerCase().includes(q));
+    return all;
+  }, [likes, matches, searchQuery, activeCategory]);
 
   // Build row animation values when conversation data changes (only first render)
   useEffect(() => {
@@ -260,6 +262,8 @@ export default function MessagesScreen({ navigation }) {
     );
   };
 
+  const CATEGORIES = ['All', 'Matches', 'Likes'];
+
   const listHeader = useCallback(() => (
     <>
       {/* ─── Upsell Banner (free users) ─── */}
@@ -271,13 +275,24 @@ export default function MessagesScreen({ navigation }) {
         />
       )}
 
-      {/* ─── Stories Row ─── */}
-      <StoriesRow
-        colors={colors}
-        onStoryPress={(story, index, storyList) => navigation.navigate('StoriesView', { story, storyIndex: index, storyList })}
-        onCreatePress={() => setShowCreateSheet(true)}
-        onViewLive={(liveData) => navigation.navigate('LiveView', { liveData })}
-      />
+      {/* ─── Category Chips ─── */}
+      <View style={styles.categoryRow}>
+        {CATEGORIES.map((cat) => {
+          const isActive = activeCategory === cat;
+          return (
+            <TouchableOpacity
+              key={cat}
+              style={[styles.categoryChip, isActive && styles.categoryChipActive]}
+              onPress={() => setActiveCategory(cat)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       {/* ─── Ad Banner (free tier) ─── */}
       <AdBanner colors={colors} />
@@ -302,14 +317,8 @@ export default function MessagesScreen({ navigation }) {
           )}
         </View>
       </View>
-
-      {/* ─── Messages header ─── */}
-      <View style={styles.messagesHeader}>
-        <Text style={styles.messagesTitle}>Messages</Text>
-        <Ionicons name="notifications" size={15} color={colors.black} />
-      </View>
     </>
-  ), [colors, isDark, styles, searchQuery, likes, navigation, hasTier]);
+  ), [colors, isDark, styles, searchQuery, activeCategory, likes, navigation, hasTier]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -328,20 +337,19 @@ export default function MessagesScreen({ navigation }) {
           },
         ]}
       >
-        <TouchableOpacity
-          style={styles.headerSettingsBtn}
-          onPress={() => navigation.navigate('Settings')}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="options-outline" size={18} color={colors.black} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Chats</Text>
-
+        <Text style={styles.headerTitle}>Messages</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Notifications')}
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="notifications-outline" size={20} color={colors.gray500} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
+            <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-          <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
-        </TouchableOpacity>
       </Animated.View>
 
       {/* ─── Everything scrolls together ─── */}
@@ -441,24 +449,15 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     backgroundColor: colors.white,
     marginBottom: 6,
   },
-  headerSettingsBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.white,
-    ...getShadow('md', isDark),
-  },
-  headerCenter: {
-    alignItems: 'center',
-  },
   headerTitle: {
-    ...Typography.screenTitle,
+    fontSize: 34,
+    fontFamily: FontFamily.script,
     color: colors.black,
-    textAlign: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   headerAvatar: {
     width: 36,
@@ -468,6 +467,35 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderColor: colors.accent,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
+  },
+
+  // ─── Category Chips ───
+  categoryRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  categoryChip: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.separator,
+  },
+  categoryChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    color: colors.gray500,
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
   },
 
   // ─── Search Bar ───

@@ -1,8 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView } from 'react-native';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Animated, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { useAccessibilityPreferences } from '../accessibility';
+import LogoMark from '../components/LogoMark';
 
 const QUESTIONS = [
   {
@@ -44,6 +45,28 @@ export default function AccessibilitySurveyScreen({ navigation }) {
     reducedMotion: false,
     screenReaderHints: true,
   });
+  const [loading, setLoading] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!loading) return;
+    // Fade in the loading overlay
+    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    // Pulse the logo
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    // Navigate after delay
+    const timer = setTimeout(() => {
+      navigation.replace('ProfileSetup');
+    }, 1800);
+    return () => { clearTimeout(timer); pulse.stop(); };
+  }, [loading, fadeAnim, pulseAnim, navigation]);
 
   const setAnswer = (key, value) => {
     setAnswers((prev) => ({ ...prev, [key]: value }));
@@ -51,7 +74,7 @@ export default function AccessibilitySurveyScreen({ navigation }) {
 
   const handleContinue = async () => {
     await saveSurveyResponses(answers);
-    navigation.replace('ProfileSetup');
+    setLoading(true);
   };
 
   const handleSkip = async () => {
@@ -62,7 +85,7 @@ export default function AccessibilitySurveyScreen({ navigation }) {
       reducedMotion: false,
       screenReaderHints: false,
     });
-    navigation.replace('ProfileSetup');
+    setLoading(true);
   };
 
   return (
@@ -96,6 +119,7 @@ export default function AccessibilitySurveyScreen({ navigation }) {
           onPress={handleContinue}
           activeOpacity={0.85}
           testID="accessibility-save"
+          disabled={loading}
         >
           <Text style={styles.primaryBtnText}>Save Preferences</Text>
         </TouchableOpacity>
@@ -105,10 +129,22 @@ export default function AccessibilitySurveyScreen({ navigation }) {
           onPress={handleSkip}
           activeOpacity={0.7}
           testID="accessibility-skip"
+          disabled={loading}
         >
           <Text style={styles.skipText}>Skip for now</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Loading overlay */}
+      {loading && (
+        <Animated.View style={[styles.loadingOverlay, { opacity: fadeAnim }]}>
+          <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+            <LogoMark size={80} light />
+          </Animated.View>
+          <Text style={styles.loadingText}>Setting up your experience...</Text>
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" style={{ marginTop: 16 }} />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -189,5 +225,19 @@ const getStyles = (colors) => StyleSheet.create({
     ...Typography.bodySmall,
     color: colors.gray500,
     textDecorationLine: 'underline',
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#111111',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+    fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 0.3,
   },
 });

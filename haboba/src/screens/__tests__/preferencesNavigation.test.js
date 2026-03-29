@@ -55,7 +55,7 @@ describe('PreferencesScreen navigation', () => {
         gray500: '#8E8E8E',
         gray600: '#666666',
         gray700: '#444444',
-        accent: '#E8613C',
+        accent: '#CE1126',
         accentTint10: '#FDE7E1',
         gold: '#F9A825',
         surface: '#FFFFFF',

@@ -374,20 +374,19 @@ export default function LikesScreen({ navigation }) {
           },
         ]}
       >
-        <TouchableOpacity
-          style={styles.filterBtn}
-          onPress={() => navigation.navigate('Settings')}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="options-outline" size={18} color={colors.black} />
-        </TouchableOpacity>
-        <View style={{ alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>Likes</Text>
-
+        <Text style={styles.headerTitle}>Likes</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Notifications')}
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="notifications-outline" size={20} color={colors.gray500} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
+            <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-          <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
-        </TouchableOpacity>
       </Animated.View>
 
       <Animated.ScrollView
@@ -469,7 +468,7 @@ export default function LikesScreen({ navigation }) {
           />
         )}
 
-        {/* Card grid */}
+        {/* Staggered masonry grid */}
         <View style={styles.likesGrid}>
           {filteredLikes.map((like, idx) => {
             const cardAnim = cardAnimsRef.current[idx];
@@ -483,57 +482,63 @@ export default function LikesScreen({ navigation }) {
               }],
             } : {};
 
+            const cardH = CARD_HEIGHT;
+            let likedAgo = `${Math.floor(Math.random() * 12) + 1}h ago`;
+            if (like.likedAt) {
+              const diff = Date.now() - new Date(like.likedAt).getTime();
+              const hrs = Math.floor(diff / (1000 * 60 * 60));
+              likedAgo = hrs < 1 ? 'Just now' : hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago`;
+            }
+
             return (
-              <Animated.View key={like.id} style={[styles.likeCard, cardAnimStyle]}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  style={StyleSheet.absoluteFill}
-                  onPress={() => {
-                    if (unlocked) {
-                      navigation.navigate('ProfileDetail', { profile: like, fromLikes: true });
-                    } else {
-                      navigation.navigate('Elite');
-                    }
-                  }}
-                >
-                  <Image
-                    source={imageSource(like.images?.[0])}
-                    style={styles.likeImage}
-                    blurRadius={unlocked ? 0 : 25}
-                  />
-                  {/* Bottom gradient overlay */}
-                  <View style={styles.gradientOverlay} />
+              <React.Fragment key={like.id}>
+                {/* Inline upgrade banner after 4th card */}
+                {idx === 4 && !unlocked && (
+                  <TouchableOpacity
+                    style={styles.inlineBanner}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('Elite')}
+                  >
+                    <Ionicons name="lock-open" size={18} color="#FFFFFF" />
+                    <Text style={styles.inlineBannerText}>Unlock to see who likes you</Text>
+                    <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+                  </TouchableOpacity>
+                )}
+                <Animated.View style={[styles.likeCard, { height: cardH }, cardAnimStyle]}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    style={StyleSheet.absoluteFill}
+                    onPress={() => {
+                      if (unlocked) {
+                        navigation.navigate('ProfileDetail', { profile: like, fromLikes: true });
+                      } else {
+                        navigation.navigate('Elite');
+                      }
+                    }}
+                  >
+                    <Image
+                      source={imageSource(like.images?.[0])}
+                      style={styles.likeImage}
+                      blurRadius={unlocked ? 0 : 25}
+                    />
 
-                  {/* Card info */}
-                  <View style={styles.likeInfo}>
-                    {/* Name + Age + Heart row */}
-                    <View style={styles.nameRow}>
-                      {unlocked ? (
-                        <Text style={styles.likeName} numberOfLines={1}>{like.name}</Text>
-                      ) : (
-                        <View style={styles.blurredName} />
-                      )}
-                      <Text style={styles.likeAge}>{like.age}</Text>
-                      <GraffitiHeart size={16} color="#FF69B4" filled />
-                    </View>
+                    {/* Card info */}
+                    <View style={styles.likeInfo}>
+                      <View style={styles.nameRow}>
+                        {unlocked ? (
+                          <Text style={styles.likeName} numberOfLines={1}>{like.name}</Text>
+                        ) : (
+                          <View style={styles.blurredName} />
+                        )}
+                        <Text style={styles.likeAge}>{like.age}</Text>
+                        <GraffitiHeart size={16} color="rgba(255,255,255,0.7)" filled />
+                      </View>
 
-                    {/* Activity row */}
-                    <View style={styles.activityRow}>
-                      {like.activity === 'nearby' ? (
-                        <>
-                          <GraffitiLocation size={13} color="#FFFFFF" filled />
-                          <Text style={styles.activityText}>Nearby</Text>
-                        </>
-                      ) : (
-                        <>
-                          <View style={styles.activeDot} />
-                          <Text style={styles.activityText}>Recently Active</Text>
-                        </>
-                      )}
+                      <Text style={styles.likedAgoText}>Liked you {likedAgo}</Text>
                     </View>
-                  </View>
-                </TouchableOpacity>
-              </Animated.View>
+                  </TouchableOpacity>
+                </Animated.View>
+              </React.Fragment>
             );
           })}
 
@@ -542,18 +547,7 @@ export default function LikesScreen({ navigation }) {
         )}
       </Animated.ScrollView>
 
-      {/* Fixed CTA button — stays at bottom, does not scroll */}
-      {!unlocked && filteredLikes.length > 0 && (
-        <View style={styles.ctaFixed}>
-          <TouchableOpacity
-            style={styles.ctaButton}
-            activeOpacity={0.85}
-            onPress={() => navigation.navigate('Elite')}
-          >
-            <Text style={styles.ctaText}>SEE WHO LIKES YOU</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* CTA removed — inline banner used instead */}
     </View>
   );
 }
@@ -572,9 +566,14 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    ...Typography.screenTitle,
+    fontSize: 34,
+    fontFamily: FontFamily.script,
     color: colors.black,
-    textAlign: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   avatar: {
     width: 36,
@@ -583,17 +582,6 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.accent,
     backgroundColor: colors.gray300,
-    ...getShadow('md', isDark),
-  },
-  filterBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.white,
     ...getShadow('md', isDark),
   },
   content: {
@@ -607,7 +595,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.accent,
+    color: colors.black,
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 6,
@@ -702,50 +690,30 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // ─── Activity row ───
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  activeDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.warning, // yellow dot for "Recently Active"
-  },
-  activityText: {
-    fontSize: 12,
+  // ─── Liked ago timestamp ───
+  likedAgoText: {
+    fontSize: 11,
     fontFamily: FontFamily.medium,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
   },
 
-  // ─── CTA fixed at bottom ───
-  ctaFixed: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 16 + (insets?.bottom || 0),
+  // ─── Inline banner CTA ───
+  inlineBanner: {
+    width: '100%',
+    flexDirection: 'row',
     alignItems: 'center',
-    zIndex: 10,
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 16,
+    backgroundColor: colors.green,
+    marginBottom: CARD_GAP,
   },
-  ctaButton: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: 40,
-    paddingVertical: 18,
-    borderRadius: 40,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  ctaText: {
-    fontSize: 17,
+  inlineBannerText: {
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-    letterSpacing: 0.8,
   },
 });

@@ -26,7 +26,7 @@ import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
-const ACCENT = '#E8613C';
+const ACCENT = '#009739';
 
 const PAGES = [{ id: 1 }, { id: 2 }];
 
@@ -326,8 +326,8 @@ const OnboardingScreen = ({ navigation }) => {
             </Animated.View>
 
             <Animated.View style={[s.heroTextBlock, { opacity: taglineOpacity, transform: [{ translateY: taglineY }] }]}>
-              <Text style={s.heroTagline}>Where Junubin</Text>
-              <Text testID="onboarding-hero-connect" style={s.heroAccent}>connect.</Text>
+              <Text style={s.heroTagline}>Connect with</Text>
+              <Text testID="onboarding-hero-connect" style={s.heroAccent}>South Sudanese.</Text>
             </Animated.View>
           </Animated.View>
 
@@ -391,7 +391,7 @@ const OnboardingScreen = ({ navigation }) => {
           <>
             <TouchableOpacity style={s.ctaWrap} onPress={goSignup} activeOpacity={0.9}>
               <LinearGradient
-                colors={[colors.accent, colors.accent, colors.accentDark]}
+                colors={[colors.green, colors.green, colors.greenDark]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={s.ctaGradient}
@@ -423,7 +423,7 @@ const OnboardingScreen = ({ navigation }) => {
         ) : (
           <TouchableOpacity testID="onboarding-next" style={s.nextBtnOuter} onPress={goNext} activeOpacity={0.85}>
             <LinearGradient
-              colors={[colors.accent, colors.accent, colors.accentDark]}
+              colors={[colors.green, colors.green, colors.greenDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={s.nextBtnGradient}

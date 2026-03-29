@@ -1,6 +1,7 @@
 import { supabase } from '../../config/supabase';
 import { normalizeProfile } from './profileService';
 import { cacheGet, cacheSet } from '../../utils/offlineCache';
+import { TIER_RANK } from '../../payments/products';
 
 const profileCache = new Map();
 const PROFILE_CACHE_TTL = 60_000;
@@ -72,13 +73,15 @@ export async function getDailyLikeStatus() {
 
   const { data: appUser } = await supabase
     .from('User')
-    .select('id, subscriptionTier')
+    .select('id, subscriptionTier, promoTier, promoEndsAt')
     .eq('auth_id', authUser.id)
     .single();
 
   if (!appUser) throw new Error('User not found');
 
-  const tier = appUser.subscriptionTier || 'free';
+  const baseTier = appUser.subscriptionTier || 'free';
+  const promoActive = appUser.promoTier && appUser.promoEndsAt && new Date(appUser.promoEndsAt).getTime() > Date.now();
+  const tier = promoActive && TIER_RANK[appUser.promoTier] > TIER_RANK[baseTier] ? appUser.promoTier : baseTier;
   const unlimited = tier !== 'free';
 
   const startOfDay = new Date();

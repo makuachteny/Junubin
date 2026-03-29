@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../config/supabase';
+import PaymentService from '../payments/PaymentService';
 
 const AuthContext = createContext(null);
 
@@ -22,6 +23,7 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       setSession(s);
       if (s) {
+        PaymentService.identify(s.user.id);
         await fetchUser(s.user.id);
       }
       setReady(true);
@@ -33,8 +35,10 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s) {
+        PaymentService.identify(s.user.id);
         fetchUser(s.user.id);
       } else {
+        PaymentService.logout();
         setUser(null);
       }
     });
@@ -111,6 +115,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
+    PaymentService.logout();
     setUser(null);
     setSession(null);
   }, []);

@@ -243,7 +243,7 @@ function ChallengesTab({ styles, colors, streak, challengesDone, setChallengesDo
     <>
       {/* Weekly streak */}
       <View style={styles.streakCard}>
-        <Ionicons name="flame" size={28} color="#E8613C" />
+        <Ionicons name="flame" size={28} color="#CE1126" />
         <View style={{ flex: 1 }}>
           <Text style={styles.streakTitle}>{streak} / 5 Weekly Streak</Text>
           <View style={styles.streakBar}>

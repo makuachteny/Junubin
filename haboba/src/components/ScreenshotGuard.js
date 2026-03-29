@@ -39,7 +39,7 @@ export default function ScreenshotGuard({ children }) {
       {showWarning && (
         <Animated.View style={[styles.overlay, { opacity }]} pointerEvents="none">
           <View style={styles.badge}>
-            <Ionicons name="shield-checkmark" size={28} color="#E8613C" />
+            <Ionicons name="shield-checkmark" size={28} color="#CE1126" />
             <Text style={styles.text}>Screenshots are not allowed</Text>
           </View>
         </Animated.View>

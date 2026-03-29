@@ -27,7 +27,7 @@ describe('FilterBar', () => {
         gray200: '#E8E8E8',
         gray300: '#D8D8D8',
         gray600: '#666666',
-        accent: '#E8613C',
+        accent: '#CE1126',
         accentTint10: '#FDE7E1',
         surface: '#FFFFFF',
       },

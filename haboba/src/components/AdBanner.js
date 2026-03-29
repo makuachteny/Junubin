@@ -1,15 +1,16 @@
 // AnaJunubin — Ad Banner (placeholder for free tier)
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { FontFamily } from '../theme';
 import { useSubscription } from '../payments';
 
 export default function AdBanner({ style, colors }) {
-  const { isSubscribed } = useSubscription();
+  const { isSubscribed, adsEnabled } = useSubscription();
+  const [dismissed, setDismissed] = useState(false);
 
   // Hide ads for subscribed users
-  if (isSubscribed()) return null;
+  if (isSubscribed() || dismissed || adsEnabled === false) return null;
 
   return (
     <View style={[styles.banner, { backgroundColor: colors.gray100, borderColor: colors.separator }, style]}>
@@ -28,7 +29,7 @@ export default function AdBanner({ style, colors }) {
           <Text style={[styles.adDesc, { color: colors.gray }]}>Remove ads & unlock unlimited likes</Text>
         </View>
       </View>
-      <TouchableOpacity style={styles.closeBtn}>
+      <TouchableOpacity style={styles.closeBtn} onPress={() => setDismissed(true)} accessibilityLabel="dismiss-ad">
         <Ionicons name="close" size={16} color={colors.gray400} />
       </TouchableOpacity>
     </View>

@@ -8,6 +8,8 @@ import {
   Switch,
   Alert,
   Animated,
+  Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { GraffitiFlame } from '../components/icons';
@@ -70,12 +72,13 @@ export default function SettingsScreen({ navigation }) {
       profileService.updateProfile({ showMe: val }).catch(() => {});
     }
   };
-  const [ads, setAds] = useState(true);
+  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, restorePurchases, isSubscribed, reset, spotlights, superLikes, adsEnabled, setAdsEnabled } = useSubscription();
   const lookingFor = currentUser.preferences?.lookingFor || 'Women';
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const { tier, hasTier, restorePurchases, cancelSubscription, isSubscribed, purchaseInProgress, reset, spotlights, superLikes } = useSubscription();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
   const contentAnim = useRef(new Animated.Value(0)).current;
+  const promoActive = promoTier && promoEndsAt && new Date(promoEndsAt).getTime() > Date.now();
+  const tierLabel = TIER_LABELS[effectiveTier] || TIER_LABELS[tier];
 
   useEffect(() => {
     Animated.timing(contentAnim, {
@@ -89,32 +92,31 @@ export default function SettingsScreen({ navigation }) {
     setModal({ visible: true, type: 'loading', title: 'Restoring...', message: 'Checking previous purchases' });
     const result = await restorePurchases();
     if (result.success) {
-      setModal({ visible: true, type: 'success', title: 'Restored!', message: `Your current tier: ${TIER_LABELS[tier]}` });
+      setModal({ visible: true, type: 'success', title: 'Restored!', message: `Your current tier: ${tierLabel}` });
     } else {
       setModal({ visible: true, type: 'error', title: 'Restore Failed', message: result.error || 'Please try again.' });
     }
   };
 
-  const handleManageSubscription = () => {
+  const handleManageSubscription = async () => {
     if (!isSubscribed()) {
       navigation.navigate('Elite');
       return;
     }
-    Alert.alert(
-      `${TIER_LABELS[tier]} Subscription`,
-      `You are currently on the ${TIER_LABELS[tier]} plan.`,
-      [
-        { text: 'Keep Plan', style: 'cancel' },
-        {
-          text: 'Cancel Subscription',
-          style: 'destructive',
-          onPress: () => {
-            cancelSubscription();
-            Alert.alert('Cancelled', 'Your subscription has been cancelled. You are now on the Free plan.');
-          },
-        },
-      ]
-    );
+    if (promoActive && tier === 'free') {
+      Alert.alert('Promo Plan', 'Your membership is a time-limited promo. Manage paid subscriptions in the app store.');
+      return;
+    }
+    const iosUrl = 'https://apps.apple.com/account/subscriptions';
+    const androidUrl = 'https://play.google.com/store/account/subscriptions?package=com.haboba.app';
+    const target = Platform.OS === 'ios' ? iosUrl : androidUrl;
+    try {
+      const supported = await Linking.canOpenURL(target);
+      if (!supported) throw new Error('unsupported');
+      await Linking.openURL(target);
+    } catch {
+      Alert.alert('Manage Subscription', 'Unable to open subscription management. Please visit your app store account subscriptions.');
+    }
   };
 
   const handleLogout = () => {
@@ -167,11 +169,11 @@ export default function SettingsScreen({ navigation }) {
   ], [mode, lookingFor, showMe]);
   const appChanges = useMemo(() => [
     { label: 'Theme', value: isDark ? 'Dark' : 'Light' },
-    { label: 'Ads', value: ads ? 'On' : 'Off' },
-    { label: 'Membership', value: TIER_LABELS[tier] },
+    { label: 'Ads', value: adsEnabled ? 'On' : 'Off' },
+    { label: 'Membership', value: tierLabel },
     { label: 'Spotlights', value: `${spotlights}` },
     { label: 'Super Likes', value: `${superLikes}` },
-  ], [isDark, ads, tier]);
+  ], [isDark, adsEnabled, tierLabel, spotlights, superLikes]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -201,7 +203,9 @@ export default function SettingsScreen({ navigation }) {
         {isSubscribed() && (
           <View style={styles.tierBadge}>
             <MaterialCommunityIcons name="crown" size={18} color={colors.accent} />
-            <Text style={styles.tierBadgeText}>{TIER_LABELS[tier]} Member</Text>
+            <Text style={styles.tierBadgeText}>
+              {tierLabel} Member{promoActive && tier === 'free' ? ' (Promo)' : ''}
+            </Text>
           </View>
         )}
 
@@ -281,8 +285,8 @@ export default function SettingsScreen({ navigation }) {
           <View style={styles.switchRow}>
             <Text style={styles.menuLabel}>Ads</Text>
             <Switch
-              value={ads}
-              onValueChange={setAds}
+              value={adsEnabled}
+              onValueChange={setAdsEnabled}
               trackColor={{ false: colors.gray300, true: colors.accent }}
               thumbColor="#FFFFFF"
             />

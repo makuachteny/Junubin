@@ -6,9 +6,10 @@ const REF_KEY = '@haboba_referral';
 export async function getReferralStats() {
   try {
     const raw = await AsyncStorage.getItem(REF_KEY);
-    return raw ? JSON.parse(raw) : { count: 0, history: [], code: null };
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed || { count: 0, history: [], code: null, claimedRewards: [] };
   } catch {
-    return { count: 0, history: [], code: null };
+    return { count: 0, history: [], code: null, claimedRewards: [] };
   }
 }
 
@@ -18,6 +19,20 @@ export async function recordReferral(referredUserId) {
     stats.count += 1;
     stats.history.push({ userId: referredUserId, date: Date.now() });
     await AsyncStorage.setItem(REF_KEY, JSON.stringify(stats));
+    return stats;
+  } catch {
+    return null;
+  }
+}
+
+export async function markRewardClaimed(rewardId) {
+  try {
+    const stats = await getReferralStats();
+    stats.claimedRewards = Array.isArray(stats.claimedRewards) ? stats.claimedRewards : [];
+    if (!stats.claimedRewards.includes(rewardId)) {
+      stats.claimedRewards.push(rewardId);
+      await AsyncStorage.setItem(REF_KEY, JSON.stringify(stats));
+    }
     return stats;
   } catch {
     return null;

@@ -79,12 +79,12 @@ export default function GroupDetailScreen({ navigation, route }) {
     <View style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="chevron-back" size={26} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle} numberOfLines={1}>{group.name || 'Group'}</Text>
         <TouchableOpacity onPress={handlePin} style={styles.headerIcon}>
-          <Ionicons name={pinned ? 'pin' : 'pin-outline'} size={22} color={pinned ? colors.accent : '#FFFFFF'} />
+          <Ionicons name={pinned ? 'pin' : 'pin-outline'} size={22} color={pinned ? colors.accent : colors.gray500} />
         </TouchableOpacity>
       </View>
 
@@ -203,14 +203,19 @@ const getStyles = (colors) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.white,
   },
   backBtn: {
-    padding: 4,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surfaceMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     ...Typography.sectionLabel,
-    color: '#FFFFFF',
+    color: colors.black,
     flex: 1,
     textAlign: 'center',
     marginHorizontal: 12,
@@ -223,31 +228,29 @@ const getStyles = (colors) => StyleSheet.create({
   },
   banner: {
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.white,
     paddingHorizontal: 24,
     paddingBottom: 28,
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
   },
   bannerIcon: {
     width: 88,
     height: 88,
     borderRadius: 24,
-    backgroundColor: colors.accentTint15,
+    backgroundColor: colors.accentTint10,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: colors.accentTint25,
   },
   bannerName: {
     ...Typography.h2,
-    color: '#FFFFFF',
+    color: colors.black,
     textAlign: 'center',
   },
   bannerMembers: {
     ...Typography.bodySmall,
-    color: colors.accent,
+    color: colors.green,
     marginTop: 4,
   },
   bannerDesc: {

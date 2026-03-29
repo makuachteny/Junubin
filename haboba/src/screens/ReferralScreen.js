@@ -1,17 +1,18 @@
 // AnaJunubin — Referral Program Screen
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Share, Alert } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import Button from '../components/Button';
 import * as referralService from '../utils/referralService';
+import { useSubscription } from '../payments';
 
 const REWARD_TIERS = [
-  { count: 1, reward: '5 Super Likes', icon: 'star', color: '#0047AB' },
-  { count: 3, reward: '1 Spotlight', icon: 'flash', color: '#F59E0B' },
-  { count: 5, reward: '1 Week Plus', icon: 'crown', color: '#E8613C' },
-  { count: 10, reward: '100 Coins', icon: 'logo-bitcoin', color: '#E8613C' },
+  { id: 'superlikes_5', count: 1, reward: '5 Super Likes', icon: 'star', color: '#0047AB' },
+  { id: 'spotlight_1', count: 3, reward: '1 Spotlight', icon: 'flash', color: '#F59E0B' },
+  { id: 'promo_plus_7d', count: 5, reward: '1 Week Plus', icon: 'crown', color: '#CE1126' },
+  { id: 'coins_100', count: 10, reward: '100 Coins', icon: 'logo-bitcoin', color: '#CE1126' },
 ];
 
 export default function ReferralScreen({ navigation }) {
@@ -20,15 +21,34 @@ export default function ReferralScreen({ navigation }) {
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [referralCount, setReferralCount] = useState(0);
   const [referralCode, setReferralCode] = useState('');
+  const [claimedRewards, setClaimedRewards] = useState([]);
+  const { addCoins, addSpotlights, addSuperLikes, grantPromoTier } = useSubscription();
+
+  const applyRewards = useCallback(async (stats) => {
+    const claimed = Array.isArray(stats.claimedRewards) ? stats.claimedRewards : [];
+    for (const tier of REWARD_TIERS) {
+      if (stats.count >= tier.count && !claimed.includes(tier.id)) {
+        if (tier.id === 'superlikes_5') addSuperLikes(5);
+        if (tier.id === 'spotlight_1') addSpotlights(1);
+        if (tier.id === 'promo_plus_7d') grantPromoTier('plus', 7);
+        if (tier.id === 'coins_100') addCoins(100);
+        await referralService.markRewardClaimed(tier.id);
+        claimed.push(tier.id);
+      }
+    }
+    setClaimedRewards(claimed);
+  }, [addCoins, addSpotlights, addSuperLikes, grantPromoTier]);
 
   useEffect(() => {
     referralService.getReferralStats().then((stats) => {
       if (stats) {
         setReferralCount(stats.count || 0);
         setReferralCode(stats.code || `JUNUBIN-${Math.random().toString(36).slice(2, 8).toUpperCase()}`);
+        setClaimedRewards(stats.claimedRewards || []);
+        applyRewards(stats);
       }
     }).catch(() => {});
-  }, []);
+  }, [applyRewards]);
 
   const handleShare = async () => {
     try {
@@ -87,7 +107,10 @@ export default function ReferralScreen({ navigation }) {
 
         {/* Reward Tiers */}
         <Text style={styles.sectionTitle}>Reward Tiers</Text>
-        {REWARD_TIERS.map((tier, i) => (
+        {REWARD_TIERS.map((tier, i) => {
+          const achieved = referralCount >= tier.count;
+          const claimed = claimedRewards.includes(tier.id);
+          return (
           <View key={i} style={styles.tierRow}>
             <View style={[styles.tierIcon, { backgroundColor: tier.color + '20' }]}>
               <Ionicons name={tier.icon} size={20} color={tier.color} />
@@ -96,13 +119,15 @@ export default function ReferralScreen({ navigation }) {
               <Text style={styles.tierCount}>{tier.count} referral{tier.count > 1 ? 's' : ''}</Text>
               <Text style={styles.tierReward}>{tier.reward}</Text>
             </View>
-            {referralCount >= tier.count ? (
-              <Ionicons name="checkmark-circle" size={22} color="#E8613C" />
+            {claimed ? (
+              <Ionicons name="checkmark-circle" size={22} color="#CE1126" />
+            ) : achieved ? (
+              <Ionicons name="checkmark-circle" size={22} color="#CE1126" />
             ) : (
               <Ionicons name="ellipse-outline" size={22} color={colors.gray300} />
             )}
           </View>
-        ))}
+        );})}
       </ScrollView>
     </View>
   );

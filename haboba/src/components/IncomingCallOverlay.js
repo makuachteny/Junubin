@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     height: 100,
     borderRadius: 50,
     borderWidth: 3,
-    borderColor: '#E8613C',
+    borderColor: '#CE1126',
     marginBottom: 16,
   },
   name: {
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#E8613C',
+    backgroundColor: '#CE1126',
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -70,8 +70,8 @@ const SOCIAL_PREFS = [
 
 // Icon tint colors based on category
 const ICON_TINTS = {
-  accent: { light: 'rgba(232, 97, 60, 0.10)', dark: 'rgba(232, 97, 60, 0.14)', iconLight: '#E8613C', iconDark: '#E8613C' },
-  warm: { light: 'rgba(232, 97, 60, 0.10)', dark: 'rgba(232, 97, 60, 0.14)', iconLight: '#E8613C', iconDark: '#E8613C' },
+  accent: { light: 'rgba(206, 17, 38, 0.10)', dark: 'rgba(240, 76, 85, 0.14)', iconLight: '#CE1126', iconDark: '#F04C55' },
+  warm: { light: 'rgba(206, 17, 38, 0.10)', dark: 'rgba(240, 76, 85, 0.14)', iconLight: '#CE1126', iconDark: '#F04C55' },
   gold: { light: 'rgba(249, 168, 37, 0.10)', dark: 'rgba(255, 213, 79, 0.14)', iconLight: '#F9A825', iconDark: '#FFD54F' },
   neutral: { light: 'rgba(115, 115, 115, 0.08)', dark: 'rgba(142, 142, 142, 0.12)', iconLight: '#737373', iconDark: '#8E8E8E' },
 };
@@ -553,7 +553,7 @@ export default function PreferencesScreen({ navigation, route }) {
             {/* ── SOCIAL PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
               <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
-              <GraffitiShield size={14} color="#E8613C" />
+              <GraffitiShield size={14} color="#CE1126" />
               <Text style={styles.sectionHeader}>Socializing Preferences</Text>
               <View style={styles.sectionCountPill}>
                 <Text style={styles.sectionCountText}>{activeCoreCount}</Text>

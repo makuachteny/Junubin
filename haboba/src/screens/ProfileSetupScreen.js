@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
   Alert,
   Image,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,7 @@ import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import LogoMark from '../components/LogoMark';
 import { getEthnicIdentity } from '../utils/ethnicIdentity';
 
 const { width } = Dimensions.get('window');
@@ -37,6 +39,7 @@ const ALL_STEPS = [
   { key: 'ethnicity', title: 'What\'s your background?', icon: 'flag', subtitle: 'Help others learn more about you.' },
   { key: 'education', title: 'Education level', icon: 'school', subtitle: 'Optional — visible on your profile.' },
   { key: 'photos', title: 'Add your best photos', icon: 'camera', subtitle: 'Add at least 2 photos. The more, the better!' },
+  { key: 'verify', title: 'Verify your identity', icon: 'shield-checkmark', subtitle: 'Take a quick selfie to prove you\'re real.' },
   { key: 'prompts', title: 'Answer a profile prompt', icon: 'chatbox-ellipses', subtitle: 'Show off your personality.' },
   { key: 'interests', title: 'What do you love?', icon: 'star', subtitle: 'Pick at least 3 interests.' },
   { key: 'purpose', title: 'What brings you here?', icon: 'options', subtitle: 'Choose your vibe. You can always explore both later.' },
@@ -77,7 +80,7 @@ const PURPOSE_OPTIONS = [
     icon: 'heart',
     label: 'Dating',
     description: 'Find meaningful connections and meet someone special.',
-    gradient: ['#E8613C', '#FF3868'],
+    gradient: ['#CE1126', '#009739'],
   },
   {
     key: 'socialize',
@@ -105,6 +108,21 @@ const ProfileSetupScreen = ({ navigation }) => {
 
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const savingFade = useRef(new Animated.Value(0)).current;
+  const savingPulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!saving) { savingFade.setValue(0); return; }
+    Animated.timing(savingFade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(savingPulse, { toValue: 1.1, duration: 800, useNativeDriver: true }),
+        Animated.timing(savingPulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [saving, savingFade, savingPulse]);
   const insets = useSafeAreaInsets();
   const { session, updateUser } = useAuth();
   const { colors, isDark } = useTheme();
@@ -125,6 +143,7 @@ const ProfileSetupScreen = ({ navigation }) => {
   const [selectedPrompt, setSelectedPrompt] = useState('');
   const [promptAnswer, setPromptAnswer] = useState('');
   const [photos, setPhotos] = useState(Array(6).fill(null));
+  const [verificationPhoto, setVerificationPhoto] = useState(null);
 
   // Visibility toggles (BLK feature)
   const [showGender, setShowGender] = useState(true);
@@ -192,6 +211,15 @@ const ProfileSetupScreen = ({ navigation }) => {
           await profileService.uploadPhoto(uri);
         } catch (e) {
           if (__DEV__) console.warn('Photo upload failed:', e.message);
+        }
+      }
+
+      // Upload verification selfie if taken
+      if (verificationPhoto) {
+        try {
+          await profileService.uploadPhoto(verificationPhoto, 'verification');
+        } catch (e) {
+          if (__DEV__) console.warn('Verification photo upload failed:', e.message);
         }
       }
 
@@ -360,6 +388,8 @@ const ProfileSetupScreen = ({ navigation }) => {
         if (count < 2) return 'Please add at least 2 photos.';
         return null;
       }
+      case 'verify':
+        return null; // Skippable — no hard requirement
       case 'prompts': {
         if (!selectedPrompt) return 'Please choose a prompt.';
         const answer = promptAnswer.trim();
@@ -398,7 +428,7 @@ const ProfileSetupScreen = ({ navigation }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => { if (fieldError) setFieldError(null); }, [stepInputKey]);
 
-  const canSkip = ['education', 'children', 'photos', 'prompts'].includes(step.key);
+  const canSkip = ['education', 'children', 'photos', 'prompts', 'verify'].includes(step.key);
 
   // ─── Render Helpers ───
   const renderRadioOption = (option, selected, onSelect) => (
@@ -605,6 +635,68 @@ const ProfileSetupScreen = ({ navigation }) => {
           </View>
         );
 
+      case 'verify':
+        return (
+          <View style={styles.stepContent}>
+            {!verificationPhoto ? (
+              <>
+                <View style={styles.verifyIconCircle}>
+                  <Ionicons name="camera" size={48} color={colors.accent} />
+                </View>
+                <View style={styles.verifyGuidelines}>
+                  {[
+                    'Face the camera directly',
+                    'Good lighting, no filters',
+                    'Match your profile photos',
+                  ].map((guide, i) => (
+                    <View key={i} style={styles.verifyGuideRow}>
+                      <Ionicons name="checkmark-circle" size={18} color={colors.green} />
+                      <Text style={styles.verifyGuideText}>{guide}</Text>
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={styles.verifyCaptureBtn}
+                  activeOpacity={0.85}
+                  onPress={async () => {
+                    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                    if (status !== 'granted') {
+                      Alert.alert('Permission needed', 'Camera access is required for verification.');
+                      return;
+                    }
+                    const result = await ImagePicker.launchCameraAsync({
+                      cameraType: ImagePicker.CameraType.front,
+                      quality: 0.8,
+                      allowsEditing: false,
+                    });
+                    if (!result.canceled && result.assets?.[0]?.uri) {
+                      setVerificationPhoto(result.assets[0].uri);
+                    }
+                  }}
+                >
+                  <Ionicons name="camera" size={20} color="#FFFFFF" />
+                  <Text style={styles.verifyCaptureBtnText}>Take Selfie</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Image source={{ uri: verificationPhoto }} style={styles.verifyPreview} />
+                <Text style={styles.verifyPreviewHint}>Does this photo clearly show your face?</Text>
+                <View style={styles.verifyActions}>
+                  <TouchableOpacity
+                    style={styles.verifyRetakeBtn}
+                    onPress={() => setVerificationPhoto(null)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="refresh" size={18} color={colors.accent} />
+                    <Text style={[styles.verifyActionText, { color: colors.accent }]}>Retake</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        );
+
       case 'prompts':
         return (
           <View style={styles.stepContent}>
@@ -717,6 +809,7 @@ const ProfileSetupScreen = ({ navigation }) => {
   };
 
   return (
+    <>
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -814,6 +907,16 @@ const ProfileSetupScreen = ({ navigation }) => {
         </View>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
+    {saving && (
+      <Animated.View style={[styles.savingOverlay, { opacity: savingFade }]}>
+        <Animated.View style={{ transform: [{ scale: savingPulse }] }}>
+          <LogoMark size={80} light />
+        </Animated.View>
+        <Text style={styles.savingText}>Creating your profile...</Text>
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" style={{ marginTop: 16 }} />
+      </Animated.View>
+    )}
+    </>
   );
 };
 
@@ -1249,6 +1352,92 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   nextCircleDisabled: {
     opacity: 0.3,
+  },
+
+  // ── Verify step ──
+  verifyIconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: colors.accentTint08,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: 24,
+  },
+  verifyGuidelines: {
+    gap: 12,
+    marginBottom: 28,
+  },
+  verifyGuideRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  verifyGuideText: {
+    ...Typography.bodySmall,
+    color: colors.black,
+  },
+  verifyCaptureBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.accent,
+  },
+  verifyCaptureBtnText: {
+    ...Typography.bodySemibold,
+    color: '#FFFFFF',
+  },
+  verifyPreview: {
+    width: 200,
+    height: 260,
+    borderRadius: 20,
+    alignSelf: 'center',
+    marginBottom: 16,
+    backgroundColor: colors.gray300,
+  },
+  verifyPreviewHint: {
+    ...Typography.bodySmall,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  verifyActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  verifyRetakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+  },
+  verifyActionText: {
+    ...Typography.bodySemibold,
+  },
+
+  // ── Saving overlay ──
+  savingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#111111',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  savingText: {
+    marginTop: 20,
+    fontSize: 17,
+    fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 0.3,
   },
 });
 

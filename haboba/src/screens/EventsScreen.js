@@ -12,10 +12,10 @@ import SkeletonShimmer from '../components/SkeletonShimmer';
 
 const CATEGORY_COLORS = {
   Social: '#0047AB',
-  Dating: '#E8613C',
+  Dating: '#CE1126',
   Diaspora: '#0047AB',
   Cultural: '#F59E0B',
-  Sports: '#E8613C',
+  Sports: '#CE1126',
   Arts: '#EC4899',
 };
 

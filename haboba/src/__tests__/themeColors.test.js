@@ -2,8 +2,8 @@ import { LightPalette, DarkPalette } from '../theme/palettes';
 
 describe('South Sudan Theme Palette', () => {
   describe('LightPalette', () => {
-    it('has sunset orange as primary accent', () => {
-      expect(LightPalette.accent).toBe('#E8613C');
+    it('has flag red as primary accent', () => {
+      expect(LightPalette.accent).toBe('#CE1126');
     });
 
     it('has vibrant pink as rose', () => {
@@ -34,9 +34,9 @@ describe('South Sudan Theme Palette', () => {
       expect(LightPalette.roseLight).toBe('#F9A8D4');
     });
 
-    it('has all accent tints derived from orange', () => {
-      expect(LightPalette.accentTint08).toContain('232, 97, 60');
-      expect(LightPalette.accentTint15).toContain('232, 97, 60');
+    it('has all accent tints derived from flag red', () => {
+      expect(LightPalette.accentTint08).toContain('206, 17, 38');
+      expect(LightPalette.accentTint15).toContain('206, 17, 38');
     });
 
     it('has all rose tints derived from pink', () => {
@@ -45,26 +45,25 @@ describe('South Sudan Theme Palette', () => {
   });
 
   describe('DarkPalette', () => {
-    it('has brightened orange accent for dark mode', () => {
-      expect(DarkPalette.accent).toBe('#F06D47');
+    it('has brightened flag red accent for dark mode', () => {
+      expect(DarkPalette.accent).toBe('#F04C55');
     });
 
     it('has brightened pink rose for dark mode', () => {
       expect(DarkPalette.rose).toBe('#F05AA5');
     });
 
-    it('has OLED black cream', () => {
-      expect(DarkPalette.cream).toBe('#000000');
+    it('has clean near-black surface', () => {
+      expect(DarkPalette.cream).toBe('#0C0C0E');
     });
 
     it('has inverted gray scale', () => {
-      // In dark mode, gray100 is darkest, gray900 is lightest
-      expect(DarkPalette.gray100).toBe('#0F0D0C');
-      expect(DarkPalette.gray900).toBe('#F5F0ED');
+      expect(DarkPalette.gray100).toBe('#0C0C0E');
+      expect(DarkPalette.gray900).toBe('#F5F3F0');
     });
 
-    it('has flag green', () => {
-      expect(DarkPalette.green).toBe('#00B844');
+    it('has brightened flag green', () => {
+      expect(DarkPalette.green).toBe('#2CB750');
     });
   });
 });

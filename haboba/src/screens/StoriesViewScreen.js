@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   dotPast: {
-    backgroundColor: '#E8613C',
+    backgroundColor: '#CE1126',
   },
   dotActive: {
     width: 24,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     right: 0,
-    backgroundColor: '#E8613C',
+    backgroundColor: '#CE1126',
     borderRadius: 4,
     transformOrigin: 'left',
   },
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#E8613C',
+    borderColor: '#CE1126',
   },
   userName: {
     flex: 1,
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#E8613C',
+    backgroundColor: '#CE1126',
   },
   threadPreview: {
     position: 'absolute',

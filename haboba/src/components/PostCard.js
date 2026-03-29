@@ -136,6 +136,9 @@ const PostCard = ({ post, reactionState, onLikeToggle }) => {
             {post.comments}
           </Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Reposted', 'This post has been shared to your feed!')} accessibilityRole="button" accessibilityLabel="Repost" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="repeat-outline" size={19} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={handleShare} accessibilityRole="button" accessibilityLabel="Share post" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="share-outline" size={18} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
         </TouchableOpacity>

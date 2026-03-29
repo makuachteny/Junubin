@@ -119,24 +119,27 @@ export const getSurface = (variant, colors, isDark) => {
 };
 
 export const Gradients = {
-  primary: ['#0F0D0C', '#000000'],
-  accent: ['#F06D47', '#E8613C', '#D14E2B'],
+  primary: ['#141416', '#0C0C0E'],
+  // South Sudan flag gradient — red → green
+  accent: ['#CE1126', '#009739'],
   rose: ['#F05AA5', '#E84393'],
   royal: ['#0047AB', '#003580', '#002B66'],
-  splash: ['#000000', '#0F0D0C', '#000000'],
+  splash: ['#060608', '#0C0C0E', '#060608'],
   card: ['transparent', 'rgba(0, 0, 0, 0.75)'],
   // South Sudan flag ring gradient (Black → Red → Gold → Green → Blue)
   storyRing: ['#1A1A1A', '#CE1126', '#FCCD12', '#009739', '#0047AB'],
   // Full South Sudan brand gradient
   southSudan: ['#000000', '#CE1126', '#FFFFFF', '#009739', '#0047AB'],
-  // Warm action gradient (orange → red)
-  warm: ['#F06D47', '#E8613C'],
+  // Warm action gradient (bright → deep red)
+  warm: ['#F04C55', '#CE1126'],
   // Flag ring (vibrant, for rings and borders)
   flagRing: ['#1A1A1A', '#CE1126', '#FCCD12', '#009739', '#0047AB'],
   // Gold accent gradient
   gold: ['#FCCD12', '#D4A800'],
   // Green accent gradient
-  green: ['#00B844', '#009739'],
+  green: ['#2CB750', '#009739'],
   // Pink gradient (likes)
   pink: ['#F05AA5', '#E84393', '#C7357D'],
+  // Red-to-green hero gradient (from the brand mark)
+  redGreen: ['#CE1126', '#8B1020', '#0B6B2A', '#009739'],
 };

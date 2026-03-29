@@ -179,16 +179,16 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               style={[
                 s.followActionBtn,
                 (isFollowing || isFriend)
-                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#E8613C' : colors.accent }
+                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#CE1126' : colors.accent }
                   : { backgroundColor: colors.accent },
               ]}
               onPress={toggleFollow}
               activeOpacity={0.8}
             >
-              {isFriend && <Ionicons name="people" size={14} color="#E8613C" style={{ marginRight: 4 }} />}
+              {isFriend && <Ionicons name="people" size={14} color="#CE1126" style={{ marginRight: 4 }} />}
               <Text style={[
                 s.followActionText,
-                { color: (isFollowing || isFriend) ? (isFriend ? '#E8613C' : colors.accent) : '#FFF' },
+                { color: (isFollowing || isFriend) ? (isFriend ? '#CE1126' : colors.accent) : '#FFF' },
               ]}>
                 {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
               </Text>
@@ -432,47 +432,53 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   factFilled: { backgroundColor: colors.accent, borderColor: colors.accent },
   factFilledText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
 
-  // ── Prompt — hero card ──
+  // ── Prompt — hero card with left accent stripe ──
   promptCard: {
-    backgroundColor: isDark ? colors.accentTint12 : colors.accentTint08,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: isDark ? colors.accentTint25 : colors.accentTint15,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FAFAFA',
+    borderRadius: 20,
+    padding: 22,
+    paddingLeft: 20,
+    marginBottom: 22,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.green,
+    borderWidth: 0.5,
+    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
   },
-  promptQ: { fontSize: 12, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.accent, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 },
-  promptA: { fontSize: 22, lineHeight: 32, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.black, fontStyle: 'italic' },
+  promptQ: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.green, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 },
+  promptA: { fontSize: 20, lineHeight: 30, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.black },
 
   // ── About ──
-  aboutSection: { marginBottom: 20 },
-  aboutText: { fontSize: 16, lineHeight: 26, color: colors.gray600, fontFamily: FontFamily.regular },
+  aboutSection: { marginBottom: 22, paddingLeft: 2 },
+  aboutText: { fontSize: 15, lineHeight: 25, color: isDark ? colors.gray600 : colors.gray700, fontFamily: FontFamily.regular },
 
   // ── Sections ──
-  section: { marginBottom: 20 },
-  sectionLabel: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray400, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  sectionLabelInline: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray400, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 0, lineHeight: 14 },
+  section: { marginBottom: 22 },
+  sectionLabel: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.script, color: colors.green, letterSpacing: 0.3, marginBottom: 12 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  sectionLabelInline: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.script, color: colors.green, letterSpacing: 0.3, marginBottom: 0, lineHeight: 16 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
-  interestPill: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.white, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.gray200 },
+  interestPill: {
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F3F5',
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
+  },
   interestText: { color: colors.black, fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
 
-  intoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1.5, borderColor: colors.accent, backgroundColor: 'transparent' },
-  intoText: { color: colors.accent, fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold },
+  intoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,151,57,0.15)' : 'rgba(0,151,57,0.08)', borderWidth: 1, borderColor: isDark ? 'rgba(0,151,57,0.3)' : 'rgba(0,151,57,0.2)' },
+  intoText: { color: colors.green, fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold },
 
-  // ── Identity — circles ──
-  stickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16 },
-  stickerItem: { alignItems: 'center', gap: 6 },
-  stickerCircle: { width: 56, height: 56, borderRadius: 28, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.accentTint08, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? colors.accentTint25 : colors.accentTint25, borderStyle: 'dashed' },
-  stickerEmoji: { fontSize: 24 },
-  stickerLabel: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray500 },
+  // ── Identity — solid circles ──
+  stickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
+  stickerItem: { alignItems: 'center', gap: 7 },
+  stickerCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F3', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' },
+  stickerEmoji: { fontSize: 26 },
+  stickerLabel: { fontSize: 11, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.gray500 },
 
   // ── Action Bar ──
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.95)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: 'rgba(255,255,255,0.08)' },
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: colors.separator },
   passBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
-  likeBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
-  matchBtn: { flex: 1, height: 54, backgroundColor: '#E8613C', borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: '#E8613C', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+  likeBtn: { flex: 1, height: 54, backgroundColor: colors.green, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+  matchBtn: { flex: 1, height: 54, backgroundColor: colors.green, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
   likeBtnText: { color: '#FFF', fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.5 },
   superBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
   challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(252,205,18,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(252,205,18,0.25)' },

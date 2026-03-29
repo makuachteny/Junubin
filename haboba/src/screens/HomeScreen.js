@@ -24,7 +24,7 @@ import MatchCelebrationOverlay from '../components/MatchCelebrationOverlay';
 import HeartBurstOverlay from '../components/HeartBurstOverlay';
 import CardSkeleton from '../components/CardSkeleton';
 import Button from '../components/Button';
-import SpotlightCard from '../components/SpotlightCard';
+// SpotlightCard removed — spotlights now appear inline in the swipe deck
 import InterstitialAd from '../components/InterstitialAd';
 import { mockProfiles } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
@@ -65,7 +65,22 @@ const buildDeck = (mode = 'Dating') => {
     }
     return filled;
   })();
-  return shuffleArray(deck);
+  const shuffled = shuffleArray(deck);
+  // Inject spotlight profiles every 5 cards
+  const withSpotlights = [];
+  for (let i = 0; i < shuffled.length; i++) {
+    withSpotlights.push(shuffled[i]);
+    if ((i + 1) % 5 === 0 && i + 1 < shuffled.length) {
+      // Pick a random profile as spotlight
+      const spotlightSource = base[Math.floor(Math.random() * base.length)];
+      withSpotlights.push({
+        ...spotlightSource,
+        id: `spotlight-${spotlightSource.id}-${i}`,
+        spotlight: true,
+      });
+    }
+  }
+  return withSpotlights;
 };
 
 // Social-mode filter options (replace dating-specific ones)
@@ -293,13 +308,15 @@ const HomeScreen = ({ navigation }) => {
     });
   }, [hasTier]);
 
-  // Read persisted mode on mount and when screen regains focus (overrides default)
+  // Read persisted mode on mount and when screen regains focus (picks up FAB changes)
   useFocusEffect(
     useCallback(() => {
       AsyncStorage.getItem('@haboba_mode').then((stored) => {
-        if (stored === 'Social' || stored === 'Dating') setMode(stored);
+        if ((stored === 'Social' || stored === 'Dating') && stored !== mode) {
+          setModeAndPersist(stored);
+        }
       });
-    }, [])
+    }, [mode, setModeAndPersist])
   );
 
   const profileCardRef = useRef(null);
@@ -623,12 +640,15 @@ const HomeScreen = ({ navigation }) => {
             {/* Card with directional entry animation */}
             <View style={styles.cardArea}>
               <View style={styles.cardLayer}>
-                {/* Next card — pre-rendered underneath, image already decoded */}
+                {/* Deck peek — 2nd card behind (deepest) */}
+                {profiles.length > 2 && (
+                  <View style={styles.deckPeek2} pointerEvents="none">
+                    <View style={styles.deckPeekCard} />
+                  </View>
+                )}
+                {/* Deck peek — 1st card behind */}
                 {hasNextProfile && (
-                  <View
-                    style={styles.nextCard}
-                    pointerEvents="none"
-                  >
+                  <View style={styles.deckPeek1} pointerEvents="none">
                     <ProfileCard
                       profile={nextProfile}
                       style={styles.fullCard}
@@ -636,7 +656,7 @@ const HomeScreen = ({ navigation }) => {
                   </View>
                 )}
                 {/* Current card — swipeable, on top */}
-                <View style={styles.fullCard}>
+                <View style={styles.currentCard}>
                   <ProfileCard
                     key={currentProfile.id}
                     ref={profileCardRef}
@@ -716,46 +736,29 @@ const HomeScreen = ({ navigation }) => {
           style={[styles.topBar, { top: insets.top }]}
           pointerEvents="box-none"
         >
-          {/* Left — Spotlight/Boost */}
-          <TouchableOpacity
-            onPress={() => navigation?.navigate?.('Boost')}
-            activeOpacity={0.85}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={styles.headerIconBtn}
-          >
-            <Ionicons name="flash" size={18} color={colors.accent} />
-          </TouchableOpacity>
-
-          {/* Center — Title + Mode toggle */}
-          <View style={styles.headerCenter}>
-            <View style={styles.modeToggle}>
-              {['Dating', 'Social'].map((label) => {
-                const active = mode === label;
-                return (
-                  <TouchableOpacity
-                    key={label}
-                    style={[styles.modeOption, active && styles.modeOptionActive]}
-                    onPress={() => setModeAndPersist(label)}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.modeOptionText, active && styles.modeOptionTextActive]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          {/* Left — Mode label */}
+          <View style={styles.headerLeft}>
+            <Text style={styles.headerModeLabel}>{mode}</Text>
           </View>
 
-          {/* Right — Profile avatar */}
-          <TouchableOpacity
-            onPress={() => navigation?.navigate?.('Profile')}
-            activeOpacity={0.85}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            style={styles.headerSideSlot}
-          >
-            <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
-          </TouchableOpacity>
+          {/* Right — Boost + Avatar */}
+          <View style={styles.headerRight}>
+            <TouchableOpacity
+              onPress={() => navigation?.navigate?.('Boost')}
+              activeOpacity={0.85}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.headerIconBtn}
+            >
+              <Ionicons name="flash" size={18} color={colors.gold} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation?.navigate?.('Profile')}
+              activeOpacity={0.85}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         {/* ─── FILTER BAR — below top bar ─── */}
@@ -796,13 +799,6 @@ const HomeScreen = ({ navigation }) => {
           <Text style={[styles.likeCounterText, likeStatus.remaining <= 5 && { color: colors.accent }]}>
             {likeStatus.remaining} likes left today
           </Text>
-        </View>
-      )}
-
-      {/* ─── SPOTLIGHT CARD (Junub users) ─── */}
-      {showSpotlight && profiles[1] && (
-        <View style={styles.spotlightWrap}>
-          <SpotlightCard profile={profiles[1]} onPress={handleExpand} colors={colors} />
         </View>
       )}
 
@@ -884,7 +880,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     flex: 1,
     paddingHorizontal: 6,
     paddingTop: insets.top + Layout.headerHeight + Layout.filterGap + 36,
-    paddingBottom: 4,
+    paddingBottom: 24,
     position: 'relative',
   },
   cardLayer: {
@@ -892,10 +888,37 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     marginHorizontal: 2,
     marginTop: 4,
   },
-  nextCard: {
+  // Visible deck stack
+  currentCard: {
+    flex: 1,
+    zIndex: 3,
+  },
+  deckPeek1: {
     ...StyleSheet.absoluteFillObject,
+    top: 8,
+    left: 8,
+    right: 8,
     borderRadius: 24,
     overflow: 'hidden',
+    transform: [{ scale: 0.96 }],
+    zIndex: 2,
+    opacity: 0.7,
+  },
+  deckPeek2: {
+    ...StyleSheet.absoluteFillObject,
+    top: 16,
+    left: 14,
+    right: 14,
+    borderRadius: 24,
+    overflow: 'hidden',
+    transform: [{ scale: 0.92 }],
+    zIndex: 1,
+    opacity: 0.4,
+  },
+  deckPeekCard: {
+    flex: 1,
+    backgroundColor: colors.gray300,
+    borderRadius: 24,
   },
 
   // ── Overlay layer — header + filters ──
@@ -921,10 +944,22 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     zIndex: 20,
     backgroundColor: 'transparent',
   },
-  headerSideSlot: {
-    width: 40,
+  headerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  headerModeLabel: {
+    fontSize: 34,
+    fontFamily: FontFamily.script,
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   headerIconBtn: {
     width: 40,
@@ -932,8 +967,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
-    ...getShadow('sm', isDark),
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   avatar: {
     width: 36,
@@ -943,38 +977,6 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.5)',
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
-  },
-
-  headerCenter: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modeToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: 16,
-    paddingHorizontal: 4,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-  },
-  modeOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  modeOptionActive: {
-    backgroundColor: colors.accent,
-  },
-  modeOptionText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 12,
-    color: colors.gray600,
-  },
-  modeOptionTextActive: {
-    color: '#FFFFFF',
-    fontFamily: FontFamily.semibold,
   },
 
   // ── Filter bar ──
@@ -996,7 +998,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   actionOverlay: {
     position: 'absolute',
-    bottom: 18,
+    bottom: 12,
     left: 8,
     right: 8,
     zIndex: 15,
@@ -1083,14 +1085,6 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.7)',
   },
 
-  // ── Spotlight ──
-  spotlightWrap: {
-    position: 'absolute',
-    bottom: 100,
-    left: 0,
-    right: 0,
-    zIndex: 14,
-  },
   whisperOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.6)',

@@ -617,8 +617,8 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     minHeight: 34,
   },
   pillActive: {
-    backgroundColor: colors.accent,
-    ...getShadow('md', isDark, colors.accent),
+    backgroundColor: isDark ? colors.gray300 : colors.gray700,
+    ...getShadow('md', isDark),
   },
   pillInactive: {
     backgroundColor: colors.surface,
@@ -627,7 +627,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     ...getShadow('sm', isDark),
   },
   pillOpen: {
-    borderColor: colors.accent,
+    borderColor: colors.green,
     borderWidth: 1,
   },
   pillIcon: {

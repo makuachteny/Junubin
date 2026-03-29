@@ -15,7 +15,6 @@ import { useTheme, Typography, FontFamily, getShadow, Layout } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GraffitiCommunity, GraffitiSparkles, GraffitiFlame, GraffitiLocation, GraffitiStar } from '../components/icons';
 import { GraffitiSectionDivider } from '../components/GraffitiAccents';
-import UnderlineTabs from '../components/UnderlineTabs';
 import PostCard from '../components/PostCard';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import EmptyState from '../components/EmptyState';
@@ -270,19 +269,19 @@ export default function CommunityScreen({ navigation, route }) {
           },
         ]}
       >
-        <TouchableOpacity
-          style={styles.settingsBtn}
-          onPress={() => navigation.navigate('Settings')}
-          activeOpacity={0.75}
-        >
-          <Ionicons name="options-outline" size={18} color={colors.black} />
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Community</Text>
+        <Text style={styles.headerTitle}>Community</Text>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Notifications')}
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="notifications-outline" size={20} color={colors.gray500} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
+            <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
-          <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
-        </TouchableOpacity>
       </Animated.View>
 
       {/* ─── Tabs ─── */}
@@ -290,11 +289,26 @@ export default function CommunityScreen({ navigation, route }) {
         style={{
           opacity: contentAnim,
           transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }],
-          paddingHorizontal: 16,
           paddingBottom: 4,
         }}
       >
-        <UnderlineTabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+        <View style={styles.segmentControl}>
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.segmentPill, isActive && styles.segmentPillActive]}
+                onPress={() => setActiveTab(tab)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.segmentPillText, isActive && styles.segmentPillTextActive]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </Animated.View>
 
       {/* ─── Content ─── */}
@@ -435,13 +449,15 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     height: Layout.headerHeight,
     backgroundColor: colors.white,
   },
-  headerCenter: {
-    alignItems: 'center',
-  },
   headerTitle: {
-    ...Typography.screenTitle,
+    fontSize: 34,
+    fontFamily: FontFamily.script,
     color: colors.black,
-    textAlign: 'center',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
   avatar: {
     width: 36,
@@ -450,17 +466,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.accent,
     backgroundColor: colors.gray300,
-    ...getShadow('md', isDark),
-  },
-  settingsBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.white,
     ...getShadow('md', isDark),
   },
   // ─── Filter Bar ───
@@ -622,6 +627,32 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   eventsCtaSub: {
     ...Typography.caption,
+  },
+
+  // ─── Segment Control ───
+  segmentControl: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: colors.white,
+  },
+  segmentPill: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: colors.surfaceMuted,
+  },
+  segmentPillActive: {
+    backgroundColor: colors.green,
+  },
+  segmentPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray500,
+  },
+  segmentPillTextActive: {
+    color: '#FFFFFF',
   },
 
   // ─── FAB ───

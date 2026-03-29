@@ -97,7 +97,7 @@ const COLORS = {
   gray: '#666', gray100: '#F0F0F0', gray200: '#DDD', gray300: '#CCC',
   gray400: '#A0A0A0', gray500: '#888', gray600: '#666', gray700: '#444',
   gray900: '#1A1A1A',
-  accent: '#E8613C', accentDark: '#D14E2B',
+  accent: '#CE1126', accentDark: '#A80E1F',
   accentTint04: '#FEF6F4', accentTint06: '#FEF3F0', accentTint08: '#FEF0EC',
   accentTint10: '#FDE7E1', accentTint12: '#FDDDD5', accentTint15: '#FDD4CA',
   accentTint25: '#FBC0B1',
@@ -211,6 +211,6 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('connect.')).toBeTruthy();
+    expect(getByText('South Sudanese.')).toBeTruthy();
   });
 });

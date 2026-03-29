@@ -361,7 +361,7 @@ const SignupScreen = ({ navigation }) => {
             {/* Inline error */}
             {inputError ? (
               <View style={styles.inputErrorRow}>
-                <Ionicons name="alert-circle" size={15} color="#FF4D4D" />
+                <Ionicons name="alert-circle" size={15} color="#F05252" />
                 <Text style={styles.inputErrorText}>{inputError}</Text>
               </View>
             ) : null}
@@ -545,7 +545,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
-    color: '#FF4D4D',
+    color: '#F05252',
     flex: 1,
   },
 

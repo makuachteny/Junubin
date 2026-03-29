@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AccessibilitySurveyScreen from '../AccessibilitySurveyScreen';
 
 const mockUseTheme = jest.fn();
@@ -26,6 +26,7 @@ jest.mock('react-native-safe-area-context', () => ({
 
 describe('AccessibilitySurveyScreen', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     mockUseTheme.mockReturnValue({
       colors: {
         accent: '#F56040',
@@ -43,15 +44,25 @@ describe('AccessibilitySurveyScreen', () => {
     mockSaveSurveyResponses.mockClear();
   });
 
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('saves answers and routes to profile setup', async () => {
     const navigation = { replace: jest.fn() };
     const { getByTestId } = render(<AccessibilitySurveyScreen navigation={navigation} />);
 
-    fireEvent.press(getByTestId('accessibility-save'));
-
-    await waitFor(() => {
-      expect(mockSaveSurveyResponses).toHaveBeenCalled();
-      expect(navigation.replace).toHaveBeenCalledWith('ProfileSetup');
+    await act(async () => {
+      fireEvent.press(getByTestId('accessibility-save'));
     });
+
+    expect(mockSaveSurveyResponses).toHaveBeenCalled();
+
+    // Navigation is delayed by the loading transition
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith('ProfileSetup');
   });
 });

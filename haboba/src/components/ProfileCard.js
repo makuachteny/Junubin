@@ -1,6 +1,6 @@
 // AnaJunubin — Profile Card
-// Full-bleed image with gradient overlay, BLK-style layout.
-// Uses react-native-reanimated + gesture-handler for native-thread swiping.
+// Split info: name chip at top-left, floating frosted panel at bottom.
+// Segmented progress bar. Directional color wash on swipe.
 
 import React, { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import {
@@ -20,12 +20,10 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   interpolate,
-  interpolateColor,
   Extrapolation,
   runOnJS,
 } from 'react-native-reanimated';
 import { hapticLight, hapticMedium } from '../utils/haptics';
-import { SpraySplatter } from './GraffitiAccents';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -42,7 +40,6 @@ const SNAP_BACK_SPRING = {
   restSpeedThreshold: 0.5,
 };
 
-// Carries the finger's velocity into exit — no speed discontinuity
 const EXIT_SPRING = {
   damping: 50,
   stiffness: 400,
@@ -57,7 +54,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
   const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
-  const thresholdCrossed = useSharedValue(0); // 0 = not crossed, 1 = crossed
+  const thresholdCrossed = useSharedValue(0);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageErrors, setImageErrors] = useState({});
 
@@ -90,7 +87,6 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
       'worklet';
       translateX.value = e.translationX;
       translateY.value = e.translationY * 0.25;
-      // Haptic feedback when crossing threshold
       const absX = Math.abs(e.translationX);
       if (absX > SWIPE_DISTANCE_THRESHOLD && thresholdCrossed.value === 0) {
         thresholdCrossed.value = 1;
@@ -115,7 +111,6 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
 
         const targetX = direction === 'right' ? EXIT_X : -EXIT_X;
 
-        // Spring with finger velocity — card continues at the pace of the swipe
         translateX.value = withSpring(targetX, {
           ...EXIT_SPRING,
           velocity: e.velocityX,
@@ -125,13 +120,11 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
           }
         });
 
-        // Y carries finger momentum naturally then settles
         translateY.value = withSpring(0, {
           ...EXIT_SPRING,
           velocity: e.velocityY * 0.3,
         });
 
-        // Immediately reveal background for seamless transition
         if (onSwipeProgress) {
           runOnJS(onSwipeProgress)(1);
         }
@@ -193,19 +186,17 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
     };
   });
 
-  const likeColor = colors.accent;   // Orange — like
-  const passColor = colors.gray400;  // Muted gray — pass
-  const glowStyle = useAnimatedStyle(() => {
+  // Directional color wash — green from right for like, gray from left for pass
+  const likeWashStyle = useAnimatedStyle(() => {
     'worklet';
-    const absX = Math.abs(translateX.value);
-    const borderW = interpolate(absX, [0, 150], [0, 3.5], Extrapolation.CLAMP);
-    // Orange glow for right (like), gray for left (pass)
-    const isRight = translateX.value >= 0;
-    const color = isRight ? likeColor : passColor;
-    return {
-      borderWidth: borderW,
-      borderColor: absX > 5 ? color : 'transparent',
-    };
+    const opacity = interpolate(translateX.value, [0, 150], [0, 0.35], Extrapolation.CLAMP);
+    return { opacity: Math.max(opacity, 0) };
+  });
+
+  const passWashStyle = useAnimatedStyle(() => {
+    'worklet';
+    const opacity = interpolate(translateX.value, [-150, 0], [0.3, 0], Extrapolation.CLAMP);
+    return { opacity: Math.max(opacity, 0) };
   });
 
   const progressBarStyle = useAnimatedStyle(() => {
@@ -216,16 +207,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
       [1, 0],
       Extrapolation.CLAMP,
     );
-    const translateYVal = interpolate(
-      Math.abs(translateX.value),
-      [0, 80],
-      [0, 10],
-      Extrapolation.CLAMP,
-    );
-    return {
-      opacity,
-      transform: [{ translateY: translateYVal }],
-    };
+    return { opacity };
   });
 
   const triggerSwipe = useCallback((direction) => {
@@ -264,6 +246,8 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
   const getInitial = () => profile.name ? profile.name.charAt(0).toUpperCase() : '?';
   const statusText = profile.status || profile.intention || profile.lookingFor;
 
+  const isSpotlight = profile.spotlight;
+
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View
@@ -271,7 +255,7 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
           styles.card,
           style,
           cardAnimatedStyle,
-          glowStyle,
+          isSpotlight && styles.spotlightCard,
         ]}
       >
         <View style={styles.imageWrapper}>
@@ -287,61 +271,86 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
               onError={handleImageError}
             />
           )}
+
+          {/* Directional color wash overlays */}
+          <Animated.View style={[styles.likeWash, likeWashStyle]} pointerEvents="none">
+            <LinearGradient
+              colors={['transparent', 'rgba(0, 151, 57, 0.5)']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+          <Animated.View style={[styles.passWash, passWashStyle]} pointerEvents="none">
+            <LinearGradient
+              colors={['rgba(100, 100, 100, 0.5)', 'transparent']}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
+
+          {/* Segmented progress bar — flag-colored active segment */}
           {totalImages > 1 && (
-            <Animated.View style={[styles.dotsRow, progressBarStyle]}>
+            <Animated.View style={[styles.segmentBar, progressBarStyle]}>
               {Array.from({ length: totalImages }).map((_, i) => (
                 <View
                   key={i}
                   style={[
-                    styles.dot,
-                    i === currentImageIndex && styles.dotActive,
+                    styles.segment,
+                    i === currentImageIndex && styles.segmentActive,
                   ]}
                 />
               ))}
             </Animated.View>
           )}
-          {profile.verified && (
-            <View style={styles.verifiedChip}>
-              <Ionicons name="checkmark-circle" size={14} color={colors.accent} />
-              <Text style={styles.verifiedText}>Verified</Text>
+
+          {/* Spotlight badge */}
+          {isSpotlight && (
+            <View style={styles.spotlightBadge}>
+              <Ionicons name="star" size={12} color="#FCCD12" />
+              <Text style={styles.spotlightBadgeText}>SPOTLIGHT</Text>
             </View>
           )}
+
+          {/* Bottom gradient for text legibility */}
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.85)', 'rgba(0,0,0,0.95)']}
-            locations={[0, 0.4, 1]}
+            colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.85)']}
+            locations={[0, 0.5, 1]}
             style={styles.bottomGradient}
             pointerEvents="none"
           />
-         <View style={styles.infoOverlay}>
-            {/* Spray splatter decoration */}
-            <View style={styles.infoSplatter} pointerEvents="none">
-              <SpraySplatter size={32} color="#FFFFFF" opacity={0.06} />
+
+          {/* Info overlay — bottom left */}
+          <View style={styles.infoOverlay}>
+            <View style={styles.nameRow}>
+              <Text style={styles.nameText}>
+                {profile.name}, {profile.age}
+              </Text>
+              {profile.verified && (
+                <Ionicons name="checkmark-circle" size={16} color="#FCCD12" />
+              )}
             </View>
-            {profile.distance != null && (
-              <View style={styles.distanceRow}>
-                <Ionicons name="location-sharp" size={13} color="rgba(255,255,255,0.85)" />
-                <Text style={styles.distanceText}>{profile.distance} miles away</Text>
-              </View>
-            )}
-            <Text style={styles.name}>
-              {profile.name}, {profile.age}
-            </Text>
-            {!!statusText && (
-              <View style={styles.statusPill}>
-                <Text style={styles.statusEmoji}>{'\uD83D\uDC4B'}</Text>
-                <Text style={styles.statusText}>{statusText}</Text>
-              </View>
-            )}
-            {profile.currentlyInto?.length > 0 && (
-              <View style={styles.currentlyIntoRow}>
-                <Text style={styles.currentlyIntoLabel}>Currently into</Text>
-                <View style={styles.currentlyIntoPills}>
-                  {profile.currentlyInto.map((item, idx) => (
-                    <View key={idx} style={styles.currentlyIntoPill}>
-                      <Text style={styles.currentlyIntoPillText}>{item}</Text>
-                    </View>
-                  ))}
+            <View style={styles.detailsRow}>
+              {profile.distance != null && (
+                <View style={styles.detailPill}>
+                  <Ionicons name="location-sharp" size={11} color="rgba(255,255,255,0.8)" />
+                  <Text style={styles.detailText}>{profile.distance} mi</Text>
                 </View>
+              )}
+              {!!statusText && (
+                <View style={styles.detailPill}>
+                  <Text style={styles.detailText}>{statusText}</Text>
+                </View>
+              )}
+            </View>
+            {profile.currentlyInto?.length > 0 && (
+              <View style={styles.tagRow}>
+                {profile.currentlyInto.slice(0, 3).map((item, idx) => (
+                  <View key={idx} style={styles.tag}>
+                    <Text style={styles.tagText}>{item}</Text>
+                  </View>
+                ))}
               </View>
             )}
           </View>
@@ -358,6 +367,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderRadius: ms(24),
     overflow: 'hidden',
     ...getSurface('card', colors, isDark),
+    borderWidth: 0,
   },
   imageWrapper: {
     flex: 1,
@@ -382,127 +392,135 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  dotsRow: {
+
+  // Directional color washes
+  likeWash: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
+  passWash: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 2,
+  },
+
+  // Image dots
+  segmentBar: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
     gap: 6,
     paddingTop: hp(14),
     zIndex: 10,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  segment: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: 'rgba(255,255,255,0.35)',
   },
-  dotActive: {
-    width: 22,
-    borderRadius: 4,
+  segmentActive: {
     backgroundColor: '#FFFFFF',
   },
-  verifiedChip: {
-    position: 'absolute',
-    top: 88,
-    right: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    zIndex: 5,
-  },
-  verifiedText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-  },
+
+  // Bottom gradient
   bottomGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: 220,
+    height: 200,
+    zIndex: 3,
   },
-  infoSplatter: {
-    position: 'absolute',
-    right: -4,
-    top: -10,
-  },
+
+  // Info overlay — bottom left, over gradient
   infoOverlay: {
     position: 'absolute',
     left: 16,
     right: 16,
-    bottom: 80,
+    bottom: 90,
     zIndex: 5,
   },
-  distanceRow: {
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  nameText: {
+    fontSize: 28,
+    fontWeight: '900',
+    fontFamily: FontFamily.black,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  detailPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 4,
-  },
-  distanceText: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
-  },
-  name: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    fontFamily: FontFamily.black,
-  },
-  statusPill: {
-    marginTop: 6,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: 4,
   },
-  statusText: {
-    color: '#FFFFFF',
+  detailText: {
     fontSize: 12,
+    color: 'rgba(255,255,255,0.85)',
+    fontFamily: FontFamily.medium,
   },
-  statusEmoji: {
-    fontSize: 14,
-  },
-  currentlyIntoRow: {
-    marginTop: 8,
-  },
-  currentlyIntoLabel: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.6)',
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-    marginBottom: 4,
-  },
-  currentlyIntoPills: {
+  tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
   },
-  currentlyIntoPill: {
+  tag: {
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint25,
+    borderColor: 'rgba(255,255,255,0.15)',
   },
-  currentlyIntoPillText: {
+  tagText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
+  },
+
+  // Spotlight — gold glow border
+  spotlightCard: {
+    borderWidth: 2.5,
+    borderColor: '#FCCD12',
+    shadowColor: '#FCCD12',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  spotlightBadge: {
+    position: 'absolute',
+    top: hp(14) + 14,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    zIndex: 10,
+  },
+  spotlightBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: '#FCCD12',
+    letterSpacing: 1.2,
   },
 });
 

@@ -1,10 +1,9 @@
 // ═══════════════════════════════════════════════════════════
 // AnaJunubin — South Sudan Palette
-// A vibrant blend of the South Sudan flag: Black, Red, Green,
-// White, Blue, and Gold star. Primary accent is warm Sunset
-// Orange; Rose is vibrant Pink for the Likes page. Flag colors
-// (green, blue, gold, red) appear as supporting accents
-// throughout the UI. OLED-optimized dark mode.
+// True flag colors tuned for UI: Red (#CE1126), Green (#009739),
+// Blue (#0047AB), Gold (#FCCD12), Black, White.
+// Vibrant flag red as primary accent. Clean near-black dark mode
+// lets every flag color breathe. Rose pink for Likes page.
 // ═══════════════════════════════════════════════════════════
 
 export const LightPalette = {
@@ -18,10 +17,10 @@ export const LightPalette = {
   creamDark: '#FFF5F0',
   creamLight: '#FFFFFF',
 
-  // ── Accent — Sunset Orange (warm blend of flag red + gold) ──
-  accent: '#E8613C',
-  accentDark: '#D14E2B',
-  accentLight: '#FDE8E2',
+  // ── Accent — South Sudan Flag Red ──
+  accent: '#CE1126',
+  accentDark: '#A80E1F',
+  accentLight: '#FDE8EB',
 
   // ── Rose — Vibrant Pink (Likes page) ──
   rose: '#E84393',
@@ -92,19 +91,19 @@ export const LightPalette = {
   surfaceHover: '#EDEAE7',
   inputBg: '#F3F0ED',
   inputBorder: '#DDD8D4',
-  accentSurface: 'rgba(232, 97, 60, 0.06)',
+  accentSurface: 'rgba(206, 17, 38, 0.06)',
   textSecondary: '#8A8580',
   textTertiary: '#6B6560',
 
-  // ── Accent tints (derived from #E8613C) ──
-  accentTint04: 'rgba(232, 97, 60, 0.04)',
-  accentTint05: 'rgba(232, 97, 60, 0.05)',
-  accentTint06: 'rgba(232, 97, 60, 0.06)',
-  accentTint08: 'rgba(232, 97, 60, 0.08)',
-  accentTint10: 'rgba(232, 97, 60, 0.10)',
-  accentTint12: 'rgba(232, 97, 60, 0.12)',
-  accentTint15: 'rgba(232, 97, 60, 0.15)',
-  accentTint25: 'rgba(232, 97, 60, 0.25)',
+  // ── Accent tints (derived from #CE1126) ──
+  accentTint04: 'rgba(206, 17, 38, 0.04)',
+  accentTint05: 'rgba(206, 17, 38, 0.05)',
+  accentTint06: 'rgba(206, 17, 38, 0.06)',
+  accentTint08: 'rgba(206, 17, 38, 0.08)',
+  accentTint10: 'rgba(206, 17, 38, 0.10)',
+  accentTint12: 'rgba(206, 17, 38, 0.12)',
+  accentTint15: 'rgba(206, 17, 38, 0.15)',
+  accentTint25: 'rgba(206, 17, 38, 0.25)',
 
   // ── Rose tints (derived from #E84393) ──
   roseTint12: 'rgba(232, 67, 147, 0.12)',
@@ -114,66 +113,66 @@ export const LightPalette = {
 
 export const DarkPalette = {
   // ── Text (bright on dark) ──
-  primary: '#F5F0ED',
+  primary: '#F5F3F0',
   primaryDark: '#FFFFFF',
-  primaryLight: '#C7C2BE',
+  primaryLight: '#C5C2BE',
 
-  // ── Surfaces — OLED-optimized ──
-  cream: '#000000',
-  creamDark: '#000000',
-  creamLight: '#0F0D0C',
+  // ── Surfaces — Clean near-black (lets flag colors pop) ──
+  cream: '#0C0C0E',
+  creamDark: '#060608',
+  creamLight: '#141416',
 
-  // ── Accent — Sunset Orange (brightened for dark) ──
-  accent: '#F06D47',
-  accentDark: '#E8613C',
-  accentLight: '#FDE8E2',
+  // ── Accent — Flag Red (brightened for dark) ──
+  accent: '#F04C55',
+  accentDark: '#CE1126',
+  accentLight: '#FDE8EB',
 
   // ── Rose — Vibrant Pink (brightened for dark) ──
   rose: '#F05AA5',
   roseDark: '#FF6DB5',
   roseLight: '#F9A8D4',
 
-  // ── Flag Green ──
-  green: '#00B844',
+  // ── Flag Green (brightened for dark) ──
+  green: '#2CB750',
   greenDark: '#009739',
   greenLight: '#E0F5E8',
 
   // ── Functional ──
-  success: '#00B844',
+  success: '#2CB750',
   warning: '#FCCD12',
   error: '#F05252',
-  info: '#4D8FDB',
+  info: '#5B93DB',
 
   // ── Core neutrals (flipped) ──
-  white: '#000000',
-  black: '#F5F0ED',
+  white: '#0C0C0E',
+  black: '#F5F3F0',
 
-  // ── Neutral grays (inverted, warm-tinted) ──
-  gray: '#8A8580',
-  grayLight: '#2D2926',
-  grayLighter: '#1C1917',
-  grayLightest: '#141210',
-  gray100: '#0F0D0C',
-  gray200: '#141210',
-  gray300: '#1C1917',
-  gray400: '#6B6560',
-  gray500: '#8A8580',
-  gray600: '#C7C2BE',
-  gray700: '#DDD8D4',
-  gray800: '#EDEAE7',
-  gray900: '#F5F0ED',
+  // ── Neutral grays (subtle warm tint) ──
+  gray: '#88868A',
+  grayLight: '#2A282C',
+  grayLighter: '#201E22',
+  grayLightest: '#181618',
+  gray100: '#0C0C0E',
+  gray200: '#141416',
+  gray300: '#201E22',
+  gray400: '#5C5A5E',
+  gray500: '#88868A',
+  gray600: '#B8B6BA',
+  gray700: '#D5D3D7',
+  gray800: '#EBEAEC',
+  gray900: '#F5F3F0',
 
   // ── Overlays ──
-  overlay: 'rgba(0, 0, 0, 0.80)',
-  overlayLight: 'rgba(0, 0, 0, 0.45)',
+  overlay: 'rgba(6, 6, 8, 0.88)',
+  overlayLight: 'rgba(6, 6, 8, 0.50)',
 
   // ── Cards ──
-  cardBg: '#0F0D0C',
-  cardBorder: '#1C1917',
+  cardBg: '#141416',
+  cardBorder: '#2A282C',
 
   // ── Tab bar ──
   tabActive: '#FFFFFF',
-  tabInactive: '#8A8580',
+  tabInactive: '#88868A',
 
   // ── Gold — South Sudan Star Gold ──
   gold: '#FCCD12',
@@ -181,7 +180,7 @@ export const DarkPalette = {
   goldLight: '#FFF7CC',
 
   // ── Royal — South Sudan Flag Blue ──
-  royal: '#4D8FDB',
+  royal: '#5B93DB',
   royalDark: '#3575C2',
   royalLight: '#A3C4F3',
 
@@ -189,27 +188,27 @@ export const DarkPalette = {
   flagRed: '#F05252',
 
   // ── Separator ──
-  separator: '#1C1917',
+  separator: '#201E22',
 
   // ── Semantic surface tokens ──
-  surface: '#0F0D0C',
-  surfaceMuted: '#000000',
-  surfaceHover: '#141210',
-  inputBg: '#1C1917',
-  inputBorder: '#2D2926',
-  accentSurface: 'rgba(240, 109, 71, 0.10)',
-  textSecondary: '#8A8580',
-  textTertiary: '#6B6560',
+  surface: '#141416',
+  surfaceMuted: '#0C0C0E',
+  surfaceHover: '#201E22',
+  inputBg: '#201E22',
+  inputBorder: '#2A282C',
+  accentSurface: 'rgba(240, 76, 85, 0.10)',
+  textSecondary: '#88868A',
+  textTertiary: '#5C5A5E',
 
-  // ── Accent tints (derived from #F06D47) ──
-  accentTint04: 'rgba(240, 109, 71, 0.04)',
-  accentTint05: 'rgba(240, 109, 71, 0.05)',
-  accentTint06: 'rgba(240, 109, 71, 0.06)',
-  accentTint08: 'rgba(240, 109, 71, 0.08)',
-  accentTint10: 'rgba(240, 109, 71, 0.10)',
-  accentTint12: 'rgba(240, 109, 71, 0.12)',
-  accentTint15: 'rgba(240, 109, 71, 0.15)',
-  accentTint25: 'rgba(240, 109, 71, 0.25)',
+  // ── Accent tints (derived from #F04C55) ──
+  accentTint04: 'rgba(240, 76, 85, 0.04)',
+  accentTint05: 'rgba(240, 76, 85, 0.05)',
+  accentTint06: 'rgba(240, 76, 85, 0.06)',
+  accentTint08: 'rgba(240, 76, 85, 0.08)',
+  accentTint10: 'rgba(240, 76, 85, 0.10)',
+  accentTint12: 'rgba(240, 76, 85, 0.12)',
+  accentTint15: 'rgba(240, 76, 85, 0.15)',
+  accentTint25: 'rgba(240, 76, 85, 0.25)',
 
   // ── Rose tints (derived from #F05AA5) ──
   roseTint12: 'rgba(240, 90, 165, 0.12)',

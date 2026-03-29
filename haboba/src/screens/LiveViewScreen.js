@@ -372,7 +372,7 @@ const s = StyleSheet.create({
     marginBottom: 6, alignSelf: 'flex-start', maxWidth: '90%',
   },
   commentUser: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: '#F97316', marginBottom: 1 },
-  commentUserMe: { color: '#E8613C' },
+  commentUserMe: { color: '#CE1126' },
   commentText: { fontSize: 13, fontFamily: FontFamily.regular, color: '#FFF', lineHeight: 18 },
 
   // Bottom bar

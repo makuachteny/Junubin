@@ -21,17 +21,18 @@ describe('ProfileCard', () => {
   });
 
   it('renders verified badge when verified', () => {
-    const { getByText } = render(
+    const { toJSON } = render(
       <ProfileCard profile={profile} onSwipe={jest.fn()} />
     );
-    expect(getByText('Verified')).toBeTruthy();
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain('checkmark-circle');
   });
 
   it('renders distance text', () => {
     const { getByText } = render(
       <ProfileCard profile={profile} onSwipe={jest.fn()} />
     );
-    expect(getByText('4 miles away')).toBeTruthy();
+    expect(getByText('4 mi')).toBeTruthy();
   });
 
   it('exposes swipe method through ref', () => {

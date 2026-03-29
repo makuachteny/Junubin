@@ -8,8 +8,10 @@ import {
   Alert,
   Animated,
   Easing,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
@@ -84,51 +86,49 @@ export default function ProfileScreen({ navigation }) {
         <View style={{ width: 28 }} />
       </View>
 
+      {/* Hero banner */}
+      <View style={styles.heroSection}>
+        <Image source={imageSource(displayUser.images?.[0])} style={styles.heroImage} resizeMode="cover" />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.65)']}
+          style={styles.heroGradient}
+        />
+        <Text style={styles.heroName}>{displayUser.name}, {displayUser.age}</Text>
+
+        {/* Edit button */}
+        <TouchableOpacity style={[styles.editBtn, styles.editBtnLeft]} onPress={handleEdit}>
+          <Ionicons name="pencil" size={16} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* Settings button */}
+        <TouchableOpacity
+          style={[styles.editBtn, styles.editBtnRight]}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Ionicons name="settings" size={16} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
       {/* Upper content — flex fills available space */}
       <View style={styles.content}>
-        {/* Profile photo with border ring */}
-        <View style={styles.photoSection}>
-          <View style={styles.photoBorderContainer}>
-            <Image source={imageSource(displayUser.images?.[0])} style={styles.profilePhoto} />
-          </View>
-
-          {/* Edit button */}
-          <TouchableOpacity style={[styles.editBtn, styles.editBtnLeft]} onPress={handleEdit}>
-            <Ionicons name="pencil" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          {/* Settings button */}
-          <TouchableOpacity
-            style={[styles.editBtn, styles.editBtnRight]}
-            onPress={() => navigation.navigate('Settings')}
-          >
-            <Ionicons name="settings" size={16} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Name */}
-        <Text style={styles.name}>{displayUser.name}, {displayUser.age}</Text>
-
         {/* Follow counts */}
         <View style={styles.followRow}>
           <TouchableOpacity
-            style={styles.followCountBtn}
+            style={styles.followCard}
             onPress={() => navigation.navigate('FollowList', { userId: displayUser.id, userName: displayUser.name, initialTab: 'Followers' })}
           >
             <Text style={styles.followCountNum}>{followCounts.followers}</Text>
             <Text style={styles.followCountLabel}>Followers</Text>
           </TouchableOpacity>
-          <View style={styles.followDivider} />
           <TouchableOpacity
-            style={styles.followCountBtn}
+            style={styles.followCard}
             onPress={() => navigation.navigate('FollowList', { userId: displayUser.id, userName: displayUser.name, initialTab: 'Following' })}
           >
             <Text style={styles.followCountNum}>{followCounts.following}</Text>
             <Text style={styles.followCountLabel}>Following</Text>
           </TouchableOpacity>
-          <View style={styles.followDivider} />
           <TouchableOpacity
-            style={styles.followCountBtn}
+            style={styles.followCard}
             onPress={() => navigation.navigate('FollowList', { userId: displayUser.id, userName: displayUser.name, initialTab: 'Friends' })}
           >
             <Text style={styles.followCountNum}>{followCounts.followers > 0 ? Math.min(followCounts.followers, followCounts.following) : 0}</Text>
@@ -151,16 +151,30 @@ export default function ProfileScreen({ navigation }) {
 
         {/* Stats row */}
         <View style={styles.statsRow}>
-          {statItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.statCard}
-              onPress={() => item.screen && navigation.navigate(item.screen)}
-            >
-              <Ionicons name={item.icon} size={20} color={item.iconColor} />
-              <Text style={styles.statText}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
+          {statItems.map((item, index) => {
+            const gradientColors = index === 0
+              ? [colors.flagRed, '#E8102A']
+              : index === 1
+              ? [colors.gold, colors.goldDark]
+              : [colors.green, colors.greenDark];
+            return (
+              <TouchableOpacity
+                key={index}
+                style={{ flex: 1 }}
+                onPress={() => item.screen && navigation.navigate(item.screen)}
+              >
+                <LinearGradient
+                  colors={gradientColors}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.statCard}
+                >
+                  <Ionicons name={item.icon} size={20} color="#FFFFFF" />
+                  <Text style={styles.statText}>{item.label}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* Sticker button */}
@@ -209,38 +223,37 @@ const getStyles = (colors) => StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: colors.white,
   },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingTop: 16,
-    paddingHorizontal: 16,
-    backgroundColor: colors.white,
-  },
-  photoSection: {
+  heroSection: {
+    width: '100%',
+    height: 200,
     position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+    overflow: 'hidden',
   },
-  photoBorderContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 3,
-    borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profilePhoto: {
-    width: 134,
-    height: 134,
-    borderRadius: 67,
+  heroImage: {
+    width: '100%',
+    height: 280,
+    top: -40,
     backgroundColor: colors.gray300,
+  },
+  heroGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 100,
+  },
+  heroName: {
+    position: 'absolute',
+    bottom: 48,
+    left: 16,
+    ...Typography.h2,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   editBtn: {
     position: 'absolute',
@@ -257,31 +270,36 @@ const getStyles = (colors) => StyleSheet.create({
     shadowRadius: 6,
   },
   editBtnLeft: {
-    bottom: -2,
-    left: -6,
+    bottom: 10,
+    left: 16,
   },
   editBtnRight: {
-    bottom: -2,
-    right: -6,
+    bottom: 10,
+    right: 16,
   },
-  name: {
-    ...Typography.h2,
-    color: colors.black,
-    marginTop: 12,
-    letterSpacing: 0.3,
+  content: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    backgroundColor: colors.white,
   },
   followRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 0,
-    marginTop: 10,
+    gap: 10,
+    marginTop: 0,
     marginBottom: 2,
   },
-  followCountBtn: {
+  followCard: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 4,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   followCountNum: {
     fontSize: 18,
@@ -290,15 +308,10 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
   },
   followCountLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: FontFamily.medium,
     color: colors.gray400,
     marginTop: 1,
-  },
-  followDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: colors.gray200,
   },
   verifyBtn: {
     flexDirection: 'row',
@@ -324,21 +337,18 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 12,
-    backgroundColor: colors.cardBg,
+    borderRadius: 16,
     gap: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
   statText: {
     ...Typography.captionBold,
     fontSize: 11,
-    color: colors.black,
+    color: '#FFFFFF',
     textAlign: 'center',
     fontWeight: '700',
     fontFamily: FontFamily.bold,

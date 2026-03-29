@@ -17,7 +17,7 @@ export default function InterstitialAd({ visible, onClose, onUpgrade, colors }) 
           </TouchableOpacity>
 
           <View style={[styles.adIcon, { backgroundColor: colors?.accentTint10 || 'rgba(232,97,60,0.1)' }]}>
-            <Ionicons name="megaphone" size={40} color={colors?.accent || '#E8613C'} />
+            <Ionicons name="megaphone" size={40} color={colors?.accent || '#CE1126'} />
           </View>
 
           <Text style={[styles.title, { color: colors?.black }]}>Enjoying JuNubin?</Text>

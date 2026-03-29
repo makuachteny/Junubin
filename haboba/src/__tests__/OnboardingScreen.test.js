@@ -54,8 +54,8 @@ jest.mock('../theme', () => ({
   },
   useTheme: () => ({
     colors: {
-      accent: '#E8613C',
-      accentDark: '#D14E2B',
+      accent: '#CE1126',
+      accentDark: '#A80E1F',
       cream: '#FFFFFF',
     },
     isDark: false,
@@ -106,28 +106,6 @@ describe('OnboardingScreen', () => {
     expect(heroText).toBeTruthy();
   });
 
-  it('displays "OUR STORY" eyebrow text', () => {
-    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('OUR STORY');
-  });
-
-  it('renders the South Sudan flag colors', () => {
-    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('#CE1126'); // red
-    expect(tree).toContain('#009739'); // green
-    expect(tree).toContain('#0047AB'); // blue
-  });
-
-  it('renders cultural pill badges (Dating, Social, Diaspora)', () => {
-    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('Dating');
-    expect(tree).toContain('Social');
-    expect(tree).toContain('Diaspora');
-  });
-
   it('shows diaspora cities', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
@@ -148,19 +126,17 @@ describe('OnboardingScreen', () => {
     expect(mockSetDevBypass).toHaveBeenCalledWith(true);
   });
 
-  it('renders 3 progress dots', () => {
+  it('renders 2 progress dots', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    // 3 dots rendered (one active, two inactive)
     const dotMatches = tree.match(/borderRadius.*?3/g);
     expect(dotMatches).toBeTruthy();
-    expect(dotMatches.length).toBeGreaterThanOrEqual(3);
+    expect(dotMatches.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('renders accent color elements', () => {
+  it('renders South Sudan flag accent colors', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    // Flag accent colors used in the screen
     expect(tree).toContain('#009739');
     expect(tree).toContain('#CE1126');
   });
@@ -175,13 +151,5 @@ describe('OnboardingScreen', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
     expect(tree).toContain('home');
-  });
-
-  it('renders South Sudan flag colors on page 2', () => {
-    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
-    const tree = JSON.stringify(toJSON());
-    expect(tree).toContain('#CE1126');
-    expect(tree).toContain('#009739');
-    expect(tree).toContain('#0047AB');
   });
 });

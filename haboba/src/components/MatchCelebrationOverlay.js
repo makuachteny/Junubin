@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     height: PHOTO_SIZE + 6,
     borderRadius: (PHOTO_SIZE + 6) / 2,
     borderWidth: 3,
-    borderColor: '#E8613C',
+    borderColor: '#CE1126',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     flexDirection: 'row',
-    backgroundColor: '#E8613C',
+    backgroundColor: '#CE1126',
     borderRadius: 28,
     paddingVertical: 16,
     alignItems: 'center',
