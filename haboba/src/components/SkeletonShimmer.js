@@ -51,14 +51,14 @@ export default function SkeletonShimmer({
           width,
           height,
           borderRadius,
-          backgroundColor: colors.greenTint08,
+          backgroundColor: '#F4F4F6',
         },
         style,
       ]}
     >
       <Animated.View style={[StyleSheet.absoluteFill, shimmerStyle]}>
         <LinearGradient
-          colors={[colors.greenTint08, colors.greenTint15, colors.greenTint08]}
+          colors={['#F4F4F6', '#E8E8EC', '#F4F4F6']}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={StyleSheet.absoluteFill}

@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import PaymentService from './PaymentService';
 import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { supabase } from '../config/supabase';
-import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
+import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
 
 const STORAGE_KEY = '@haboba_subscription';
 
@@ -37,7 +37,7 @@ export function SubscriptionProvider({ children }) {
       return { ...next, promoTier: null, promoEndsAt: null };
     }
     return next;
-  }, [syncTierToBackend]);
+  }, []);
 
   const getEffectiveTier = useCallback((baseTier, promoTier, promoEndsAt) => {
     const promoActive = promoTier && promoEndsAt && new Date(promoEndsAt).getTime() > Date.now();
@@ -446,6 +446,7 @@ export function SubscriptionProvider({ children }) {
     hasUnlimitedLikes: () => hasUnlimitedLikes(effectiveTier),
     canUseAdvancedFilters: () => canUseAdvancedFilters(effectiveTier),
     canUseDiasporaConnect: () => canUseDiasporaConnect(effectiveTier),
+    canUseIncognito: () => canUseIncognitoFn(effectiveTier),
   }), [state, purchaseInProgress, offerings, effectiveTier]);
 
   const actionsValue = useMemo(() => ({

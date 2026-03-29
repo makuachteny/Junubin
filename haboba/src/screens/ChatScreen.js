@@ -1288,7 +1288,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   headerStatus: {
     ...Typography.caption,
-    color: colors.green,
+    color: colors.gray500,
     marginTop: 1,
   },
   headerActions: {
@@ -1390,7 +1390,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: '#F4F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1401,7 +1401,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     flex: 1,
   },
   missionsBadge: {
-    backgroundColor: colors.greenTint10,
+    backgroundColor: '#E8E8EC',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -1562,7 +1562,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   funChoiceActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: '#F4F4F6',
   },
   funChoiceEmoji: {
     fontSize: isCompact ? 16 : 18,
@@ -1712,7 +1712,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     borderRadius: prefs?.largerTouchTargets ? 21 : 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.greenTint08,
+    backgroundColor: '#F4F4F6',
     marginBottom: 2,
   },
   actionRow: {
@@ -1736,9 +1736,9 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.greenTint08,
+    backgroundColor: '#F4F4F6',
     borderWidth: 1,
-    borderColor: colors.greenTint12,
+    borderColor: '#ECECF0',
   },
   actionIconLabel: {
     ...Typography.caption,
@@ -1777,7 +1777,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   stickerChoiceActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.greenTint10,
+    backgroundColor: '#E8E8EC',
   },
   stickerChoiceText: {
     fontSize: 20,

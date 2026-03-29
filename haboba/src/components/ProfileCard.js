@@ -199,17 +199,6 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
     return { opacity: Math.max(opacity, 0) };
   });
 
-  const progressBarStyle = useAnimatedStyle(() => {
-    'worklet';
-    const opacity = interpolate(
-      Math.abs(translateX.value),
-      [0, 40],
-      [1, 0],
-      Extrapolation.CLAMP,
-    );
-    return { opacity };
-  });
-
   const triggerSwipe = useCallback((direction) => {
     const targetX = direction === 'right' ? EXIT_X : -EXIT_X;
     const kickVelocity = direction === 'right' ? 1200 : -1200;
@@ -290,20 +279,6 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
             />
           </Animated.View>
 
-          {/* Segmented progress bar — flag-colored active segment */}
-          {totalImages > 1 && (
-            <Animated.View style={[styles.segmentBar, progressBarStyle]}>
-              {Array.from({ length: totalImages }).map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.segment,
-                    i === currentImageIndex && styles.segmentActive,
-                  ]}
-                />
-              ))}
-            </Animated.View>
-          )}
 
           {/* Spotlight badge */}
           {isSpotlight && (
@@ -401,24 +376,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   passWash: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 2,
-  },
-
-  // Image dots
-  segmentBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 6,
-    paddingTop: hp(14),
-    zIndex: 10,
-  },
-  segment: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-  },
-  segmentActive: {
-    backgroundColor: '#FFFFFF',
   },
 
   // Bottom gradient

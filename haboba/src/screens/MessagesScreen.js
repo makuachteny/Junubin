@@ -409,7 +409,7 @@ export default function MessagesScreen({ navigation }) {
               }}
               activeOpacity={0.8}
             >
-              <Ionicons name="add-circle-outline" size={20} color={colors.green} />
+              <Ionicons name="add-circle-outline" size={20} color={colors.black} />
               <View style={styles.sheetTextWrap}>
                 <Text style={styles.sheetRowTitle}>Add Story</Text>
                 <Text style={styles.sheetRowSub}>Share a moment with your followers</Text>
@@ -470,7 +470,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.green,
+    borderColor: colors.gray300,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
@@ -491,8 +491,8 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderColor: colors.separator,
   },
   categoryChipActive: {
-    backgroundColor: colors.green,
-    borderColor: colors.green,
+    backgroundColor: colors.black,
+    borderColor: colors.black,
   },
   categoryChipLikes: {
     backgroundColor: colors.accent,
@@ -502,10 +502,11 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
-    color: colors.gray500,
+    color: isDark ? 'rgba(255,255,255,0.6)' : colors.gray500,
   },
   categoryChipTextActive: {
-    color: '#FFFFFF',
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
+    fontWeight: '700',
   },
 
   // ─── Search Bar ───
@@ -625,12 +626,12 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.green,
-    backgroundColor: colors.greenLight,
+    borderColor: colors.gray300,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6',
   },
   unreadBadgeText: {
     ...Typography.captionBold,
-    color: colors.green,
+    color: colors.black,
     fontSize: 10,
     letterSpacing: 0.2,
   },

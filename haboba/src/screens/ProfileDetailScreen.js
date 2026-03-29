@@ -1,11 +1,10 @@
 // AnaJunubin — Profile Detail Screen
 
-import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   Dimensions,
   Image,
   TouchableOpacity,
@@ -14,13 +13,12 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiHeart, GraffitiSparkles, GraffitiStickerIcon, GraffitiShield } from '../components/icons';
-import { SpraySplatter } from '../components/GraffitiAccents';
+import { GraffitiHeart, GraffitiSparkles } from '../components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, FontFamily, getShadow } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription } from '../payments';
+import { useSubscription, canUseWhispers } from '../payments';
 import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
 import AdBanner from '../components/AdBanner';
@@ -36,7 +34,7 @@ const PhotoItem = ({ uri, name, width }) => {
   if (err || !uri) {
     return (
       <View style={{ width, height: PHOTO_H, backgroundColor: colors.gray300, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontSize: 80, fontWeight: '900', fontFamily: FontFamily.black, color: colors.green, opacity: 0.4 }}>
+        <Text style={{ fontSize: 80, fontWeight: '900', fontFamily: FontFamily.black, color: colors.gray400, opacity: 0.4 }}>
           {name ? name.charAt(0).toUpperCase() : '?'}
         </Text>
       </View>
@@ -55,19 +53,25 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const profile = route.params?.profile || {};
   const fromLikes = route.params?.fromLikes || false;
-  const [photoIdx, setPhotoIdx] = useState(0);
-  const { consumeSuperLike, superLikes, hasTier } = useSubscription();
+  const { consumeSuperLike, superLikes, hasTier, whispers, consumeWhisper, tier } = useSubscription();
   const { session } = useAuth();
   const { isFollowing, isFriend, counts: followCounts, toggleFollow } = useFollow(profile.id);
 
-  const handlePass = () => { if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass').catch((e) => { if (__DEV__) console.warn('Pass swipe failed:', e); }); navigation.goBack(); };
+  const goBackWithSwipe = (direction) => {
+    navigation.navigate({ name: 'Main', params: { screen: 'Home', params: { swipeAction: direction, swipedProfileId: profile.id } }, merge: true });
+  };
+
+  const handlePass = () => {
+    if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass').catch((e) => { if (__DEV__) console.warn('Pass swipe failed:', e); });
+    goBackWithSwipe('left');
+  };
   const handleLike = () => {
     if (session && profile.id) {
       discoverService.recordSwipe(profile.id, 'like').then((r) => {
         if (r?.match) Alert.alert('It\'s a Match!', `You and ${profile.name} liked each other!`);
       }).catch((e) => { if (__DEV__) console.warn('Like swipe failed:', e); });
     }
-    navigation.goBack();
+    goBackWithSwipe('right');
   };
   const handleMatchAndChat = () => {
     if (session && profile.id) {
@@ -81,11 +85,31 @@ const ProfileDetailScreen = ({ navigation, route }) => {
       navigation.replace('Chat', { match: profile });
     }
   };
+  const handleWhisper = () => {
+    if (!canUseWhispers(tier || 'free')) {
+      Alert.alert('JuNubin+ Feature', 'Whispers let you message before matching. Upgrade to JuNubin+ to unlock.', [
+        { text: 'See Plans', onPress: () => navigation.navigate('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    if (whispers <= 0) {
+      Alert.alert('No Whispers', 'You\'re out of whispers!', [
+        { text: 'Get More', onPress: () => navigation.navigate('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+      return;
+    }
+    consumeWhisper();
+    navigation.navigate('Chat', { match: profile, whisper: true });
+  };
+
   const handleSuperLike = () => {
     if (superLikes <= 0) { Alert.alert('No Super Likes', 'You\'re out of Super Likes!', [{ text: 'Get More', onPress: () => { navigation.goBack(); navigation.navigate('Boost'); } }, { text: 'Cancel', style: 'cancel' }]); return; }
-    consumeSuperLike();
+    const consumed = consumeSuperLike();
+    if (consumed === false) return;
     if (session && profile.id) discoverService.recordSwipe(profile.id, 'super_like').catch((e) => { if (__DEV__) console.warn('Super like failed:', e); });
-    navigation.goBack();
+    goBackWithSwipe('right');
   };
 
   // Section entrance animations
@@ -109,8 +133,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
 
   const pQ = promptQuestion || 'The perfect date would be';
   const pA = promptAnswer || bio || about || 'Going on a late drive and getting food while we talk.';
-  const gallery = (() => { const src = (images || []).filter(Boolean); if (!src.length) return []; const f = [...src]; let i = 0; while (f.length < 3) { f.push(src[i % src.length]); i++; } return f; })();
-  const onScroll = useCallback((e) => setPhotoIdx(Math.round(e.nativeEvent.contentOffset.x / SW)), []);
+  const gallery = (() => { const src = (images || []).filter(Boolean); if (!src.length) return []; const f = [...src]; let i = 0; while (f.length < 6) { f.push(src[i % src.length]); i++; } return f; })();
 
   // Quick facts — compact inline items
   const quickFacts = [
@@ -120,22 +143,26 @@ const ProfileDetailScreen = ({ navigation, route }) => {
     distance && `${distance} mi`,
   ].filter(Boolean);
 
+  // Inline photo component — card-style with rounded corners
+  const InlinePhoto = ({ index }) => {
+    if (!gallery[index]) return null;
+    return (
+      <View style={s.inlinePhotoCard}>
+        <PhotoItem uri={gallery[index]} name={name} width={SW - 36} />
+      </View>
+    );
+  };
+
   return (
     <View style={s.root}>
       <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} bounces={false}>
-        {/* ── Photo with gradient bleed ── */}
+        {/* ── Photo 1 — Hero with name overlay ── */}
         <View style={s.photoWrap}>
-          <FlatList data={gallery} horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={16} onScroll={onScroll} keyExtractor={(_, i) => `p${i}`} maxToRenderPerBatch={3} renderItem={({ item }) => <PhotoItem uri={item} name={name} width={SW} />} />
+          <PhotoItem uri={gallery[0]} name={name} width={SW} />
 
           <TouchableOpacity style={[s.backBtn, { top: insets.top + 10 }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={26} color="#FFF" />
           </TouchableOpacity>
-
-          {gallery.length > 1 && (
-            <View style={s.dots}>
-              {gallery.map((_, i) => <View key={i} style={[s.dot, i === photoIdx ? s.dotOn : s.dotOff]} />)}
-            </View>
-          )}
 
           {/* Gradient that bleeds into the info area */}
           <LinearGradient
@@ -148,7 +175,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           <View style={s.nameOverlay}>
             <View style={s.nameRow}>
               <Text style={s.nameText}>{name}, {age}</Text>
-              {verified && <Ionicons name="checkmark-circle" size={20} color={colors.green} style={{ marginLeft: 5 }} />}
+              {verified && <Ionicons name="checkmark-circle" size={20} color={colors.black} style={{ marginLeft: 5 }} />}
             </View>
             {(job || school || education) && (
               <Text style={s.subtitleText}>
@@ -179,8 +206,8 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               style={[
                 s.followActionBtn,
                 (isFollowing || isFriend)
-                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#CE1126' : colors.green }
-                  : { backgroundColor: colors.green },
+                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#CE1126' : colors.black }
+                  : { backgroundColor: colors.black },
               ]}
               onPress={toggleFollow}
               activeOpacity={0.8}
@@ -188,7 +215,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               {isFriend && <Ionicons name="people" size={14} color="#CE1126" style={{ marginRight: 4 }} />}
               <Text style={[
                 s.followActionText,
-                { color: (isFollowing || isFriend) ? (isFriend ? '#CE1126' : colors.green) : '#FFF' },
+                { color: (isFollowing || isFriend) ? (isFriend ? '#CE1126' : colors.black) : (isDark ? '#1A1A1A' : '#FFF') },
               ]}>
                 {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
               </Text>
@@ -209,15 +236,14 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               {ethnicity ? (() => {
                 const eth = getEthnicIdentity(ethnicity);
                 return (
-                  <View style={[s.factPill, { borderColor: eth.color, backgroundColor: eth.tint }]}>
+                  <View style={s.factPill}>
                     <Text style={{ fontSize: 14 }}>{eth.emoji}</Text>
-                    <Text style={[s.factText, { color: eth.color }]}>{eth.label}</Text>
+                    <Text style={s.factText}>{eth.label}</Text>
                   </View>
                 );
               })() : null}
               {(intention || lookingFor) ? (
                 <View style={[s.factPill, s.factFilled]}>
-                  <GraffitiHeart size={12} color="#FFF" filled />
                   <Text style={s.factFilledText}>{intention || lookingFor}</Text>
                 </View>
               ) : null}
@@ -229,9 +255,30 @@ const ProfileDetailScreen = ({ navigation, route }) => {
             </View>
           </Animated.View>
 
-          {/* Tribal divider accent */}
+          {/* ── Identity — inline pills ── */}
+          {stickers.length > 0 && (
+            <Animated.View style={{
+              opacity: factsAnim,
+              transform: [{ translateY: factsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            }}>
+              <View style={s.identitySection}>
+                <View style={s.pillRow}>
+                  {stickers.map((st, i) => (
+                    <View key={i} style={s.identityPill}>
+                      <Text style={s.identityEmoji}>{st.emoji}</Text>
+                      <Text style={s.identityLabel}>{st.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </Animated.View>
+          )}
+        </View>
 
+        {/* ── Photo 2 ── */}
+        <InlinePhoto index={1} />
 
+        <View style={s.sectionBody}>
           {/* ── Prompt — the hero card ── */}
           <Animated.View style={{
             opacity: promptAnim,
@@ -242,16 +289,27 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               <Text style={s.promptA}>{pA}</Text>
             </View>
           </Animated.View>
+        </View>
 
+        {/* ── Photo 3 ── */}
+        <InlinePhoto index={2} />
+
+        <View style={s.sectionBody}>
           {/* ── About ── */}
           {(about || bio) ? (
             <Animated.View style={{ opacity: aboutAnim }}>
               <View style={s.aboutSection}>
+                <Text style={s.aboutLabel}>About</Text>
                 <Text style={s.aboutText}>{about || bio}</Text>
               </View>
             </Animated.View>
           ) : null}
+        </View>
 
+        {/* ── Photo 4 ── */}
+        <InlinePhoto index={3} />
+
+        <View style={s.sectionBody}>
           {/* ── Interests ── */}
           {interests.length > 0 && (
             <Animated.View style={{
@@ -270,7 +328,12 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               </View>
             </Animated.View>
           )}
+        </View>
 
+        {/* ── Photo 5 ── */}
+        <InlinePhoto index={4} />
+
+        <View style={s.sectionBody}>
           {/* ── Currently Into ── */}
           {currentlyInto?.length > 0 && (
             <Animated.View style={{
@@ -289,43 +352,12 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               </View>
             </Animated.View>
           )}
+        </View>
 
-          {/* ── Identity — large emoji circles ── */}
-          {stickers.length > 0 && (
-            <Animated.View style={{
-              opacity: sectionsAnim,
-              transform: [{ translateY: sectionsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
-            }}>
-              <View style={s.section}>
-                <View style={s.sectionHeaderRow}>
-                  <GraffitiShield size={16} color={colors.green} filled />
-                  <Text style={s.sectionLabelInline}>Identity</Text>
-                </View>
-                <View style={s.stickerRow}>
-                  {stickers.map((st, i) => {
-                    const eth = getEthnicIdentity(st.label);
-                    const isEthnic = ['Dinka','Nuer','Shilluk','Bari','Zande','Acholi','Murle','Toposa','Lotuko','Madi','Luo'].includes(st.label);
-                    const ringColor = isEthnic ? eth.color : colors.greenTint25;
-                    const bgColor = isEthnic ? eth.tint : (isDark ? 'rgba(255,255,255,0.06)' : colors.greenTint08);
-                    const iconColor = isEthnic ? eth.color : colors.green;
-                    return (
-                      <View key={i} style={s.stickerItem}>
-                        <View style={[s.stickerCircle, { borderColor: ringColor, backgroundColor: bgColor }]}>
-                          {GraffitiStickerIcon.has(st.emoji) ? (
-                            <GraffitiStickerIcon emoji={st.emoji} size={26} color={iconColor} />
-                          ) : (
-                            <Text style={s.stickerEmoji}>{st.emoji}</Text>
-                          )}
-                        </View>
-                        <Text style={[s.stickerLabel, isEthnic && { color: eth.color }]}>{st.label}</Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
-            </Animated.View>
-          )}
+        {/* ── Photo 6 ── */}
+        <InlinePhoto index={5} />
 
+        <View style={s.sectionBody}>
           {/* ── Ad Banner ── */}
           <AdBanner colors={colors} style={{ marginBottom: 12 }} />
 
@@ -364,10 +396,12 @@ const ProfileDetailScreen = ({ navigation, route }) => {
             </TouchableOpacity>
             <TouchableOpacity style={s.likeBtn} onPress={handleLike} activeOpacity={0.8}>
               <GraffitiHeart size={22} color="#FFF" filled />
-              <Text style={s.likeBtnText}>Like</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.superBtn} onPress={handleSuperLike} activeOpacity={0.7}>
-              <GraffitiSparkles size={22} color={colors.green} filled />
+              <GraffitiSparkles size={22} color={colors.black} filled />
+            </TouchableOpacity>
+            <TouchableOpacity style={s.whisperBtn} onPress={handleWhisper} activeOpacity={0.7}>
+              <Ionicons name="chatbubble-ellipses" size={20} color={colors.accent} />
             </TouchableOpacity>
             <TouchableOpacity
               style={s.challengeBtn}
@@ -398,11 +432,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // ── Photo ──
   photoWrap: { width: SW, height: PHOTO_H, backgroundColor: colors.gray200 },
   backBtn: { position: 'absolute', left: 14, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  dots: { position: 'absolute', bottom: 70, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6, zIndex: 10 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotOn: { backgroundColor: '#FFF', shadowColor: '#FFF', shadowOpacity: 0.8, shadowRadius: 4 },
-  dotOff: { backgroundColor: 'rgba(255,255,255,0.4)' },
   photoGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 160 },
+  inlinePhotoCard: { marginHorizontal: 18, borderRadius: 20, overflow: 'hidden', marginVertical: 0, height: (SW - 36) * 1.25, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 },
   nameOverlay: { position: 'absolute', bottom: 16, left: 20, right: 20, zIndex: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
   nameText: { fontSize: 30, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
@@ -410,6 +441,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Body ──
   body: { paddingHorizontal: 18, marginTop: -4 },
+  sectionBody: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 4 },
 
   // ── Follow bar ──
   followBar: {
@@ -425,54 +457,49 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   followActionText: { fontSize: 14, fontWeight: '700', fontFamily: FontFamily.bold },
 
   // ── Quick facts ──
-  factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, marginTop: 8 },
-  factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.white, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.gray200 },
+  factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14, marginTop: 8 },
+  factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   factText: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
-  factAccent: { borderColor: colors.green, backgroundColor: isDark ? colors.greenTint10 : colors.greenTint06 },
-  factFilled: { backgroundColor: colors.green, borderColor: colors.green },
-  factFilledText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
+  factFilled: { backgroundColor: colors.black },
+  factFilledText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: isDark ? '#1A1A1A' : '#FFF' },
 
   // ── Prompt — hero card with left accent stripe ──
   promptCard: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#FAFAFA',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F6F6F8',
     borderRadius: 20,
-    padding: 22,
-    paddingLeft: 20,
-    marginBottom: 22,
+    padding: 24,
+    paddingLeft: 22,
+    marginBottom: 4,
     borderLeftWidth: 4,
-    borderLeftColor: colors.green,
-    borderWidth: 0.5,
-    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    borderLeftColor: colors.black,
   },
-  promptQ: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.green, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 12 },
-  promptA: { fontSize: 20, lineHeight: 30, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.black },
+  promptQ: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.gray500, letterSpacing: 1.2, textTransform: 'uppercase', marginBottom: 14 },
+  promptA: { fontSize: 21, lineHeight: 32, fontWeight: '700', fontFamily: FontFamily.bold, color: colors.black },
 
   // ── About ──
-  aboutSection: { marginBottom: 22, paddingLeft: 2 },
-  aboutText: { fontSize: 15, lineHeight: 25, color: isDark ? colors.gray600 : colors.gray700, fontFamily: FontFamily.regular },
+  aboutSection: { marginBottom: 4, paddingLeft: 2 },
+  aboutLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.gray500, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 10 },
+  aboutText: { fontSize: 16, lineHeight: 26, color: isDark ? colors.gray600 : colors.gray700, fontFamily: FontFamily.regular },
+
+  // ── Identity — inline pills ──
+  identitySection: { marginBottom: 6 },
+  identityPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
+  identityEmoji: { fontSize: 16 },
+  identityLabel: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
 
   // ── Sections ──
-  section: { marginBottom: 22 },
-  sectionLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.green, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
-  sectionLabelInline: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.green, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 0, lineHeight: 16 },
+  section: { marginBottom: 4 },
+  sectionLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.gray500, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 12 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
   interestPill: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F3F3F5',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6',
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
   },
   interestText: { color: colors.black, fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
 
-  intoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? 'rgba(0,151,57,0.15)' : 'rgba(0,151,57,0.08)', borderWidth: 1, borderColor: isDark ? 'rgba(0,151,57,0.3)' : 'rgba(0,151,57,0.2)' },
-  intoText: { color: colors.green, fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold },
-
-  // ── Identity — solid circles ──
-  stickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
-  stickerItem: { alignItems: 'center', gap: 7 },
-  stickerCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F0F0F3', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' },
-  stickerEmoji: { fontSize: 26 },
-  stickerLabel: { fontSize: 11, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.gray500 },
+  intoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6' },
+  intoText: { color: colors.black, fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold },
 
   // ── Action Bar ──
   actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: colors.separator },
@@ -481,6 +508,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   matchBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
   likeBtnText: { color: '#FFF', fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.5 },
   superBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
+  whisperBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(206,17,38,0.10)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(206,17,38,0.20)' },
   challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(252,205,18,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(252,205,18,0.25)' },
 });
 

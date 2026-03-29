@@ -7,7 +7,7 @@ import { GraffitiShield } from './icons';
 
 export default function ProfilePromptBanner({ message, onPress, colors }) {
   return (
-    <TouchableOpacity style={[styles.banner, { backgroundColor: colors.greenTint08, borderColor: colors.greenTint15 }]} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity style={[styles.banner, { backgroundColor: '#F4F4F6', borderColor: '#E8E8EC' }]} onPress={onPress} activeOpacity={0.8}>
       <GraffitiShield size={18} color={colors.accent} filled />
       <Text style={[styles.text, { color: colors.black }]}>{message}</Text>
       <Ionicons name="chevron-forward" size={16} color={colors.accent} />

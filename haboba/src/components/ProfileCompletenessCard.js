@@ -13,7 +13,7 @@ export default function ProfileCompletenessCard({ score, suggestion, onPress, co
   const strokeDashoffset = circumference - (score / 100) * circumference;
 
   return (
-    <TouchableOpacity style={[styles.card, { backgroundColor: colors.greenTint08, borderColor: colors.greenTint15 }]} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity style={[styles.card, { backgroundColor: '#F4F4F6', borderColor: '#E8E8EC' }]} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.ringWrap}>
         <Svg width={size} height={size}>
           <Circle

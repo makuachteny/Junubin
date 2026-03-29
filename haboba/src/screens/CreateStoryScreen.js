@@ -11,8 +11,8 @@ const BG_COLORS = ['#0047AB', '#0047AB', '#009739', '#CE1126', '#009739', '#EC48
 
 export default function CreateStoryScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [mode, setMode] = useState('text'); // 'text' or 'photo'
   const [text, setText] = useState('');
   const [bgColor, setBgColor] = useState(BG_COLORS[0]);
@@ -63,16 +63,16 @@ export default function CreateStoryScreen({ navigation }) {
       {/* Mode toggle */}
       <View style={styles.modeRow}>
         <TouchableOpacity
-          style={[styles.modeBtn, mode === 'text' && { backgroundColor: colors.green }]}
+          style={[styles.modeBtn, mode === 'text' && { backgroundColor: colors.black }]}
           onPress={() => setMode('text')}
         >
-          <Text style={[styles.modeBtnText, mode === 'text' && { color: '#FFF' }]}>Text</Text>
+          <Text style={[styles.modeBtnText, mode === 'text' && { color: isDark ? '#1A1A1A' : '#FFF' }]}>Text</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.modeBtn, mode === 'photo' && { backgroundColor: colors.green }]}
+          style={[styles.modeBtn, mode === 'photo' && { backgroundColor: colors.black }]}
           onPress={() => setMode('photo')}
         >
-          <Text style={[styles.modeBtnText, mode === 'photo' && { color: '#FFF' }]}>Photo</Text>
+          <Text style={[styles.modeBtnText, mode === 'photo' && { color: isDark ? '#1A1A1A' : '#FFF' }]}>Photo</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.modeBtn, { backgroundColor: '#CE1126' }]}
@@ -128,7 +128,7 @@ export default function CreateStoryScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
   header: {
     flexDirection: 'row',
@@ -143,7 +143,7 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
     letterSpacing: 0.3,
   },
-  postText: { ...Typography.bodySemibold, color: colors.green },
+  postText: { ...Typography.bodySemibold, color: colors.black },
   modeRow: {
     flexDirection: 'row',
     justifyContent: 'center',

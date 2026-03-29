@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import { useAuth } from '../auth';
+import { useSubscription } from '../payments';
 
 // Simulated backend lookup — in production this would POST phone numbers
 // to the server and return matched user profiles.
@@ -49,6 +50,7 @@ const FindFriendsScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { session } = useAuth();
+  const { canUseDiasporaConnect } = useSubscription();
   const [permissionStatus, setPermissionStatus] = useState(null); // null | 'granted' | 'denied'
   const [loading, setLoading] = useState(false);
   const [contacts, setContacts] = useState([]); // all contacts
@@ -170,7 +172,7 @@ const FindFriendsScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.permissionCard}>
-          <View style={[styles.permissionIcon, { backgroundColor: colors.greenTint08 }]}>
+          <View style={[styles.permissionIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
             <Ionicons name="people" size={48} color={colors.accent} />
           </View>
           <Text style={styles.permissionTitle}>Find your people</Text>
@@ -261,7 +263,7 @@ const FindFriendsScreen = ({ navigation }) => {
       const isFollowed = followedIds.has(user.userId);
       return (
         <View style={styles.contactRow}>
-          <View style={[styles.contactAvatar, { backgroundColor: colors.greenTint08 }]}>
+          <View style={[styles.contactAvatar, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
             {user.avatar ? (
               <Image source={{ uri: user.avatar }} style={styles.contactAvatarImg} />
             ) : (
@@ -329,6 +331,30 @@ const FindFriendsScreen = ({ navigation }) => {
         <View style={styles.backBtn} />
       </View>
 
+      {/* Diaspora Connect */}
+      <TouchableOpacity
+        style={styles.diasporaBtn}
+        onPress={() => {
+          if (!canUseDiasporaConnect()) {
+            Alert.alert(
+              'Junub Feature',
+              'Diaspora Connect lets you find South Sudanese across cities and countries. Upgrade to Junub to unlock.',
+              [
+                { text: 'See Plans', onPress: () => navigation.navigate('Elite') },
+                { text: 'Cancel', style: 'cancel' },
+              ]
+            );
+            return;
+          }
+          Alert.alert('Diaspora Connect', 'Search for South Sudanese in other cities and countries coming soon!');
+        }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="globe-outline" size={18} color={colors.accent} />
+        <Text style={styles.diasporaBtnText}>Diaspora Connect</Text>
+        <Ionicons name="chevron-forward" size={16} color={isDark ? 'rgba(255,255,255,0.3)' : colors.gray400} />
+      </TouchableOpacity>
+
       {/* Search */}
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={16} color={isDark ? 'rgba(255,255,255,0.4)' : colors.gray400} />
@@ -387,6 +413,28 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
+    color: isDark ? '#FFFFFF' : colors.black,
+  },
+
+  // ── Diaspora Connect ──
+  diasporaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.gray200,
+    gap: 8,
+  },
+  diasporaBtnText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: isDark ? '#FFFFFF' : colors.black,
   },
 

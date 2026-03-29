@@ -133,15 +133,19 @@ export default function ProfileScreen({ navigation }) {
         {/* Quick actions row */}
         <View style={styles.quickActions}>
           <TouchableOpacity style={styles.quickActionBtn} onPress={handleEdit}>
-            <Ionicons name="create-outline" size={20} color={colors.green} />
-            <Text style={styles.quickActionText}>Edit Profile</Text>
+            <Ionicons name="create-outline" size={20} color={colors.black} />
+            <Text style={styles.quickActionText}>Edit</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionBtn} onPress={handleVerify}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={colors.green} />
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.black} />
             <Text style={styles.quickActionText}>Verify</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => Alert.alert('Saved', 'No saved profiles yet. Bookmark profiles to see them here.')}>
+            <Ionicons name="bookmark-outline" size={20} color={colors.black} />
+            <Text style={styles.quickActionText}>Saved</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate('Settings')}>
-            <Ionicons name="settings-outline" size={20} color={colors.green} />
+            <Ionicons name="settings-outline" size={20} color={colors.black} />
             <Text style={styles.quickActionText}>Settings</Text>
           </TouchableOpacity>
         </View>
@@ -162,7 +166,7 @@ export default function ProfileScreen({ navigation }) {
               onPress={() => item.screen && navigation.navigate(item.screen)}
               activeOpacity={0.8}
             >
-              <Ionicons name={item.icon} size={22} color={colors.green} />
+              <Ionicons name={item.icon} size={22} color={item.iconColor} />
               <Text style={styles.statCount}>{item.count || 0}</Text>
               <Text style={styles.statLabel}>{item.label}</Text>
             </TouchableOpacity>

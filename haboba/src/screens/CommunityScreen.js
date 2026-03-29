@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   Image,
   Animated,
+  Dimensions,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,7 +29,10 @@ import { useCurrentUser } from '../hooks';
 import { mockEvents } from '../data/mockEvents';
 import { applyCommunityFilters } from '../utils/communityFilters';
 
-const TABS = ['Feed', 'Groups', 'Events'];
+const FIXED_TABS = ['Feed', 'Live'];
+const OPTIONAL_TABS = ['Groups', 'Events'];
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 const COMMUNITY_FILTERS = [
   { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
@@ -36,13 +42,17 @@ const COMMUNITY_FILTERS = [
   { id: 'friends', label: 'Friends', icon: 'people', graffitiIcon: 'community' },
   { id: 'popular', label: 'Popular', icon: 'flame', graffitiIcon: 'star' },
 ];
+const INLINE_FILTER_COUNT = 2;
 
 export default function CommunityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { currentUser } = useCurrentUser();
   const [activeTab, setActiveTab] = useState('Feed');
+  const [enabledOptionalTabs, setEnabledOptionalTabs] = useState(['Groups', 'Events']);
+  const visibleTabs = [...FIXED_TABS, ...OPTIONAL_TABS.filter((t) => enabledOptionalTabs.includes(t))];
   const [activeFilters, setActiveFilters] = useState([]);
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [posts, setPosts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -81,18 +91,6 @@ export default function CommunityScreen({ navigation, route }) {
     }, 800);
   }, []);
 
-  const handleFilterPress = useCallback((filterId) => {
-    if (filterId === 'fun') {
-      navigation.navigate('InteractivityHub');
-      return;
-    }
-    setActiveFilters((prev) =>
-      prev.includes(filterId)
-        ? prev.filter((f) => f !== filterId)
-        : [...prev, filterId]
-    );
-  }, [navigation]);
-
   const renderPost = useCallback(({ item }) => (
     <PostCard post={item} />
   ), []);
@@ -124,9 +122,6 @@ export default function CommunityScreen({ navigation, route }) {
         <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
       }
     >
-      <View style={styles.filterBarWrap}>
-        {renderFilterBar()}
-      </View>
       {renderActiveMeta()}
       {/* My Groups — horizontal scroll */}
       <Text style={styles.sectionTitle}>My Groups</Text>
@@ -191,59 +186,6 @@ export default function CommunityScreen({ navigation, route }) {
     </ScrollView>
   );
 
-  const renderFilterBar = () => (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.filterBarContent}
-    >
-      {COMMUNITY_FILTERS.map((filter) => {
-        const isActive = filter.accent || activeFilters.includes(filter.id);
-        const iconColor = isActive ? '#FFFFFF' : colors.gray600;
-        const GRAFFITI_MAP = {
-          sparkles: GraffitiSparkles,
-          flame: GraffitiFlame,
-          location: GraffitiLocation,
-          community: GraffitiCommunity,
-          star: GraffitiStar,
-        };
-        const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
-        return (
-          <TouchableOpacity
-            key={filter.id}
-            style={[
-              styles.filterPill,
-              isActive && filter.accent && styles.filterPillAccent,
-              isActive && !filter.accent && styles.filterPillActive,
-            ]}
-            onPress={() => handleFilterPress(filter.id)}
-            activeOpacity={0.8}
-          >
-            {GraffitiComp ? (
-              <GraffitiComp size={14} color={iconColor} filled={isActive} />
-            ) : (
-              <Ionicons
-                name={filter.icon}
-                size={14}
-                color={iconColor}
-              />
-            )}
-            <Text
-              style={[
-                styles.filterPillText,
-                isActive
-                  ? styles.filterPillTextActive
-                  : { color: colors.gray600 },
-              ]}
-            >
-              {filter.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  );
-
   const renderActiveMeta = () => (
     activeFilters.length > 0 ? (
       <View style={styles.activeFilterMeta}>
@@ -284,32 +226,146 @@ export default function CommunityScreen({ navigation, route }) {
         </View>
       </Animated.View>
 
-      {/* ─── Tabs ─── */}
+      {/* ─── Tabs + Inline Filters ─── */}
       <Animated.View
         style={{
           opacity: contentAnim,
           transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [-6, 0] }) }],
-          paddingBottom: 4,
         }}
       >
-        <View style={styles.segmentControl}>
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab;
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.combinedBar}
+        >
+          {visibleTabs.map((tab) => {
+            const isTabActive = activeTab === tab;
+            const TAB_ICONS = { Feed: 'newspaper-outline', Live: 'radio-outline', Groups: 'people-outline', Events: 'calendar-outline' };
             return (
               <TouchableOpacity
                 key={tab}
-                style={[styles.segmentPill, isActive && styles.segmentPillActive]}
+                style={[styles.segmentPill, isTabActive && styles.segmentPillActive]}
                 onPress={() => setActiveTab(tab)}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.segmentPillText, isActive && styles.segmentPillTextActive]}>
+                <Ionicons
+                  name={TAB_ICONS[tab] || 'ellipse-outline'}
+                  size={15}
+                  color={isTabActive ? '#FFFFFF' : colors.gray500}
+                  style={{ marginRight: 5 }}
+                />
+                <Text style={[styles.segmentPillText, isTabActive && styles.segmentPillTextActive]}>
                   {tab}
                 </Text>
               </TouchableOpacity>
             );
           })}
-        </View>
+
+          <View style={styles.barDivider} />
+
+          {COMMUNITY_FILTERS.slice(0, INLINE_FILTER_COUNT).map((filter) => {
+            const isActive = filter.accent || activeFilters.includes(filter.id);
+            const GRAFFITI_MAP = { sparkles: GraffitiSparkles, flame: GraffitiFlame, location: GraffitiLocation, community: GraffitiCommunity, star: GraffitiStar };
+            const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
+            return (
+              <TouchableOpacity
+                key={filter.id}
+                style={[
+                  styles.filterPill,
+                  isActive && filter.accent && styles.filterPillAccent,
+                  isActive && !filter.accent && styles.filterPillActive,
+                ]}
+                onPress={() => {
+                  if (filter.id === 'fun') { navigation.navigate('InteractivityHub'); return; }
+                  setActiveFilters((prev) =>
+                    prev.includes(filter.id) ? prev.filter((f) => f !== filter.id) : [...prev, filter.id]
+                  );
+                }}
+                activeOpacity={0.7}
+              >
+                {GraffitiComp ? (
+                  <GraffitiComp size={14} color={isActive ? '#FFFFFF' : colors.gray600} filled={isActive} />
+                ) : (
+                  <Ionicons name={filter.icon} size={14} color={isActive ? '#FFFFFF' : colors.gray600} />
+                )}
+                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                  {filter.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+
+          <TouchableOpacity
+            style={styles.moreFilterBtn}
+            onPress={() => setShowMoreFilters(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="options-outline" size={18} color={activeFilters.length > 0 ? colors.black : colors.gray500} />
+          </TouchableOpacity>
+        </ScrollView>
       </Animated.View>
+
+      {/* ─── More Filters Modal ─── */}
+      <Modal visible={showMoreFilters} transparent animationType="fade" onRequestClose={() => setShowMoreFilters(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowMoreFilters(false)}>
+          <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>Customize</Text>
+
+            <Text style={styles.modalSectionLabel}>Tabs</Text>
+            <View style={styles.modalPillRow}>
+              {OPTIONAL_TABS.map((tab) => {
+                const isOn = enabledOptionalTabs.includes(tab);
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.modalFilterPill, isOn && styles.modalFilterPillActive]}
+                    onPress={() => {
+                      setEnabledOptionalTabs((prev) =>
+                        prev.includes(tab) ? prev.filter((t) => t !== tab) : [...prev, tab]
+                      );
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name={tab === 'Groups' ? 'people-outline' : 'calendar-outline'} size={16} color={isOn ? (isDark ? '#1A1A1A' : '#FFF') : colors.gray600} />
+                    <Text style={[styles.modalFilterText, isOn && { color: isDark ? '#1A1A1A' : '#FFF' }]}>{tab}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.modalSectionLabel}>Filters</Text>
+            <View style={styles.modalPillRow}>
+              {COMMUNITY_FILTERS.slice(INLINE_FILTER_COUNT).map((filter) => {
+                const isActive = activeFilters.includes(filter.id);
+                const GRAFFITI_MAP = { sparkles: GraffitiSparkles, flame: GraffitiFlame, location: GraffitiLocation, community: GraffitiCommunity, star: GraffitiStar };
+                const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
+                return (
+                  <TouchableOpacity
+                    key={filter.id}
+                    style={[styles.modalFilterPill, isActive && styles.modalFilterPillActive]}
+                    onPress={() => {
+                      setActiveFilters((prev) =>
+                        prev.includes(filter.id) ? prev.filter((f) => f !== filter.id) : [...prev, filter.id]
+                      );
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    {GraffitiComp ? (
+                      <GraffitiComp size={16} color={isActive ? (isDark ? '#1A1A1A' : '#FFFFFF') : colors.gray600} filled={isActive} />
+                    ) : (
+                      <Ionicons name={filter.icon} size={16} color={isActive ? (isDark ? '#1A1A1A' : '#FFFFFF') : colors.gray600} />
+                    )}
+                    <Text style={[styles.modalFilterText, isActive && { color: isDark ? '#1A1A1A' : '#FFF' }]}>{filter.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowMoreFilters(false)} activeOpacity={0.8}>
+              <Text style={styles.modalDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* ─── Content ─── */}
       <Animated.View
@@ -321,7 +377,9 @@ export default function CommunityScreen({ navigation, route }) {
           },
         ]}
       >
-        {activeTab === 'Feed' ? (
+        {activeTab === 'Live' ? (
+          <LiveTab navigation={navigation} insets={insets} />
+        ) : activeTab === 'Feed' ? (
           isLoading ? (
             <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
               {Array.from({ length: 3 }).map((_, i) => (
@@ -348,9 +406,6 @@ export default function CommunityScreen({ navigation, route }) {
               }
               ListHeaderComponent={(
                 <View>
-                  <View style={styles.filterBarWrap}>
-                    {renderFilterBar()}
-                  </View>
                   {renderActiveMeta()}
                   <AdBanner colors={colors} />
                 </View>
@@ -368,12 +423,9 @@ export default function CommunityScreen({ navigation, route }) {
           )
         ) : activeTab === 'Events' ? (
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.groupsContent}>
-            <View style={styles.filterBarWrap}>
-              {renderFilterBar()}
-            </View>
             {renderActiveMeta()}
             <TouchableOpacity
-              style={[styles.eventsCtaCard, { backgroundColor: colors.greenLight, borderColor: colors.greenLight }]}
+              style={[styles.eventsCtaCard, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6', borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC' }]}
               onPress={() => navigation.navigate('Events')}
               activeOpacity={0.8}
             >
@@ -415,12 +467,12 @@ export default function CommunityScreen({ navigation, route }) {
         )}
       </Animated.View>
 
-      {/* ─── FAB — Feed tab only ─── */}
-      {activeTab === 'Feed' && (
+      {/* ─── FAB — Feed or Reels tab ─── */}
+      {(activeTab === 'Feed' || activeTab === 'Live') && (
         <TouchableOpacity
           style={styles.fab}
           activeOpacity={0.85}
-          onPress={() => navigation.navigate('CreatePost')}
+          onPress={() => activeTab === 'Live' ? navigation.navigate('GoLive') : navigation.navigate('CreatePost')}
         >
           <LinearGradient
             colors={['#000000', '#CE1126', '#009739']}
@@ -428,13 +480,198 @@ export default function CommunityScreen({ navigation, route }) {
             end={{ x: 1, y: 1 }}
             style={styles.fabGradient}
           >
-            <Ionicons name="add" size={28} color="#FFF" />
+            <Ionicons name={activeTab === 'Live' ? 'radio' : 'add'} size={22} color="#FFF" />
           </LinearGradient>
         </TouchableOpacity>
       )}
     </View>
   );
 }
+
+// ── Mock live streams ──
+const MOCK_LIVES = [
+  { id: 'l1', name: 'Achol', age: 23, image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600', viewers: 142, caption: 'Live from Juba!', verified: true, category: 'Hangout' },
+  { id: 'l2', name: 'Nyirou', age: 26, image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600', viewers: 65, caption: 'Fashion talk', verified: false, category: 'Style' },
+  { id: 'l3', name: 'Ateny', age: 24, image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600', viewers: 28, caption: 'Cooking kisra live!', verified: true, category: 'Cooking' },
+  { id: 'l4', name: 'Deng', age: 25, image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600', viewers: 310, caption: 'Music session', verified: true, category: 'Music' },
+  { id: 'l5', name: 'Garang', age: 28, image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600', viewers: 89, caption: 'Minneapolis vibes', verified: false, category: 'Hangout' },
+  { id: 'l6', name: 'Akuch', age: 22, image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600', viewers: 204, caption: 'Q&A night', verified: true, category: 'Chat' },
+];
+
+const LIVE_CARD_W = (SCREEN_W - 32 - 10) / 2;
+const LIVE_CARD_H = LIVE_CARD_W * 1.4;
+
+function formatCount(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+  return String(n);
+}
+
+function LiveTab({ navigation }) {
+  const renderLiveCard = useCallback(({ item, index }) => {
+    return (
+      <TouchableOpacity
+        style={liveStyles.card}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('LiveView', { allLives: MOCK_LIVES, initialIndex: index })}
+      >
+        <Image source={{ uri: item.image }} style={liveStyles.cardImage} resizeMode="cover" />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.7)']}
+          locations={[0.4, 1]}
+          style={liveStyles.cardGradient}
+          pointerEvents="none"
+        />
+
+        {/* LIVE badge + viewers */}
+        <View style={liveStyles.liveBadge}>
+          <View style={liveStyles.liveDot} />
+          <Text style={liveStyles.liveText}>LIVE</Text>
+        </View>
+
+        <View style={liveStyles.viewerBadge}>
+          <Ionicons name="eye" size={10} color="#FFFFFF" />
+          <Text style={liveStyles.viewerText}>{formatCount(item.viewers)}</Text>
+        </View>
+
+        {/* Category tag */}
+        <View style={liveStyles.categoryTag}>
+          <Text style={liveStyles.categoryText}>{item.category}</Text>
+        </View>
+
+        {/* Bottom info */}
+        <View style={liveStyles.cardInfo}>
+          <Text style={liveStyles.cardName}>{item.name}, {item.age}
+            {item.verified && '  '}
+          </Text>
+          {item.verified && <Ionicons name="checkmark-circle" size={12} color="#4DA6FF" style={{ position: 'absolute', right: 8, bottom: 28 }} />}
+          <Text style={liveStyles.cardCaption} numberOfLines={1}>{item.caption}</Text>
+        </View>
+
+      </TouchableOpacity>
+    );
+  }, [navigation]);
+
+  return (
+    <FlatList
+      data={MOCK_LIVES}
+      keyExtractor={(item) => item.id}
+      renderItem={renderLiveCard}
+      numColumns={2}
+      columnWrapperStyle={liveStyles.row}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={liveStyles.grid}
+    />
+  );
+}
+
+const liveStyles = StyleSheet.create({
+  grid: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  row: {
+    gap: 10,
+    marginBottom: 10,
+  },
+  card: {
+    width: LIVE_CARD_W,
+    height: LIVE_CARD_H,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '60%',
+  },
+  liveBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(206,17,38,0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  liveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#FFFFFF',
+  },
+  liveText: {
+    fontSize: 9,
+    fontWeight: '900',
+    fontFamily: 'DMSans-ExtraBold',
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  viewerBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  viewerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: 'DMSans-Bold',
+    color: '#FFFFFF',
+  },
+  categoryTag: {
+    position: 'absolute',
+    top: 36,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  categoryText: {
+    fontSize: 9,
+    fontWeight: '600',
+    fontFamily: 'DMSans-SemiBold',
+    color: 'rgba(255,255,255,0.8)',
+  },
+  cardInfo: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+  },
+  cardName: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'DMSans-Bold',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  cardCaption: {
+    fontSize: 11,
+    fontFamily: 'DMSans-Regular',
+    color: 'rgba(255,255,255,0.7)',
+  },
+});
 
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
@@ -466,9 +703,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: colors.gray300,
     backgroundColor: colors.gray300,
-    ...getShadow('md', isDark),
   },
   // ─── Filter Bar ───
   filterBarWrap: {
@@ -483,28 +719,31 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: colors.separator,
-    backgroundColor: colors.white,
+    borderColor: isDark ? colors.gray800 : 'rgba(38,38,38,0.14)',
+    backgroundColor: colors.surface,
+    minHeight: 34,
   },
   filterPillAccent: {
-    backgroundColor: colors.green,
-    borderColor: colors.green,
+    backgroundColor: isDark ? colors.gray300 : colors.gray700,
+    borderColor: isDark ? colors.gray300 : colors.gray700,
   },
   filterPillActive: {
-    backgroundColor: colors.black,
-    borderColor: colors.black,
+    backgroundColor: isDark ? colors.gray300 : colors.gray700,
+    borderColor: isDark ? colors.gray300 : colors.gray700,
   },
   filterPillText: {
     fontSize: 12,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
+    color: isDark ? 'rgba(255,255,255,0.92)' : colors.gray700,
   },
   filterPillTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
   },
 
   content: {
@@ -523,7 +762,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   clearFiltersText: {
     ...Typography.captionBold,
-    color: colors.green,
+    color: colors.accent,
   },
   feedList: {
     paddingBottom: 80,
@@ -631,50 +870,146 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     ...Typography.caption,
   },
 
-  // ─── Segment Control ───
-  segmentControl: {
+  // ─── Combined Bar (Tabs + Filters) ───
+  combinedBar: {
     flexDirection: 'row',
-    gap: 8,
+    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    paddingRight: 8,
     backgroundColor: colors.white,
   },
+  barDivider: {
+    width: 1,
+    height: 22,
+    backgroundColor: colors.separator,
+    marginHorizontal: 4,
+  },
   segmentPill: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 24,
-    backgroundColor: colors.surfaceMuted,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: isDark ? colors.gray800 : 'rgba(38,38,38,0.14)',
+    minHeight: 34,
   },
   segmentPillActive: {
-    backgroundColor: colors.green,
+    backgroundColor: isDark ? colors.gray300 : colors.gray700,
+    borderColor: isDark ? colors.gray300 : colors.gray700,
   },
   segmentPillText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
-    color: colors.gray500,
+    fontFamily: FontFamily.semibold,
+    color: isDark ? 'rgba(255,255,255,0.92)' : colors.gray700,
   },
   segmentPillTextActive: {
     color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  moreFilterBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: isDark ? colors.gray300 : colors.surfaceMuted,
+  },
+
+  // ─── Filter Modal ───
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: colors.black,
+    marginBottom: 20,
+  },
+  modalSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.gray500,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  modalPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  modalFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: colors.white,
+  },
+  modalFilterPillActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  modalFilterText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    color: colors.gray600,
+  },
+  modalDoneBtn: {
+    backgroundColor: colors.black,
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: 'center',
+  },
+  modalDoneText: {
+    color: isDark ? '#1A1A1A' : '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
 
   // ─── FAB ───
   fab: {
     position: 'absolute',
     bottom: 90,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 6,
+    zIndex: 20,
   },
   fabGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },

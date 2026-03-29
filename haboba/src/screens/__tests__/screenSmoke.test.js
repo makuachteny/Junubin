@@ -229,6 +229,6 @@ describe('screen smoke tests', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Home Screen')).toBeTruthy();
+    expect(getByText('Community Screen')).toBeTruthy();
   });
 });

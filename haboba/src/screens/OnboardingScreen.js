@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiCrown } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily, useTheme } from '../theme';
 import LogoMark from '../components/LogoMark';
@@ -27,7 +26,7 @@ import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
-const ACCENT = '#FCCD12';
+const ACCENT = '#FFFFFF';
 
 const PAGES = [{ id: 1 }, { id: 2 }];
 
@@ -263,16 +262,16 @@ const OnboardingScreen = ({ navigation }) => {
         <Image source={LANDING_IMAGE} style={s.bgImage} resizeMode="cover" />
       </Animated.View>
 
-      {/* ── Gradient overlay — smoother, less harsh ── */}
+      {/* ── Gradient overlay ── */}
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradientOpacity }]}>
         <LinearGradient
           colors={[
-            'rgba(0, 0, 0, 0.15)',
-            'rgba(0, 0, 0, 0.05)',
-            'rgba(0, 0, 0, 0.15)',
-            'rgba(0, 0, 0, 0.35)',
-            'rgba(0, 0, 0, 0.65)',
-            'rgba(0, 0, 0, 0.85)',
+            'rgba(0, 0, 0, 0.6)',
+            'rgba(0, 0, 0, 0.3)',
+            'rgba(0, 0, 0, 0.3)',
+            'rgba(0, 0, 0, 0.5)',
+            'rgba(0, 0, 0, 0.75)',
+            'rgba(0, 0, 0, 0.92)',
           ]}
           locations={[0, 0.2, 0.4, 0.6, 0.8, 0.95]}
           style={StyleSheet.absoluteFill}
@@ -321,17 +320,13 @@ const OnboardingScreen = ({ navigation }) => {
                 alignItems: 'center',
               }}
             >
-              <Animated.View style={{ opacity: logoOpacity }}>
-                <View style={s.logoWithCrown}>
-                  <GraffitiCrown size={28} color="#FCCD12" filled style={s.crownIcon} />
-                  <LogoMark size={90} light animated showSub={false} />
+              <Animated.View style={{ opacity: logoOpacity, alignItems: 'center' }}>
+                <LogoMark size={80} light animated showSub={false} />
+                <View style={{ marginTop: 20, alignItems: 'center' }}>
+                  <Text testID="onboarding-hero-connect" style={s.splashHeadline}>Spread Love{'\n'}Make Friends</Text>
                 </View>
               </Animated.View>
             </Animated.View>
-          </View>
-          {/* Subtle "South Sudanese" at the bottom */}
-          <View style={s.splashBottom}>
-            <Text testID="onboarding-hero-connect" style={s.splashTagline}>South Sudanese</Text>
           </View>
         </View>
 
@@ -462,31 +457,32 @@ const s = StyleSheet.create({
   heroWrap: { alignItems: 'center', paddingHorizontal: CONTENT_PAD, gap: 8 },
   splashCenter: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    paddingBottom: 200,
   },
-  logoWithCrown: {
-    alignItems: 'center',
-    position: 'relative',
+  splashHeadline: {
+    fontSize: 26,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 32,
+    letterSpacing: -0.5,
   },
-  crownIcon: {
-    position: 'absolute',
-    top: -18,
-    zIndex: 2,
+  splashRule: {
+    width: 40,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginVertical: 12,
   },
-  splashBottom: {
-    position: 'absolute',
-    bottom: 180,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  splashTagline: {
-    fontSize: 14,
+  splashSub: {
+    fontSize: 13,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
     color: 'rgba(255,255,255,0.45)',
-    letterSpacing: 4,
+    letterSpacing: 2,
     textTransform: 'uppercase',
   },
   heroAccent: {

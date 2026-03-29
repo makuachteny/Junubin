@@ -171,8 +171,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.greenTint12,
-    backgroundColor: colors.greenTint05,
+    borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#ECECF0',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 14,
@@ -212,7 +212,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   optionSelected: {
-    backgroundColor: colors.greenTint05,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
   },
   optionLeft: {
     flexDirection: 'row',
@@ -248,7 +248,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginRight: 14,
   },
   optionIconSelected: {
-    backgroundColor: colors.greenTint10,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
   },
   optionTextWrap: {
     flex: 1,

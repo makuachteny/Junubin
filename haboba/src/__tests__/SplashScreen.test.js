@@ -65,17 +65,11 @@ describe('SplashScreen', () => {
     expect(getByTestId('splash-greeting')).toBeTruthy();
   });
 
-  it('renders the South Sudan flag stripe with 5 bands', () => {
-    const { toJSON } = render(
+  it('renders the logo and tagline', () => {
+    const { getByTestId } = render(
       <SplashScreen onFinish={jest.fn()} authReady={false} />
     );
-    const tree = JSON.stringify(toJSON());
-    // Flag colors should be present
-    expect(tree).toContain('#000000'); // black
-    expect(tree).toContain('#CE1126'); // red
-    expect(tree).toContain('#FFFFFF'); // white
-    expect(tree).toContain('#009739'); // green
-    expect(tree).toContain('#0047AB'); // blue
+    expect(getByTestId('splash-tagline')).toBeTruthy();
   });
 
   it('calls onFinish after animation completes when authReady', () => {

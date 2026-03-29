@@ -49,20 +49,22 @@ export default function PhotoVerificationScreen({ navigation }) {
       case 0:
         return (
           <View style={styles.stepContent}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="camera" size={40} color={colors.accent} />
-            </View>
-            <Text style={styles.stepTitle}>Verify Your Photos</Text>
-            <Text style={styles.stepDesc}>
-              Take a selfie to prove you're real. This helps build trust in the community.
-            </Text>
-            <View style={styles.instructions}>
-              {['Face the camera directly', 'Good lighting, no filters', 'Match your profile photos'].map((item, i) => (
-                <View key={i} style={styles.instructionRow}>
-                  <Ionicons name="checkmark-circle" size={20} color={colors.accent} />
-                  <Text style={styles.instructionText}>{item}</Text>
-                </View>
-              ))}
+            <View style={styles.stepTop}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="camera" size={32} color={colors.accent} />
+              </View>
+              <Text style={styles.stepTitle}>Verify Your Photos</Text>
+              <Text style={styles.stepDesc}>
+                Take a selfie to prove you're real. This helps{'\n'}build trust in the community.
+              </Text>
+              <View style={styles.instructions}>
+                {['Face the camera directly', 'Good lighting, no filters', 'Match your profile photos'].map((item, i) => (
+                  <View key={i} style={styles.instructionRow}>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                    <Text style={styles.instructionText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
             <Button title="Take Selfie" variant="primary" size="lg" fullWidth onPress={() => setStep(1)} />
           </View>
@@ -71,9 +73,11 @@ export default function PhotoVerificationScreen({ navigation }) {
       case 1:
         return (
           <View style={styles.stepContent}>
-            <View style={styles.cameraPlaceholder}>
-              <Ionicons name="camera" size={60} color={colors.gray400} />
-              <Text style={[styles.stepDesc, { marginTop: 16 }]}>Position your face in the frame</Text>
+            <View style={styles.stepTop}>
+              <View style={styles.cameraPlaceholder}>
+                <Ionicons name="camera" size={48} color={colors.gray400} />
+                <Text style={[styles.stepDesc, { marginTop: 12 }]}>Position your face in the frame</Text>
+              </View>
             </View>
             <Button title="Capture Photo" variant="primary" size="lg" fullWidth onPress={handleCapture} />
           </View>
@@ -82,9 +86,11 @@ export default function PhotoVerificationScreen({ navigation }) {
       case 2:
         return (
           <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Review Your Photo</Text>
-            {photo && <Image source={{ uri: photo }} style={styles.reviewImage} />}
-            <Text style={styles.stepDesc}>Does this photo clearly show your face?</Text>
+            <View style={styles.stepTop}>
+              <Text style={styles.stepTitle}>Review Your Photo</Text>
+              {photo && <Image source={{ uri: photo }} style={styles.reviewImage} />}
+              <Text style={styles.stepDesc}>Does this photo clearly show your face?</Text>
+            </View>
             <View style={styles.reviewActions}>
               <Button title="Retake" variant="outline" size="md" onPress={() => setStep(1)} style={{ flex: 1 }} />
               <Button title="Submit" variant="primary" size="md" onPress={handleSubmit} style={{ flex: 1 }} />
@@ -95,13 +101,15 @@ export default function PhotoVerificationScreen({ navigation }) {
       case 3:
         return (
           <View style={styles.stepContent}>
-            <View style={styles.iconCircle}>
-              <Ionicons name="checkmark-circle" size={50} color={colors.success} />
+            <View style={styles.stepTop}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="checkmark-circle" size={40} color={colors.success} />
+              </View>
+              <Text style={styles.stepTitle}>Submitted!</Text>
+              <Text style={styles.stepDesc}>
+                Your verification is being reviewed.{'\n'}This usually takes less than 24 hours.
+              </Text>
             </View>
-            <Text style={styles.stepTitle}>Submitted!</Text>
-            <Text style={styles.stepDesc}>
-              Your verification is being reviewed. This usually takes less than 24 hours.
-            </Text>
             <Button title="Done" variant="primary" size="lg" fullWidth onPress={() => navigation.goBack()} />
           </View>
         );
@@ -125,7 +133,9 @@ export default function PhotoVerificationScreen({ navigation }) {
         ))}
       </View>
 
-      {renderStep()}
+      <View style={styles.body}>
+        {renderStep()}
+      </View>
     </View>
   );
 }
@@ -140,58 +150,70 @@ const getStyles = (colors) => StyleSheet.create({
     height: 56,
   },
   headerTitle: {
-    fontSize: 34,
-    fontFamily: FontFamily.black,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.black,
-    letterSpacing: 0.3,
   },
   progressRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
+    gap: 6,
+    paddingVertical: 8,
   },
   progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 24,
+    height: 3,
+    borderRadius: 1.5,
     backgroundColor: colors.gray300,
+  },
+  body: {
+    flex: 1,
   },
   stepContent: {
     flex: 1,
     paddingHorizontal: 24,
-    justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
+    justifyContent: 'space-between',
+    paddingTop: 40,
+    paddingBottom: 32,
+  },
+  stepTop: {
+    alignItems: 'center',
+    gap: 12,
   },
   iconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: colors.greenTint08,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.gray100,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   stepTitle: {
-    ...Typography.h2,
+    fontSize: 22,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
     color: colors.black,
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   stepDesc: {
-    ...Typography.bodySmall,
-    color: colors.gray,
+    fontSize: 14,
+    fontFamily: FontFamily.regular,
+    color: colors.gray500,
     textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 300,
+    lineHeight: 21,
+    maxWidth: 280,
   },
-  instructions: { gap: 12, marginVertical: 16 },
-  instructionRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  instructionText: { ...Typography.body, color: colors.black },
+  instructions: { gap: 14, marginVertical: 20, alignSelf: 'center' },
+  instructionRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  instructionText: { fontSize: 15, fontFamily: FontFamily.medium, color: colors.black },
   cameraPlaceholder: {
-    width: 260,
-    height: 340,
-    borderRadius: 20,
+    width: 240,
+    height: 320,
+    borderRadius: 24,
     backgroundColor: colors.gray100,
     justifyContent: 'center',
     alignItems: 'center',
@@ -202,7 +224,7 @@ const getStyles = (colors) => StyleSheet.create({
   reviewImage: {
     width: 220,
     height: 280,
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: colors.gray300,
   },
   reviewActions: {

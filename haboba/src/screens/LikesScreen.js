@@ -10,9 +10,9 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow, Layout } from '../theme';
-import { GraffitiLocation, GraffitiHeart, GraffitiShield } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
 import Button from '../components/Button';
 import AdBanner from '../components/AdBanner';
@@ -410,7 +410,7 @@ export default function LikesScreen({ navigation }) {
           activeFilters={activeFilters}
           filterSelections={filterSelections}
           onFilterSelect={handleFilterSelect}
-          showSettingsButton={false}
+          showSettingsButton={true}
           filters={LIKE_FILTERS}
           options={LIKE_FILTER_OPTIONS}
           containerStyle={{ marginTop: Layout.filterGap, marginBottom: 6, marginLeft: -12, marginRight: -12 }}
@@ -427,25 +427,49 @@ export default function LikesScreen({ navigation }) {
           <>
         {/* Ambient spray accents */}
         <View style={{ position: 'absolute', right: 8, top: 20 }} pointerEvents="none">
-          <SpraySplatter size={35} color={colors.green} opacity={0.06} />
+          <SpraySplatter size={35} color={colors.gray400} opacity={0.06} />
         </View>
         <View style={{ position: 'absolute', left: 4, bottom: 100 }} pointerEvents="none">
-          <SpraySplatter size={40} color={colors.green} opacity={0.05} />
+          <SpraySplatter size={40} color={colors.gray400} opacity={0.05} />
         </View>
 
-        {/* Like count */}
-        <Text style={styles.likesCount}>{filteredLikes.length} Like{filteredLikes.length !== 1 ? 's' : ''}</Text>
-
-        {/* Upgrade text */}
-        {unlocked ? (
-          <Text style={styles.upgradeText}>
-            You can see everyone who likes you!
-          </Text>
-        ) : (
-          <Text style={styles.upgradeText}>
-            Upgrade to Elite Membership to see{'\n'}people who already liked you!
-          </Text>
-        )}
+        {/* Likes summary strip */}
+        <View style={styles.likesSummary}>
+          {/* Stacked avatars */}
+          <View style={styles.avatarStack}>
+            {filteredLikes.slice(0, 4).map((like, i) => (
+              <Image
+                key={like.id}
+                source={imageSource(like.images?.[0])}
+                style={[
+                  styles.stackedAvatar,
+                  { marginLeft: i === 0 ? 0 : -10, zIndex: 4 - i },
+                ]}
+                blurRadius={unlocked ? 0 : 8}
+              />
+            ))}
+            {filteredLikes.length > 4 && (
+              <View style={[styles.stackedAvatar, styles.stackedMore, { marginLeft: -10, zIndex: 0 }]}>
+                <Text style={styles.stackedMoreText}>+{filteredLikes.length - 4}</Text>
+              </View>
+            )}
+          </View>
+          {/* Text */}
+          <View style={styles.likesSummaryText}>
+            <Text style={styles.likesSummaryTitle}>
+              {filteredLikes.length} {filteredLikes.length === 1 ? 'person' : 'people'} {unlocked ? 'liked you' : 'waiting'}
+            </Text>
+            <Text style={styles.likesSummarySubtitle}>
+              {unlocked ? 'Tap to match instantly' : 'Unlock to see them all'}
+            </Text>
+          </View>
+          {/* CTA */}
+          {!unlocked && (
+            <TouchableOpacity style={styles.likesUnlockBtn} onPress={() => navigation.navigate('Elite')}>
+              <Ionicons name="eye-outline" size={14} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Upsell Banner (free users) */}
         {!hasTier('plus') && (
@@ -499,9 +523,16 @@ export default function LikesScreen({ navigation }) {
                     activeOpacity={0.85}
                     onPress={() => navigation.navigate('Elite')}
                   >
-                    <Ionicons name="lock-open" size={18} color="#FFFFFF" />
-                    <Text style={styles.inlineBannerText}>Unlock to see who likes you</Text>
-                    <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+                    <LinearGradient
+                      colors={[colors.accent, isDark ? '#8B0A1A' : '#A50E20']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.inlineBannerGradient}
+                    >
+                      <Ionicons name="lock-open" size={18} color="#FFFFFF" />
+                      <Text style={styles.inlineBannerText}>Unlock to see who likes you</Text>
+                      <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
                 <Animated.View style={[styles.likeCard, { height: cardH }, cardAnimStyle]}>
@@ -522,6 +553,13 @@ export default function LikesScreen({ navigation }) {
                       blurRadius={unlocked ? 0 : 25}
                     />
 
+                    {/* Gradient overlay */}
+                    <LinearGradient
+                      colors={['transparent', 'rgba(0,0,0,0.65)', 'rgba(0,0,0,0.85)']}
+                      locations={[0, 0.5, 1]}
+                      style={styles.cardGradient}
+                    />
+
                     {/* Card info */}
                     <View style={styles.likeInfo}>
                       <View style={styles.nameRow}>
@@ -531,10 +569,32 @@ export default function LikesScreen({ navigation }) {
                           <View style={styles.blurredName} />
                         )}
                         <Text style={styles.likeAge}>{like.age}</Text>
-                        <GraffitiHeart size={16} color={colors.accent} filled />
                       </View>
 
-                      <Text style={styles.likedAgoText}>Liked you {likedAgo}</Text>
+                      <View style={styles.likeTypeRow}>
+                        <Ionicons
+                          name={
+                            (like.likeType === 'super_like' || like.isSuperLike) ? 'star' :
+                            (like.hasWhisper || like.whisperText) ? 'chatbubble' :
+                            'heart'
+                          }
+                          size={11}
+                          color={
+                            (like.likeType === 'super_like' || like.isSuperLike) ? '#FCCD12' :
+                            (like.hasWhisper || like.whisperText) ? '#9B59B6' :
+                            'rgba(255,255,255,0.5)'
+                          }
+                        />
+                        <Text style={[
+                          styles.likedAgoText,
+                          (like.likeType === 'super_like' || like.isSuperLike) && { color: '#FCCD12' },
+                          (like.hasWhisper || like.whisperText) && { color: '#C39BD3' },
+                        ]}>
+                          {(like.likeType === 'super_like' || like.isSuperLike) ? `Super Liked ${likedAgo}` :
+                           (like.hasWhisper || like.whisperText) ? `Whispered ${likedAgo}` :
+                           likedAgo}
+                        </Text>
+                      </View>
                     </View>
                   </TouchableOpacity>
                 </Animated.View>
@@ -582,7 +642,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.green,
+    borderColor: colors.gray300,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
@@ -593,23 +653,60 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 90,
   },
-  likesCount: {
-    fontSize: 28,
+  likesSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+    borderRadius: 16,
+  },
+  avatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  stackedAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2.5,
+    borderColor: isDark ? colors.gray200 : colors.white,
+  },
+  stackedMore: {
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stackedMoreText: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: '#FFFFFF',
+  },
+  likesSummaryText: {
+    flex: 1,
+  },
+  likesSummaryTitle: {
+    fontSize: 15,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.accent,
-    textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 6,
+    color: colors.black,
+    marginBottom: 1,
   },
-  upgradeText: {
-    fontSize: 16,
-    fontFamily: FontFamily.medium,
-    fontWeight: '500',
-    color: isDark ? colors.gray400 : colors.gray700,
-    textAlign: 'center',
-    marginBottom: 20,
-    lineHeight: 23,
+  likesSummarySubtitle: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    color: colors.gray500,
+  },
+  likesUnlockBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // ─── Card grid ───
@@ -625,6 +722,9 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: colors.gray300,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    ...getShadow('md', isDark),
   },
   likeSkeletonCard: {
     width: CARD_WIDTH,
@@ -637,20 +737,12 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     height: '100%',
     resizeMode: 'cover',
   },
-  gradientOverlay: {
+  cardGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '50%',
-    backgroundColor: 'transparent',
-    // Simulated gradient with layered opacity
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    // Use a dark overlay at the bottom
-    ...StyleSheet.absoluteFillObject,
-    top: undefined,
-    backgroundGradient: undefined, // RN doesn't support CSS gradients
+    height: '55%',
   },
   likeInfo: {
     position: 'absolute',
@@ -659,11 +751,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     right: 0,
     paddingHorizontal: 12,
     paddingBottom: 14,
-    paddingTop: 40,
-    // Dark gradient effect
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    paddingTop: 24,
   },
 
   // ─── Name row ───
@@ -684,33 +772,47 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   likeAge: {
     fontSize: 15,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 
-  // ─── Liked ago timestamp ───
+  likeTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 3,
+  },
   likedAgoText: {
     fontSize: 11,
     fontFamily: FontFamily.medium,
+    fontWeight: '500',
     color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
   },
 
   // ─── Inline banner CTA ───
   inlineBanner: {
     width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: CARD_GAP,
+    ...getShadow('md', isDark),
+  },
+  inlineBannerGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
     paddingVertical: 16,
-    borderRadius: 16,
-    backgroundColor: colors.accent,
-    marginBottom: CARD_GAP,
   },
   inlineBannerText: {
     fontSize: 15,

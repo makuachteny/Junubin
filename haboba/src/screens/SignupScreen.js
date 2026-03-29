@@ -198,7 +198,7 @@ const SignupScreen = ({ navigation }) => {
                 <Ionicons
                   name={selectedMethod === 'phone' ? 'phone-portrait' : 'mail'}
                   size={32}
-                  color={colors.green}
+                  color={colors.black}
                 />
               </View>
             </View>
@@ -246,7 +246,7 @@ const SignupScreen = ({ navigation }) => {
                 onPress={handleVerify}
                 disabled={!isCodeComplete}
               >
-                <Ionicons name="arrow-forward" size={28} color="#FFFFFF" />
+                <Ionicons name="arrow-forward" size={28} color={isDark ? '#1A1A1A' : '#FFFFFF'} />
               </TouchableOpacity>
             </View>
           </View>
@@ -300,7 +300,7 @@ const SignupScreen = ({ navigation }) => {
                 <Ionicons
                   name="phone-portrait"
                   size={16}
-                  color={selectedMethod === 'phone' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'}
+                  color={selectedMethod === 'phone' ? (isDark ? '#1A1A1A' : '#FFFFFF') : 'rgba(255,255,255,0.5)'}
                 />
                 <Text style={[styles.methodTabText, selectedMethod === 'phone' && styles.methodTabTextActive]}>
                   Phone
@@ -313,7 +313,7 @@ const SignupScreen = ({ navigation }) => {
                 <Ionicons
                   name="mail"
                   size={16}
-                  color={selectedMethod === 'email' ? '#FFFFFF' : 'rgba(255,255,255,0.5)'}
+                  color={selectedMethod === 'email' ? (isDark ? '#1A1A1A' : '#FFFFFF') : 'rgba(255,255,255,0.5)'}
                 />
                 <Text style={[styles.methodTabText, selectedMethod === 'email' && styles.methodTabTextActive]}>
                   Email
@@ -383,7 +383,7 @@ const SignupScreen = ({ navigation }) => {
                   onPress={handleSendCode}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="arrow-forward" size={28} color="#FFFFFF" />
+                  <Ionicons name="arrow-forward" size={28} color={isDark ? '#1A1A1A' : '#FFFFFF'} />
                 </TouchableOpacity>
               </View>
             )}
@@ -481,7 +481,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderRadius: 12,
   },
   methodTabActive: {
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
   },
   methodTabText: {
     fontSize: 14,
@@ -490,7 +490,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.5)',
   },
   methodTabTextActive: {
-    color: '#FFFFFF',
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
   },
 
   // Input
@@ -508,12 +508,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   countryCodeActive: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenTint10,
+    borderColor: colors.black,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
   },
   countryCodeText: {
     ...Typography.bodySemibold,
-    color: colors.green,
+    color: colors.black,
   },
   input: {
     flex: 1,
@@ -530,8 +530,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
   },
   inputActive: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenTint08,
+    borderColor: colors.black,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
   },
 
   // Inline error
@@ -558,7 +558,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginBottom: 24,
   },
   termsLink: {
-    color: colors.green,
+    color: colors.black,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -572,10 +572,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.green,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
@@ -595,11 +595,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.greenTint15,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
   },
   verifyTitle: {
     fontSize: 28,
@@ -642,8 +642,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     textAlign: 'center',
   },
   codeInputFilled: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenTint04,
+    borderColor: colors.black,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
   },
   resendBtn: {
     flexDirection: 'row',
@@ -656,7 +656,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   resendLink: {
     ...Typography.bodySmallMedium,
-    color: colors.green,
+    color: colors.black,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
   },

@@ -35,9 +35,9 @@ const QUESTIONS = [
 
 export default function AccessibilitySurveyScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { saveSurveyResponses } = useAccessibilityPreferences();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [answers, setAnswers] = useState({
     highContrast: true,
     nonColorCues: true,
@@ -107,8 +107,8 @@ export default function AccessibilitySurveyScreen({ navigation }) {
               <Switch
                 value={!!answers[q.key]}
                 onValueChange={(v) => setAnswer(q.key, v)}
-                trackColor={{ false: colors.gray300, true: colors.greenTint25 }}
-                thumbColor={answers[q.key] ? colors.green : '#FFFFFF'}
+                trackColor={{ false: colors.gray300, true: colors.black }}
+                thumbColor={answers[q.key] ? '#FFFFFF' : '#FFFFFF'}
               />
             </View>
           ))}
@@ -149,7 +149,7 @@ export default function AccessibilitySurveyScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
@@ -160,7 +160,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   kicker: {
     ...Typography.captionBold,
-    color: colors.green,
+    color: colors.gray500,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -208,13 +208,13 @@ const getStyles = (colors) => StyleSheet.create({
     marginTop: 8,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     justifyContent: 'center',
     alignItems: 'center',
   },
   primaryBtnText: {
     ...Typography.bodySemibold,
-    color: '#FFFFFF',
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
     fontFamily: FontFamily.bold,
   },
   skipBtn: {

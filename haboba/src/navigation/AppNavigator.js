@@ -106,19 +106,11 @@ function HomeTabs() {
   }, [currentMode]);
 
   return (
-    <>
       <Tab.Navigator
-        initialRouteName="HomeTab"
+        initialRouteName="CommunityTab"
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarShowLabel: true,
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: '600',
-            fontFamily: FontFamily.semibold,
-            letterSpacing: 0.3,
-            marginTop: -2,
-          },
+          tabBarShowLabel: false,
           tabBarActiveTintColor: route.name === 'LikesTab' ? colors.accent : colors.tabActive,
           tabBarInactiveTintColor: colors.tabInactive,
           tabBarStyle: {
@@ -143,7 +135,7 @@ function HomeTabs() {
               return (
                 <Animated.View style={[tabStyles.fabWrap, { transform: [{ scale: scaleValue }] }]}>
                   <View style={[tabStyles.fab, { backgroundColor: colors.black }]}>
-                    <Ionicons name="swap-horizontal" size={22} color="#FFFFFF" />
+                    <Ionicons name="swap-horizontal" size={22} color={isDark ? '#1A1A1A' : '#FFFFFF'} />
                   </View>
                 </Animated.View>
               );
@@ -201,11 +193,11 @@ function HomeTabs() {
           },
         })}
       >
+        <Tab.Screen name="CommunityTab" component={CommunityScreen} options={{ tabBarLabel: 'Explore' }} />
         <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Connect' }} />
-        <Tab.Screen name="CommunityTab" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
         <Tab.Screen name="ModeToggle" component={EmptyScreen} options={{ tabBarLabel: '' }} />
         <Tab.Screen name="LikesTab" component={LikesScreen} options={{ tabBarLabel: 'Likes' }} />
-        <Tab.Screen name="MessagesTab" component={MessagesScreen} options={{ tabBarLabel: 'Messages' }} />
+        <Tab.Screen name="MessagesTab" component={MessagesScreen} options={{ tabBarLabel: 'Chats' }} />
       </Tab.Navigator>
   );
 }

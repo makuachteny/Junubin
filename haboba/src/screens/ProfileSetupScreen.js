@@ -650,7 +650,7 @@ const ProfileSetupScreen = ({ navigation }) => {
                     'Match your profile photos',
                   ].map((guide, i) => (
                     <View key={i} style={styles.verifyGuideRow}>
-                      <Ionicons name="checkmark-circle" size={18} color={colors.green} />
+                      <Ionicons name="checkmark-circle" size={18} color={colors.black} />
                       <Text style={styles.verifyGuideText}>{guide}</Text>
                     </View>
                   ))}
@@ -957,7 +957,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.gray200,
   },
   progressDotActive: {
-    backgroundColor: colors.greenTint25 || colors.accent,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#E0E0E4',
     width: 8,
     height: 8,
   },
@@ -984,11 +984,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.greenTint15,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
   },
 
   // ─── Title ───
@@ -1064,7 +1064,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   radioRowActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.greenTint04,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
   },
   radioText: {
     fontSize: 16,
@@ -1154,7 +1154,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1199,12 +1199,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.greenTint06,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: colors.greenTint15,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
   },
   selectedPromptText: {
     fontSize: 15,
@@ -1290,7 +1290,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   purposeCardActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.greenTint04,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
   },
   purposeIconCircle: {
     width: 48,
@@ -1359,7 +1359,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',

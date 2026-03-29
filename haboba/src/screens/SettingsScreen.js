@@ -72,7 +72,9 @@ export default function SettingsScreen({ navigation }) {
       profileService.updateProfile({ showMe: val }).catch(() => {});
     }
   };
-  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, restorePurchases, isSubscribed, reset, spotlights, superLikes, adsEnabled, setAdsEnabled } = useSubscription();
+  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, canUseIncognito, restorePurchases, isSubscribed, reset, spotlights, superLikes, adsEnabled, setAdsEnabled } = useSubscription();
+  const [incognito, setIncognito] = useState(false);
+  const [distanceUnit, setDistanceUnit] = useState('mi');
   const lookingFor = currentUser.preferences?.lookingFor || 'Women';
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
@@ -202,7 +204,7 @@ export default function SettingsScreen({ navigation }) {
         {/* Subscription badge */}
         {isSubscribed() && (
           <View style={styles.tierBadge}>
-            <MaterialCommunityIcons name="crown" size={18} color={colors.green} />
+            <MaterialCommunityIcons name="crown" size={18} color={colors.gold} />
             <Text style={styles.tierBadgeText}>
               {tierLabel} Member{promoActive && tier === 'free' ? ' (Promo)' : ''}
             </Text>
@@ -239,11 +241,11 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={styles.boostRow}>
           <TouchableOpacity style={styles.boostCard} onPress={() => navigation.navigate('Boost')}>
-            <GraffitiFlame size={24} color={colors.green} filled />
+            <GraffitiFlame size={24} color={colors.accent} filled />
             <Text style={styles.boostCardText}>GET MORE{'\n'}SPOTLIGHTS</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.superLikeCard} onPress={() => navigation.navigate('Elite')}>
-            <MaterialCommunityIcons name="crown" size={24} color={colors.green} />
+            <MaterialCommunityIcons name="crown" size={24} color={colors.gold} />
             <Text style={styles.boostCardText}>GET MORE{'\n'}SUPER LIKES</Text>
           </TouchableOpacity>
         </View>
@@ -277,7 +279,7 @@ export default function SettingsScreen({ navigation }) {
             <Switch
               value={showMe}
               onValueChange={handleShowMeToggle}
-              trackColor={{ false: colors.gray300, true: colors.green }}
+              trackColor={{ false: colors.gray300, true: colors.black }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -287,7 +289,35 @@ export default function SettingsScreen({ navigation }) {
             <Switch
               value={adsEnabled}
               onValueChange={setAdsEnabled}
-              trackColor={{ false: colors.gray300, true: colors.green }}
+              trackColor={{ false: colors.gray300, true: colors.black }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuLabel}>Incognito Mode</Text>
+              <Text style={styles.switchDesc}>
+                Browse without appearing in others' card stacks. Junub tier required.
+              </Text>
+            </View>
+            <Switch
+              value={incognito}
+              onValueChange={(val) => {
+                if (val && !canUseIncognito()) {
+                  Alert.alert(
+                    'Junub Feature',
+                    'Incognito Mode is available on the Junub tier. Upgrade to browse privately.',
+                    [
+                      { text: 'See Plans', onPress: () => navigation.navigate('Elite') },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                  return;
+                }
+                setIncognito(val);
+              }}
+              trackColor={{ false: colors.gray300, true: colors.black }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -302,10 +332,31 @@ export default function SettingsScreen({ navigation }) {
             <Switch
               value={isDark}
               onValueChange={toggleTheme}
-              trackColor={{ false: colors.gray300, true: colors.green }}
+              trackColor={{ false: colors.gray300, true: colors.black }}
               thumbColor="#FFFFFF"
             />
           </View>
+
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuLabel}>Distance Unit</Text>
+              <Text style={styles.switchDesc}>
+                {distanceUnit === 'mi' ? 'Miles' : 'Kilometers'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.unitToggle}
+              onPress={() => setDistanceUnit(u => u === 'mi' ? 'km' : 'mi')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.unitToggleText}>{distanceUnit.toUpperCase()}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <PressableRow style={styles.menuRow} onPress={() => Alert.alert('Blocked Users', 'You have no blocked users.', [{ text: 'OK' }])}>
+            <Text style={styles.menuLabel}>Blocked Users</Text>
+            <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
+          </PressableRow>
         </View>
 
         <View style={styles.sectionCard}>
@@ -335,6 +386,27 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
           </PressableRow>
         ))}
+
+        {/* Delete account */}
+        <PressableRow style={styles.menuRow} onPress={() => {
+          Alert.alert(
+            'Delete Account',
+            'Are you sure? This will permanently delete your account and all your data. This action cannot be undone.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete Account',
+                style: 'destructive',
+                onPress: () => {
+                  Alert.alert('Account Scheduled for Deletion', 'Your account will be deleted within 30 days. Log in again to cancel.');
+                },
+              },
+            ]
+          );
+        }}>
+          <Text style={[styles.menuLabel, { color: colors.error }]}>Delete Account</Text>
+          <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
+        </PressableRow>
 
         {/* Logout */}
         <PressableRow style={styles.menuRow} onPress={handleLogout}>
@@ -385,7 +457,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   doneText: {
     ...Typography.bodySemibold,
-    color: colors.green,
+    color: colors.black,
   },
   content: {
     paddingHorizontal: 16,
@@ -396,7 +468,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     gap: 6,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -405,7 +477,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   tierBadgeText: {
     ...Typography.label,
-    color: colors.green,
+    color: colors.black,
   },
   upgradeSection: {
     marginTop: 16,
@@ -418,30 +490,30 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   boostCard: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.greenTint25,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
     borderRadius: 22,
     paddingVertical: 22,
     paddingHorizontal: 14,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.greenTint06,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
     ...getShadow('sm', isDark),
   },
   superLikeCard: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.greenTint25,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
     borderRadius: 22,
     paddingVertical: 22,
     paddingHorizontal: 14,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.greenTint06,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
     ...getShadow('sm', isDark),
   },
   boostCardText: {
     ...Typography.captionBold,
-    color: colors.green,
+    color: colors.black,
     textAlign: 'center',
     letterSpacing: 0.5,
     lineHeight: 16,
@@ -482,7 +554,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   sectionValue: {
     ...Typography.bodySemibold,
-    color: colors.green,
+    color: colors.gray500,
   },
   sliderPlaceholder: {
     marginTop: 16,
@@ -497,7 +569,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   sliderFill: {
     position: 'absolute',
     height: 6,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     borderRadius: 3,
     width: '100%',
   },
@@ -508,8 +580,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.green,
-    shadowColor: colors.green,
+    backgroundColor: colors.black,
+    shadowColor: colors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -551,14 +623,14 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
   },
   radioActive: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenTint10,
+    borderColor: colors.black,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6',
   },
   radioInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
   },
   radioLabel: {
     ...Typography.body,
@@ -573,7 +645,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   othersTitle: {
     ...Typography.sectionLabel,
-    color: colors.green,
+    color: colors.gray500,
     marginBottom: 12,
   },
   sectionCard: {
@@ -588,7 +660,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   cardTitle: {
     ...Typography.sectionLabel,
-    color: colors.green,
+    color: colors.gray500,
     marginVertical: 8,
   },
   infoRow: {
@@ -642,6 +714,19 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginTop: 4,
     maxWidth: 260,
     fontFamily: FontFamily.regular,
+  },
+  unitToggle: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.black,
+  },
+  unitToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
+    letterSpacing: 0.5,
   },
   footer: {
     alignItems: 'center',

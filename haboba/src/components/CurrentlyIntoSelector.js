@@ -139,7 +139,7 @@ const getStyles = (colors) =>
     },
     chipActive: {
       borderColor: colors.accent,
-      backgroundColor: colors.greenTint08,
+      backgroundColor: '#F4F4F6',
     },
     chipText: {
       ...Typography.bodySmallMedium,

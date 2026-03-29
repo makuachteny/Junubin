@@ -18,13 +18,13 @@ import EmptyState from '../components/EmptyState';
 import SkeletonShimmer from '../components/SkeletonShimmer';
 
 const ICON_MAP = {
-  like: { name: 'heart', color: '#E84393' },
-  match: { name: 'heart-circle', color: '#E84393' },
-  comment: { name: 'chatbubble', color: '#6B8DB5' },
-  follow: { name: 'person-add', color: '#6B9E5B' },
+  like: { name: 'heart', color: '#CE1126' },
+  match: { name: 'heart-circle', color: '#CE1126' },
+  comment: { name: 'chatbubble', color: '#0047AB' },
+  follow: { name: 'person-add', color: '#009739' },
   like_post: { name: 'thumbs-up', color: '#CE1126' },
-  group: { name: 'people', color: '#8B5CF6' },
-  superlike: { name: 'star', color: '#FFC107' },
+  group: { name: 'people', color: '#0047AB' },
+  superlike: { name: 'star', color: '#FCCD12' },
 };
 
 function NotificationSkeleton() {
@@ -45,8 +45,8 @@ function NotificationSkeleton() {
 
 export default function NotificationsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [notifications, setNotifications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -115,11 +115,11 @@ export default function NotificationsScreen({ navigation }) {
               prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
             );
             if (item.type === 'match' || item.type === 'like' || item.type === 'superlike') {
-              navigation.navigate('LikesTab');
+              navigation.navigate('Main', { screen: 'LikesTab' });
             } else if (item.type === 'comment' || item.type === 'like_post') {
-              navigation.navigate('CommunityTab');
+              navigation.navigate('Main', { screen: 'CommunityTab' });
             } else if (item.type === 'follow') {
-              navigation.navigate('CommunityTab');
+              navigation.navigate('Main', { screen: 'CommunityTab' });
             }
           }}
         >
@@ -190,7 +190,7 @@ export default function NotificationsScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
@@ -232,7 +232,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   notifUnread: {
-    backgroundColor: colors.greenTint04,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
   },
   avatarWrap: {
     position: 'relative',

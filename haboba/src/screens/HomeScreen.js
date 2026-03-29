@@ -263,7 +263,7 @@ const applyFilters = (profiles, toggleFilters, selections = {}) => {
   });
 };
 
-const HomeScreen = ({ navigation }) => {
+const HomeScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier, tier } = useSubscription();
@@ -308,22 +308,36 @@ const HomeScreen = ({ navigation }) => {
     });
   }, [hasTier]);
 
-  // Read persisted mode on mount and when screen regains focus (picks up FAB changes)
-  useFocusEffect(
-    useCallback(() => {
+  // Poll for mode changes from the tab bar FAB toggle
+  useEffect(() => {
+    const check = setInterval(() => {
       AsyncStorage.getItem('@haboba_mode').then((stored) => {
         if ((stored === 'Social' || stored === 'Dating') && stored !== mode) {
           setModeAndPersist(stored);
         }
       });
-    }, [mode, setModeAndPersist])
-  );
+    }, 500);
+    return () => clearInterval(check);
+  }, [mode, setModeAndPersist]);
 
   const profileCardRef = useRef(null);
   const profilesRef = useRef(profiles);
   profilesRef.current = profiles;
   const topMotion = useRef(new Animated.Value(0)).current;
   const apiCursorRef = useRef(null);
+
+  // Advance deck when returning from ProfileDetail after a reaction
+  useEffect(() => {
+    const swipeAction = route.params?.swipeAction;
+    const swipedId = route.params?.swipedProfileId;
+    if (swipeAction && swipedId) {
+      // Remove the swiped profile from the deck
+      setProfiles((prev) => prev.filter((p) => p.id !== swipedId));
+      setLastSwiped({ profile: profilesRef.current.find((p) => p.id === swipedId) || {}, direction: swipeAction });
+      // Clear the params so it doesn't re-trigger
+      navigation.setParams({ swipeAction: undefined, swipedProfileId: undefined });
+    }
+  }, [route.params?.swipeAction, route.params?.swipedProfileId, navigation]);
 
   // Fetch profiles from API on mount and when mode changes
   useEffect(() => {
@@ -465,7 +479,7 @@ const HomeScreen = ({ navigation }) => {
       ]);
       return;
     }
-    consumeSuperLike();
+    if (!consumeSuperLike()) return;
     if (profileCardRef.current?.swipe) {
       profileCardRef.current.swipe('right');
     } else {
@@ -973,7 +987,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.green,
+    borderColor: colors.gray300,
     backgroundColor: colors.gray300,
   },
 
@@ -1031,12 +1045,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: colors.greenTint15,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
   },
   emptyTitle: {
     ...Typography.h2,

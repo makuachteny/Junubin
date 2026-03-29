@@ -25,7 +25,7 @@ export default function AdBanner({ style, colors }) {
         ))}
       </View>
       <View style={styles.content}>
-        <View style={[styles.adLabel, { backgroundColor: colors.greenTint15 }]}>
+        <View style={[styles.adLabel, { backgroundColor: '#E8E8EC' }]}>
           <Text style={[styles.adLabelText, { color: colors.accent }]}>AD</Text>
         </View>
         <View style={styles.adContent}>

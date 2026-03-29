@@ -35,8 +35,8 @@ const formReducer = (state, action) => {
 
 export default function EditProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { session, updateUser } = useAuth();
   const { currentUser, refreshUser } = useCurrentUser();
   const [saving, setSaving] = useState(false);
@@ -163,7 +163,7 @@ export default function EditProfileScreen({ navigation }) {
                   ]);
                 }}
               >
-                <Ionicons name="close-circle" size={22} color={colors.green} />
+                <Ionicons name="close-circle" size={22} color={colors.black} />
               </TouchableOpacity>
               {i === 0 && (
                 <View style={styles.mainBadge}>
@@ -179,10 +179,10 @@ export default function EditProfileScreen({ navigation }) {
             disabled={uploading}
           >
             {uploading ? (
-              <ActivityIndicator size="small" color={colors.green} />
+              <ActivityIndicator size="small" color={colors.black} />
             ) : (
               <>
-                <Ionicons name="add" size={32} color={colors.green} />
+                <Ionicons name="add" size={32} color={colors.black} />
                 <Text style={styles.addPhotoText}>Add</Text>
               </>
             )}
@@ -271,7 +271,7 @@ export default function EditProfileScreen({ navigation }) {
                 onPress={() => toggleSticker(index)}
               >
                 {GraffitiStickerIcon.has(sticker.emoji) ? (
-                  <GraffitiStickerIcon emoji={sticker.emoji} size={20} color={isSelected ? colors.green : colors.gray500} />
+                  <GraffitiStickerIcon emoji={sticker.emoji} size={20} color={isSelected ? colors.black : colors.gray500} />
                 ) : (
                   <Text style={styles.stickerEmoji}>{sticker.emoji}</Text>
                 )}
@@ -279,7 +279,7 @@ export default function EditProfileScreen({ navigation }) {
                   {sticker.label}
                 </Text>
                 {isSelected && (
-                  <Ionicons name="checkmark-circle" size={16} color={colors.green} style={{ marginLeft: 2 }} />
+                  <Ionicons name="checkmark-circle" size={16} color={colors.black} style={{ marginLeft: 2 }} />
                 )}
               </TouchableOpacity>
             );
@@ -292,7 +292,7 @@ export default function EditProfileScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
@@ -315,14 +315,14 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
   },
   saveBtn: {
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
   },
   saveBtnText: {
     ...Typography.label,
-    color: '#FFFFFF',
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
     fontWeight: '700',
     fontFamily: FontFamily.bold,
   },
@@ -366,14 +366,14 @@ const getStyles = (colors) => StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     left: 6,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
   mainBadgeText: {
     ...Typography.caption,
-    color: '#FFFFFF',
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     fontSize: 10,
@@ -383,16 +383,16 @@ const getStyles = (colors) => StyleSheet.create({
     height: 140,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: colors.green,
+    borderColor: colors.black,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.greenTint05,
+    backgroundColor: '#F8F8FA',
     gap: 4,
   },
   addPhotoText: {
     ...Typography.caption,
-    color: colors.green,
+    color: colors.black,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -444,15 +444,15 @@ const getStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   optionChipActive: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenTint08,
+    borderColor: colors.black,
+    backgroundColor: '#F4F4F6',
   },
   optionText: {
     ...Typography.bodySmallMedium,
     color: colors.gray,
   },
   optionTextActive: {
-    color: colors.green,
+    color: colors.black,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -473,8 +473,8 @@ const getStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   stickerChipActive: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenTint08,
+    borderColor: colors.black,
+    backgroundColor: '#F4F4F6',
   },
   stickerEmoji: {
     fontSize: 16,
@@ -484,7 +484,7 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.gray,
   },
   stickerLabelActive: {
-    color: colors.green,
+    color: colors.black,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },

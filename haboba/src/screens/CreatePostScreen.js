@@ -467,7 +467,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   mediaBtnActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.greenTint05,
+    backgroundColor: '#F8F8FA',
   },
   mediaBtnText: {
     ...Typography.caption,
@@ -533,9 +533,9 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: colors.greenTint08,
+    backgroundColor: '#F4F4F6',
     borderWidth: 1,
-    borderColor: colors.greenTint15,
+    borderColor: '#E8E8EC',
   },
   tagChipText: {
     ...Typography.caption,

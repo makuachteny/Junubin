@@ -56,7 +56,7 @@ function getVariant(variant, colors, isDark) {
     case 'secondary':
       return {
         container: {
-          backgroundColor: colors.greenTint06,
+          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
         },
         textColor: colors.accent,
       };

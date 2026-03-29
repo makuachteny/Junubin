@@ -176,7 +176,7 @@ const WheelPicker = ({ options, selectedValue, onSelect, colors, isDark }) => {
           right: 16,
           height: ITEM_HEIGHT,
           borderRadius: 14,
-          backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+          backgroundColor: 'rgba(0,0,0,0.04)',
           zIndex: 1,
         }}
       />
@@ -247,8 +247,8 @@ const WheelPicker = ({ options, selectedValue, onSelect, colors, isDark }) => {
                     fontFamily: isSelected ? FontFamily.bold : FontFamily.regular,
                     fontWeight: isSelected ? '700' : '400',
                     color: isSelected
-                      ? (isDark ? '#FFFFFF' : colors.black)
-                      : (isDark ? 'rgba(255,255,255,0.5)' : colors.gray400),
+                      ? colors.black
+                      : colors.gray400,
                     textAlign: 'center',
                   }}
                 >
@@ -450,9 +450,6 @@ const FilterBar = ({
                     style={styles.chevron}
                   />
                 )}
-                {hasSelection && !isOpen && (
-                  <View style={styles.selectionDot} />
-                )}
               </TouchableOpacity>
             );
           })}
@@ -514,7 +511,7 @@ const FilterBar = ({
                 dealbreaker[openDropdown] && styles.checkboxChecked,
               ]}>
                 {dealbreaker[openDropdown] && (
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  <Ionicons name="checkmark" size={14} color={isDark ? '#1A1A1A' : '#FFFFFF'} />
                 )}
               </View>
               <View style={styles.dealbreakerTextWrap}>
@@ -582,7 +579,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
@@ -593,7 +590,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 9,
     fontFamily: FontFamily.bold,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
     lineHeight: 12,
   },
   scrollView: {
@@ -624,7 +621,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     ...getShadow('sm', isDark),
   },
   pillOpen: {
-    borderColor: colors.green,
+    borderColor: colors.black,
     borderWidth: 1,
   },
   pillIcon: {
@@ -651,7 +648,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     height: 6,
     borderRadius: 3,
     marginLeft: 6,
-    backgroundColor: isDark ? '#FFFFFF' : colors.green,
+    backgroundColor: isDark ? '#FFFFFF' : colors.black,
   },
 
   // ─── Overlay ───
@@ -681,19 +678,19 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     width: 40,
     height: 5,
     borderRadius: 3,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
+    backgroundColor: 'rgba(0,0,0,0.15)',
   },
 
   // ─── Sheet Content ───
   sheetTitle: {
     ...Typography.h2,
-    color: isDark ? '#FFFFFF' : colors.black,
+    color: colors.black,
     textAlign: 'center',
     marginTop: 8,
   },
   sheetSubtitle: {
     ...Typography.bodySmall,
-    color: colors.gray500,
+    color: isDark ? 'rgba(0,0,0,0.5)' : colors.gray500,
     textAlign: 'center',
     marginTop: 6,
     marginBottom: 16,
@@ -714,15 +711,15 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     height: 26,
     borderRadius: 7,
     borderWidth: 2,
-    borderColor: isDark ? 'rgba(255,255,255,0.2)' : colors.gray300,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)',
+    borderColor: colors.gray300,
+    backgroundColor: 'rgba(0,0,0,0.03)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
   checkboxChecked: {
-    backgroundColor: colors.green,
-    borderColor: colors.green,
+    backgroundColor: colors.black,
+    borderColor: colors.black,
   },
   dealbreakerTextWrap: {
     flex: 1,
@@ -731,13 +728,13 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
-    color: isDark ? 'rgba(255,255,255,0.6)' : colors.gray500,
+    color: colors.gray500,
   },
   dealbreakerDesc: {
     fontSize: 13,
     fontWeight: '400',
     fontFamily: FontFamily.regular,
-    color: isDark ? 'rgba(255,255,255,0.35)' : colors.gray400,
+    color: colors.gray400,
     marginTop: 2,
   },
 
@@ -754,7 +751,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: isDark ? 'rgba(255,255,255,0.2)' : colors.gray300,
+    borderColor: colors.gray300,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -762,12 +759,12 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: isDark ? 'rgba(255,255,255,0.7)' : colors.gray600,
+    color: colors.gray600,
     letterSpacing: 0.3,
   },
   applyBtn: {
     flex: 1,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     borderRadius: 999,
     paddingVertical: 18,
     alignItems: 'center',
@@ -781,7 +778,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
     letterSpacing: 0.3,
   },
 });

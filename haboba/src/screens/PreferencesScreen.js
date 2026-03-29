@@ -365,15 +365,7 @@ export default function PreferencesScreen({ navigation, route }) {
       }
     }
 
-    if (route?.params?.returnTo === 'Discover') {
-      navigation.navigate('Main', { screen: 'HomeTab' });
-      return;
-    }
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-      return;
-    }
-    navigation.navigate('Main', { screen: 'HomeTab' });
+    navigation.goBack();
   };
 
   const openMemberPref = (pref) => {
@@ -454,7 +446,7 @@ export default function PreferencesScreen({ navigation, route }) {
               <View style={[styles.prefValuePill, isSet && styles.prefValuePillSet]}>
                 <Text style={[styles.prefValue, isSet && styles.prefValueSet]}>{val}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={isSet ? colors.green : colors.gray400} />
+              <Ionicons name="chevron-forward" size={16} color={isSet ? colors.black : colors.gray400} />
             </>
           )}
         </View>
@@ -519,8 +511,8 @@ export default function PreferencesScreen({ navigation, route }) {
                     color: slideAnim.interpolate({
                       inputRange: [0, 1],
                       outputRange: seg.value === 'Dating'
-                        ? ['#FFFFFF', colors.gray600]
-                        : [colors.gray600, '#FFFFFF'],
+                        ? [isDark ? '#1A1A1A' : '#FFFFFF', colors.gray600]
+                        : [colors.gray600, isDark ? '#1A1A1A' : '#FFFFFF'],
                     }),
                   },
                 ]}
@@ -533,7 +525,7 @@ export default function PreferencesScreen({ navigation, route }) {
 
         <View style={styles.summaryCard}>
           <View style={styles.summaryIconWrap}>
-            <Ionicons name={isSocial ? 'people-circle-outline' : 'heart-circle-outline'} size={20} color={colors.green} />
+            <Ionicons name={isSocial ? 'people-circle-outline' : 'heart-circle-outline'} size={20} color={colors.black} />
           </View>
           <View style={styles.summaryTextWrap}>
             <Text style={styles.summaryTitle}>{isSocial ? 'Social Match Setup' : 'Dating Match Setup'}</Text>
@@ -552,7 +544,7 @@ export default function PreferencesScreen({ navigation, route }) {
           <>
             {/* ── SOCIAL PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
-              <View style={[styles.sectionDot, { backgroundColor: colors.green }]} />
+              <View style={[styles.sectionDot, { backgroundColor: colors.black }]} />
               <GraffitiShield size={14} color="#CE1126" />
               <Text style={styles.sectionHeader}>Socializing Preferences</Text>
               <View style={styles.sectionCountPill}>
@@ -569,7 +561,7 @@ export default function PreferencesScreen({ navigation, route }) {
           <>
             {/* ── MEMBER PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
-              <View style={[styles.sectionDot, { backgroundColor: colors.green }]} />
+              <View style={[styles.sectionDot, { backgroundColor: colors.black }]} />
               <GraffitiShield size={14} color="#CE1126" />
               <Text style={styles.sectionHeader}>Member Preferences</Text>
               <View style={styles.sectionCountPill}>
@@ -631,8 +623,8 @@ export default function PreferencesScreen({ navigation, route }) {
         )}
 
         <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
-          <View style={[styles.sectionDot, { backgroundColor: colors.green }]} />
-          <GraffitiShield size={14} color={colors.green} />
+          <View style={[styles.sectionDot, { backgroundColor: colors.black }]} />
+          <GraffitiShield size={14} color={colors.black} />
           <Text style={styles.sectionHeader}>Interactive Experience</Text>
         </View>
         <View style={styles.card}>
@@ -642,8 +634,8 @@ export default function PreferencesScreen({ navigation, route }) {
             activeOpacity={0.75}
           >
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: colors.greenTint08 }]}>
-                <Ionicons name="people-circle-outline" size={18} color={colors.green} />
+              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
+                <Ionicons name="people-circle-outline" size={18} color={colors.black} />
               </View>
               <Text style={styles.prefLabel}>Friend-of-friend layer</Text>
             </View>
@@ -656,8 +648,8 @@ export default function PreferencesScreen({ navigation, route }) {
 
           <View style={[styles.prefRow, styles.prefRowBorder]}>
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: colors.greenTint08 }]}>
-                <Ionicons name="sparkles-outline" size={18} color={colors.green} />
+              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.black} />
               </View>
               <Text style={styles.prefLabel}>Seasonal mode</Text>
             </View>
@@ -678,8 +670,8 @@ export default function PreferencesScreen({ navigation, route }) {
 
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: colors.greenTint08 }]}>
-                <Ionicons name="planet-outline" size={18} color={colors.green} />
+              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
+                <Ionicons name="planet-outline" size={18} color={colors.black} />
               </View>
               <Text style={styles.prefLabel}>Personality quest</Text>
             </View>
@@ -699,7 +691,7 @@ export default function PreferencesScreen({ navigation, route }) {
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: isDark ? colors.cream : colors.creamDark,
+    backgroundColor: colors.white,
   },
   header: {
     flexDirection: 'row',
@@ -707,18 +699,19 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     height: 56,
-    backgroundColor: isDark ? colors.cream : colors.creamDark,
+    backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 34,
+    fontSize: 28,
+    fontWeight: '900',
     fontFamily: FontFamily.black,
     color: colors.black,
     textAlign: 'center',
-    letterSpacing: 0.3,
+    letterSpacing: -0.8,
   },
   doneText: {
     ...Typography.bodySemibold,
-    color: colors.green,
+    color: colors.black,
   },
   doneBtn: {
     minWidth: 64,
@@ -733,7 +726,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(245, 96, 64, 0.22)' : colors.greenTint12,
+    borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#ECECF0',
     backgroundColor: isDark ? 'rgba(232, 97, 60, 0.10)' : 'rgba(245, 96, 64, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -792,7 +785,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     left: 3,
     bottom: 3,
     borderRadius: 12,
-    backgroundColor: colors.green,
+    backgroundColor: colors.black,
     ...getShadow('sm', isDark),
   },
   segmentButton: {
@@ -832,9 +825,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   sectionCountPill: {
     borderWidth: 1,
-    borderColor: colors.greenTint25,
+    borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E0E0E4',
     borderRadius: 999,
-    backgroundColor: colors.greenTint06,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
     paddingHorizontal: 7,
     paddingVertical: 1,
     minWidth: 22,
@@ -844,7 +837,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 10,
     fontFamily: FontFamily.bold,
     fontWeight: '700',
-    color: colors.green,
+    color: colors.black,
   },
   sectionCountPillGold: {
     borderColor: isDark ? 'rgba(255, 213, 79, 0.28)' : 'rgba(249, 168, 37, 0.32)',
@@ -901,11 +894,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // Preference card
   card: {
-    backgroundColor: isDark ? colors.surface : colors.creamDark,
+    backgroundColor: isDark ? colors.surface : colors.gray100,
     borderRadius: 18,
     overflow: 'hidden',
-    borderWidth: isDark ? 0.5 : 0,
-    borderColor: isDark ? colors.cardBorder : 'transparent',
+    borderWidth: 0.5,
+    borderColor: isDark ? colors.cardBorder : colors.separator,
     ...getShadow('sm', isDark),
   },
 
@@ -961,8 +954,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingVertical: 4,
   },
   prefValuePillSet: {
-    backgroundColor: colors.greenTint10,
-    borderColor: colors.greenTint25,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
+    borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E0E0E4',
   },
   prefValue: {
     fontSize: 13,
@@ -971,7 +964,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: colors.gray500,
   },
   prefValueSet: {
-    color: colors.green,
+    color: colors.black,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -992,8 +985,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingVertical: 3,
   },
   seasonChipActive: {
-    borderColor: colors.green,
-    backgroundColor: colors.greenTint08,
+    borderColor: colors.black,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
   },
   seasonChipText: {
     ...Typography.caption,
@@ -1001,7 +994,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 9,
   },
   seasonChipTextActive: {
-    color: colors.green,
+    color: colors.black,
   },
   questMeta: {
     alignItems: 'flex-end',

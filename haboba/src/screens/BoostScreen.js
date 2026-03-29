@@ -68,7 +68,7 @@ export default function BoostScreen({ navigation }) {
     const result = await purchase(purchaseTarget);
 
     if (result.success) {
-      setModal({ visible: true, type: 'success', title: 'Spotlights Added!', message: `You now have ${spotlights + pack.count} spotlights.` });
+      setModal({ visible: true, type: 'success', title: 'Spotlights Added!', message: `${pack.count} Spotlight${pack.count > 1 ? 's' : ''} added to your account!` });
     } else if (result.error === 'cancelled') {
       setModal((m) => ({ ...m, visible: false }));
     } else {
@@ -219,7 +219,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.greenTint15,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
   },
   title: {
     ...Typography.h1,
@@ -238,7 +238,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.greenTint12,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#ECECF0',
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,

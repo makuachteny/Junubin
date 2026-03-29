@@ -52,8 +52,8 @@ export default function CallScreen({ navigation, route }) {
     <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
       {/* Pulsing ring behind avatar */}
       <View style={styles.avatarWrap}>
-        <View style={[styles.pulseRing, styles.pulseRing1, { borderColor: colors.greenTint15 }]} />
-        <View style={[styles.pulseRing, styles.pulseRing2, { borderColor: colors.greenTint15 }]} />
+        <View style={[styles.pulseRing, styles.pulseRing1, { borderColor: '#E8E8EC' }]} />
+        <View style={[styles.pulseRing, styles.pulseRing2, { borderColor: '#E8E8EC' }]} />
         <Image source={imageSource(match.images?.[0])} style={[styles.avatar, { borderColor: colors.accent }]} />
       </View>
 

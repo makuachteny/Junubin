@@ -236,12 +236,12 @@ const getStyles = (colors) => StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 24,
-    backgroundColor: colors.greenTint10,
+    backgroundColor: '#E8E8EC',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
     borderWidth: 1.5,
-    borderColor: colors.greenTint25,
+    borderColor: '#E0E0E4',
   },
   bannerName: {
     ...Typography.h2,
@@ -250,7 +250,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   bannerMembers: {
     ...Typography.bodySmall,
-    color: colors.green,
+    color: colors.gray500,
     marginTop: 4,
   },
   bannerDesc: {
