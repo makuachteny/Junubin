@@ -462,7 +462,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   connectionsCount: {
     ...Typography.captionBold,
     color: colors.accent,
-    backgroundColor: colors.accentTint10,
+    backgroundColor: colors.greenTint10,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -565,7 +565,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   badgeUnlocked: {
     borderColor: colors.accent,
-    backgroundColor: isDark ? colors.accentTint10 : colors.accentTint06,
+    backgroundColor: isDark ? colors.greenTint10 : colors.greenTint06,
   },
   badgeEmoji: { fontSize: 24 },
   badgeLabel: {
@@ -621,7 +621,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     borderBottomColor: colors.gray200,
   },
   leaderRowMe: {
-    backgroundColor: isDark ? colors.accentTint10 : colors.accentTint06,
+    backgroundColor: isDark ? colors.greenTint10 : colors.greenTint06,
     borderRadius: 12,
     borderBottomWidth: 0,
   },

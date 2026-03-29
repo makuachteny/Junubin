@@ -170,7 +170,7 @@ const FindFriendsScreen = ({ navigation }) => {
         </View>
 
         <View style={styles.permissionCard}>
-          <View style={[styles.permissionIcon, { backgroundColor: colors.accentTint08 }]}>
+          <View style={[styles.permissionIcon, { backgroundColor: colors.greenTint08 }]}>
             <Ionicons name="people" size={48} color={colors.accent} />
           </View>
           <Text style={styles.permissionTitle}>Find your people</Text>
@@ -261,7 +261,7 @@ const FindFriendsScreen = ({ navigation }) => {
       const isFollowed = followedIds.has(user.userId);
       return (
         <View style={styles.contactRow}>
-          <View style={[styles.contactAvatar, { backgroundColor: colors.accentTint08 }]}>
+          <View style={[styles.contactAvatar, { backgroundColor: colors.greenTint08 }]}>
             {user.avatar ? (
               <Image source={{ uri: user.avatar }} style={styles.contactAvatarImg} />
             ) : (

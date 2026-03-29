@@ -12,7 +12,7 @@ export default function IncomingCallOverlay({ visible, caller, onAccept, onDecli
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.overlay}>
-        <View style={[styles.card, { borderColor: colors.accentTint25 }]}>
+        <View style={[styles.card, { borderColor: colors.greenTint25 }]}>
           <Image source={imageSource(caller.images?.[0])} style={[styles.avatar, { borderColor: colors.accent }]} />
           <Text style={styles.name}>{caller.name}</Text>
           <Text style={styles.label}>Incoming Call</Text>

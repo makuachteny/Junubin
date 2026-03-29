@@ -139,13 +139,13 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     position: 'absolute',
     zIndex: 3,
   },
-  // Like — flag green
+  // Like — red heart
   likeBtn: {
     width: 56,
     height: 56,
-    backgroundColor: '#009739',
+    backgroundColor: '#CE1126',
     marginBottom: 0,
-    ...getShadow('lg', isDark, '#009739'),
+    ...getShadow('lg', isDark, '#CE1126'),
   },
 });
 

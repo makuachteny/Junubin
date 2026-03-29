@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { GraffitiCrown } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily, useTheme } from '../theme';
 import LogoMark from '../components/LogoMark';
@@ -26,7 +27,7 @@ import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
-const ACCENT = '#009739';
+const ACCENT = '#FCCD12';
 
 const PAGES = [{ id: 1 }, { id: 2 }];
 
@@ -246,8 +247,7 @@ const OnboardingScreen = ({ navigation }) => {
   // ── Logo entrance ──
   const logoScale = entrance.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
   const logoOpacity = entrance.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.3, 1] });
-  const ornamentY = entrance.interpolate({ inputRange: [0, 1], outputRange: [32, 0] });
-  const ornamentOpacity = entrance.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0, 1] });
+  // Removed — text block replaced by minimal logo
 
   // ── Pulse values ──
   const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.6] });
@@ -267,14 +267,14 @@ const OnboardingScreen = ({ navigation }) => {
       <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradientOpacity }]}>
         <LinearGradient
           colors={[
-            'rgba(0, 0, 0, 0)',
-            'rgba(0, 0, 0, 0.03)',
-            'rgba(0, 0, 0, 0.18)',
-            'rgba(0, 0, 0, 0.52)',
-            'rgba(0, 0, 0, 0.82)',
-            'rgba(0, 0, 0, 0.94)',
+            'rgba(0, 0, 0, 0.15)',
+            'rgba(0, 0, 0, 0.05)',
+            'rgba(0, 0, 0, 0.15)',
+            'rgba(0, 0, 0, 0.35)',
+            'rgba(0, 0, 0, 0.65)',
+            'rgba(0, 0, 0, 0.85)',
           ]}
-          locations={[0, 0.15, 0.35, 0.55, 0.75, 0.92]}
+          locations={[0, 0.2, 0.4, 0.6, 0.8, 0.95]}
           style={StyleSheet.absoluteFill}
         />
       </Animated.View>
@@ -310,42 +310,29 @@ const OnboardingScreen = ({ navigation }) => {
         style={StyleSheet.absoluteFill}
         contentContainerStyle={{ width: W * PAGES.length }}
       >
-        {/* ──── PAGE 1: THE POSTER ──── */}
-        <View style={[s.pg, { paddingBottom: bottomH + 24 }]}>
-          <Animated.View
-            style={[
-              s.heroWrap,
-              {
+        {/* ──── PAGE 1: THE SPLASH ──── */}
+        <View style={s.pg}>
+          {/* Centered logo with crown — fills the screen like BLK splash */}
+          <View style={s.splashCenter}>
+            <Animated.View
+              style={{
                 opacity: a0.opacity,
                 transform: [{ scale: Animated.multiply(a0.scale, logoScale) }],
-              },
-            ]}
-          >
-            <View style={s.heroHalo} pointerEvents="none" />
-            <Animated.View style={{ opacity: logoOpacity }}>
-              <LogoMark size={120} light animated showSub={false} />
+                alignItems: 'center',
+              }}
+            >
+              <Animated.View style={{ opacity: logoOpacity }}>
+                <View style={s.logoWithCrown}>
+                  <GraffitiCrown size={28} color="#FCCD12" filled style={s.crownIcon} />
+                  <LogoMark size={90} light animated showSub={false} />
+                </View>
+              </Animated.View>
             </Animated.View>
-
-            <Animated.View style={[s.heroTextBlock, { opacity: taglineOpacity, transform: [{ translateY: taglineY }] }]}>
-              <Text style={s.heroTagline}>Connect with</Text>
-              <Text testID="onboarding-hero-connect" style={s.heroAccent}>South Sudanese.</Text>
-            </Animated.View>
-          </Animated.View>
-
-          {/* Scroll hint */}
-          <Animated.View
-            style={[
-              s.scrollHint,
-              {
-                bottom: bottomH - 20,
-                opacity: Animated.multiply(a0.opacity, pulseOpacity),
-                transform: [{ translateX: pulseX }],
-              },
-            ]}
-          >
-            <Text style={s.scrollHintText}>SWIPE</Text>
-            <Ionicons name="chevron-forward" size={12} color="rgba(255,255,255,0.4)" />
-          </Animated.View>
+          </View>
+          {/* Subtle "South Sudanese" at the bottom */}
+          <View style={s.splashBottom}>
+            <Text testID="onboarding-hero-connect" style={s.splashTagline}>South Sudanese</Text>
+          </View>
         </View>
 
         {/* ──── PAGE 2: THE INVITATION ──── */}
@@ -392,7 +379,7 @@ const OnboardingScreen = ({ navigation }) => {
           <>
             <TouchableOpacity style={s.ctaWrap} onPress={goSignup} activeOpacity={0.9}>
               <LinearGradient
-                colors={[colors.green, colors.green, colors.greenDark]}
+                colors={['#CE1126', '#009739']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={s.ctaGradient}
@@ -424,7 +411,7 @@ const OnboardingScreen = ({ navigation }) => {
         ) : (
           <TouchableOpacity testID="onboarding-next" style={s.nextBtnOuter} onPress={goNext} activeOpacity={0.85}>
             <LinearGradient
-              colors={[colors.green, colors.green, colors.greenDark]}
+              colors={['#CE1126', '#009739']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={s.nextBtnGradient}
@@ -472,27 +459,40 @@ const s = StyleSheet.create({
   contentWrap: { paddingHorizontal: CONTENT_PAD },
 
   // ══ PAGE 1 — Hero ══
-  heroWrap: { alignItems: 'center', paddingHorizontal: CONTENT_PAD, marginTop: H * 0.1, gap: 14 },
-  heroHalo: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(0,151,57,0.12)',
-    shadowColor: '#009739',
-    shadowOffset: { width: 0, height: 18 },
-    shadowOpacity: 0.35,
-    shadowRadius: 32,
+  heroWrap: { alignItems: 'center', paddingHorizontal: CONTENT_PAD, gap: 8 },
+  splashCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  heroTextBlock: { alignItems: 'center', marginTop: 28 },
-  heroTagline: {
-    fontSize: 22, fontWeight: '300', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.7)', textAlign: 'center',
-    letterSpacing: 4, textTransform: 'uppercase', marginBottom: 6,
+  logoWithCrown: {
+    alignItems: 'center',
+    position: 'relative',
+  },
+  crownIcon: {
+    position: 'absolute',
+    top: -18,
+    zIndex: 2,
+  },
+  splashBottom: {
+    position: 'absolute',
+    bottom: 180,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  splashTagline: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 4,
+    textTransform: 'uppercase',
   },
   heroAccent: {
-    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
-    color: '#FFFFFF', textAlign: 'center', letterSpacing: -1,
+    fontSize: 16, fontWeight: '500', fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.5)', textAlign: 'center', letterSpacing: 3,
+    textTransform: 'uppercase',
   },
   heroRule: { width: 120, height: 2, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.32)' },
   heroGlyphRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },

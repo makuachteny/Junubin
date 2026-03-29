@@ -454,7 +454,7 @@ export default function PreferencesScreen({ navigation, route }) {
               <View style={[styles.prefValuePill, isSet && styles.prefValuePillSet]}>
                 <Text style={[styles.prefValue, isSet && styles.prefValueSet]}>{val}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color={isSet ? colors.accent : colors.gray400} />
+              <Ionicons name="chevron-forward" size={16} color={isSet ? colors.green : colors.gray400} />
             </>
           )}
         </View>
@@ -533,7 +533,7 @@ export default function PreferencesScreen({ navigation, route }) {
 
         <View style={styles.summaryCard}>
           <View style={styles.summaryIconWrap}>
-            <Ionicons name={isSocial ? 'people-circle-outline' : 'heart-circle-outline'} size={20} color={colors.accent} />
+            <Ionicons name={isSocial ? 'people-circle-outline' : 'heart-circle-outline'} size={20} color={colors.green} />
           </View>
           <View style={styles.summaryTextWrap}>
             <Text style={styles.summaryTitle}>{isSocial ? 'Social Match Setup' : 'Dating Match Setup'}</Text>
@@ -552,7 +552,7 @@ export default function PreferencesScreen({ navigation, route }) {
           <>
             {/* ── SOCIAL PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
-              <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+              <View style={[styles.sectionDot, { backgroundColor: colors.green }]} />
               <GraffitiShield size={14} color="#CE1126" />
               <Text style={styles.sectionHeader}>Socializing Preferences</Text>
               <View style={styles.sectionCountPill}>
@@ -569,7 +569,7 @@ export default function PreferencesScreen({ navigation, route }) {
           <>
             {/* ── MEMBER PREFERENCES ── */}
             <View style={styles.sectionHeaderRow}>
-              <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
+              <View style={[styles.sectionDot, { backgroundColor: colors.green }]} />
               <GraffitiShield size={14} color="#CE1126" />
               <Text style={styles.sectionHeader}>Member Preferences</Text>
               <View style={styles.sectionCountPill}>
@@ -631,8 +631,8 @@ export default function PreferencesScreen({ navigation, route }) {
         )}
 
         <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
-          <View style={[styles.sectionDot, { backgroundColor: colors.accent }]} />
-          <GraffitiShield size={14} color={colors.accent} />
+          <View style={[styles.sectionDot, { backgroundColor: colors.green }]} />
+          <GraffitiShield size={14} color={colors.green} />
           <Text style={styles.sectionHeader}>Interactive Experience</Text>
         </View>
         <View style={styles.card}>
@@ -642,8 +642,8 @@ export default function PreferencesScreen({ navigation, route }) {
             activeOpacity={0.75}
           >
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: colors.accentTint08 }]}>
-                <Ionicons name="people-circle-outline" size={18} color={colors.accent} />
+              <View style={[styles.prefIconWrap, { backgroundColor: colors.greenTint08 }]}>
+                <Ionicons name="people-circle-outline" size={18} color={colors.green} />
               </View>
               <Text style={styles.prefLabel}>Friend-of-friend layer</Text>
             </View>
@@ -656,8 +656,8 @@ export default function PreferencesScreen({ navigation, route }) {
 
           <View style={[styles.prefRow, styles.prefRowBorder]}>
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: colors.accentTint08 }]}>
-                <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
+              <View style={[styles.prefIconWrap, { backgroundColor: colors.greenTint08 }]}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.green} />
               </View>
               <Text style={styles.prefLabel}>Seasonal mode</Text>
             </View>
@@ -678,8 +678,8 @@ export default function PreferencesScreen({ navigation, route }) {
 
           <View style={styles.prefRow}>
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: colors.accentTint08 }]}>
-                <Ionicons name="planet-outline" size={18} color={colors.accent} />
+              <View style={[styles.prefIconWrap, { backgroundColor: colors.greenTint08 }]}>
+                <Ionicons name="planet-outline" size={18} color={colors.green} />
               </View>
               <Text style={styles.prefLabel}>Personality quest</Text>
             </View>
@@ -718,7 +718,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   doneText: {
     ...Typography.bodySemibold,
-    color: colors.accent,
+    color: colors.green,
   },
   doneBtn: {
     minWidth: 64,
@@ -733,7 +733,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(245, 96, 64, 0.22)' : colors.accentTint12,
+    borderColor: isDark ? 'rgba(245, 96, 64, 0.22)' : colors.greenTint12,
     backgroundColor: isDark ? 'rgba(232, 97, 60, 0.10)' : 'rgba(245, 96, 64, 0.06)',
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -792,7 +792,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     left: 3,
     bottom: 3,
     borderRadius: 12,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     ...getShadow('sm', isDark),
   },
   segmentButton: {
@@ -832,9 +832,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   sectionCountPill: {
     borderWidth: 1,
-    borderColor: colors.accentTint25,
+    borderColor: colors.greenTint25,
     borderRadius: 999,
-    backgroundColor: colors.accentTint06,
+    backgroundColor: colors.greenTint06,
     paddingHorizontal: 7,
     paddingVertical: 1,
     minWidth: 22,
@@ -844,7 +844,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 10,
     fontFamily: FontFamily.bold,
     fontWeight: '700',
-    color: colors.accent,
+    color: colors.green,
   },
   sectionCountPillGold: {
     borderColor: isDark ? 'rgba(255, 213, 79, 0.28)' : 'rgba(249, 168, 37, 0.32)',
@@ -961,8 +961,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingVertical: 4,
   },
   prefValuePillSet: {
-    backgroundColor: colors.accentTint10,
-    borderColor: colors.accentTint25,
+    backgroundColor: colors.greenTint10,
+    borderColor: colors.greenTint25,
   },
   prefValue: {
     fontSize: 13,
@@ -971,7 +971,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: colors.gray500,
   },
   prefValueSet: {
-    color: colors.accent,
+    color: colors.green,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -992,8 +992,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingVertical: 3,
   },
   seasonChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint08,
+    borderColor: colors.green,
+    backgroundColor: colors.greenTint08,
   },
   seasonChipText: {
     ...Typography.caption,
@@ -1001,7 +1001,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 9,
   },
   seasonChipTextActive: {
-    color: colors.accent,
+    color: colors.green,
   },
   questMeta: {
     alignItems: 'flex-end',

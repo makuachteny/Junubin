@@ -219,7 +219,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: colors.accentTint15,
+    backgroundColor: colors.greenTint15,
   },
   title: {
     ...Typography.h1,
@@ -238,7 +238,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: colors.accentTint12,
+    backgroundColor: colors.greenTint12,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,

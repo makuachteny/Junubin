@@ -63,13 +63,13 @@ export default function CreateStoryScreen({ navigation }) {
       {/* Mode toggle */}
       <View style={styles.modeRow}>
         <TouchableOpacity
-          style={[styles.modeBtn, mode === 'text' && { backgroundColor: colors.accent }]}
+          style={[styles.modeBtn, mode === 'text' && { backgroundColor: colors.green }]}
           onPress={() => setMode('text')}
         >
           <Text style={[styles.modeBtnText, mode === 'text' && { color: '#FFF' }]}>Text</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.modeBtn, mode === 'photo' && { backgroundColor: colors.accent }]}
+          style={[styles.modeBtn, mode === 'photo' && { backgroundColor: colors.green }]}
           onPress={() => setMode('photo')}
         >
           <Text style={[styles.modeBtnText, mode === 'photo' && { color: '#FFF' }]}>Photo</Text>
@@ -143,7 +143,7 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
     letterSpacing: 0.3,
   },
-  postText: { ...Typography.bodySemibold, color: colors.accent },
+  postText: { ...Typography.bodySemibold, color: colors.green },
   modeRow: {
     flexDirection: 'row',
     justifyContent: 'center',

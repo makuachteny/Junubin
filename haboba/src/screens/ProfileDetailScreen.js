@@ -36,7 +36,7 @@ const PhotoItem = ({ uri, name, width }) => {
   if (err || !uri) {
     return (
       <View style={{ width, height: PHOTO_H, backgroundColor: colors.gray300, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ fontSize: 80, fontWeight: '900', fontFamily: FontFamily.black, color: colors.accent, opacity: 0.4 }}>
+        <Text style={{ fontSize: 80, fontWeight: '900', fontFamily: FontFamily.black, color: colors.green, opacity: 0.4 }}>
           {name ? name.charAt(0).toUpperCase() : '?'}
         </Text>
       </View>
@@ -148,7 +148,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           <View style={s.nameOverlay}>
             <View style={s.nameRow}>
               <Text style={s.nameText}>{name}, {age}</Text>
-              {verified && <Ionicons name="checkmark-circle" size={20} color={colors.accent} style={{ marginLeft: 5 }} />}
+              {verified && <Ionicons name="checkmark-circle" size={20} color={colors.green} style={{ marginLeft: 5 }} />}
             </View>
             {(job || school || education) && (
               <Text style={s.subtitleText}>
@@ -179,8 +179,8 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               style={[
                 s.followActionBtn,
                 (isFollowing || isFriend)
-                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#CE1126' : colors.accent }
-                  : { backgroundColor: colors.accent },
+                  ? { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: isFriend ? '#CE1126' : colors.green }
+                  : { backgroundColor: colors.green },
               ]}
               onPress={toggleFollow}
               activeOpacity={0.8}
@@ -188,7 +188,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               {isFriend && <Ionicons name="people" size={14} color="#CE1126" style={{ marginRight: 4 }} />}
               <Text style={[
                 s.followActionText,
-                { color: (isFollowing || isFriend) ? (isFriend ? '#CE1126' : colors.accent) : '#FFF' },
+                { color: (isFollowing || isFriend) ? (isFriend ? '#CE1126' : colors.green) : '#FFF' },
               ]}>
                 {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
               </Text>
@@ -298,16 +298,16 @@ const ProfileDetailScreen = ({ navigation, route }) => {
             }}>
               <View style={s.section}>
                 <View style={s.sectionHeaderRow}>
-                  <GraffitiShield size={16} color={colors.accent} filled />
+                  <GraffitiShield size={16} color={colors.green} filled />
                   <Text style={s.sectionLabelInline}>Identity</Text>
                 </View>
                 <View style={s.stickerRow}>
                   {stickers.map((st, i) => {
                     const eth = getEthnicIdentity(st.label);
                     const isEthnic = ['Dinka','Nuer','Shilluk','Bari','Zande','Acholi','Murle','Toposa','Lotuko','Madi','Luo'].includes(st.label);
-                    const ringColor = isEthnic ? eth.color : colors.accentTint25;
-                    const bgColor = isEthnic ? eth.tint : (isDark ? 'rgba(255,255,255,0.06)' : colors.accentTint08);
-                    const iconColor = isEthnic ? eth.color : colors.accent;
+                    const ringColor = isEthnic ? eth.color : colors.greenTint25;
+                    const bgColor = isEthnic ? eth.tint : (isDark ? 'rgba(255,255,255,0.06)' : colors.greenTint08);
+                    const iconColor = isEthnic ? eth.color : colors.green;
                     return (
                       <View key={i} style={s.stickerItem}>
                         <View style={[s.stickerCircle, { borderColor: ringColor, backgroundColor: bgColor }]}>
@@ -367,7 +367,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               <Text style={s.likeBtnText}>Like</Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.superBtn} onPress={handleSuperLike} activeOpacity={0.7}>
-              <GraffitiSparkles size={22} color={colors.accent} filled />
+              <GraffitiSparkles size={22} color={colors.green} filled />
             </TouchableOpacity>
             <TouchableOpacity
               style={s.challengeBtn}
@@ -428,8 +428,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20, marginTop: 8 },
   factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.white, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.gray200 },
   factText: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
-  factAccent: { borderColor: colors.accent, backgroundColor: isDark ? colors.accentTint10 : colors.accentTint06 },
-  factFilled: { backgroundColor: colors.accent, borderColor: colors.accent },
+  factAccent: { borderColor: colors.green, backgroundColor: isDark ? colors.greenTint10 : colors.greenTint06 },
+  factFilled: { backgroundColor: colors.green, borderColor: colors.green },
   factFilledText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
 
   // ── Prompt — hero card with left accent stripe ──
@@ -477,8 +477,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // ── Action Bar ──
   actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 24, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: colors.separator },
   passBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
-  likeBtn: { flex: 1, height: 54, backgroundColor: colors.green, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
-  matchBtn: { flex: 1, height: 54, backgroundColor: colors.green, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.green, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+  likeBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
+  matchBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
   likeBtnText: { color: '#FFF', fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.5 },
   superBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
   challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(252,205,18,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(252,205,18,0.25)' },

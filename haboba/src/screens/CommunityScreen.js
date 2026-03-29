@@ -143,7 +143,7 @@ export default function CommunityScreen({ navigation, route }) {
             onPress={() => navigation.navigate('GroupDetail', { group })}
           >
             <View style={styles.myGroupIcon}>
-              <GraffitiCommunity size={20} color={colors.green} filled />
+              <GraffitiCommunity size={20} color={colors.royal} filled />
             </View>
             <Text style={styles.myGroupName} numberOfLines={1}>{group.name}</Text>
             <Text style={styles.myGroupMembers}>{group.members} members</Text>
@@ -171,7 +171,7 @@ export default function CommunityScreen({ navigation, route }) {
           onPress={() => navigation.navigate('GroupDetail', { group })}
         >
           <View style={styles.discoverIcon}>
-            <GraffitiCommunity size={22} color={colors.green} filled />
+            <GraffitiCommunity size={22} color={colors.royal} filled />
           </View>
           <View style={styles.discoverInfo}>
             <Text style={styles.discoverName}>{group.name}</Text>
@@ -377,12 +377,12 @@ export default function CommunityScreen({ navigation, route }) {
               onPress={() => navigation.navigate('Events')}
               activeOpacity={0.8}
             >
-              <Ionicons name="calendar" size={24} color={colors.green} />
+              <Ionicons name="calendar" size={24} color={colors.gold} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.eventsCtaTitle, { color: colors.black }]}>Upcoming Events</Text>
                 <Text style={[styles.eventsCtaSub, { color: colors.gray }]}>{filteredEvents.length} events near you</Text>
               </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.green} />
+              <Ionicons name="chevron-forward" size={20} color={colors.gold} />
             </TouchableOpacity>
             {filteredEvents.slice(0, 3).map((evt) => (
               <TouchableOpacity
@@ -391,8 +391,8 @@ export default function CommunityScreen({ navigation, route }) {
                 activeOpacity={0.8}
                 onPress={() => navigation.navigate('EventDetail', { event: evt })}
               >
-                <View style={[styles.discoverIcon, { backgroundColor: colors.greenLight }]}>
-                  <Ionicons name="calendar-outline" size={22} color={colors.green} />
+                <View style={[styles.discoverIcon, { backgroundColor: colors.goldLight }]}>
+                  <Ionicons name="calendar-outline" size={22} color={colors.gold} />
                 </View>
                 <View style={styles.discoverInfo}>
                   <Text style={[styles.discoverName, { color: colors.black }]}>{evt.title}</Text>
@@ -466,7 +466,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: colors.green,
+    borderColor: colors.gold,
     backgroundColor: colors.gray300,
     ...getShadow('md', isDark),
   },
@@ -558,7 +558,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.greenLight,
+    backgroundColor: colors.royalLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10,
@@ -586,7 +586,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 14,
-    backgroundColor: colors.greenLight,
+    backgroundColor: colors.royalLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,

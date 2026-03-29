@@ -107,8 +107,8 @@ export default function AccessibilitySurveyScreen({ navigation }) {
               <Switch
                 value={!!answers[q.key]}
                 onValueChange={(v) => setAnswer(q.key, v)}
-                trackColor={{ false: colors.gray300, true: colors.accentTint25 }}
-                thumbColor={answers[q.key] ? colors.accent : '#FFFFFF'}
+                trackColor={{ false: colors.gray300, true: colors.greenTint25 }}
+                thumbColor={answers[q.key] ? colors.green : '#FFFFFF'}
               />
             </View>
           ))}
@@ -160,7 +160,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   kicker: {
     ...Typography.captionBold,
-    color: colors.accent,
+    color: colors.green,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
@@ -208,7 +208,7 @@ const getStyles = (colors) => StyleSheet.create({
     marginTop: 8,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     justifyContent: 'center',
     alignItems: 'center',
   },

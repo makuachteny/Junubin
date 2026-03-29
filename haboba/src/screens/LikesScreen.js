@@ -531,7 +531,7 @@ export default function LikesScreen({ navigation }) {
                           <View style={styles.blurredName} />
                         )}
                         <Text style={styles.likeAge}>{like.age}</Text>
-                        <GraffitiHeart size={16} color="rgba(255,255,255,0.7)" filled />
+                        <GraffitiHeart size={16} color={colors.accent} filled />
                       </View>
 
                       <Text style={styles.likedAgoText}>Liked you {likedAgo}</Text>
@@ -597,7 +597,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.black,
+    color: colors.accent,
     textAlign: 'center',
     marginTop: 12,
     marginBottom: 6,
@@ -709,7 +709,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     gap: 10,
     paddingVertical: 16,
     borderRadius: 16,
-    backgroundColor: colors.green,
+    backgroundColor: colors.accent,
     marginBottom: CARD_GAP,
   },
   inlineBannerText: {

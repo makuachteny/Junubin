@@ -9,6 +9,7 @@ import {
   Animated,
   Easing,
   Dimensions,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -86,31 +87,24 @@ export default function ProfileScreen({ navigation }) {
         <View style={{ width: 28 }} />
       </View>
 
-      {/* Hero banner */}
+      {/* Hero banner — clean, no overlapping icons */}
       <View style={styles.heroSection}>
         <Image source={imageSource(displayUser.images?.[0])} style={styles.heroImage} resizeMode="cover" />
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.65)']}
+          colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.75)']}
+          locations={[0, 0.5, 1]}
           style={styles.heroGradient}
         />
-        <Text style={styles.heroName}>{displayUser.name}, {displayUser.age}</Text>
-
-        {/* Edit button */}
-        <TouchableOpacity style={[styles.editBtn, styles.editBtnLeft]} onPress={handleEdit}>
-          <Ionicons name="pencil" size={16} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        {/* Settings button */}
-        <TouchableOpacity
-          style={[styles.editBtn, styles.editBtnRight]}
-          onPress={() => navigation.navigate('Settings')}
-        >
-          <Ionicons name="settings" size={16} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.heroInfo}>
+          <Text style={styles.heroName}>{displayUser.name}, {displayUser.age}</Text>
+          {displayUser.bio ? (
+            <Text style={styles.heroBio} numberOfLines={1}>{displayUser.bio}</Text>
+          ) : null}
+        </View>
       </View>
 
-      {/* Upper content — flex fills available space */}
-      <View style={styles.content}>
+      {/* Content */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false} bounces={false}>
         {/* Follow counts */}
         <View style={styles.followRow}>
           <TouchableOpacity
@@ -136,11 +130,21 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Verification row */}
-        <TouchableOpacity style={styles.verifyBtn} onPress={handleVerify}>
-          <Ionicons name="checkmark-circle" size={16} color={colors.accent} />
-          <Text style={styles.verifyText}>Get verified</Text>
-        </TouchableOpacity>
+        {/* Quick actions row */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={handleEdit}>
+            <Ionicons name="create-outline" size={20} color={colors.green} />
+            <Text style={styles.quickActionText}>Edit Profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={handleVerify}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.green} />
+            <Text style={styles.quickActionText}>Verify</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => navigation.navigate('Settings')}>
+            <Ionicons name="settings-outline" size={20} color={colors.green} />
+            <Text style={styles.quickActionText}>Settings</Text>
+          </TouchableOpacity>
+        </View>
 
         <ProfileCompletenessCard
           score={completeness.score}
@@ -149,42 +153,24 @@ export default function ProfileScreen({ navigation }) {
           colors={colors}
         />
 
-        {/* Stats row */}
+        {/* Stats row — clean, uniform */}
         <View style={styles.statsRow}>
-          {statItems.map((item, index) => {
-            const gradientColors = index === 0
-              ? [colors.flagRed, '#E8102A']
-              : index === 1
-              ? [colors.gold, colors.goldDark]
-              : [colors.green, colors.greenDark];
-            return (
-              <TouchableOpacity
-                key={index}
-                style={{ flex: 1 }}
-                onPress={() => item.screen && navigation.navigate(item.screen)}
-              >
-                <LinearGradient
-                  colors={gradientColors}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.statCard}
-                >
-                  <Ionicons name={item.icon} size={20} color="#FFFFFF" />
-                  <Text style={styles.statText}>{item.label}</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            );
-          })}
+          {statItems.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.statCard}
+              onPress={() => item.screen && navigation.navigate(item.screen)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={item.icon} size={22} color={colors.green} />
+              <Text style={styles.statCount}>{item.count || 0}</Text>
+              <Text style={styles.statLabel}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        {/* Sticker button */}
-        <TouchableOpacity style={styles.stickerBtn} onPress={handleSticker}>
-          <View style={styles.stickerCircle}>
-            <Ionicons name="add" size={28} color={colors.accent} />
-          </View>
-          <Text style={styles.stickerText}>Sticker</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={{ height: 24 }} />
+      </ScrollView>
 
       {/* Match More CTA section — anchored at bottom */}
       {showJunubCTA && (
@@ -225,16 +211,15 @@ const getStyles = (colors) => StyleSheet.create({
   },
   heroSection: {
     width: '100%',
-    height: 200,
+    height: 280,
     position: 'relative',
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     overflow: 'hidden',
   },
   heroImage: {
     width: '100%',
-    height: 280,
-    top: -40,
+    height: '100%',
     backgroundColor: colors.gray300,
   },
   heroGradient: {
@@ -242,45 +227,29 @@ const getStyles = (colors) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 100,
+    height: 160,
+  },
+  heroInfo: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
   },
   heroName: {
-    position: 'absolute',
-    bottom: 48,
-    left: 16,
-    ...Typography.h2,
+    fontSize: 30,
+    fontWeight: '900',
+    fontFamily: FontFamily.black,
     color: '#FFFFFF',
-    letterSpacing: 0.3,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    letterSpacing: -0.5,
   },
-  editBtn: {
-    position: 'absolute',
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-  },
-  editBtnLeft: {
-    bottom: 10,
-    left: 16,
-  },
-  editBtnRight: {
-    bottom: 10,
-    right: 16,
+  heroBio: {
+    fontSize: 14,
+    fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 4,
   },
   content: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
     paddingTop: 16,
     paddingHorizontal: 16,
     backgroundColor: colors.white,
@@ -290,8 +259,7 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    marginTop: 0,
-    marginBottom: 2,
+    marginBottom: 16,
   },
   followCard: {
     flex: 1,
@@ -299,82 +267,69 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: 16,
     backgroundColor: colors.surfaceMuted,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 12,
   },
   followCountNum: {
-    fontSize: 18,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
+    fontSize: 20,
+    fontWeight: '900',
+    fontFamily: FontFamily.black,
     color: colors.black,
   },
   followCountLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: FontFamily.medium,
     color: colors.gray400,
-    marginTop: 1,
+    marginTop: 2,
   },
-  verifyBtn: {
+  quickActions: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
+    gap: 8,
+    marginBottom: 16,
   },
-  verifyText: {
-    ...Typography.bodySmallMedium,
-    fontSize: 13,
+  quickActionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.separator,
+  },
+  quickActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: colors.black,
   },
   statsRow: {
     flexDirection: 'row',
     gap: 10,
     marginTop: 16,
-    width: '100%',
   },
   statCard: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 16,
     paddingHorizontal: 8,
     borderRadius: 16,
-    gap: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: 4,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.separator,
   },
-  statText: {
-    ...Typography.captionBold,
-    fontSize: 11,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-  },
-  stickerBtn: {
-    alignItems: 'center',
-    marginTop: 18,
-    gap: 6,
-  },
-  stickerCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: colors.accent,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.accentTint04,
-  },
-  stickerText: {
-    ...Typography.caption,
-    fontSize: 12,
+  statCount: {
+    fontSize: 18,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
     color: colors.black,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
+    marginTop: 4,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
+    color: colors.gray400,
   },
   matchMore: {
     width: '100%',

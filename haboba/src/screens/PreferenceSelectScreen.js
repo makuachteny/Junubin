@@ -171,8 +171,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.accentTint12,
-    backgroundColor: colors.accentTint05,
+    borderColor: colors.greenTint12,
+    backgroundColor: colors.greenTint05,
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 14,
@@ -212,7 +212,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   optionSelected: {
-    backgroundColor: colors.accentTint05,
+    backgroundColor: colors.greenTint05,
   },
   optionLeft: {
     flexDirection: 'row',
@@ -248,7 +248,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginRight: 14,
   },
   optionIconSelected: {
-    backgroundColor: colors.accentTint10,
+    backgroundColor: colors.greenTint10,
   },
   optionTextWrap: {
     flex: 1,

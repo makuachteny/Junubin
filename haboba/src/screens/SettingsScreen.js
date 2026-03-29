@@ -202,7 +202,7 @@ export default function SettingsScreen({ navigation }) {
         {/* Subscription badge */}
         {isSubscribed() && (
           <View style={styles.tierBadge}>
-            <MaterialCommunityIcons name="crown" size={18} color={colors.accent} />
+            <MaterialCommunityIcons name="crown" size={18} color={colors.green} />
             <Text style={styles.tierBadgeText}>
               {tierLabel} Member{promoActive && tier === 'free' ? ' (Promo)' : ''}
             </Text>
@@ -239,11 +239,11 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={styles.boostRow}>
           <TouchableOpacity style={styles.boostCard} onPress={() => navigation.navigate('Boost')}>
-            <GraffitiFlame size={24} color={colors.accent} filled />
+            <GraffitiFlame size={24} color={colors.green} filled />
             <Text style={styles.boostCardText}>GET MORE{'\n'}SPOTLIGHTS</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.superLikeCard} onPress={() => navigation.navigate('Elite')}>
-            <MaterialCommunityIcons name="crown" size={24} color={colors.accent} />
+            <MaterialCommunityIcons name="crown" size={24} color={colors.green} />
             <Text style={styles.boostCardText}>GET MORE{'\n'}SUPER LIKES</Text>
           </TouchableOpacity>
         </View>
@@ -277,7 +277,7 @@ export default function SettingsScreen({ navigation }) {
             <Switch
               value={showMe}
               onValueChange={handleShowMeToggle}
-              trackColor={{ false: colors.gray300, true: colors.accent }}
+              trackColor={{ false: colors.gray300, true: colors.green }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -287,7 +287,7 @@ export default function SettingsScreen({ navigation }) {
             <Switch
               value={adsEnabled}
               onValueChange={setAdsEnabled}
-              trackColor={{ false: colors.gray300, true: colors.accent }}
+              trackColor={{ false: colors.gray300, true: colors.green }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -302,7 +302,7 @@ export default function SettingsScreen({ navigation }) {
             <Switch
               value={isDark}
               onValueChange={toggleTheme}
-              trackColor={{ false: colors.gray300, true: colors.accent }}
+              trackColor={{ false: colors.gray300, true: colors.green }}
               thumbColor="#FFFFFF"
             />
           </View>
@@ -385,7 +385,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   doneText: {
     ...Typography.bodySemibold,
-    color: colors.accent,
+    color: colors.green,
   },
   content: {
     paddingHorizontal: 16,
@@ -396,7 +396,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'center',
     gap: 6,
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.greenTint08,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
@@ -405,7 +405,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   tierBadgeText: {
     ...Typography.label,
-    color: colors.accent,
+    color: colors.green,
   },
   upgradeSection: {
     marginTop: 16,
@@ -418,30 +418,30 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   boostCard: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.accentTint25,
+    borderColor: colors.greenTint25,
     borderRadius: 22,
     paddingVertical: 22,
     paddingHorizontal: 14,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.accentSurface,
+    backgroundColor: colors.greenTint06,
     ...getShadow('sm', isDark),
   },
   superLikeCard: {
     flex: 1,
     borderWidth: 1,
-    borderColor: colors.accentTint25,
+    borderColor: colors.greenTint25,
     borderRadius: 22,
     paddingVertical: 22,
     paddingHorizontal: 14,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: colors.accentSurface,
+    backgroundColor: colors.greenTint06,
     ...getShadow('sm', isDark),
   },
   boostCardText: {
     ...Typography.captionBold,
-    color: colors.accent,
+    color: colors.green,
     textAlign: 'center',
     letterSpacing: 0.5,
     lineHeight: 16,
@@ -482,7 +482,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   sectionValue: {
     ...Typography.bodySemibold,
-    color: colors.accent,
+    color: colors.green,
   },
   sliderPlaceholder: {
     marginTop: 16,
@@ -497,7 +497,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   sliderFill: {
     position: 'absolute',
     height: 6,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     borderRadius: 3,
     width: '100%',
   },
@@ -508,8 +508,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.accent,
-    shadowColor: colors.accent,
+    backgroundColor: colors.green,
+    shadowColor: colors.green,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -551,14 +551,14 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
   },
   radioActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint10,
+    borderColor: colors.green,
+    backgroundColor: colors.greenTint10,
   },
   radioInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
   },
   radioLabel: {
     ...Typography.body,
@@ -573,7 +573,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   othersTitle: {
     ...Typography.sectionLabel,
-    color: colors.accent,
+    color: colors.green,
     marginBottom: 12,
   },
   sectionCard: {
@@ -588,7 +588,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   cardTitle: {
     ...Typography.sectionLabel,
-    color: colors.accent,
+    color: colors.green,
     marginVertical: 8,
   },
   infoRow: {

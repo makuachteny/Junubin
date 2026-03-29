@@ -31,6 +31,14 @@ export const LightPalette = {
   green: '#009739',
   greenDark: '#007A2E',
   greenLight: '#E0F5E8',
+  greenTint04: 'rgba(0, 151, 57, 0.04)',
+  greenTint05: 'rgba(0, 151, 57, 0.05)',
+  greenTint06: 'rgba(0, 151, 57, 0.06)',
+  greenTint08: 'rgba(0, 151, 57, 0.08)',
+  greenTint10: 'rgba(0, 151, 57, 0.10)',
+  greenTint12: 'rgba(0, 151, 57, 0.12)',
+  greenTint15: 'rgba(0, 151, 57, 0.15)',
+  greenTint25: 'rgba(0, 151, 57, 0.25)',
 
   // ── Functional ──
   success: '#009739',
@@ -136,6 +144,14 @@ export const DarkPalette = {
   green: '#2CB750',
   greenDark: '#009739',
   greenLight: '#E0F5E8',
+  greenTint04: 'rgba(44, 183, 80, 0.04)',
+  greenTint05: 'rgba(44, 183, 80, 0.05)',
+  greenTint06: 'rgba(44, 183, 80, 0.06)',
+  greenTint08: 'rgba(44, 183, 80, 0.08)',
+  greenTint10: 'rgba(44, 183, 80, 0.10)',
+  greenTint12: 'rgba(44, 183, 80, 0.12)',
+  greenTint15: 'rgba(44, 183, 80, 0.15)',
+  greenTint25: 'rgba(44, 183, 80, 0.25)',
 
   // ── Functional ──
   success: '#2CB750',

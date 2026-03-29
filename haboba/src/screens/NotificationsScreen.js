@@ -232,7 +232,7 @@ const getStyles = (colors) => StyleSheet.create({
     borderBottomColor: colors.separator,
   },
   notifUnread: {
-    backgroundColor: colors.accentTint04,
+    backgroundColor: colors.greenTint04,
   },
   avatarWrap: {
     position: 'relative',

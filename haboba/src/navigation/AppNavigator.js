@@ -7,14 +7,9 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
-  TouchableOpacity,
-  Text,
-  Modal,
-  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, FontFamily, Typography } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 import { useAuth } from '../auth';
 import { hapticSelection, hapticLight } from '../utils/haptics';
 import { GraffitiCommunity, GraffitiHeart, GraffitiChat } from '../components/icons';
@@ -92,7 +87,6 @@ const EmptyScreen = () => <View style={{ flex: 1 }} />;
 function HomeTabs() {
   const { colors, isDark } = useTheme();
   const tabStyles = useMemo(() => getTabStyles(colors, isDark), [colors, isDark]);
-  const [modeSheetOpen, setModeSheetOpen] = useState(false);
   const [currentMode, setCurrentMode] = useState('Dating');
   const TAB_NAMES = ['HomeTab', 'CommunityTab', 'ModeToggle', 'LikesTab', 'MessagesTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
@@ -104,12 +98,12 @@ function HomeTabs() {
     });
   }, []);
 
-  const handleModeSelect = useCallback(async (mode) => {
+  const toggleMode = useCallback(async () => {
     hapticLight();
-    setCurrentMode(mode);
-    setModeSheetOpen(false);
-    try { await AsyncStorage.setItem('@haboba_mode', mode); } catch {}
-  }, []);
+    const next = currentMode === 'Dating' ? 'Social' : 'Dating';
+    setCurrentMode(next);
+    try { await AsyncStorage.setItem('@haboba_mode', next); } catch {}
+  }, [currentMode]);
 
   return (
     <>
@@ -148,14 +142,9 @@ function HomeTabs() {
             if (route.name === 'ModeToggle') {
               return (
                 <Animated.View style={[tabStyles.fabWrap, { transform: [{ scale: scaleValue }] }]}>
-                  <LinearGradient
-                    colors={['#CE1126', '#009739']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={tabStyles.fab}
-                  >
+                  <View style={[tabStyles.fab, { backgroundColor: colors.black }]}>
                     <Ionicons name="swap-horizontal" size={22} color="#FFFFFF" />
-                  </LinearGradient>
+                  </View>
                 </Animated.View>
               );
             }
@@ -194,8 +183,7 @@ function HomeTabs() {
           tabPress: (e) => {
             if (route.name === 'ModeToggle') {
               e.preventDefault();
-              hapticSelection();
-              setModeSheetOpen(true);
+              toggleMode();
               return;
             }
             hapticSelection();
@@ -219,47 +207,6 @@ function HomeTabs() {
         <Tab.Screen name="LikesTab" component={LikesScreen} options={{ tabBarLabel: 'Likes' }} />
         <Tab.Screen name="MessagesTab" component={MessagesScreen} options={{ tabBarLabel: 'Messages' }} />
       </Tab.Navigator>
-
-      {/* Mode Toggle Bottom Sheet */}
-      <Modal
-        visible={modeSheetOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModeSheetOpen(false)}
-      >
-        <Pressable style={tabStyles.sheetOverlay} onPress={() => setModeSheetOpen(false)}>
-          <View style={tabStyles.sheetContainer}>
-            <View style={tabStyles.sheetHandle} />
-            <Text style={tabStyles.sheetTitle}>Choose Mode</Text>
-            {['Dating', 'Social'].map((mode) => {
-              const isActive = currentMode === mode;
-              return (
-                <TouchableOpacity
-                  key={mode}
-                  style={[tabStyles.sheetOption, isActive && tabStyles.sheetOptionActive]}
-                  onPress={() => handleModeSelect(mode)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons
-                    name={mode === 'Dating' ? 'heart' : 'people'}
-                    size={22}
-                    color={isActive ? '#FFFFFF' : colors.gray500}
-                  />
-                  <View>
-                    <Text style={[tabStyles.sheetOptionLabel, isActive && tabStyles.sheetOptionLabelActive]}>
-                      {mode === 'Social' ? 'Socialize' : mode}
-                    </Text>
-                    <Text style={tabStyles.sheetOptionDesc}>
-                      {mode === 'Dating' ? 'Find meaningful connections' : 'Meet friends & join communities'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </Pressable>
-      </Modal>
-    </>
   );
 }
 
@@ -384,75 +331,22 @@ const getTabStyles = (colors, isDark) => StyleSheet.create({
   },
   // Center FAB
   fabWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    marginBottom: 18,
-    shadowColor: '#CE1126',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
   },
   fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  // Mode toggle sheet
-  sheetOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheetContainer: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 44 : 24,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gray300,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  sheetTitle: {
-    ...Typography.h3,
-    color: colors.primary,
-    marginBottom: 16,
-  },
-  sheetOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    borderRadius: 16,
-    marginBottom: 8,
-    backgroundColor: colors.surfaceMuted,
-  },
-  sheetOptionActive: {
-    backgroundColor: colors.accent,
-  },
-  sheetOptionLabel: {
-    ...Typography.bodySemibold,
-    color: colors.primary,
-  },
-  sheetOptionLabelActive: {
-    color: '#FFFFFF',
-  },
-  sheetOptionDesc: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontFamily: FontFamily.regular,
-    marginTop: 2,
   },
 });
 

@@ -163,7 +163,7 @@ export default function EditProfileScreen({ navigation }) {
                   ]);
                 }}
               >
-                <Ionicons name="close-circle" size={22} color={colors.accent} />
+                <Ionicons name="close-circle" size={22} color={colors.green} />
               </TouchableOpacity>
               {i === 0 && (
                 <View style={styles.mainBadge}>
@@ -179,10 +179,10 @@ export default function EditProfileScreen({ navigation }) {
             disabled={uploading}
           >
             {uploading ? (
-              <ActivityIndicator size="small" color={colors.accent} />
+              <ActivityIndicator size="small" color={colors.green} />
             ) : (
               <>
-                <Ionicons name="add" size={32} color={colors.accent} />
+                <Ionicons name="add" size={32} color={colors.green} />
                 <Text style={styles.addPhotoText}>Add</Text>
               </>
             )}
@@ -271,7 +271,7 @@ export default function EditProfileScreen({ navigation }) {
                 onPress={() => toggleSticker(index)}
               >
                 {GraffitiStickerIcon.has(sticker.emoji) ? (
-                  <GraffitiStickerIcon emoji={sticker.emoji} size={20} color={isSelected ? colors.accent : colors.gray500} />
+                  <GraffitiStickerIcon emoji={sticker.emoji} size={20} color={isSelected ? colors.green : colors.gray500} />
                 ) : (
                   <Text style={styles.stickerEmoji}>{sticker.emoji}</Text>
                 )}
@@ -279,7 +279,7 @@ export default function EditProfileScreen({ navigation }) {
                   {sticker.label}
                 </Text>
                 {isSelected && (
-                  <Ionicons name="checkmark-circle" size={16} color={colors.accent} style={{ marginLeft: 2 }} />
+                  <Ionicons name="checkmark-circle" size={16} color={colors.green} style={{ marginLeft: 2 }} />
                 )}
               </TouchableOpacity>
             );
@@ -315,7 +315,7 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
   },
   saveBtn: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 20,
@@ -366,7 +366,7 @@ const getStyles = (colors) => StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     left: 6,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -383,16 +383,16 @@ const getStyles = (colors) => StyleSheet.create({
     height: 140,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.green,
     borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.accentTint05,
+    backgroundColor: colors.greenTint05,
     gap: 4,
   },
   addPhotoText: {
     ...Typography.caption,
-    color: colors.accent,
+    color: colors.green,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -444,15 +444,15 @@ const getStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   optionChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint08,
+    borderColor: colors.green,
+    backgroundColor: colors.greenTint08,
   },
   optionText: {
     ...Typography.bodySmallMedium,
     color: colors.gray,
   },
   optionTextActive: {
-    color: colors.accent,
+    color: colors.green,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -473,8 +473,8 @@ const getStyles = (colors) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   stickerChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint08,
+    borderColor: colors.green,
+    backgroundColor: colors.greenTint08,
   },
   stickerEmoji: {
     fontSize: 16,
@@ -484,7 +484,7 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.gray,
   },
   stickerLabelActive: {
-    color: colors.accent,
+    color: colors.green,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },

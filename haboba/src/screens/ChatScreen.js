@@ -853,10 +853,10 @@ export default function ChatScreen({ navigation, route }) {
 
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={handleVoiceCall} style={styles.headerIcon}>
-            <Ionicons name="call" size={20} color={colors.accent} />
+            <Ionicons name="call" size={20} color={colors.royal} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleVideoCall} style={styles.headerIcon}>
-            <Ionicons name="videocam" size={22} color={colors.accent} />
+            <Ionicons name="videocam" size={22} color={colors.royal} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon}>
             <Ionicons name="ellipsis-vertical" size={20} color={colors.gray} />
@@ -882,7 +882,7 @@ export default function ChatScreen({ navigation, route }) {
             <View style={styles.matchBanner}>
               <View style={styles.avatarGlow}>
                 <LinearGradient
-                  colors={[colors.accent, colors.rose, colors.gold]}
+                  colors={['#CE1126', '#FCCD12', '#009739', '#0047AB']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.avatarRing}
@@ -1274,7 +1274,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     height: 40,
     borderRadius: 20,
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.gold,
     backgroundColor: colors.gray300,
   },
   headerOnlineDot: {
@@ -1288,7 +1288,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   headerStatus: {
     ...Typography.caption,
-    color: colors.accent,
+    color: colors.green,
     marginTop: 1,
   },
   headerActions: {
@@ -1331,25 +1331,21 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   avatarGlow: {
     marginBottom: 14,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
   },
   avatarRing: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    padding: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },
   bannerAvatar: {
     width: 84,
-    height: 84,
-    borderRadius: 42,
+    height: 74,
+    borderRadius: 37,
     borderWidth: 3,
-    borderColor: colors.cream,
+    borderColor: colors.white,
     backgroundColor: colors.gray300,
   },
   bannerText: {
@@ -1394,7 +1390,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.greenTint08,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1405,7 +1401,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     flex: 1,
   },
   missionsBadge: {
-    backgroundColor: colors.accentTint10,
+    backgroundColor: colors.greenTint10,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -1566,7 +1562,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   funChoiceActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.greenTint08,
   },
   funChoiceEmoji: {
     fontSize: isCompact ? 16 : 18,
@@ -1716,7 +1712,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     borderRadius: prefs?.largerTouchTargets ? 21 : 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.greenTint08,
     marginBottom: 2,
   },
   actionRow: {
@@ -1740,9 +1736,9 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.greenTint08,
     borderWidth: 1,
-    borderColor: colors.accentTint12,
+    borderColor: colors.greenTint12,
   },
   actionIconLabel: {
     ...Typography.caption,
@@ -1781,7 +1777,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   stickerChoiceActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.accentTint10,
+    backgroundColor: colors.greenTint10,
   },
   stickerChoiceText: {
     fontSize: 20,

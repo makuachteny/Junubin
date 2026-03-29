@@ -412,10 +412,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     zIndex: 10,
   },
   segment: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
   segmentActive: {
     backgroundColor: '#FFFFFF',
@@ -462,14 +462,14 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 12,
   },
   detailText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.85)',
+    color: '#FFFFFF',
     fontFamily: FontFamily.medium,
   },
   tagRow: {

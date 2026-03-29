@@ -126,14 +126,6 @@ export default function SplashScreen({ onFinish, authReady }) {
       <Animated.View style={[styles.bottomSection, { opacity: logoFade }]}>
 
         <Text testID="splash-tagline" style={styles.tagline}>Connect with your people</Text>
-        {/* South Sudan flag stripe */}
-        <View style={styles.flagStripe}>
-          <View style={[styles.flagBand, { backgroundColor: '#000000' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#CE1126' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#FFFFFF' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#009739' }]} />
-          <View style={[styles.flagBand, { backgroundColor: '#0047AB' }]} />
-        </View>
       </Animated.View>
     </View>
   );

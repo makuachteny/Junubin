@@ -16,7 +16,7 @@ export default function EmptyState({ icon, title, subtitle, actionLabel, onActio
       <View style={styles.cornerTL}><GraffitiCorner size={20} color={colors.accent} position="topLeft" /></View>
       <View style={styles.cornerBR}><GraffitiCorner size={20} color="#CE1126" position="bottomRight" /></View>
 
-      <View style={[styles.iconCircle, { backgroundColor: colors.accentTint08 }]}>
+      <View style={[styles.iconCircle, { backgroundColor: colors.greenTint08 }]}>
         <Ionicons name={icon} size={32} color={colors.accent} />
       </View>
       <Text style={[styles.title, { color: colors.black }]}>{title}</Text>

@@ -279,10 +279,14 @@ export default function MessagesScreen({ navigation }) {
       <View style={styles.categoryRow}>
         {CATEGORIES.map((cat) => {
           const isActive = activeCategory === cat;
+          const isLikes = cat === 'Likes';
           return (
             <TouchableOpacity
               key={cat}
-              style={[styles.categoryChip, isActive && styles.categoryChipActive]}
+              style={[
+                styles.categoryChip,
+                isActive && (isLikes ? styles.categoryChipLikes : styles.categoryChipActive),
+              ]}
               onPress={() => setActiveCategory(cat)}
               activeOpacity={0.8}
             >
@@ -490,6 +494,10 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     backgroundColor: colors.green,
     borderColor: colors.green,
   },
+  categoryChipLikes: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
   categoryChipText: {
     fontSize: 13,
     fontWeight: '600',
@@ -575,7 +583,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: colors.green,
+    backgroundColor: colors.accent,
     position: 'absolute',
     bottom: -4,
     right: -4,
@@ -638,7 +646,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginLeft: 8,
   },
   likesYouBadge: {
-    backgroundColor: colors.green,
+    backgroundColor: colors.accent,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 3,

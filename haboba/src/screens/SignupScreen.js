@@ -198,7 +198,7 @@ const SignupScreen = ({ navigation }) => {
                 <Ionicons
                   name={selectedMethod === 'phone' ? 'phone-portrait' : 'mail'}
                   size={32}
-                  color={colors.accent}
+                  color={colors.green}
                 />
               </View>
             </View>
@@ -481,7 +481,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderRadius: 12,
   },
   methodTabActive: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
   },
   methodTabText: {
     fontSize: 14,
@@ -508,12 +508,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   countryCodeActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint10,
+    borderColor: colors.green,
+    backgroundColor: colors.greenTint10,
   },
   countryCodeText: {
     ...Typography.bodySemibold,
-    color: colors.accent,
+    color: colors.green,
   },
   input: {
     flex: 1,
@@ -530,8 +530,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
   },
   inputActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint08,
+    borderColor: colors.green,
+    backgroundColor: colors.greenTint08,
   },
 
   // Inline error
@@ -558,7 +558,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginBottom: 24,
   },
   termsLink: {
-    color: colors.accent,
+    color: colors.green,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
@@ -572,10 +572,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.green,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.accent,
+    shadowColor: colors.green,
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.5,
     shadowRadius: 12,
@@ -595,11 +595,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.greenTint08,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.accentTint15,
+    borderColor: colors.greenTint15,
   },
   verifyTitle: {
     fontSize: 28,
@@ -642,8 +642,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     textAlign: 'center',
   },
   codeInputFilled: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint04,
+    borderColor: colors.green,
+    backgroundColor: colors.greenTint04,
   },
   resendBtn: {
     flexDirection: 'row',
@@ -656,7 +656,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   resendLink: {
     ...Typography.bodySmallMedium,
-    color: colors.accent,
+    color: colors.green,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
   },

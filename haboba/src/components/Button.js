@@ -56,7 +56,7 @@ function getVariant(variant, colors, isDark) {
     case 'secondary':
       return {
         container: {
-          backgroundColor: colors.accentSurface,
+          backgroundColor: colors.greenTint06,
         },
         textColor: colors.accent,
       };

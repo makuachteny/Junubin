@@ -749,7 +749,7 @@ const HomeScreen = ({ navigation }) => {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.headerIconBtn}
             >
-              <Ionicons name="flash" size={18} color={colors.gold} />
+              <Ionicons name="flash" size={18} color={colors.black} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => navigation?.navigate?.('Profile')}
@@ -952,11 +952,8 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     fontSize: 28,
     fontFamily: FontFamily.black,
     fontWeight: '900',
-    color: '#FFFFFF',
+    color: colors.black,
     letterSpacing: -0.8,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 6,
   },
   headerRight: {
     flexDirection: 'row',
@@ -969,16 +966,15 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: colors.surfaceMuted,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.5)',
+    borderColor: colors.green,
     backgroundColor: colors.gray300,
-    ...getShadow('md', isDark),
   },
 
   // ── Filter bar ──
@@ -1035,12 +1031,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.greenTint08,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: colors.accentTint15,
+    borderColor: colors.greenTint15,
   },
   emptyTitle: {
     ...Typography.h2,
