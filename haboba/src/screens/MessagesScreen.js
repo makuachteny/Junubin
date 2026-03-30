@@ -18,7 +18,7 @@ import { GraffitiChat } from '../components/icons';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, Typography, FontFamily, getShadow, Gradients, Layout } from '../theme';
+import { useTheme, Typography, FontFamily, Gradients, Layout } from '../theme';
 import { mockMatches, mockLikes } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
@@ -53,6 +53,15 @@ export default function MessagesScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
+  const isPlus = hasTier('plus');
+  const filtersLocked = !isPlus;
+
+  const showFiltersLocked = useCallback(() => {
+    Alert.alert('JuNubin+ Filters', 'Upgrade to JuNubin+ to unlock message filters and search.', [
+      { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [navigation]);
 
   const fetchMatches = useCallback(() => {
     if (!session) {
@@ -132,15 +141,22 @@ export default function MessagesScreen({ navigation }) {
 
   // Build combined conversation list with category + search filtering
   const conversationData = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
+    const q = (filtersLocked ? '' : searchQuery).toLowerCase().trim();
     const likeItems = likes.map((like) => ({ ...like, type: 'like' }));
     const matchItems = matches.map((match) => ({ ...match, type: 'match' }));
     let all = [...likeItems, ...matchItems];
-    if (activeCategory === 'Matches') all = matchItems;
-    else if (activeCategory === 'Likes') all = likeItems;
+    const effectiveCategory = filtersLocked ? 'All' : activeCategory;
+    if (effectiveCategory === 'Matches') all = matchItems;
+    else if (effectiveCategory === 'Likes') all = likeItems;
     if (q) all = all.filter((item) => item.name?.toLowerCase().includes(q));
     return all;
-  }, [likes, matches, searchQuery, activeCategory]);
+  }, [likes, matches, searchQuery, activeCategory, filtersLocked]);
+
+  useEffect(() => {
+    if (!filtersLocked) return;
+    if (activeCategory !== 'All') setActiveCategory('All');
+    if (searchQuery) setSearchQuery('');
+  }, [filtersLocked, activeCategory, searchQuery]);
 
   // Build row animation values when conversation data changes (only first render)
   useEffect(() => {
@@ -206,7 +222,7 @@ export default function MessagesScreen({ navigation }) {
               <View style={styles.likesYouBadge}>
                 <Text style={styles.likesYouText}>Likes You</Text>
               </View>
-              <Ionicons name="chevron-forward" size={14} color={colors.gray400} />
+              <Ionicons name="chevron-forward" size={15} color={colors.gray400} />
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -256,16 +272,25 @@ export default function MessagesScreen({ navigation }) {
               {item.lastMessage}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
+          <Ionicons name="chevron-forward" size={19} color={colors.gray400} />
         </TouchableOpacity>
       </Animated.View>
     );
   };
 
-  const CATEGORIES = ['All', 'Matches', 'Likes'];
+  const unreadMatchCount = useMemo(() => matches.filter((m) => m.unread).length, [matches]);
+  const likesCount = likes.length;
+  const CATEGORIES = [
+    { label: 'All', badge: unreadMatchCount + likesCount },
+    { label: 'Matches', badge: unreadMatchCount },
+    { label: 'Likes', badge: likesCount },
+  ];
 
   const listHeader = useCallback(() => (
     <>
+      {/* Filters + search scroll with content */}
+      {filtersPanel()}
+
       {/* ─── Upsell Banner (free users) ─── */}
       {!hasTier('plus') && (
         <ProfilePromptBanner
@@ -275,33 +300,63 @@ export default function MessagesScreen({ navigation }) {
         />
       )}
 
-      {/* ─── Category Chips ─── */}
+      {/* ─── Ad Banner (free tier) ─── */}
+      <AdBanner colors={colors} />
+
+      {/* ─── See who likes you upsell (non-Junub) ─── */}
+      {!hasTier('junub') && likesCount > 0 && (
+        <TouchableOpacity
+          style={styles.upsellCard}
+          onPress={() => navigation.navigate('Elite')}
+          activeOpacity={0.8}
+        >
+          <View style={styles.upsellIconWrap}>
+            <Ionicons name="eye" size={18} color={colors.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.upsellTitle}>{likesCount} people liked you</Text>
+            <Text style={styles.upsellDesc}>Upgrade to Junub to see who</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
+        </TouchableOpacity>
+      )}
+    </>
+  ), [colors, isDark, navigation, hasTier, likesCount, filtersPanel]);
+
+  const filtersPanel = useCallback(() => (
+    <View style={styles.filtersPanel}>
       <View style={styles.categoryRow}>
         {CATEGORIES.map((cat) => {
-          const isActive = activeCategory === cat;
-          const isLikes = cat === 'Likes';
+          const isActive = activeCategory === cat.label;
+          const isLikes = cat.label === 'Likes';
+          const countText = cat.badge > 0 ? `${cat.badge > 99 ? '99+' : cat.badge}` : '';
           return (
             <TouchableOpacity
-              key={cat}
+              key={cat.label}
               style={[
                 styles.categoryChip,
                 isActive && (isLikes ? styles.categoryChipLikes : styles.categoryChipActive),
+                filtersLocked && styles.categoryChipLocked,
               ]}
-              onPress={() => setActiveCategory(cat)}
-              activeOpacity={0.8}
+              onPress={() => {
+                if (filtersLocked) { showFiltersLocked(); return; }
+                setActiveCategory(cat.label);
+              }}
+              activeOpacity={filtersLocked ? 1 : 0.8}
             >
               <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>
-                {cat}
+                {cat.label}
               </Text>
+              {countText !== '' && (
+                <Text style={[styles.categoryChipCount, isActive && styles.categoryChipCountActive]}>
+                  {countText}
+                </Text>
+              )}
             </TouchableOpacity>
           );
         })}
       </View>
 
-      {/* ─── Ad Banner (free tier) ─── */}
-      <AdBanner colors={colors} />
-
-      {/* ─── Search Bar ─── */}
       <View style={styles.searchWrap}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={colors.gray400} />
@@ -313,16 +368,27 @@ export default function MessagesScreen({ navigation }) {
             onChangeText={setSearchQuery}
             returnKeyType="search"
             autoCorrect={false}
+            editable={!filtersLocked}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color={colors.gray400} />
+              <Ionicons name="close-circle" size={19} color={colors.gray400} />
             </TouchableOpacity>
+          )}
+          {filtersLocked && (
+            <Pressable style={styles.searchLockOverlay} onPress={showFiltersLocked} />
           )}
         </View>
       </View>
-    </>
-  ), [colors, isDark, styles, searchQuery, activeCategory, likes, navigation, hasTier]);
+
+      {filtersLocked && (
+        <TouchableOpacity style={styles.filtersLockedRow} onPress={showFiltersLocked} activeOpacity={0.8}>
+          <Ionicons name="lock-closed" size={14} color={colors.gray500} />
+          <Text style={styles.filtersLockedText}>Filters are JuNubin+ only</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  ), [CATEGORIES, activeCategory, filtersLocked, searchQuery, colors, showFiltersLocked]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -348,7 +414,7 @@ export default function MessagesScreen({ navigation }) {
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="notifications-outline" size={20} color={colors.gray500} />
+            <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
             <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
@@ -451,28 +517,31 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     backgroundColor: colors.white,
-    marginBottom: 6,
+    marginBottom: 0,
   },
   headerTitle: {
-    fontSize: 30,
+    fontSize: 32,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,
-    letterSpacing: -0.8,
+    letterSpacing: -0.5,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: colors.gray300,
     backgroundColor: colors.gray300,
-    ...getShadow('md', isDark),
+  },
+
+  filtersPanel: {
+    backgroundColor: colors.white,
   },
 
   // ─── Category Chips ───
@@ -480,15 +549,20 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 6,
   },
   categoryChip: {
-    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 18,
     backgroundColor: colors.surfaceMuted,
     borderWidth: 1,
     borderColor: colors.separator,
+  },
+  categoryChipLocked: {
+    opacity: 0.7,
   },
   categoryChipActive: {
     backgroundColor: colors.black,
@@ -499,37 +573,62 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderColor: colors.accent,
   },
   categoryChipText: {
+    ...Typography.label,
     fontSize: 13,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
     color: isDark ? 'rgba(255,255,255,0.6)' : colors.gray500,
   },
   categoryChipTextActive: {
     color: isDark ? '#1A1A1A' : '#FFFFFF',
     fontWeight: '700',
   },
+  categoryChipCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: isDark ? 'rgba(255,255,255,0.4)' : colors.gray400,
+    marginLeft: 4,
+  },
+  categoryChipCountActive: {
+    color: isDark ? 'rgba(26,26,26,0.45)' : 'rgba(255,255,255,0.65)',
+  },
 
   // ─── Search Bar ───
   searchWrap: {
     paddingHorizontal: 16,
-    paddingBottom: 18,
+    paddingBottom: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: isDark ? colors.gray200 : colors.gray100,
-    borderRadius: 12,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 16,
     paddingHorizontal: 14,
-    height: 40,
-    gap: 10,
+    height: 44,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+  },
+  searchLockOverlay: {
+    ...StyleSheet.absoluteFillObject,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
-    fontFamily: FontFamily.medium,
-    fontWeight: '500',
+    ...Typography.caption,
+    fontSize: 14,
     color: colors.black,
     paddingVertical: 0,
+  },
+  filtersLockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  filtersLockedText: {
+    ...Typography.caption,
+    color: colors.gray500,
+    fontSize: 12,
   },
 
   // ─── New Connections ───
@@ -558,24 +657,24 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: prefs?.largerTouchTargets ? 16 : 14,
+    paddingVertical: prefs?.largerTouchTargets ? 14 : 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.separator,
+    borderBottomColor: isDark ? 'rgba(255,255,255,0.04)' : colors.separator,
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 14,
+    marginRight: 12,
   },
   avatarRing: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    padding: 2.5,
+    padding: 2,
   },
   msgAvatar: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: colors.gray300,
     borderWidth: 2,
     borderColor: colors.white,
@@ -606,19 +705,23 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginBottom: 4,
   },
   msgName: {
-    ...Typography.sectionLabel,
+    ...Typography.bodySmallMedium,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: colors.black,
   },
-  msgTime: {
+  msgTime:
+ {
     ...Typography.caption,
+    fontSize: 13,
     color: prefs?.highContrast ? colors.gray700 : colors.gray500,
     marginLeft: 8,
   },
   msgPreview: {
-    ...Typography.bodySmall,
+    ...Typography.caption,
     color: prefs?.highContrast ? colors.gray700 : colors.gray600,
     marginTop: 2,
-    lineHeight: 18,
   },
   unreadBadge: {
     marginLeft: 8,
@@ -627,7 +730,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.gray300,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted,
   },
   unreadBadgeText: {
     ...Typography.captionBold,
@@ -649,16 +752,14 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   likesYouBadge: {
     backgroundColor: colors.accent,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   likesYouText: {
     ...Typography.captionBold,
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     letterSpacing: 0.3,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
   },
 
   // ─── Create Sheet ───
@@ -724,5 +825,36 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     ...Typography.bodySmall,
     color: colors.gray500,
     marginTop: 8,
+  },
+
+  // ─── Upsell Card ───
+  upsellCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 10,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: isDark ? 'rgba(206,17,38,0.06)' : 'rgba(206,17,38,0.04)',
+    gap: 12,
+  },
+  upsellIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: isDark ? 'rgba(206,17,38,0.12)' : 'rgba(206,17,38,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  upsellTitle: {
+    ...Typography.bodySmallMedium,
+    fontSize: 14,
+    color: colors.accent,
+  },
+  upsellDesc: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: colors.gray500,
+    marginTop: 1,
   },
 });

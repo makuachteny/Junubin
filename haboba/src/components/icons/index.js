@@ -15,3 +15,6 @@ export { default as GraffitiShield } from './GraffitiShield';
 export { default as GraffitiDrum } from './GraffitiDrum';
 export { default as GraffitiSpray } from './GraffitiSpray';
 export { default as GraffitiTag } from './GraffitiTag';
+export { default as GraffitiBookmark } from './GraffitiBookmark';
+export { default as GraffitiRepost } from './GraffitiRepost';
+export { default as GraffitiShare } from './GraffitiShare';

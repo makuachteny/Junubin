@@ -341,8 +341,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingBottom: 4,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
+    borderBottomWidth: 0,
   },
   title: {
     fontSize: 34,

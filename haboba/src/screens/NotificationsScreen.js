@@ -201,8 +201,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     height: 56,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
+    borderBottomWidth: 0,
   },
   backBtn: {
     padding: 4,

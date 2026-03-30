@@ -43,19 +43,19 @@ export const Typography = {
   body: { fontFamily: FontFamily.regular, fontSize: 17, fontWeight: '400', lineHeight: 25, letterSpacing: 0.05 },
   bodyMedium: { fontFamily: FontFamily.medium, fontSize: 17, fontWeight: '500', lineHeight: 25, letterSpacing: 0.05 },
   bodySemibold: { fontFamily: FontFamily.semibold, fontSize: 17, fontWeight: '600', lineHeight: 25, letterSpacing: 0.03 },
-  bodySmall: { fontFamily: FontFamily.regular, fontSize: 15, fontWeight: '400', lineHeight: 22, letterSpacing: 0.04 },
-  bodySmallMedium: { fontFamily: FontFamily.medium, fontSize: 15, fontWeight: '500', lineHeight: 22, letterSpacing: 0.04 },
+  bodySmall: { fontFamily: FontFamily.regular, fontSize: 16, fontWeight: '400', lineHeight: 23, letterSpacing: 0.04 },
+  bodySmallMedium: { fontFamily: FontFamily.medium, fontSize: 16, fontWeight: '500', lineHeight: 23, letterSpacing: 0.04 },
   // Caption
-  caption: { fontFamily: FontFamily.medium, fontSize: 13, fontWeight: '500', lineHeight: 17, letterSpacing: 0.2 },
-  captionBold: { fontFamily: FontFamily.bold, fontSize: 13, fontWeight: '700', lineHeight: 17, letterSpacing: 0.25 },
+  caption: { fontFamily: FontFamily.medium, fontSize: 14, fontWeight: '500', lineHeight: 18, letterSpacing: 0.2 },
+  captionBold: { fontFamily: FontFamily.bold, fontSize: 14, fontWeight: '700', lineHeight: 18, letterSpacing: 0.25 },
   // Label
   label: { fontFamily: FontFamily.semibold, fontSize: 14, fontWeight: '600', lineHeight: 18, letterSpacing: 0.45 },
   labelUpper: { fontFamily: FontFamily.bold, fontSize: 13, fontWeight: '700', lineHeight: 17, letterSpacing: 0.9, textTransform: 'uppercase' },
   // Section
-  sectionTitle: { fontFamily: FontFamily.bold, fontSize: 20, fontWeight: '700', lineHeight: 26, letterSpacing: -0.05 },
-  sectionLabel: { fontFamily: FontFamily.semibold, fontSize: 17, fontWeight: '600', lineHeight: 23, letterSpacing: 0.02 },
+  sectionTitle: { fontFamily: FontFamily.bold, fontSize: 22, fontWeight: '700', lineHeight: 28, letterSpacing: -0.05 },
+  sectionLabel: { fontFamily: FontFamily.semibold, fontSize: 18, fontWeight: '600', lineHeight: 24, letterSpacing: 0.02 },
   // Screen header
-  screenTitle: { fontFamily: FontFamily.bold, fontSize: 23, fontWeight: '700', lineHeight: 29, letterSpacing: -0.25 },
+  screenTitle: { fontFamily: FontFamily.bold, fontSize: 24, fontWeight: '700', lineHeight: 30, letterSpacing: -0.25 },
 };
 
 export const BorderRadius = {
@@ -81,8 +81,8 @@ export const ZIndex = {
 };
 
 export const Layout = {
-  headerHeight: 56,
-  filterGap: 8,
+  headerHeight: 60,
+  filterGap: 10,
 };
 
 export const getSurface = (variant, colors, isDark) => {

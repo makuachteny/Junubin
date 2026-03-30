@@ -57,6 +57,7 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const joinAnim = useRef(new Animated.Value(0)).current;
+  const joinTimeoutRef = useRef(null);
   const reactionIdRef = useRef(0);
   const commentIdxRef = useRef(0);
 
@@ -115,15 +116,28 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
   }, []);
 
   const handleRequestJoin = useCallback(() => {
+    if (joinStatus === 'pending') return;
     setJoinStatus('pending');
     hapticSelection?.();
     Animated.timing(joinAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     // Simulate host accepting
-    setTimeout(() => {
+    if (joinTimeoutRef.current) clearTimeout(joinTimeoutRef.current);
+    joinTimeoutRef.current = setTimeout(() => {
       setJoinStatus('joined');
       Animated.timing(joinAnim, { toValue: 0, duration: 300, useNativeDriver: true }).start();
     }, 2000);
+  }, [joinAnim, joinStatus]);
+
+  const handleCancelRequest = useCallback(() => {
+    if (joinTimeoutRef.current) clearTimeout(joinTimeoutRef.current);
+    joinTimeoutRef.current = null;
+    setJoinStatus('none');
+    Animated.timing(joinAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start();
   }, [joinAnim]);
+
+  useEffect(() => () => {
+    if (joinTimeoutRef.current) clearTimeout(joinTimeoutRef.current);
+  }, []);
 
   const handleSendComment = useCallback(() => {
     if (!commentText.trim()) return;
@@ -149,7 +163,7 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
   return (
     <View style={s.page}>
       {/* Background */}
-      <Image source={{ uri: image }} style={s.bgImage} blurRadius={joinStatus === 'joined' ? 0 : 20} />
+      <Image source={{ uri: image }} style={s.bgImage} blurRadius={0} />
       <View style={[s.bgOverlay, joinStatus === 'joined' && { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
 
       {/* Center content when not joined */}
@@ -162,6 +176,7 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
             <Ionicons name="eye" size={14} color="rgba(255,255,255,0.7)" />
             <Text style={s.preJoinViewerText}>{viewerCount} watching</Text>
           </View>
+          <Text style={s.preJoinHint}>Request to join to chat, react, and send gifts.</Text>
 
           {joinStatus === 'none' && (
             <TouchableOpacity style={s.requestBtn} onPress={handleRequestJoin} activeOpacity={0.8}>
@@ -170,10 +185,15 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
             </TouchableOpacity>
           )}
           {joinStatus === 'pending' && (
-            <Animated.View style={[s.pendingPill, { opacity: joinAnim }]}>
-              <Ionicons name="time" size={16} color="#FFFFFF" />
-              <Text style={s.pendingText}>Waiting for host...</Text>
-            </Animated.View>
+            <>
+              <Animated.View style={[s.pendingPill, { opacity: joinAnim }]}>
+                <Ionicons name="time" size={16} color="#FFFFFF" />
+                <Text style={s.pendingText}>Waiting for host...</Text>
+              </Animated.View>
+              <TouchableOpacity style={s.cancelRequestBtn} onPress={handleCancelRequest} activeOpacity={0.8}>
+                <Text style={s.cancelRequestText}>Cancel Request</Text>
+              </TouchableOpacity>
+            </>
           )}
         </View>
       )}
@@ -203,16 +223,14 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
             </View>
           </TouchableOpacity>
 
-          {joinStatus === 'joined' && (
-            <TouchableOpacity
-              style={[s.followBtn, (isFollowing || isFriend) && s.followBtnActive]}
-              onPress={() => { toggleFollow(); hapticSelection?.(); }}
-            >
-              <Text style={s.followBtnText}>
-                {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[s.followBtn, (isFollowing || isFriend) && s.followBtnActive]}
+            onPress={() => { toggleFollow(); hapticSelection?.(); }}
+          >
+            <Text style={s.followBtnText}>
+              {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={s.closeBtn} onPress={() => navigation.goBack()}>
@@ -377,27 +395,34 @@ const s = StyleSheet.create({
     paddingHorizontal: 40,
   },
   preJoinAvatar: {
-    width: 110, height: 110, borderRadius: 55, borderWidth: 3, borderColor: '#CE1126', marginBottom: 16,
+    width: 118, height: 118, borderRadius: 59, borderWidth: 3, borderColor: '#CE1126', marginBottom: 16,
   },
   preJoinName: {
-    fontSize: 22, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', marginBottom: 6,
+    fontSize: 24, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', marginBottom: 6,
   },
   preJoinCaption: {
-    fontSize: 14, fontFamily: FontFamily.regular, color: 'rgba(255,255,255,0.6)',
+    fontSize: 15, fontFamily: FontFamily.regular, color: 'rgba(255,255,255,0.6)',
     textAlign: 'center', marginBottom: 12, lineHeight: 20,
   },
   preJoinViewers: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 24,
   },
   preJoinViewerText: {
-    fontSize: 14, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.7)',
+    fontSize: 15, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.7)',
+  },
+  preJoinHint: {
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: 18,
   },
   requestBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#CE1126', paddingHorizontal: 28, paddingVertical: 14, borderRadius: 28,
+    backgroundColor: '#CE1126', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 30,
   },
   requestBtnText: {
-    fontSize: 16, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF', letterSpacing: 0.3,
+    fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF', letterSpacing: 0.3,
   },
   pendingPill: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -405,6 +430,20 @@ const s = StyleSheet.create({
   },
   pendingText: {
     fontSize: 14, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.8)',
+  },
+  cancelRequestBtn: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  cancelRequestText: {
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.8)',
   },
 
   // Gradients
@@ -423,7 +462,7 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 24, paddingRight: 12, paddingVertical: 4, paddingLeft: 4,
   },
   streamerAvatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#CE1126' },
-  streamerName: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
+  streamerName: { fontSize: 14, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
   streamerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   liveBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 3,
@@ -431,14 +470,14 @@ const s = StyleSheet.create({
   },
   liveDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#FFF' },
   liveLabel: { fontSize: 9, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', letterSpacing: 0.5 },
-  viewerText: { fontSize: 11, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.6)' },
+  viewerText: { fontSize: 12, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.6)' },
 
-  followBtn: { backgroundColor: '#CE1126', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 16 },
+  followBtn: { backgroundColor: '#CE1126', paddingHorizontal: 15, paddingVertical: 7, borderRadius: 17 },
   followBtnActive: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  followBtnText: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
+  followBtnText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
 
   closeBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.4)',
+    width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center', alignItems: 'center',
   },
 
@@ -446,7 +485,7 @@ const s = StyleSheet.create({
   reactionsColumn: {
     position: 'absolute', right: 16, bottom: 200, width: 60, height: 250, zIndex: 15, alignItems: 'center',
   },
-  floatingEmoji: { fontSize: 34, position: 'absolute', bottom: 0 },
+  floatingEmoji: { fontSize: 36, position: 'absolute', bottom: 0 },
 
   // Comments
   commentsArea: { position: 'absolute', left: 12, right: 80, height: 200, zIndex: 15 },
@@ -454,9 +493,9 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7,
     marginBottom: 6, alignSelf: 'flex-start', maxWidth: '90%',
   },
-  commentUser: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: '#F97316', marginBottom: 1 },
+  commentUser: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: '#F97316', marginBottom: 1 },
   commentUserMe: { color: '#CE1126' },
-  commentText: { fontSize: 13, fontFamily: FontFamily.regular, color: '#FFF', lineHeight: 18 },
+  commentText: { fontSize: 14, fontFamily: FontFamily.regular, color: '#FFF', lineHeight: 19 },
 
   // Bottom bar
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20, paddingHorizontal: 12 },
@@ -464,12 +503,12 @@ const s = StyleSheet.create({
   commentInput: {
     flex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 24,
     backgroundColor: 'rgba(0,0,0,0.4)', color: '#FFF', paddingHorizontal: 16, paddingVertical: 10,
-    fontSize: 14, fontFamily: FontFamily.regular,
+    fontSize: 15, fontFamily: FontFamily.regular,
   },
-  sendBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#CE1126', justifyContent: 'center', alignItems: 'center' },
-  quickReaction: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#CE1126', justifyContent: 'center', alignItems: 'center' },
+  quickReaction: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
   giftBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.1)',
+    width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(249,115,22,0.3)',
   },
 
@@ -480,23 +519,23 @@ const s = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40,
   },
   giftSheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  giftSheetTitle: { fontSize: 18, fontWeight: '800', fontFamily: FontFamily.bold, color: '#FFF' },
+  giftSheetTitle: { fontSize: 19, fontWeight: '800', fontFamily: FontFamily.bold, color: '#FFF' },
   coinBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: 'rgba(252,205,18,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16,
   },
-  coinBadgeText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FCCD12' },
+  coinBadgeText: { fontSize: 14, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FCCD12' },
   giftGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' },
   giftItem: {
     width: (W - 80) / 3, alignItems: 'center', paddingVertical: 14, borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  giftName: { fontSize: 12, fontWeight: '600', fontFamily: FontFamily.semibold, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
+  giftName: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
   giftCost: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  giftCostText: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FCCD12' },
+  giftCostText: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FCCD12' },
   getCoinsBtn: {
     marginTop: 16, alignItems: 'center', paddingVertical: 12, borderRadius: 20,
     backgroundColor: 'rgba(252,205,18,0.15)', borderWidth: 1, borderColor: 'rgba(252,205,18,0.3)',
   },
-  getCoinsBtnText: { fontSize: 14, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FCCD12' },
+  getCoinsBtnText: { fontSize: 15, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FCCD12' },
 });

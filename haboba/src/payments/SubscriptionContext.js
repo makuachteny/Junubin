@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PaymentService from './PaymentService';
+import FlutterwaveService from './FlutterwaveService';
 import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { supabase } from '../config/supabase';
 import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
@@ -267,6 +268,52 @@ export function SubscriptionProvider({ children }) {
     }
   }, []);
 
+  /**
+   * Purchase via Flutterwave (M-Pesa, MoMo, bank, card).
+   * Returns a payment link for the WebView checkout.
+   * Entitlements are granted server-side via webhook after payment completes.
+   */
+  const purchaseWithFlutterwave = useCallback(async ({ productId, paymentMethod, currency, phoneNumber, eventMeta }) => {
+    setPurchaseInProgress(true);
+    try {
+      const result = await FlutterwaveService.createPayment({
+        productId, paymentMethod, currency, phoneNumber, eventMeta,
+      });
+      return { success: true, paymentLink: result.paymentLink, txRef: result.txRef };
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to create payment' };
+    } finally {
+      setPurchaseInProgress(false);
+    }
+  }, []);
+
+  /**
+   * Confirm a Flutterwave payment after the user returns from checkout.
+   * Polls the status endpoint and refreshes local state when confirmed.
+   */
+  const confirmFlutterwavePayment = useCallback(async (txRef) => {
+    try {
+      const result = await FlutterwaveService.checkPaymentStatus(txRef);
+      if (result.status === 'successful') {
+        // Refresh state from server to pick up granted entitlements
+        const serverState = await loadServerState();
+        if (serverState) {
+          setState((prev) => normalizeState({
+            ...prev,
+            coins: Number.isFinite(serverState.coins) ? serverState.coins : prev.coins,
+            spotlights: Number.isFinite(serverState.spotlights) ? serverState.spotlights : prev.spotlights,
+            superLikes: Number.isFinite(serverState.superLikes) ? serverState.superLikes : prev.superLikes,
+            whispers: Number.isFinite(serverState.whispers) ? serverState.whispers : prev.whispers,
+            tier: serverState.subscriptionTier || prev.tier,
+          }));
+        }
+      }
+      return result;
+    } catch (err) {
+      return { status: 'error', productId: null };
+    }
+  }, [loadServerState, normalizeState]);
+
   const restorePurchases = useCallback(async () => {
     setPurchaseInProgress(true);
     try {
@@ -451,6 +498,8 @@ export function SubscriptionProvider({ children }) {
 
   const actionsValue = useMemo(() => ({
     purchase,
+    purchaseWithFlutterwave,
+    confirmFlutterwavePayment,
     restorePurchases,
     cancelSubscription,
     consumeSpotlight,
@@ -464,7 +513,7 @@ export function SubscriptionProvider({ children }) {
     setAdsEnabled,
     grantPromoTier,
     reset,
-  }), [purchase, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, consumeCoins, addCoins, addSpotlights, addSuperLikes, addWhispers, setAdsEnabled, grantPromoTier, reset]);
+  }), [purchase, purchaseWithFlutterwave, confirmFlutterwavePayment, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, consumeCoins, addCoins, addSpotlights, addSuperLikes, addWhispers, setAdsEnabled, grantPromoTier, reset]);
 
   if (!loaded) {
     return (

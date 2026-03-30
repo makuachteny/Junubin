@@ -170,7 +170,7 @@ describe('Purpose / Intention flow', () => {
     expect(queryByText('Who do you want to date?')).toBeNull();
   });
 
-  it('authenticated user with complete profile goes to Main (Community)', () => {
+  it('authenticated user with complete profile goes to Main (Home)', () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: { profileComplete: true } },
@@ -182,7 +182,7 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Community Screen')).toBeTruthy();
+    expect(getByText('Home Screen')).toBeTruthy();
   });
 
   it('authenticated user with accountPurpose set goes to Main', () => {
@@ -197,7 +197,7 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Community Screen')).toBeTruthy();
+    expect(getByText('Home Screen')).toBeTruthy();
   });
 
   it('authenticated user without profile goes to ProfileSetup', () => {

@@ -50,6 +50,7 @@
     "expo-image": "~3.0.2",
     "expo-image-picker": "~17.0.10",
     "expo-linear-gradient": "~15.0.8",
+    "expo-location": "~19.0.8",
     "expo-network": "~8.0.8",
     "expo-notifications": "~0.32.16",
     "expo-screen-capture": "~8.0.9",
@@ -65,7 +66,8 @@
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-svg-transformer": "^1.5.3",
-    "react-native-url-polyfill": "^2.0.0"
+    "react-native-url-polyfill": "^2.0.0",
+    "react-native-webview": "13.15.0"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
@@ -77,6 +79,7 @@
     "jest-circus": "^29.7.0",
     "jest-expo": "^54.0.13",
     "react-test-renderer": "19.1.0",
+    "sharp": "^0.34.5",
     "typescript": "~5.9.2"
   },
   "private": true

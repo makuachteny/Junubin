@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useCallback } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
@@ -11,11 +11,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 import { useAuth } from '../auth';
-import { hapticSelection, hapticLight } from '../utils/haptics';
+import { hapticSelection } from '../utils/haptics';
 import { GraffitiCommunity, GraffitiHeart, GraffitiChat } from '../components/icons';
 import LogoMark from '../components/LogoMark';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 // Screens - Onboarding flow (eager — auth flow)
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SignupScreen from '../screens/SignupScreen';
@@ -70,6 +68,7 @@ const CreateStoryScreen = lazify(() => import('../screens/CreateStoryScreen'));
 const EventsScreen = lazify(() => import('../screens/EventsScreen'));
 const EventDetailScreen = lazify(() => import('../screens/EventDetailScreen'));
 const CreateEventScreen = lazify(() => import('../screens/CreateEventScreen'));
+const CreateGroupScreen = lazify(() => import('../screens/CreateGroupScreen'));
 const InteractivityHubScreen = lazify(() => import('../screens/InteractivityHubScreen'));
 const GameSettingsScreen = lazify(() => import('../screens/GameSettingsScreen'));
 const GoLiveScreen = lazify(() => import('../screens/GoLiveScreen'));
@@ -81,69 +80,44 @@ const Tab = createBottomTabNavigator();
 const AuthStack = createStackNavigator();
 const MainStack = createStackNavigator();
 
-// Placeholder for the center FAB tab (never actually rendered)
-const EmptyScreen = () => <View style={{ flex: 1 }} />;
-
 function HomeTabs() {
-  const { colors, isDark } = useTheme();
-  const tabStyles = useMemo(() => getTabStyles(colors, isDark), [colors, isDark]);
-  const [currentMode, setCurrentMode] = useState('Dating');
-  const TAB_NAMES = ['HomeTab', 'CommunityTab', 'ModeToggle', 'LikesTab', 'MessagesTab'];
+  const { colors } = useTheme();
+  const tabStyles = useMemo(() => getTabStyles(), []);
+  const TAB_NAMES = ['HomeTab', 'CommunityTab', 'LikesTab', 'MessagesTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
-
-  // Read persisted mode on mount
-  React.useEffect(() => {
-    AsyncStorage.getItem('@haboba_mode').then((stored) => {
-      if (stored === 'Social' || stored === 'Dating') setCurrentMode(stored);
-    });
-  }, []);
-
-  const toggleMode = useCallback(async () => {
-    hapticLight();
-    const next = currentMode === 'Dating' ? 'Social' : 'Dating';
-    setCurrentMode(next);
-    try { await AsyncStorage.setItem('@haboba_mode', next); } catch {}
-  }, [currentMode]);
 
   return (
       <Tab.Navigator
-        initialRouteName="CommunityTab"
+        initialRouteName="HomeTab"
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarShowLabel: false,
-          tabBarActiveTintColor: route.name === 'LikesTab' ? colors.accent : colors.tabActive,
+          tabBarShowLabel: true,
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontFamily: FontFamily.semibold,
+            fontWeight: '600',
+            marginTop: -2,
+          },
+          tabBarActiveTintColor: route.name === 'LikesTab' ? colors.accent : colors.black,
           tabBarInactiveTintColor: colors.tabInactive,
           tabBarStyle: {
-            backgroundColor: colors.surface,
-            borderTopWidth: 0.5,
-            borderTopColor: colors.separator,
-            height: Platform.OS === 'ios' ? 80 : 64,
-            paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-            paddingTop: 6,
-            shadowColor: colors.gray700,
-            shadowOffset: { width: 0, height: -4 },
-            shadowOpacity: 0.08,
-            shadowRadius: 12,
-            elevation: 10,
+            backgroundColor: colors.white,
+            borderTopWidth: 0,
+            height: Platform.OS === 'ios' ? 88 : 68,
+            paddingBottom: Platform.OS === 'ios' ? 26 : 10,
+            paddingTop: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.04,
+            shadowRadius: 8,
+            elevation: 6,
           },
           tabBarIcon: ({ focused }) => {
             const idx = TAB_NAMES.indexOf(route.name);
             const scaleValue = idx >= 0 ? tabScales[idx] : new Animated.Value(1);
-
-            // Center FAB — raised gradient button
-            if (route.name === 'ModeToggle') {
-              return (
-                <Animated.View style={[tabStyles.fabWrap, { transform: [{ scale: scaleValue }] }]}>
-                  <View style={[tabStyles.fab, { backgroundColor: colors.black }]}>
-                    <Ionicons name="swap-horizontal" size={22} color={isDark ? '#1A1A1A' : '#FFFFFF'} />
-                  </View>
-                </Animated.View>
-              );
-            }
-
             const activeColor = route.name === 'LikesTab' ? colors.accent : colors.tabActive;
             const iconColor = focused ? activeColor : colors.tabInactive;
-            const size = 22;
+            const size = 28;
 
             let icon;
             switch (route.name) {
@@ -166,18 +140,12 @@ function HomeTabs() {
             return (
               <Animated.View style={[tabStyles.tabIcon, { transform: [{ scale: scaleValue }] }]}>
                 {icon}
-                {focused && <View style={[tabStyles.activeBar, { backgroundColor: activeColor }]} />}
               </Animated.View>
             );
           },
         })}
         screenListeners={({ route }) => ({
-          tabPress: (e) => {
-            if (route.name === 'ModeToggle') {
-              e.preventDefault();
-              toggleMode();
-              return;
-            }
+          tabPress: () => {
             hapticSelection();
             const idx = TAB_NAMES.indexOf(route.name);
             if (idx >= 0) {
@@ -193,9 +161,8 @@ function HomeTabs() {
           },
         })}
       >
-        <Tab.Screen name="CommunityTab" component={CommunityScreen} options={{ tabBarLabel: 'Explore' }} />
-        <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Connect' }} />
-        <Tab.Screen name="ModeToggle" component={EmptyScreen} options={{ tabBarLabel: '' }} />
+        <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Discover' }} />
+        <Tab.Screen name="CommunityTab" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
         <Tab.Screen name="LikesTab" component={LikesScreen} options={{ tabBarLabel: 'Likes' }} />
         <Tab.Screen name="MessagesTab" component={MessagesScreen} options={{ tabBarLabel: 'Chats' }} />
       </Tab.Navigator>
@@ -276,6 +243,7 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="Events" component={EventsScreen} />
       <MainStack.Screen name="EventDetail" component={EventDetailScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
       <MainStack.Screen name="CreateEvent" component={CreateEventScreen} options={{ presentation: 'modal' }} />
+      <MainStack.Screen name="CreateGroup" component={CreateGroupScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="InteractivityHub" component={InteractivityHubScreen} />
       <MainStack.Screen name="GameSettings" component={GameSettingsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="GoLive" component={GoLiveScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
@@ -308,37 +276,12 @@ export default function AppNavigator() {
     : <MainNavigator initialRouteName="Main" />;
 }
 
-const getTabStyles = (colors, isDark) => StyleSheet.create({
+const getTabStyles = () => StyleSheet.create({
   tabIcon: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 44,
-    height: 36,
-  },
-  activeBar: {
-    width: 20,
-    height: 2.5,
-    borderRadius: 1.5,
-    marginTop: 4,
-  },
-  // Center FAB
-  fabWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  fab: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 56,
+    height: 38,
   },
 });
 

@@ -8,6 +8,7 @@ import {
   Image,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -331,7 +332,27 @@ export default function LikesScreen({ navigation }) {
     Animated.stagger(0, staggered).start();
   }, [filteredLikes]);
 
+  const isPlus = hasTier('plus');
+  const filtersLocked = !isPlus;
+
+  useEffect(() => {
+    if (!filtersLocked) return;
+    if (activeFilters.length > 0) setActiveFilters([]);
+    if (Object.keys(filterSelections).length > 0) setFilterSelections({});
+  }, [filtersLocked, activeFilters.length, filterSelections]);
+
+  const showFiltersLocked = useCallback(() => {
+    Alert.alert('JuNubin+ Filters', 'Upgrade to JuNubin+ to unlock filters.', [
+      { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [navigation]);
+
   const handleFilterPress = useCallback((filterName) => {
+    if (filtersLocked) {
+      showFiltersLocked();
+      return;
+    }
     if (filterName === 'More') {
       navigation?.navigate?.('Preferences');
       return;
@@ -344,6 +365,10 @@ export default function LikesScreen({ navigation }) {
   }, [navigation]);
 
   const handleFilterSelect = useCallback((filterName, value) => {
+    if (filtersLocked) {
+      showFiltersLocked();
+      return;
+    }
     setFilterSelections((prev) => {
       const next = { ...prev };
       if (value === null) {
@@ -353,7 +378,7 @@ export default function LikesScreen({ navigation }) {
       }
       return next;
     });
-  }, []);
+  }, [filtersLocked, showFiltersLocked]);
 
   const filteredLikes = useMemo(
     () => applyLikeFilters(likes, activeFilters, filterSelections),
@@ -381,13 +406,36 @@ export default function LikesScreen({ navigation }) {
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="notifications-outline" size={20} color={colors.gray500} />
+            <Ionicons name="notifications-outline" size={21} color={colors.gray500} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
             <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {/* Fixed filter bar */}
+      <View style={styles.filterBarWrap}>
+        <FilterBar
+          onFilterPress={handleFilterPress}
+          onSettingsPress={() => navigation.navigate('Preferences')}
+          activeFilters={activeFilters}
+          filterSelections={filterSelections}
+          onFilterSelect={handleFilterSelect}
+          showSettingsButton={true}
+          filters={LIKE_FILTERS}
+          options={LIKE_FILTER_OPTIONS}
+          containerStyle={{ marginTop: 2, marginBottom: 4, marginLeft: -12, marginRight: -12 }}
+          disabled={filtersLocked}
+          onDisabledPress={showFiltersLocked}
+        />
+        {filtersLocked && (
+          <TouchableOpacity style={styles.filtersLockedRow} onPress={showFiltersLocked} activeOpacity={0.8}>
+            <Ionicons name="lock-closed" size={14} color={colors.gray500} />
+            <Text style={styles.filtersLockedText}>Filters are JuNubin+ only</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <Animated.ScrollView
         style={[
@@ -403,18 +451,6 @@ export default function LikesScreen({ navigation }) {
           <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Filter bar (scrolls with content) */}
-        <FilterBar
-          onFilterPress={handleFilterPress}
-          onSettingsPress={() => navigation.navigate('Preferences')}
-          activeFilters={activeFilters}
-          filterSelections={filterSelections}
-          onFilterSelect={handleFilterSelect}
-          showSettingsButton={true}
-          filters={LIKE_FILTERS}
-          options={LIKE_FILTER_OPTIONS}
-          containerStyle={{ marginTop: Layout.filterGap, marginBottom: 6, marginLeft: -12, marginRight: -12 }}
-        />
         {isLoading ? (
           <View style={styles.likesGrid}>
             {Array.from({ length: 6 }).map((_, idx) => (
@@ -516,8 +552,8 @@ export default function LikesScreen({ navigation }) {
 
             return (
               <React.Fragment key={like.id}>
-                {/* Inline upgrade banner after 4th card */}
-                {idx === 4 && !unlocked && (
+                {/* Inline upgrade banner after teaser cards */}
+                {idx === 2 && !unlocked && (
                   <TouchableOpacity
                     style={styles.inlineBanner}
                     activeOpacity={0.85}
@@ -529,8 +565,8 @@ export default function LikesScreen({ navigation }) {
                       end={{ x: 1, y: 1 }}
                       style={styles.inlineBannerGradient}
                     >
-                      <Ionicons name="lock-open" size={18} color="#FFFFFF" />
-                      <Text style={styles.inlineBannerText}>Unlock to see who likes you</Text>
+                      <Ionicons name="eye" size={18} color="#FFFFFF" />
+                      <Text style={styles.inlineBannerText}>See all {filteredLikes.length} people who like you</Text>
                       <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
                     </LinearGradient>
                   </TouchableOpacity>
@@ -540,7 +576,7 @@ export default function LikesScreen({ navigation }) {
                     activeOpacity={0.85}
                     style={StyleSheet.absoluteFill}
                     onPress={() => {
-                      if (unlocked) {
+                      if (unlocked || idx < 2) {
                         navigation.navigate('ProfileDetail', { profile: like, fromLikes: true });
                       } else {
                         navigation.navigate('Elite');
@@ -550,7 +586,7 @@ export default function LikesScreen({ navigation }) {
                     <Image
                       source={imageSource(like.images?.[0])}
                       style={styles.likeImage}
-                      blurRadius={unlocked ? 0 : 25}
+                      blurRadius={unlocked || idx < 2 ? 0 : 25}
                     />
 
                     {/* Gradient overlay */}
@@ -563,7 +599,7 @@ export default function LikesScreen({ navigation }) {
                     {/* Card info */}
                     <View style={styles.likeInfo}>
                       <View style={styles.nameRow}>
-                        {unlocked ? (
+                        {(unlocked || idx < 2) ? (
                           <Text style={styles.likeName} numberOfLines={1}>{like.name}</Text>
                         ) : (
                           <View style={styles.blurredName} />
@@ -578,7 +614,7 @@ export default function LikesScreen({ navigation }) {
                             (like.hasWhisper || like.whisperText) ? 'chatbubble' :
                             'heart'
                           }
-                          size={11}
+                          size={15}
                           color={
                             (like.likeType === 'super_like' || like.isSuperLike) ? '#FCCD12' :
                             (like.hasWhisper || like.whisperText) ? '#9B59B6' :
@@ -626,25 +662,24 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 30,
+    fontSize: 32,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,
-    letterSpacing: -0.8,
+    letterSpacing: -0.5,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: colors.gray300,
     backgroundColor: colors.gray300,
-    ...getShadow('md', isDark),
   },
   content: {
     flex: 1,
@@ -657,8 +692,8 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
     marginBottom: 8,
     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
     borderRadius: 16,
@@ -668,9 +703,9 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     alignItems: 'center',
   },
   stackedAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 2.5,
     borderColor: isDark ? colors.gray200 : colors.white,
   },
@@ -680,7 +715,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     alignItems: 'center',
   },
   stackedMoreText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
     color: '#FFFFFF',
@@ -689,21 +724,21 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     flex: 1,
   },
   likesSummaryTitle: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: colors.black,
     marginBottom: 1,
   },
   likesSummarySubtitle: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: FontFamily.regular,
     color: colors.gray500,
   },
   likesUnlockBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -768,7 +803,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     borderRadius: 4,
   },
   likeName: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
@@ -777,7 +812,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     textShadowRadius: 2,
   },
   likeAge: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
@@ -793,7 +828,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     marginTop: 3,
   },
   likedAgoText: {
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: FontFamily.medium,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.6)',
@@ -815,9 +850,28 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     paddingVertical: 16,
   },
   inlineBannerText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
+  },
+  filterBarWrap: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 6,
+    backgroundColor: colors.white,
+    borderBottomWidth: 0,
+  },
+  filtersLockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 2,
+    paddingTop: 2,
+  },
+  filtersLockedText: {
+    ...Typography.caption,
+    color: colors.gray500,
+    fontSize: 12,
   },
 });

@@ -9,61 +9,41 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily } from '../theme';
-import { POST_THEMES, mockComments } from '../data/mockProfiles';
+import { useTheme, FontFamily, Typography } from '../theme';
+import { mockComments } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
-import { useFollow } from '../hooks/useFollow';
-import { GraffitiSend } from '../components/icons';
+import { GraffitiSend, GraffitiHeart, GraffitiChat } from '../components/icons';
+import PostCard from '../components/PostCard';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import EmptyState from '../components/EmptyState';
 
 export default function PostDetailScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { currentUser } = useCurrentUser();
 
   const post = route.params?.post || {};
   const postId = post.id || 'post1';
   const initialComments = mockComments[postId] || [];
 
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(post.likes || 0);
   const [comments, setComments] = useState(initialComments);
   const [commentText, setCommentText] = useState('');
-  const { isFollowing: following, isFriend, toggleFollow } = useFollow(post.user?.id);
   const [commentLikes, setCommentLikes] = useState({});
   const [replyTo, setReplyTo] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 800);
+    setTimeout(() => setRefreshing(false), 800);
   }, []);
-
-  const theme = POST_THEMES[post.cardTheme] || POST_THEMES.default;
-  const isDarkCard = theme.bg === '#262626' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12';
-
-  const handleLike = () => {
-    setLiked(!liked);
-    setLikeCount(liked ? likeCount - 1 : likeCount + 1);
-  };
-
-  const handleFollow = () => {
-    toggleFollow();
-  };
-
-  const handleShare = () => {
-    Alert.alert('Share', 'Post link copied to clipboard!');
-  };
 
   const handleComment = () => {
     if (!commentText.trim()) return;
@@ -73,16 +53,22 @@ export default function PostDetailScreen({ navigation, route }) {
       text: commentText.trim(),
       time: 'Just now',
       likes: 0,
+      replyTo: replyTo || null,
     };
     setComments((prev) => [...prev, newComment]);
     setCommentText('');
+    setReplyTo(null);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
   };
 
   const handleCommentLike = (commentId) => {
-    setCommentLikes((prev) => ({
-      ...prev,
-      [commentId]: !prev[commentId],
-    }));
+    setCommentLikes((prev) => ({ ...prev, [commentId]: !prev[commentId] }));
+  };
+
+  const handleReply = (userName) => {
+    setReplyTo(userName);
+    setCommentText(`@${userName} `);
+    inputRef.current?.focus();
   };
 
   return (
@@ -91,12 +77,14 @@ export default function PostDetailScreen({ navigation, route }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color={colors.black} />
+          <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Post</Text>
-        <View style={{ width: 30 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Post</Text>
+        </View>
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView
@@ -104,101 +92,83 @@ export default function PostDetailScreen({ navigation, route }) {
         style={styles.body}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        refreshControl={<ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        {/* Post card */}
-        <View style={[styles.postCard, { backgroundColor: theme.bg }]}>
-          {/* Post header */}
-          <View style={styles.postHeader}>
-            <Image source={imageSource(post.user?.avatar)} style={styles.postAvatar} />
-            <View style={styles.postHeaderInfo}>
-              <Text style={[styles.postUserName, { color: theme.text }]}>{post.user?.name}</Text>
-              <Text style={[styles.postMeta, { color: isDarkCard ? 'rgba(255,255,255,0.5)' : colors.gray400 }]}>
-                {post.user?.location} · {post.timestamp}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.followBtn, { backgroundColor: following ? 'transparent' : theme.accent, borderColor: theme.accent, borderWidth: following ? 1.5 : 0 }]}
-              onPress={handleFollow}
-              activeOpacity={0.8}
-            >
-              {isFriend && <Ionicons name="people" size={12} color={theme.accent} style={{ marginRight: 3 }} />}
-              <Text style={[styles.followBtnText, { color: following ? theme.accent : (isDarkCard ? '#000' : '#FFF') }]}>
-                {isFriend ? 'Friends' : following ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
+        {/* ─── The Post itself — rendered as a full PostCard ─── */}
+        <PostCard post={post} />
+
+        {/* ─── Comments Section Divider ─── */}
+        <View style={styles.commentsDivider}>
+          <LinearGradient
+            colors={isDark ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'] : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.dividerLine}
+          />
+          <View style={styles.commentsDividerPill}>
+            <GraffitiChat size={14} color={colors.accent} />
+            <Text style={styles.commentsDividerText}>
+              Comments ({comments.length})
+            </Text>
           </View>
-
-          {/* Content */}
-          {post.content && (
-            <Text style={[styles.postContent, { color: theme.text }]}>{post.content}</Text>
-          )}
-
-          {/* Image */}
-          {post.image && (
-            <Image source={imageSource(post.image)} style={styles.postImage} />
-          )}
-
-          {/* Actions */}
-          <View style={[styles.postActions, { borderTopColor: isDarkCard ? 'rgba(255,255,255,0.1)' : colors.separator }]}>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleLike}>
-              <Ionicons
-                name={liked ? 'heart' : 'heart-outline'}
-                size={22}
-                color={liked ? colors.accent : (isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400)}
-              />
-              <Text style={[styles.actionText, { color: liked ? colors.accent : (isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400) }]}>
-                {likeCount}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => scrollRef.current?.scrollToEnd({ animated: true })}>
-              <Ionicons name="chatbubble" size={20} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
-              <Text style={[styles.actionText, { color: isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400 }]}>
-                {comments.length}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
-              <Ionicons name="share-outline" size={20} color={isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400} />
-              <Text style={[styles.actionText, { color: isDarkCard ? 'rgba(255,255,255,0.6)' : colors.gray400 }]}>
-                Share
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <LinearGradient
+            colors={isDark ? ['rgba(255,255,255,0)', 'rgba(255,255,255,0.06)', 'rgba(255,255,255,0)'] : ['rgba(0,0,0,0)', 'rgba(0,0,0,0.06)', 'rgba(0,0,0,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.dividerLine}
+          />
         </View>
 
-        {/* Comments section */}
+        {/* ─── Comments List ─── */}
         <View style={styles.commentsSection}>
-          <Text style={styles.commentsTitle}>Comments ({comments.length})</Text>
-
           {comments.length === 0 && (
             <EmptyState
               icon="chatbubble-outline"
               title="No comments yet"
-              subtitle="Start the conversation!"
+              subtitle="Be the first to share your thoughts!"
             />
           )}
 
           {comments.map((comment) => {
             const isLiked = commentLikes[comment.id];
+            const isOwn = comment.user.name === currentUser.name;
             return (
               <View key={comment.id} style={styles.commentRow}>
-                <Image source={imageSource(comment.user.avatar)} style={styles.commentAvatar} />
+                <Image source={imageSource(comment.user.avatar)} style={[styles.commentAvatar, isOwn && styles.commentAvatarOwn]} />
                 <View style={styles.commentBody}>
-                  <View style={styles.commentBubble}>
-                    <Text style={styles.commentName}>{comment.user.name}</Text>
+                  <View style={[styles.commentBubble, isOwn && styles.commentBubbleOwn]}>
+                    <View style={styles.commentNameRow}>
+                      <View style={styles.commentNameLeft}>
+                        <Text style={styles.commentName}>{comment.user.name}</Text>
+                        {isOwn && <View style={styles.youBadge}><Text style={styles.youBadgeText}>You</Text></View>}
+                      </View>
+                      <Text style={styles.commentTime}>{comment.time}</Text>
+                    </View>
+                    {comment.replyTo && (
+                      <Text style={styles.commentReplyTag}>Replying to @{comment.replyTo}</Text>
+                    )}
                     <Text style={styles.commentText}>{comment.text}</Text>
                   </View>
+
+                  {/* Comment actions */}
                   <View style={styles.commentActions}>
-                    <Text style={styles.commentTime}>{comment.time}</Text>
-                    <TouchableOpacity onPress={() => handleCommentLike(comment.id)}>
-                      <Text style={[styles.commentAction, isLiked && { color: colors.accent }]}>
-                        Like{isLiked ? 'd' : ''} ({comment.likes + (isLiked ? 1 : 0)})
+                    <TouchableOpacity
+                      style={styles.commentActionBtn}
+                      onPress={() => handleCommentLike(comment.id)}
+                      activeOpacity={0.7}
+                    >
+                      <GraffitiHeart size={14} color={isLiked ? colors.rose : colors.gray400} filled={isLiked} />
+                      <Text style={[styles.commentActionText, isLiked && { color: colors.rose }]}>
+                        {comment.likes + (isLiked ? 1 : 0)}
                       </Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => { setReplyTo(comment.user.name); setCommentText(`@${comment.user.name} `); }}>
-                      <Text style={styles.commentAction}>Reply</Text>
+                    <TouchableOpacity
+                      style={styles.commentActionBtn}
+                      onPress={() => handleReply(comment.user.name)}
+                      activeOpacity={0.7}
+                    >
+                      <GraffitiChat size={13} color={colors.gray400} />
+                      <Text style={styles.commentActionText}>Reply</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -210,220 +180,280 @@ export default function PostDetailScreen({ navigation, route }) {
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Comment input */}
+      {/* ─── Comment Input ─── */}
       <View style={[styles.commentInput, { paddingBottom: insets.bottom + 8 }]}>
-        <Image source={imageSource(currentUser.images?.[0])} style={styles.inputAvatar} />
-        <View style={styles.inputWrap}>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Write a comment..."
-            placeholderTextColor={colors.gray400}
-            value={commentText}
-            onChangeText={setCommentText}
-            multiline
-            maxLength={300}
-          />
+        {replyTo && (
+          <View style={styles.replyBar}>
+            <View style={styles.replyBarLeft}>
+              <Ionicons name="return-down-forward" size={14} color={colors.accent} />
+              <Text style={styles.replyBarText}>
+                Replying to <Text style={{ fontWeight: '700', color: colors.accent }}>@{replyTo}</Text>
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => { setReplyTo(null); setCommentText(''); }}>
+              <Ionicons name="close-circle" size={18} color={colors.gray400} />
+            </TouchableOpacity>
+          </View>
+        )}
+        <View style={styles.inputRow}>
+          <Image source={imageSource(currentUser.images?.[0])} style={styles.inputAvatar} />
+          <View style={styles.inputWrap}>
+            <TextInput
+              ref={inputRef}
+              style={styles.textInput}
+              placeholder={replyTo ? `Reply to @${replyTo}...` : 'Add a comment...'}
+              placeholderTextColor={colors.gray400}
+              value={commentText}
+              onChangeText={setCommentText}
+              multiline
+              maxLength={300}
+            />
+          </View>
+          {commentText.trim() ? (
+            <TouchableOpacity onPress={handleComment} style={styles.sendBtn} activeOpacity={0.8}>
+              <GraffitiSend size={18} color="#FFFFFF" filled />
+            </TouchableOpacity>
+          ) : null}
         </View>
-        {commentText.trim() ? (
-          <TouchableOpacity onPress={handleComment} style={styles.sendBtn}>
-            <GraffitiSend size={18} color="#FFFFFF" filled />
-          </TouchableOpacity>
-        ) : null}
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
   },
+
+  // ─── Header ───
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
     backgroundColor: colors.white,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
+    borderBottomWidth: 0,
   },
   backBtn: {
-    padding: 4,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: isDark ? colors.gray200 : colors.surfaceMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
-    ...Typography.sectionLabel,
+    ...Typography.bodySmallMedium,
     color: colors.black,
   },
   body: {
     flex: 1,
   },
-  postCard: {
-    margin: 16,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.gray200,
-  },
-  postHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-  },
-  postAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 15,
-    marginRight: 10,
-    backgroundColor: colors.gray300,
-  },
-  postHeaderInfo: {
-    flex: 1,
-  },
-  postUserName: {
-    ...Typography.bodySemibold,
-    fontSize: 15,
-  },
-  postMeta: {
-    ...Typography.caption,
-    marginTop: 1,
-  },
-  followBtn: {
+
+  // ─── Comments Divider ───
+  commentsDivider: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 20,
+    marginTop: 8,
+    marginBottom: 16,
+    gap: 12,
   },
-  followBtnText: {
-    ...Typography.captionBold,
+  dividerLine: {
+    flex: 1,
+    height: 1,
   },
-  postContent: {
-    ...Typography.body,
-    fontSize: 16,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    lineHeight: 24,
-  },
-  postImage: {
-    width: '100%',
-    height: 260,
-    resizeMode: 'cover',
-  },
-  postActions: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    gap: 24,
-    borderTopWidth: 0.5,
-  },
-  actionBtn: {
+  commentsDividerPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
   },
-  actionText: {
-    ...Typography.bodySmallMedium,
+  commentsDividerText: {
+    ...Typography.captionBold,
+    fontSize: 13,
+    color: colors.black,
   },
+
+  // ─── Comments List ───
   commentsSection: {
     paddingHorizontal: 16,
-  },
-  commentsTitle: {
-    ...Typography.sectionLabel,
-    color: colors.black,
-    marginBottom: 16,
   },
   commentRow: {
     flexDirection: 'row',
     marginBottom: 16,
+    alignItems: 'flex-start',
   },
   commentAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 12,
+    borderRadius: 18,
     marginRight: 10,
+    marginTop: 2,
     backgroundColor: colors.gray300,
+  },
+  commentAvatarOwn: {
+    borderWidth: 2,
+    borderColor: colors.accent,
   },
   commentBody: {
     flex: 1,
   },
   commentBubble: {
-    backgroundColor: colors.cream,
-    borderRadius: 14,
-    paddingHorizontal: 12,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 16,
+    borderTopLeftRadius: 4,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderWidth: 0.5,
-    borderColor: colors.gray200,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+  },
+  commentBubbleOwn: {
+    backgroundColor: isDark ? 'rgba(206,17,38,0.08)' : 'rgba(206,17,38,0.04)',
+    borderColor: isDark ? 'rgba(206,17,38,0.15)' : 'rgba(206,17,38,0.08)',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 4,
+  },
+  commentNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  commentNameLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   commentName: {
     ...Typography.captionBold,
+    fontSize: 13,
     color: colors.black,
-    marginBottom: 3,
+  },
+  youBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    backgroundColor: isDark ? 'rgba(206,17,38,0.2)' : 'rgba(206,17,38,0.1)',
+  },
+  youBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.accent,
+  },
+  commentTime: {
+    fontSize: 11,
+    fontFamily: FontFamily.regular,
+    color: colors.gray400,
+  },
+  commentReplyTag: {
+    fontSize: 12,
+    fontFamily: FontFamily.medium,
+    color: colors.accent,
+    marginBottom: 4,
   },
   commentText: {
-    ...Typography.bodySmall,
+    ...Typography.caption,
     color: colors.black,
     lineHeight: 20,
   },
   commentActions: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 18,
     marginTop: 6,
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
   },
-  commentTime: {
+  commentActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  commentActionText: {
     ...Typography.caption,
+    fontSize: 12,
     color: colors.gray400,
   },
-  commentAction: {
-    ...Typography.caption,
-    color: colors.gray,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-  },
+
+  // ─── Comment Input ───
   commentInput: {
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray200,
+  },
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(206,17,38,0.03)',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray200,
+  },
+  replyBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  replyBarText: {
+    ...Typography.caption,
+    fontSize: 13,
+    color: colors.gray600,
+  },
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 14,
     paddingTop: 10,
-    backgroundColor: colors.white,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.gray200,
     gap: 10,
   },
   inputAvatar: {
     width: 34,
     height: 34,
-    borderRadius: 12,
+    borderRadius: 17,
     marginBottom: 4,
     backgroundColor: colors.gray300,
   },
   inputWrap: {
     flex: 1,
-    backgroundColor: colors.cream,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    maxHeight: 80,
-    borderWidth: 0.5,
-    borderColor: colors.gray200,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxHeight: 90,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
   },
   textInput: {
-    ...Typography.bodySmall,
-    fontSize: 14,
+    ...Typography.caption,
     color: colors.black,
-    maxHeight: 60,
+    maxHeight: 65,
     paddingTop: 0,
     paddingBottom: 0,
   },
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
   },
 });

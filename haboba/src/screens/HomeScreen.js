@@ -308,17 +308,7 @@ const HomeScreen = ({ navigation, route }) => {
     });
   }, [hasTier]);
 
-  // Poll for mode changes from the tab bar FAB toggle
-  useEffect(() => {
-    const check = setInterval(() => {
-      AsyncStorage.getItem('@haboba_mode').then((stored) => {
-        if ((stored === 'Social' || stored === 'Dating') && stored !== mode) {
-          setModeAndPersist(stored);
-        }
-      });
-    }, 500);
-    return () => clearInterval(check);
-  }, [mode, setModeAndPersist]);
+  // Mode toggle is now in the header — no need to poll AsyncStorage
 
   const profileCardRef = useRef(null);
   const profilesRef = useRef(profiles);
@@ -700,41 +690,49 @@ const HomeScreen = ({ navigation, route }) => {
                 onLike={handleLike}
                 onSuperLike={handleSuperLike}
                 onMessage={handleMessage}
-                onReaction={handleReaction}
+                hasRewind={!!lastSwiped}
+                mode={mode}
               />
             </View>
           </>
         ) : (
           <View style={styles.empty}>
             <View style={styles.emptyBanner}>
-              <View style={styles.emptyIconRow}>
-                <View style={styles.emptyCircle}>
-                  <Ionicons name="people-outline" size={28} color={colors.accent} />
-                </View>
+              <View style={styles.emptyCircle}>
+                <Ionicons name="heart-outline" size={36} color={colors.accent} />
               </View>
               <Text style={styles.emptyTitle}>
-                {mode === 'Social' ? 'No more people' : 'No more profiles'}
+                {mode === 'Social' ? 'You\'ve met everyone!' : 'That\'s everyone for now'}
               </Text>
               <Text style={styles.emptySub}>
                 {mode === 'Social'
-                  ? 'You\'ve seen everyone looking to socialize nearby. Check back later or adjust your filters.'
-                  : 'You\'ve seen everyone nearby. Check back later or adjust your filters to see more people.'}
+                  ? 'Come back later for new people, or widen your filters to meet more.'
+                  : 'New people join daily. Widen your filters or check back soon.'}
               </Text>
-              <Button
-                title="Adjust Filters"
-                variant="primary"
-                size="sm"
-                fullWidth={false}
-                onPress={() => navigation?.navigate?.('Preferences')}
-                style={{ paddingHorizontal: 32 }}
-              />
+              <View style={styles.emptyActions}>
+                <Button
+                  title="Widen Filters"
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  onPress={() => navigation?.navigate?.('Preferences')}
+                />
+                <Button
+                  title={mode === 'Dating' ? 'Try Social Mode' : 'Try Dating Mode'}
+                  variant="outline"
+                  size="md"
+                  fullWidth
+                  onPress={() => setModeAndPersist(mode === 'Dating' ? 'Social' : 'Dating')}
+                />
+              </View>
               {!hasTier('plus') && (
                 <TouchableOpacity
                   style={styles.upgradeInline}
                   onPress={() => navigation?.navigate?.('Elite')}
                   activeOpacity={0.85}
                 >
-                  <Text style={styles.upgradeInlineText}>Upgrade to see more profiles</Text>
+                  <Ionicons name="flash" size={14} color={colors.accent} />
+                  <Text style={styles.upgradeInlineText}>Get unlimited with JuNubin+</Text>
                   <Ionicons name="chevron-forward" size={14} color={colors.gray600} />
                 </TouchableOpacity>
               )}
@@ -750,9 +748,16 @@ const HomeScreen = ({ navigation, route }) => {
           style={[styles.topBar, { top: insets.top }]}
           pointerEvents="box-none"
         >
-          {/* Left — Mode label */}
+          {/* Left — Mode label + toggle */}
           <View style={styles.headerLeft}>
-            <Text style={styles.headerModeLabel}>{mode === 'Social' ? 'Socialize' : mode}</Text>
+            <Text style={styles.headerModeLabel}>{mode === 'Social' ? 'Socialize' : 'Dating'}</Text>
+            <TouchableOpacity
+              onPress={() => setModeAndPersist(mode === 'Dating' ? 'Social' : 'Dating')}
+              activeOpacity={0.8}
+              style={styles.modeToggle}
+            >
+              <Ionicons name="swap-horizontal" size={15} color={colors.black} />
+            </TouchableOpacity>
           </View>
 
           {/* Right — Boost + Avatar */}
@@ -763,7 +768,7 @@ const HomeScreen = ({ navigation, route }) => {
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={styles.headerIconBtn}
             >
-              <Ionicons name="flash" size={18} color={colors.black} />
+              <Ionicons name="flash" size={17} color={colors.black} />
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => navigation?.navigate?.('Profile')}
@@ -775,19 +780,16 @@ const HomeScreen = ({ navigation, route }) => {
           </View>
         </Animated.View>
 
-        {/* ─── FILTER BAR — below top bar ─── */}
+        {/* ─── FILTER BAR — below top bar, collapses on swipe ─── */}
         <Animated.View
           style={[
             styles.filterBarWrap,
             {
-            top: insets.top + Layout.headerHeight + 2,
+              top: insets.top + Layout.headerHeight + 2,
               opacity: topMotion,
               transform: [
                 {
-                  translateY: topMotion.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-10, 0],
-                  }),
+                  translateY: topMotion.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }),
                 },
               ],
             },
@@ -823,6 +825,7 @@ const HomeScreen = ({ navigation, route }) => {
         matchedUser={matchData?.matchedUser}
         onSendMessage={handleMatchSendMessage}
         onKeepSwiping={handleKeepSwiping}
+        mode={mode}
       />
 
       {/* ─── WHISPER COMPOSER (premium) ─── */}
@@ -892,9 +895,9 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   cardArea: {
     flex: 1,
-    paddingHorizontal: 6,
-    paddingTop: insets.top + Layout.headerHeight + Layout.filterGap + 36,
-    paddingBottom: 24,
+    paddingHorizontal: 10,
+    paddingTop: insets.top + Layout.headerHeight + Layout.filterGap + 44,
+    paddingBottom: 10,
     position: 'relative',
   },
   cardLayer: {
@@ -916,7 +919,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   deckPeekCard: {
     flex: 1,
     backgroundColor: colors.gray300,
-    borderRadius: 16,
+    borderRadius: 22,
   },
 
   // ── Overlay layer — header + filters ──
@@ -947,21 +950,30 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     alignItems: 'center',
   },
   headerModeLabel: {
-    fontSize: 30,
+    fontSize: 32,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,
-    letterSpacing: -0.8,
+    letterSpacing: -0.5,
+  },
+  modeToggle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceMuted,
@@ -993,9 +1005,9 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   actionOverlay: {
     position: 'absolute',
-    bottom: 12,
-    left: 8,
-    right: 8,
+    bottom: 14,
+    left: 0,
+    right: 0,
     zIndex: 15,
   },
 
@@ -1025,15 +1037,20 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     marginBottom: 4,
   },
   emptyCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(206,17,38,0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
+    borderWidth: 1.5,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(206,17,38,0.15)',
+  },
+  emptyActions: {
+    width: '100%',
+    gap: 10,
+    marginBottom: 4,
   },
   emptyTitle: {
     ...Typography.h2,

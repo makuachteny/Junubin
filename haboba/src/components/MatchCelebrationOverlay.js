@@ -50,7 +50,9 @@ const MatchCelebrationOverlay = ({
   matchedUser,
   onSendMessage,
   onKeepSwiping,
+  mode = 'Dating',
 }) => {
+  const isSocial = mode === 'Social';
   const { colors } = useTheme();
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const orbitProgress = useRef(new Animated.Value(0)).current;
@@ -250,9 +252,11 @@ const MatchCelebrationOverlay = ({
       {/* Title */}
       <Animated.View style={[styles.titleWrap, { transform: [{ scale: titleScale }] }]}>
 
-        <Text style={styles.title}>It's a Match!</Text>
+        <Text style={styles.title}>{isSocial ? 'New Friend!' : "It's a Match!"}</Text>
         <Text style={styles.subtitle}>
-          You and {matchedUser?.name || 'someone'} liked each other
+          {isSocial
+            ? `You are now friends with ${matchedUser?.name || 'someone'}`
+            : `You and ${matchedUser?.name || 'someone'} liked each other`}
         </Text>
         {/* Flag stripe */}
         <View style={styles.flagStripe}>
@@ -274,13 +278,13 @@ const MatchCelebrationOverlay = ({
 
       {/* Buttons */}
       <Animated.View style={[styles.buttonsWrap, { opacity: buttonsOpacity }]}>
-        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={onSendMessage} activeOpacity={0.85}>
-          <Ionicons name="chatbubble" size={18} color="#FFF" style={{ marginRight: 8 }} />
-          <Text style={styles.primaryBtnText}>Send a Message</Text>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: isSocial ? '#F0A030' : colors.accent }]} onPress={onSendMessage} activeOpacity={0.85}>
+          <Ionicons name={isSocial ? 'hand-left' : 'chatbubble'} size={18} color="#FFF" style={{ marginRight: 8 }} />
+          <Text style={styles.primaryBtnText}>{isSocial ? 'Say Hi!' : 'Send a Message'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.ghostBtn} onPress={onKeepSwiping} activeOpacity={0.7}>
-          <Text style={styles.ghostBtnText}>Keep Swiping</Text>
+          <Text style={styles.ghostBtnText}>{isSocial ? 'Find More Friends' : 'Keep Swiping'}</Text>
         </TouchableOpacity>
       </Animated.View>
     </Animated.View>

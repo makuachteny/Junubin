@@ -13,7 +13,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiHeart, GraffitiSparkles } from '../components/icons';
+import { GraffitiHeart, GraffitiStar } from '../components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily } from '../theme';
@@ -396,26 +396,26 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         {fromLikes ? (
           <>
             <TouchableOpacity style={s.passBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-              <Ionicons name="close" size={28} color={colors.rose} />
+              <Ionicons name="close" size={24} color={colors.rose} />
             </TouchableOpacity>
             <TouchableOpacity style={s.matchBtn} onPress={handleMatchAndChat} activeOpacity={0.8}>
-              <Ionicons name="chatbubble-ellipses" size={20} color="#FFF" />
+              <Ionicons name="chatbubble" size={18} color="#FFF" />
               <Text style={s.likeBtnText}>Match & Chat</Text>
             </TouchableOpacity>
           </>
         ) : (
           <>
             <TouchableOpacity style={s.passBtn} onPress={handlePass} activeOpacity={0.7}>
-              <Ionicons name="close" size={28} color={colors.rose} />
+              <Ionicons name="close" size={24} color={colors.rose} />
             </TouchableOpacity>
             <TouchableOpacity style={s.likeBtn} onPress={handleLike} activeOpacity={0.8}>
-              <GraffitiHeart size={22} color="#FFF" filled />
+              <GraffitiHeart size={20} color="#FFF" filled />
             </TouchableOpacity>
             <TouchableOpacity style={s.superBtn} onPress={handleSuperLike} activeOpacity={0.7}>
-              <GraffitiSparkles size={22} color={colors.black} filled />
+              <GraffitiStar size={20} color={colors.black} filled />
             </TouchableOpacity>
             <TouchableOpacity style={s.whisperBtn} onPress={handleWhisper} activeOpacity={0.7}>
-              <Ionicons name="chatbubble-ellipses" size={20} color={colors.accent} />
+              <Ionicons name="chatbubble" size={18} color={colors.accent} />
             </TouchableOpacity>
             <TouchableOpacity
               style={s.challengeBtn}
@@ -431,7 +431,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               }}
               activeOpacity={0.7}
             >
-              <Ionicons name="game-controller" size={20} color="#FCCD12" />
+              <Ionicons name="game-controller" size={18} color="#FCCD12" />
             </TouchableOpacity>
           </>
         )}
@@ -472,7 +472,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Quick facts ──
   factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14, marginTop: 8 },
-  factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
   factText: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
   factFilled: { backgroundColor: colors.black },
   factFilledText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: isDark ? '#1A1A1A' : '#FFF' },
@@ -498,7 +498,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Identity — inline pills ──
   identitySection: { marginBottom: 6 },
-  identityPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
+  identityPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
   identityEmoji: { fontSize: 16 },
   identityLabel: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
 
@@ -508,23 +508,23 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
   interestPill: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted,
     paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
   },
   interestText: { color: colors.black, fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
 
-  intoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6' },
+  intoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted },
   intoText: { color: colors.black, fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold },
 
   // ── Action Bar ──
-  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 16, paddingHorizontal: 18, paddingTop: 14, borderTopWidth: 0.5, borderTopColor: colors.separator },
-  passBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
-  likeBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
-  matchBtn: { flex: 1, height: 54, backgroundColor: colors.accent, borderRadius: 27, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, shadowColor: colors.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 10, elevation: 8 },
-  likeBtnText: { color: '#FFF', fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.5 },
-  superBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
-  whisperBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(206,17,38,0.10)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(206,17,38,0.20)' },
-  challengeBtn: { width: 54, height: 54, borderRadius: 27, backgroundColor: 'rgba(252,205,18,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(252,205,18,0.25)' },
+  actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: colors.separator },
+  passBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
+  likeBtn: { flex: 1, height: 46, backgroundColor: colors.accent, borderRadius: 23, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, shadowColor: colors.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  matchBtn: { flex: 1, height: 46, backgroundColor: colors.accent, borderRadius: 23, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, shadowColor: colors.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  likeBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.3 },
+  superBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
+  whisperBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(206,17,38,0.10)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(206,17,38,0.20)' },
+  challengeBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(252,205,18,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(252,205,18,0.25)' },
 });
 
 export default ProfileDetailScreen;

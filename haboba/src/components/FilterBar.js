@@ -274,6 +274,8 @@ const FilterBar = ({
   filters = DEFAULT_FILTERS,
   options = DEFAULT_FILTER_OPTIONS,
   containerStyle,
+  disabled = false,
+  onDisabledPress,
 }) => {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
@@ -314,6 +316,10 @@ const FilterBar = ({
   };
 
   const handlePillPress = (filter) => {
+    if (disabled) {
+      onDisabledPress?.(filter.label);
+      return;
+    }
     if (filter.hasChevron) {
       if (openDropdown === filter.label) {
         closeSheet();
@@ -381,17 +387,23 @@ const FilterBar = ({
 
   return (
     <View style={styles.wrapper}>
-      <View style={[styles.container, containerStyle]}>
+      <View style={[styles.container, containerStyle, disabled && styles.containerDisabled]}>
         {showSettingsButton && (
           <TouchableOpacity
             style={styles.filterIconButton}
-            onPress={onSettingsPress}
-            activeOpacity={0.7}
+            onPress={() => {
+              if (disabled) {
+                onDisabledPress?.('settings');
+                return;
+              }
+              onSettingsPress?.();
+            }}
+            activeOpacity={disabled ? 1 : 0.7}
             accessibilityRole="button"
             accessibilityLabel="Filter settings"
             hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
           >
-            <Ionicons name="options-outline" size={18} color={isDark ? '#FFFFFF' : colors.black} />
+            <Ionicons name="options-outline" size={16} color={isDark ? '#FFFFFF' : colors.black} />
             {appliedCount > 0 && (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{appliedCount}</Text>
@@ -418,9 +430,10 @@ const FilterBar = ({
                   styles.pill,
                   isActive ? styles.pillActive : styles.pillInactive,
                   isOpen && styles.pillOpen,
+                  disabled && styles.pillDisabled,
                 ]}
                 onPress={() => handlePillPress(filter)}
-                activeOpacity={0.7}
+                activeOpacity={disabled ? 1 : 0.7}
                 accessibilityRole="button"
                 accessibilityLabel={`Filter by ${filter.label}`}
                 accessibilityState={{ selected: isActive }}
@@ -445,7 +458,7 @@ const FilterBar = ({
                 {filter.hasChevron && (
                   <Ionicons
                     name={isOpen ? 'chevron-up' : 'chevron-down'}
-                    size={13}
+                    size={12}
                     color={isActive ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.85)' : colors.gray600)}
                     style={styles.chevron}
                   />
@@ -563,14 +576,17 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     paddingHorizontal: 16,
     backgroundColor: 'transparent',
   },
+  containerDisabled: {
+    opacity: 0.7,
+  },
   filterIconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: isDark ? colors.gray300 : colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   filterBadge: {
     position: 'absolute',
@@ -598,14 +614,14 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   pillContainer: {
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     paddingRight: 8,
   },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
     borderRadius: 18,
     justifyContent: 'center',
     minHeight: 34,
@@ -620,6 +636,9 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     borderColor: isDark ? colors.gray800 : 'rgba(38,38,38,0.14)',
     ...getShadow('sm', isDark),
   },
+  pillDisabled: {
+    opacity: 0.75,
+  },
   pillOpen: {
     borderColor: colors.black,
     borderWidth: 1,
@@ -628,7 +647,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     marginRight: 5,
   },
   pillText: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: FontFamily.semibold,
   },
   pillTextActive: {

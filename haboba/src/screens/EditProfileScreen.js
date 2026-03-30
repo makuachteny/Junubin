@@ -304,8 +304,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     backgroundColor: colors.white,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
+    borderBottomWidth: 0,
   },
   backBtn: {
     padding: 4,

@@ -71,9 +71,11 @@ export default function CommunityScreen({ navigation, route }) {
     const timer = setTimeout(() => {
       setPosts(mockPosts);
       setIsLoading(false);
-    }, 600);
+    }, 200);
     return () => clearTimeout(timer);
   }, []);
+
+  const [myGroups, setMyGroups] = useState(mockGroups.myGroups);
 
   useEffect(() => {
     const createdPost = route?.params?.createdPost;
@@ -83,12 +85,20 @@ export default function CommunityScreen({ navigation, route }) {
     navigation.setParams({ createdPost: undefined });
   }, [route?.params?.createdPost, navigation]);
 
+  useEffect(() => {
+    const createdGroup = route?.params?.createdGroup;
+    if (!createdGroup) return;
+    setMyGroups((prev) => [createdGroup, ...prev.filter((g) => g.id !== createdGroup.id)]);
+    setActiveTab('Groups');
+    navigation.setParams({ createdGroup: undefined });
+  }, [route?.params?.createdGroup, navigation]);
+
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
     setTimeout(() => {
       setPosts(mockPosts);
       setRefreshing(false);
-    }, 800);
+    }, 300);
   }, []);
 
   const renderPost = useCallback(({ item }) => (
@@ -101,8 +111,8 @@ export default function CommunityScreen({ navigation, route }) {
     [posts, activeFilters]
   );
   const filteredMyGroups = useMemo(
-    () => applyCommunityFilters(mockGroups.myGroups, activeFilters),
-    [activeFilters]
+    () => applyCommunityFilters(myGroups, activeFilters),
+    [myGroups, activeFilters]
   );
   const filteredDiscoverGroups = useMemo(
     () => applyCommunityFilters(mockGroups.discover, activeFilters),
@@ -123,6 +133,23 @@ export default function CommunityScreen({ navigation, route }) {
       }
     >
       {renderActiveMeta()}
+
+      {/* Create Group CTA */}
+      <TouchableOpacity
+        style={styles.createGroupCta}
+        onPress={() => navigation.navigate('CreateGroup')}
+        activeOpacity={0.8}
+      >
+        <View style={styles.createGroupIcon}>
+          <Ionicons name="add" size={20} color="#FFFFFF" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.createGroupTitle}>Start a Group</Text>
+          <Text style={styles.createGroupSub}>Bring your community together</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
+      </TouchableOpacity>
+
       {/* My Groups — horizontal scroll */}
       <Text style={styles.sectionTitle}>My Groups</Text>
       <ScrollView
@@ -137,9 +164,14 @@ export default function CommunityScreen({ navigation, route }) {
             activeOpacity={0.8}
             onPress={() => navigation.navigate('GroupDetail', { group })}
           >
-            <View style={styles.myGroupIcon}>
-              <GraffitiCommunity size={20} color={colors.royal} filled />
-            </View>
+            <LinearGradient
+              colors={['#CE1126', '#009739']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.myGroupIconGrad}
+            >
+              <GraffitiCommunity size={18} color="#FFFFFF" filled />
+            </LinearGradient>
             <Text style={styles.myGroupName} numberOfLines={1}>{group.name}</Text>
             <Text style={styles.myGroupMembers}>{group.members} members</Text>
           </TouchableOpacity>
@@ -148,8 +180,10 @@ export default function CommunityScreen({ navigation, route }) {
       {filteredMyGroups.length === 0 && (
         <EmptyState
           icon="people-outline"
-          title="No groups match filters"
-          subtitle="Try removing a filter to see more groups."
+          title="No groups yet"
+          subtitle="Create a group or join one to see it here."
+          actionLabel="Create Group"
+          onAction={() => navigation.navigate('CreateGroup')}
         />
       )}
 
@@ -171,9 +205,14 @@ export default function CommunityScreen({ navigation, route }) {
           <View style={styles.discoverInfo}>
             <Text style={styles.discoverName}>{group.name}</Text>
             <Text style={styles.discoverDesc} numberOfLines={2}>{group.description}</Text>
-            <Text style={styles.discoverMembers}>{group.members.toLocaleString()} members</Text>
+            <View style={styles.discoverMetaRow}>
+              <Ionicons name="people" size={12} color={colors.gray400} />
+              <Text style={styles.discoverMembers}>{group.members.toLocaleString()} members</Text>
+            </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
+          <View style={styles.discoverJoinBtn}>
+            <Text style={styles.discoverJoinText}>Join</Text>
+          </View>
         </TouchableOpacity>
       ))}
       {filteredDiscoverGroups.length === 0 && (
@@ -218,7 +257,7 @@ export default function CommunityScreen({ navigation, route }) {
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="notifications-outline" size={20} color={colors.gray500} />
+            <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
             <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
@@ -250,9 +289,9 @@ export default function CommunityScreen({ navigation, route }) {
               >
                 <Ionicons
                   name={TAB_ICONS[tab] || 'ellipse-outline'}
-                  size={15}
+                  size={13}
                   color={isTabActive ? '#FFFFFF' : colors.gray500}
-                  style={{ marginRight: 5 }}
+                  style={{ marginRight: 4 }}
                 />
                 <Text style={[styles.segmentPillText, isTabActive && styles.segmentPillTextActive]}>
                   {tab}
@@ -284,9 +323,9 @@ export default function CommunityScreen({ navigation, route }) {
                 activeOpacity={0.7}
               >
                 {GraffitiComp ? (
-                  <GraffitiComp size={14} color={isActive ? '#FFFFFF' : colors.gray600} filled={isActive} />
+                  <GraffitiComp size={13} color={isActive ? '#FFFFFF' : colors.gray600} filled={isActive} />
                 ) : (
-                  <Ionicons name={filter.icon} size={14} color={isActive ? '#FFFFFF' : colors.gray600} />
+                  <Ionicons name={filter.icon} size={13} color={isActive ? '#FFFFFF' : colors.gray600} />
                 )}
                 <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
                   {filter.label}
@@ -300,7 +339,7 @@ export default function CommunityScreen({ navigation, route }) {
             onPress={() => setShowMoreFilters(true)}
             activeOpacity={0.7}
           >
-            <Ionicons name="options-outline" size={18} color={activeFilters.length > 0 ? colors.black : colors.gray500} />
+            <Ionicons name="options-outline" size={15} color={activeFilters.length > 0 ? colors.black : colors.gray500} />
           </TouchableOpacity>
         </ScrollView>
       </Animated.View>
@@ -467,7 +506,7 @@ export default function CommunityScreen({ navigation, route }) {
         )}
       </Animated.View>
 
-      {/* ─── FAB — Feed or Reels tab ─── */}
+      {/* ─── FAB — Feed or Live tab ─── */}
       {(activeTab === 'Feed' || activeTab === 'Live') && (
         <TouchableOpacity
           style={styles.fab}
@@ -667,21 +706,21 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: colors.white,
   },
   headerTitle: {
-    fontSize: 30,
+    fontSize: 32,
     fontFamily: FontFamily.black,
     fontWeight: '900',
     color: colors.black,
-    letterSpacing: -0.8,
+    letterSpacing: -0.5,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
     borderColor: colors.gray300,
     backgroundColor: colors.gray300,
@@ -699,8 +738,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: isDark ? colors.gray800 : 'rgba(38,38,38,0.14)',
@@ -716,7 +755,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderColor: isDark ? colors.gray300 : colors.gray700,
   },
   filterPillText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
     color: isDark ? 'rgba(255,255,255,0.92)' : colors.gray700,
@@ -750,6 +789,38 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
 
   // ─── Groups ───
+  createGroupCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray200,
+    gap: 12,
+  },
+  createGroupIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  createGroupTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.black,
+  },
+  createGroupSub: {
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    color: colors.gray500,
+    marginTop: 1,
+  },
   groupsContent: {
     paddingBottom: 40,
   },
@@ -781,6 +852,14 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  myGroupIconGrad: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   myGroupName: {
     ...Typography.captionBold,
     color: colors.black,
@@ -790,7 +869,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   myGroupMembers: {
     ...Typography.caption,
     color: colors.gray500,
-    fontSize: 11,
+    fontSize: 12,
   },
   discoverCard: {
     flexDirection: 'row',
@@ -823,10 +902,28 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     lineHeight: 18,
     marginBottom: 4,
   },
+  discoverMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
   discoverMembers: {
     ...Typography.caption,
     color: colors.gray500,
-    fontSize: 11,
+    fontSize: 12,
+  },
+  discoverJoinBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: colors.accent,
+  },
+  discoverJoinText: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
   },
 
   // ─── Events CTA ───
@@ -853,23 +950,23 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   combinedBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 4,
     paddingRight: 8,
     backgroundColor: colors.white,
   },
   barDivider: {
     width: 1,
-    height: 22,
+    height: 18,
     backgroundColor: colors.separator,
-    marginHorizontal: 4,
+    marginHorizontal: 3,
   },
   segmentPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
     borderRadius: 18,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -881,7 +978,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderColor: isDark ? colors.gray300 : colors.gray700,
   },
   segmentPillText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
     color: isDark ? 'rgba(255,255,255,0.92)' : colors.gray700,
@@ -891,9 +988,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontWeight: '700',
   },
   moreFilterBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: isDark ? colors.gray300 : colors.surfaceMuted,
@@ -914,14 +1011,14 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingBottom: 40,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
     color: colors.black,
     marginBottom: 20,
   },
   modalSectionLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: colors.gray500,

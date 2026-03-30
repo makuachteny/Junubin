@@ -19,6 +19,7 @@ import { GraffitiSend } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { mockMessages } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
@@ -111,7 +112,7 @@ export default function ChatScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompact = width < 375;
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { prefs } = useAccessibilityPreferences();
   const styles = useMemo(() => getStyles(colors, isCompact, prefs), [colors, isCompact, prefs]);
   const { hasTier, coins, consumeCoins } = useSubscription();
@@ -833,9 +834,9 @@ export default function ChatScreen({ navigation, route }) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 10 : 0}
     >
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+      <BlurView intensity={Platform.OS === 'ios' ? 60 : 0} tint={isDark ? 'dark' : 'light'} style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={26} color={colors.black} />
+          <Ionicons name="chevron-back" size={22} color={colors.black} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.headerProfile} activeOpacity={0.7}>
@@ -853,16 +854,16 @@ export default function ChatScreen({ navigation, route }) {
 
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={handleVoiceCall} style={styles.headerIcon}>
-            <Ionicons name="call" size={20} color={colors.black} />
+            <Ionicons name="call" size={18} color={colors.black} />
           </TouchableOpacity>
           <TouchableOpacity onPress={handleVideoCall} style={styles.headerIcon}>
-            <Ionicons name="videocam" size={22} color={colors.black} />
+            <Ionicons name="videocam" size={20} color={colors.black} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.headerIcon}>
-            <Ionicons name="ellipsis-vertical" size={20} color={colors.gray} />
+            <Ionicons name="ellipsis-vertical" size={18} color={colors.gray500} />
           </TouchableOpacity>
         </View>
-      </View>
+      </BlurView>
 
       {/* Messages */}
       <FlatList
@@ -1253,15 +1254,26 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: isCompact ? 10 : 12,
-    paddingBottom: 12,
-    backgroundColor: colors.white,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.gray200,
+    paddingHorizontal: isCompact ? 10 : 14,
+    paddingBottom: 14,
+    backgroundColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.85)' : colors.white,
+    borderBottomWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 6,
+    zIndex: 10,
+    overflow: 'hidden',
   },
   backBtn: {
-    padding: 4,
-    marginRight: 8,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surfaceMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
   },
   headerProfile: {
     flex: 1,
@@ -1270,11 +1282,11 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     gap: 10,
   },
   headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: colors.gray300,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2.5,
+    borderColor: colors.accent,
     backgroundColor: colors.gray300,
   },
   headerOnlineDot: {
@@ -1293,10 +1305,15 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 6,
   },
   headerIcon: {
-    padding: 6,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surfaceMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   messagesList: {
     paddingHorizontal: isCompact ? 12 : 16,
@@ -1350,7 +1367,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   bannerText: {
     fontFamily: FontFamily.bold,
-    fontSize: 18,
+    fontSize: 20,
     color: colors.black,
     letterSpacing: -0.2,
   },
@@ -1390,7 +1407,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 10,
-    backgroundColor: '#F4F4F6',
+    backgroundColor: colors.surfaceMuted,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1401,7 +1418,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     flex: 1,
   },
   missionsBadge: {
-    backgroundColor: '#E8E8EC',
+    backgroundColor: colors.separator,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
@@ -1562,7 +1579,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   funChoiceActive: {
     borderColor: colors.accent,
-    backgroundColor: '#F4F4F6',
+    backgroundColor: colors.surfaceMuted,
   },
   funChoiceEmoji: {
     fontSize: isCompact ? 16 : 18,
@@ -1582,7 +1599,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     display: isCompact ? 'none' : 'flex',
   },
   messageBubbleWrap: {
-    marginVertical: 3,
+    marginVertical: 4,
     maxWidth: isCompact ? '84%' : '78%',
   },
   myMessage: {
@@ -1592,24 +1609,34 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     alignSelf: 'flex-start',
   },
   bubble: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderRadius: 20,
   },
   myBubble: {
     backgroundColor: colors.accent,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
+    shadowColor: colors.accent,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   theirBubble: {
     backgroundColor: colors.white,
-    borderBottomLeftRadius: 4,
-    borderWidth: 0.5,
-    borderColor: colors.gray200,
+    borderBottomLeftRadius: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.separator,
   },
   bubbleText: {
     ...Typography.bodySmall,
-    fontSize: 15,
-    lineHeight: 21,
+    fontSize: 16,
+    lineHeight: 23,
   },
   myBubbleText: {
     color: '#FFFFFF',
@@ -1663,12 +1690,16 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: isCompact ? 8 : 12,
-    paddingTop: 10,
+    paddingHorizontal: isCompact ? 8 : 14,
+    paddingTop: 12,
     backgroundColor: colors.white,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.gray200,
-    gap: isCompact ? 4 : 6,
+    borderTopWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 6,
+    gap: isCompact ? 5 : 8,
   },
   inputIcon: {
     padding: prefs?.largerTouchTargets ? (isCompact ? 10 : 11) : (isCompact ? 6 : 8),
@@ -1677,12 +1708,12 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   inputWrap: {
     flex: 1,
     backgroundColor: colors.cream,
-    borderRadius: 22,
-    paddingHorizontal: isCompact ? 12 : 16,
-    paddingVertical: isCompact ? 7 : 8,
+    borderRadius: 24,
+    paddingHorizontal: isCompact ? 14 : 18,
+    paddingVertical: isCompact ? 9 : 10,
     maxHeight: 100,
-    borderWidth: 0.5,
-    borderColor: colors.gray200,
+    borderWidth: 1,
+    borderColor: colors.separator,
   },
   textInput: {
     ...Typography.bodySmall,
@@ -1693,26 +1724,26 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     paddingBottom: 0,
   },
   sendBtn: {
-    width: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 36 : 40),
-    height: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 36 : 40),
-    borderRadius: prefs?.largerTouchTargets ? (isCompact ? 20 : 22) : (isCompact ? 18 : 20),
+    width: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 38 : 42),
+    height: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 38 : 42),
+    borderRadius: prefs?.largerTouchTargets ? (isCompact ? 20 : 22) : (isCompact ? 19 : 21),
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 2,
     shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
   },
   plusBtn: {
-    width: prefs?.largerTouchTargets ? 42 : 36,
-    height: prefs?.largerTouchTargets ? 42 : 36,
-    borderRadius: prefs?.largerTouchTargets ? 21 : 18,
+    width: prefs?.largerTouchTargets ? 42 : 38,
+    height: prefs?.largerTouchTargets ? 42 : 38,
+    borderRadius: prefs?.largerTouchTargets ? 21 : 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F4F4F6',
+    backgroundColor: colors.surfaceMuted,
     marginBottom: 2,
   },
   actionRow: {
@@ -1722,8 +1753,6 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
     backgroundColor: colors.white,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.gray200,
   },
   actionIcon: {
     alignItems: 'center',
@@ -1731,18 +1760,21 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     minWidth: 60,
   },
   actionIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 50,
+    height: 50,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F4F4F6',
-    borderWidth: 1,
-    borderColor: '#ECECF0',
+    backgroundColor: colors.surfaceMuted,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   actionIconLabel: {
     ...Typography.caption,
-    fontSize: 11,
+    fontSize: 12,
     color: colors.gray500,
   },
   stickerPopup: {
@@ -1777,7 +1809,7 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   stickerChoiceActive: {
     borderColor: colors.accent,
-    backgroundColor: '#E8E8EC',
+    backgroundColor: colors.separator,
   },
   stickerChoiceText: {
     fontSize: 20,

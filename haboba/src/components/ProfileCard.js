@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Image as ExpoImage } from 'expo-image';
+import { BlurView } from 'expo-blur';
 import { FontFamily, ms, hp, useTheme, getSurface } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -310,35 +311,35 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
             pointerEvents="none"
           />
 
-          {/* Info overlay — bottom left */}
+          {/* Info overlay — bottom left with frosted pills */}
           <View style={styles.infoOverlay}>
             <View style={styles.nameRow}>
               <Text style={styles.nameText}>
                 {profile.name}, {profile.age} {getFlag(profile.country)}
               </Text>
               {profile.verified && (
-                <Ionicons name="checkmark-circle" size={16} color="#FCCD12" />
+                <Ionicons name="checkmark-circle" size={20} color="#FCCD12" />
               )}
             </View>
             <View style={styles.detailsRow}>
               {profile.distance != null && (
-                <View style={styles.detailPill}>
-                  <Ionicons name="location-sharp" size={11} color="rgba(255,255,255,0.8)" />
+                <BlurView intensity={40} tint="dark" style={styles.detailPill}>
+                  <Ionicons name="location-sharp" size={13} color="rgba(255,255,255,0.9)" />
                   <Text style={styles.detailText}>{profile.distance} mi</Text>
-                </View>
+                </BlurView>
               )}
               {!!statusText && (
-                <View style={styles.detailPill}>
+                <BlurView intensity={40} tint="dark" style={styles.detailPill}>
                   <Text style={styles.detailText}>{statusText}</Text>
-                </View>
+                </BlurView>
               )}
             </View>
             {profile.currentlyInto?.length > 0 && (
               <View style={styles.tagRow}>
                 {profile.currentlyInto.slice(0, 3).map((item, idx) => (
-                  <View key={idx} style={styles.tag}>
+                  <BlurView key={idx} intensity={30} tint="dark" style={styles.tag}>
                     <Text style={styles.tagText}>{item}</Text>
-                  </View>
+                  </BlurView>
                 ))}
               </View>
             )}
@@ -353,17 +354,22 @@ ProfileCard.displayName = 'ProfileCard';
 
 const getStyles = (colors, isDark) => StyleSheet.create({
   card: {
-    borderRadius: ms(24),
+    borderRadius: ms(22),
     overflow: 'hidden',
-    backgroundColor: colors.gray900,
+    backgroundColor: colors.gray300,
     borderWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 12,
   },
   imageWrapper: {
     flex: 1,
   },
   imageFallback: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.gray900,
+    backgroundColor: colors.gray300,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -395,21 +401,26 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // Segmented progress bar
   progressBar: {
     position: 'absolute',
-    top: 12,
-    left: 12,
-    right: 12,
+    top: 14,
+    left: 14,
+    right: 14,
     flexDirection: 'row',
-    gap: 4,
+    gap: 5,
     zIndex: 10,
   },
   progressSegment: {
     flex: 1,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.35)',
   },
   progressSegmentActive: {
     backgroundColor: '#FFFFFF',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 2,
   },
 
   // LIKE / NOPE stamps
@@ -458,71 +469,71 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 200,
+    height: 260,
     zIndex: 3,
   },
 
-  // Info overlay — bottom left, over gradient
+  // Info overlay — sits above buttons with clear spacing
   infoOverlay: {
     position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: 90,
+    left: 18,
+    right: 18,
+    bottom: 96,
     zIndex: 5,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
+    gap: 8,
+    marginBottom: 8,
   },
   nameText: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '900',
     fontFamily: FontFamily.black,
     color: '#FFFFFF',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
   },
   detailsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    marginBottom: 0,
   },
   detailPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   detailText: {
-    fontSize: 12,
-    color: '#FFFFFF',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
     fontFamily: FontFamily.medium,
   },
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    marginTop: 8,
   },
   tag: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    paddingVertical: 5,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   tagText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
-
   // Spotlight — gold glow border
   spotlightCard: {
     borderWidth: 2.5,

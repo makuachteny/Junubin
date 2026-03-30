@@ -130,8 +130,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: colors.cardBg,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.separator,
+    borderBottomWidth: 0,
   },
   backBtn: {
     width: 40,

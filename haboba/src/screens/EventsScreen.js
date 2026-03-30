@@ -1,10 +1,17 @@
-// AnaJunubin — Events Listing Screen
 import React, { useMemo, useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  TextInput,
+  ScrollView,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import { mockEvents } from '../data/mockEvents';
+import { useTheme, FontFamily, Typography, getShadow } from '../theme';
+import { mockEvents, EVENT_CITIES, EVENT_CATEGORIES } from '../data/mockEvents';
 import { interactiveStore } from '../utils/interactiveStore';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import EmptyState from '../components/EmptyState';
@@ -41,19 +48,19 @@ export default function EventsScreen({ navigation }) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [joinedRooms, setJoinedRooms] = useState({});
-  const [seasonMode, setSeasonMode] = useState('Festival');
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCity, setSelectedCity] = useState('All');
+  const [selectedCategory, setSelectedCategory] = useState('All');
 
   useEffect(() => {
     interactiveStore.getEventRooms().then((saved) => {
       if (saved && typeof saved === 'object') setJoinedRooms(saved);
     });
-    interactiveStore.getSeasonMode().then((mode) => {
-      if (mode) setSeasonMode(mode);
-    });
-    // Simulate initial load
     const timer = setTimeout(() => {
       setEvents(mockEvents);
       setIsLoading(false);
@@ -77,6 +84,29 @@ export default function EventsScreen({ navigation }) {
     });
   }, []);
 
+  // Filtered events
+  const filteredEvents = useMemo(() => {
+    let result = events;
+    if (selectedCity !== 'All') {
+      result = result.filter((e) => e.city === selectedCity);
+    }
+    if (selectedCategory !== 'All') {
+      result = result.filter((e) => e.category === selectedCategory);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((e) =>
+        e.title.toLowerCase().includes(q) ||
+        e.location.toLowerCase().includes(q) ||
+        e.description.toLowerCase().includes(q) ||
+        e.category.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [events, selectedCity, selectedCategory, searchQuery]);
+
+  const activeFilterCount = (selectedCity !== 'All' ? 1 : 0) + (selectedCategory !== 'All' ? 1 : 0);
+
   const renderEvent = ({ item }) => {
     const catColor = CATEGORY_COLORS[item.category] || colors.accent;
     const joined = !!joinedRooms[item.id];
@@ -95,25 +125,40 @@ export default function EventsScreen({ navigation }) {
           </Text>
         </View>
         <View style={styles.eventInfo}>
-          <View style={[styles.categoryTag, { backgroundColor: catColor + '20' }]}>
-            <Text style={[styles.categoryText, { color: catColor }]}>{item.category}</Text>
+          <View style={styles.eventTagRow}>
+            <View style={[styles.categoryTag, { backgroundColor: catColor + '20' }]}>
+              <Text style={[styles.categoryText, { color: catColor }]}>{item.category}</Text>
+            </View>
+            {item.isFree && (
+              <View style={[styles.freeTag, { backgroundColor: isDark ? 'rgba(0,151,57,0.15)' : 'rgba(0,151,57,0.1)' }]}>
+                <Text style={styles.freeTagText}>Free</Text>
+              </View>
+            )}
           </View>
-          <Text style={styles.eventTitle}>{item.title}</Text>
+          <Text style={styles.eventTitle} numberOfLines={1}>{item.title}</Text>
           <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={13} color={colors.gray} />
-            <Text style={styles.metaText}>{item.location}</Text>
+            <Ionicons name="location-sharp" size={12} color={colors.gray500} />
+            <Text style={styles.metaText} numberOfLines={1}>{item.location}</Text>
           </View>
           <View style={styles.metaRow}>
-            <Ionicons name="people-outline" size={13} color={colors.gray} />
+            <Ionicons name="people" size={12} color={colors.gray500} />
             <Text style={styles.metaText}>{item.attendees} attending</Text>
+            <Text style={styles.metaDot}>&middot;</Text>
+            <Ionicons name="time-outline" size={12} color={colors.gray500} />
+            <Text style={styles.metaText}>{item.time}</Text>
           </View>
           <TouchableOpacity
             style={[styles.roomBtn, joined && styles.roomBtnJoined]}
             activeOpacity={0.8}
             onPress={() => handleJoinRoom(item.id)}
           >
+            <Ionicons
+              name={joined ? 'checkmark-circle' : 'add-circle-outline'}
+              size={14}
+              color={joined ? '#FFF' : colors.accent}
+            />
             <Text style={[styles.roomBtnText, joined && styles.roomBtnTextJoined]}>
-              {joined ? 'Joined Match Room' : 'Join Match Room'}
+              {joined ? 'Joined' : 'RSVP'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -124,21 +169,98 @@ export default function EventsScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="chevron-back" size={26} color={colors.black} />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
+          <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Events</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('CreateEvent')}>
-          <Ionicons name="add-circle-outline" size={26} color={colors.accent} />
+        <TouchableOpacity onPress={() => navigation.navigate('CreateEvent')} style={styles.headerAdd}>
+          <Ionicons name="add" size={22} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
 
+      {/* Search bar */}
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={18} color={colors.gray400} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search events, cities, categories..."
+          placeholderTextColor={colors.gray400}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          returnKeyType="search"
+        />
+        {searchQuery ? (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={18} color={colors.gray400} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {/* City filter pills */}
+      <View style={styles.filterSection}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          <Ionicons name="location" size={14} color={colors.accent} style={{ marginRight: 6, marginTop: 1 }} />
+          {EVENT_CITIES.map((city) => {
+            const isActive = selectedCity === city;
+            return (
+              <TouchableOpacity
+                key={city}
+                style={[styles.filterPill, isActive && styles.filterPillActive]}
+                onPress={() => setSelectedCity(city)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                  {city}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Category filter pills */}
+      <View style={styles.filterSection}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+          <Ionicons name="grid" size={14} color={colors.gray500} style={{ marginRight: 6, marginTop: 1 }} />
+          {EVENT_CATEGORIES.map((cat) => {
+            const isActive = selectedCategory === cat;
+            const catColor = CATEGORY_COLORS[cat] || colors.black;
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.filterPill, isActive && { backgroundColor: catColor, borderColor: catColor }]}
+                onPress={() => setSelectedCategory(cat)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
+                  {cat}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Active filter count */}
+      {activeFilterCount > 0 && (
+        <View style={styles.activeFilterRow}>
+          <Text style={styles.activeFilterText}>
+            {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found
+          </Text>
+          <TouchableOpacity onPress={() => { setSelectedCity('All'); setSelectedCategory('All'); setSearchQuery(''); }}>
+            <Text style={styles.clearFilterText}>Clear all</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Event list */}
       {isLoading ? (
         <EventSkeleton />
       ) : (
         <FlatList
-          data={events}
+          data={filteredEvents}
           keyExtractor={(item) => item.id}
           renderItem={renderEvent}
           contentContainerStyle={styles.list}
@@ -146,17 +268,13 @@ export default function EventsScreen({ navigation }) {
           refreshControl={
             <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
-          ListHeaderComponent={(
-            <View style={styles.seasonCard}>
-              <Ionicons name="sparkles" size={18} color={colors.accent} />
-              <Text style={styles.seasonText}>Seasonal Mode: {seasonMode}</Text>
-            </View>
-          )}
           ListEmptyComponent={
             <EmptyState
               icon="calendar-outline"
-              title="No events nearby"
-              subtitle="Check back soon for upcoming events"
+              title={searchQuery ? 'No matching events' : 'No events in this area'}
+              subtitle={searchQuery ? 'Try a different search term' : 'Try selecting a different city or category'}
+              actionLabel="Clear Filters"
+              onAction={() => { setSelectedCity('All'); setSelectedCategory('All'); setSearchQuery(''); }}
             />
           }
         />
@@ -167,82 +285,202 @@ export default function EventsScreen({ navigation }) {
 
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.white },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 56,
+    height: 52,
   },
-  headerTitle: { ...Typography.screenTitle, color: colors.black },
-  list: { paddingHorizontal: 16, paddingBottom: 20 },
-  seasonCard: {
-    flexDirection: 'row',
+  headerBack: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: isDark ? colors.gray200 : colors.surfaceMuted,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
   },
-  seasonText: {
-    ...Typography.captionBold,
+  headerTitle: {
+    ...Typography.sectionTitle,
+    fontSize: 20,
     color: colors.black,
   },
+  headerAdd: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // Search
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    ...Typography.caption,
+    fontSize: 14,
+    color: colors.black,
+    paddingVertical: 0,
+  },
+
+  // Filters
+  filterSection: {
+    marginBottom: 4,
+  },
+  filterRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    gap: 8,
+    alignItems: 'center',
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.white,
+  },
+  filterPillActive: {
+    backgroundColor: colors.black,
+    borderColor: colors.black,
+  },
+  filterPillText: {
+    ...Typography.label,
+    fontSize: 13,
+    color: isDark ? 'rgba(255,255,255,0.7)' : colors.gray600,
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // Active filter row
+  activeFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+  },
+  activeFilterText: {
+    ...Typography.caption,
+    fontSize: 13,
+    color: colors.gray500,
+  },
+  clearFilterText: {
+    ...Typography.captionBold,
+    fontSize: 13,
+    color: colors.accent,
+  },
+
+  // List
+  list: { paddingHorizontal: 16, paddingBottom: 20, paddingTop: 4 },
+
+  // Event Card
   eventCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
+    padding: 16,
     borderRadius: 16,
-    backgroundColor: colors.cardBg,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : colors.white,
     borderWidth: 1,
-    borderColor: colors.separator,
-    marginBottom: 12,
-    gap: 14,
+    borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    marginBottom: 10,
+    gap: 12,
     ...getShadow('sm', isDark),
   },
   dateBadge: {
-    width: 52,
-    height: 56,
+    width: 54,
+    height: 58,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dateMonth: { fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold },
-  dateDay: { fontSize: 22, fontWeight: '800', fontFamily: FontFamily.extrabold },
-  eventInfo: { flex: 1, gap: 4 },
+  dateMonth: { fontSize: 10, fontWeight: '700', fontFamily: FontFamily.bold },
+  dateDay: { fontSize: 24, fontWeight: '800', fontFamily: FontFamily.extrabold },
+  eventInfo: { flex: 1, gap: 3 },
+  eventTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
   categoryTag: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
-    marginBottom: 2,
   },
   categoryText: { fontSize: 10, fontWeight: '700', fontFamily: FontFamily.bold },
-  eventTitle: { ...Typography.sectionLabel, color: colors.black },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { ...Typography.caption, color: colors.gray },
+  freeTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  freeTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.green,
+  },
+  eventTitle: {
+    ...Typography.bodySmallMedium,
+    fontSize: 15,
+    color: colors.black,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  metaText: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: colors.gray500,
+  },
+  metaDot: {
+    fontSize: 12,
+    color: colors.gray400,
+    marginHorizontal: 2,
+  },
   roomBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginTop: 6,
     alignSelf: 'flex-start',
-    borderRadius: 999,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   roomBtnJoined: {
     borderColor: colors.accent,
     backgroundColor: colors.accent,
   },
   roomBtnText: {
-    ...Typography.caption,
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.accent,
-    fontSize: 11,
   },
   roomBtnTextJoined: {
     color: '#FFF',

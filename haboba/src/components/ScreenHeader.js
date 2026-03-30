@@ -53,13 +53,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   rightSlot: {
-    minWidth: 36,
+    minWidth: 40,
     alignItems: 'flex-end',
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
   },
 });
