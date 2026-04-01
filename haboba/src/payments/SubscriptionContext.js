@@ -243,6 +243,8 @@ export function SubscriptionProvider({ children }) {
             next.spotlights = prev.spotlights + product.quantity;
           } else if (product.category === 'superlike') {
             next.superLikes = prev.superLikes + product.quantity;
+          } else if (product.category === 'coins') {
+            next.coins = prev.coins + product.quantity;
           }
         }
 
@@ -256,6 +258,8 @@ export function SubscriptionProvider({ children }) {
             supabase.rpc('add_spotlights', { user_auth_id: authUser.id, amount: product.quantity }).catch(() => {});
           } else if (product.category === 'superlike') {
             supabase.rpc('add_superlikes', { user_auth_id: authUser.id, amount: product.quantity }).catch(() => {});
+          } else if (product.category === 'coins') {
+            supabase.rpc('add_coins', { user_auth_id: authUser.id, amount: product.quantity }).catch(() => {});
           }
         }
       }

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, getShadow, Layout } from '../theme';
+import { useTheme, Typography, FontFamily, Layout } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GraffitiCommunity, GraffitiSparkles, GraffitiFlame, GraffitiLocation, GraffitiStar } from '../components/icons';
 import { GraffitiSectionDivider } from '../components/GraffitiAccents';
@@ -412,7 +412,7 @@ export default function CommunityScreen({ navigation, route }) {
           styles.content,
           {
             opacity: contentAnim,
-            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            transform: [{ translateY: contentAnim.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }],
           },
         ]}
       >
@@ -695,11 +695,10 @@ const liveStyles = StyleSheet.create({
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: isDark ? colors.white : '#F4F2EE',
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     height: Layout.headerHeight,
@@ -793,18 +792,18 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 16,
+    marginTop: 6,
+    padding: 12,
+    borderRadius: 14,
     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
     borderWidth: 1,
     borderColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray200,
-    gap: 12,
+    gap: 10,
   },
   createGroupIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -822,26 +821,28 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginTop: 1,
   },
   groupsContent: {
-    paddingBottom: 40,
+    paddingBottom: 80,
+    paddingTop: 4,
   },
   sectionTitle: {
-    ...Typography.sectionTitle,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
     color: colors.black,
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   myGroupsRow: {
     paddingHorizontal: 16,
     gap: 12,
   },
   myGroupCard: {
-    width: 120,
+    width: 110,
     backgroundColor: isDark ? colors.gray200 : colors.gray100,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 14,
+    padding: 12,
     alignItems: 'center',
-    ...getShadow('sm', isDark),
   },
   myGroupIcon: {
     width: 44,
@@ -875,29 +876,32 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.separator,
+    borderBottomColor: isDark ? 'rgba(255,255,255,0.04)' : colors.separator,
   },
   discoverIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     backgroundColor: colors.royalLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
   discoverInfo: {
     flex: 1,
   },
   discoverName: {
-    ...Typography.sectionLabel,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: colors.black,
-    marginBottom: 3,
+    marginBottom: 2,
   },
   discoverDesc: {
-    ...Typography.bodySmall,
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
     color: colors.gray600,
     lineHeight: 18,
     marginBottom: 4,
@@ -930,16 +934,18 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   eventsCtaCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    gap: 12,
+    gap: 10,
     marginHorizontal: 16,
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 6,
   },
   eventsCtaTitle: {
-    ...Typography.sectionLabel,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     marginBottom: 2,
   },
   eventsCtaSub: {

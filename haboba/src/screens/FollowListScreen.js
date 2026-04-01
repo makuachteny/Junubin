@@ -135,7 +135,7 @@ export default function FollowListScreen({ navigation, route }) {
                   ? 'When you and someone follow each other, you become friends!'
                   : activeTab === 'Followers'
                   ? 'People who follow this profile will appear here.'
-                  : 'People this user follows will appear here.'
+                  : 'People this user is following will appear here.'
               }
             />
           }

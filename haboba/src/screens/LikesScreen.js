@@ -406,7 +406,7 @@ export default function LikesScreen({ navigation }) {
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="notifications-outline" size={21} color={colors.gray500} />
+            <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
             <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
@@ -651,7 +651,7 @@ export default function LikesScreen({ navigation }) {
 const getStyles = (colors, isDark, insets) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: isDark ? colors.white : '#F4F2EE',
   },
   headerRow: {
     flexDirection: 'row',
@@ -660,6 +660,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     paddingHorizontal: 16,
     height: Layout.headerHeight,
     backgroundColor: colors.white,
+    marginBottom: -6,
   },
   headerTitle: {
     fontSize: 32,
@@ -692,21 +693,21 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     marginBottom: 8,
     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-    borderRadius: 16,
+    borderRadius: 14,
   },
   avatarStack: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   stackedAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 2.5,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
     borderColor: isDark ? colors.gray200 : colors.white,
   },
   stackedMore: {
@@ -715,7 +716,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     alignItems: 'center',
   },
   stackedMoreText: {
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '800',
     fontFamily: FontFamily.extrabold,
     color: '#FFFFFF',
@@ -724,21 +725,21 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     flex: 1,
   },
   likesSummaryTitle: {
-    fontSize: 17,
+    fontSize: 14,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: colors.black,
     marginBottom: 1,
   },
   likesSummarySubtitle: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: FontFamily.regular,
     color: colors.gray500,
   },
   likesUnlockBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
@@ -857,8 +858,8 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
   },
   filterBarWrap: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 6,
+    paddingTop: 2,
+    paddingBottom: 4,
     backgroundColor: colors.white,
     borderBottomWidth: 0,
   },

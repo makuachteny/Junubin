@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 import { useAuth } from '../auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { hapticSelection } from '../utils/haptics';
 import { GraffitiCommunity, GraffitiHeart, GraffitiChat } from '../components/icons';
 import LogoMark from '../components/LogoMark';
@@ -75,6 +76,7 @@ const GoLiveScreen = lazify(() => import('../screens/GoLiveScreen'));
 const LiveViewScreen = lazify(() => import('../screens/LiveViewScreen'));
 const FollowListScreen = lazify(() => import('../screens/FollowListScreen'));
 const FindFriendsScreen = lazify(() => import('../screens/FindFriendsScreen'));
+const WebViewScreen = lazify(() => import('../screens/WebViewScreen'));
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createStackNavigator();
@@ -88,7 +90,7 @@ function HomeTabs() {
 
   return (
       <Tab.Navigator
-        initialRouteName="CommunityTab"
+        initialRouteName="HomeTab"
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarShowLabel: true,
@@ -192,6 +194,7 @@ function AuthNavigator({ initialRouteName = 'Onboarding' }) {
     >
       <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
       <AuthStack.Screen name="Signup" component={SignupScreen} />
+      <AuthStack.Screen name="SettingsInfo" component={SettingsInfoScreen} />
       <AuthStack.Screen name="AccessibilitySurvey" component={AccessibilitySurveyScreen} />
       <AuthStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
     </AuthStack.Navigator>
@@ -250,14 +253,22 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="LiveView" component={LiveViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
       <MainStack.Screen name="FollowList" component={FollowListScreen} />
       <MainStack.Screen name="FindFriends" component={FindFriendsScreen} options={{ presentation: 'modal' }} />
+      <MainStack.Screen name="WebView" component={WebViewScreen} options={{ presentation: 'modal' }} />
     </MainStack.Navigator>
   );
 }
 
 export default function AppNavigator() {
   const { isAuthenticated, user, ready, devBypass } = useAuth();
+  const [hasOnboarded, setHasOnboarded] = useState(null);
 
-  if (!ready) return null;
+  useEffect(() => {
+    AsyncStorage.getItem('@haboba_onboarded').then((val) => {
+      setHasOnboarded(val === 'true');
+    }).catch(() => setHasOnboarded(false));
+  }, []);
+
+  if (!ready || hasOnboarded === null) return null;
 
   const profile = user?.profile;
   const hasProfile =
@@ -268,7 +279,7 @@ export default function AppNavigator() {
   const needsProfileSetup = isAuthenticated && !hasProfile && !devBypass;
 
   if (!isAuthenticated) {
-    return <AuthNavigator initialRouteName="Onboarding" />;
+    return <AuthNavigator initialRouteName={hasOnboarded ? 'Signup' : 'Onboarding'} />;
   }
 
   return needsProfileSetup

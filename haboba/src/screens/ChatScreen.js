@@ -18,7 +18,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { GraffitiSend } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { mockMessages } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
@@ -41,6 +40,7 @@ import { hapticMedium, hapticHeavy } from '../utils/haptics';
 import { useScreenshotProtection } from '../utils/useScreenshotProtection';
 
 import { interactiveStore } from '../utils/interactiveStore';
+import CoinPurchaseSheet from '../components/CoinPurchaseSheet';
 import { enqueueAction, processQueue } from '../utils/offlineQueue';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
 import { useAccessibilityPreferences } from '../accessibility';
@@ -134,6 +134,7 @@ export default function ChatScreen({ navigation, route }) {
   const [reactionPosition, setReactionPosition] = useState(null);
   const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [showGiftPicker, setShowGiftPicker] = useState(false);
+  const [showCoinSheet, setShowCoinSheet] = useState(false);
   const [giftAnimation, setGiftAnimation] = useState(null);
   const [missionState, setMissionState] = useState({
     intro: false,
@@ -623,10 +624,7 @@ export default function ChatScreen({ navigation, route }) {
 
   const handleGiftSelect = useCallback((gift) => {
     if (!consumeCoins(gift.coins)) {
-      Alert.alert('Not Enough Coins', 'You need more coins to send this gift.', [
-        { text: 'Get Coins', onPress: () => navigation.navigate('Boost') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+      setShowCoinSheet(true);
       return;
     }
     setShowGiftPicker(false);
@@ -882,14 +880,7 @@ export default function ChatScreen({ navigation, route }) {
             {/* ── Match Banner ── */}
             <View style={styles.matchBanner}>
               <View style={styles.avatarGlow}>
-                <LinearGradient
-                  colors={['#CE1126', '#FCCD12', '#009739', '#0047AB']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.avatarRing}
-                >
-                  <Image source={imageSource(match.images?.[0])} style={styles.bannerAvatar} />
-                </LinearGradient>
+                <Image source={imageSource(match.images?.[0])} style={styles.bannerAvatar} />
               </View>
               <Text style={styles.bannerText}>You matched with {match.name}!</Text>
               <Text style={styles.bannerSub}>Say something to break the ice</Text>
@@ -1241,6 +1232,7 @@ export default function ChatScreen({ navigation, route }) {
         onPlayAgain={() => gameResult && handleGamePlayAgain(gameResult.type)}
         onClose={() => setGameResult(null)}
       />
+      <CoinPurchaseSheet visible={showCoinSheet} onClose={() => setShowCoinSheet(false)} />
     </KeyboardAvoidingView>
     </View>
   );
@@ -1285,8 +1277,6 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    borderWidth: 2.5,
-    borderColor: colors.accent,
     backgroundColor: colors.gray300,
   },
   headerOnlineDot: {
@@ -1358,11 +1348,9 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     alignItems: 'center',
   },
   bannerAvatar: {
-    width: 84,
-    height: 74,
-    borderRadius: 37,
-    borderWidth: 3,
-    borderColor: colors.white,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.gray300,
   },
   bannerText: {

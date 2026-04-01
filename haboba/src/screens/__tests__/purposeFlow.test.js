@@ -109,6 +109,7 @@ const COLORS = {
 
 describe('Purpose / Intention flow', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     mockUseTheme.mockReturnValue({ isDark: false, toggleTheme: jest.fn(), colors: COLORS });
     mockUseAuth.mockReturnValue({
@@ -136,6 +137,11 @@ describe('Purpose / Intention flow', () => {
       reset: jest.fn(),
     });
     mockUseCurrentUser.mockReturnValue({ currentUser: null });
+  });
+
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
   });
 
   it('renders first step (name) on ProfileSetup', () => {
@@ -170,62 +176,62 @@ describe('Purpose / Intention flow', () => {
     expect(queryByText('Who do you want to date?')).toBeNull();
   });
 
-  it('authenticated user with complete profile goes to Main (Home)', () => {
+  it('authenticated user with complete profile goes to Main (Home)', async () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: { profileComplete: true } },
       logout: jest.fn(), updateUser: jest.fn(),
     });
 
-    const { getByText } = render(
+    const { findByText } = render(
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Home Screen')).toBeTruthy();
+    expect(await findByText('Home Screen')).toBeTruthy();
   });
 
-  it('authenticated user with accountPurpose set goes to Main', () => {
+  it('authenticated user with accountPurpose set goes to Main', async () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: { accountPurpose: 'socialize' } },
       logout: jest.fn(), updateUser: jest.fn(),
     });
 
-    const { getByText } = render(
+    const { findByText } = render(
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Home Screen')).toBeTruthy();
+    expect(await findByText('Home Screen')).toBeTruthy();
   });
 
-  it('authenticated user without profile goes to ProfileSetup', () => {
+  it('authenticated user without profile goes to ProfileSetup', async () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: null },
       logout: jest.fn(), updateUser: jest.fn(),
     });
 
-    const { getByText } = render(
+    const { findByText } = render(
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText("What's your first name?")).toBeTruthy();
+    expect(await findByText("What's your first name?")).toBeTruthy();
   });
 
-  it('unauthenticated user sees Onboarding', () => {
+  it('unauthenticated user sees Onboarding', async () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: false, session: null, user: null,
       logout: jest.fn(), updateUser: jest.fn(),
     });
 
-    const { getByText } = render(
+    const { findByText } = render(
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Skip')).toBeTruthy();
+    expect(await findByText('Skip')).toBeTruthy();
   });
 });

@@ -33,6 +33,11 @@ export const PRODUCT_IDS = {
   SUPERLIKE_5: 'com.haboba.superlike.5',
   SUPERLIKE_15: 'com.haboba.superlike.15',
   SUPERLIKE_30: 'com.haboba.superlike.30',
+
+  // ── Consumables — Coins ──
+  COINS_100: 'com.haboba.coins.100',
+  COINS_500: 'com.haboba.coins.500',
+  COINS_1200: 'com.haboba.coins.1200',
 };
 
 // Tier hierarchy: free → plus → junub
@@ -135,5 +140,30 @@ export const PRODUCTS = {
     category: 'superlike',
     quantity: 30,
     price: '$29.99',
+  },
+
+  // ── Coins ──
+  [PRODUCT_IDS.COINS_100]: {
+    id: PRODUCT_IDS.COINS_100,
+    type: 'consumable',
+    category: 'coins',
+    quantity: 100,
+    price: '$1.99',
+  },
+  [PRODUCT_IDS.COINS_500]: {
+    id: PRODUCT_IDS.COINS_500,
+    type: 'consumable',
+    category: 'coins',
+    quantity: 500,
+    price: '$7.99',
+    badge: 'POPULAR',
+  },
+  [PRODUCT_IDS.COINS_1200]: {
+    id: PRODUCT_IDS.COINS_1200,
+    type: 'consumable',
+    category: 'coins',
+    quantity: 1200,
+    price: '$14.99',
+    badge: 'BEST VALUE',
   },
 };

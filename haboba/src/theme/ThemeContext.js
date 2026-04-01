@@ -11,7 +11,7 @@ const ThemeContext = createContext({
 });
 
 export function ThemeProvider({ children }) {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {

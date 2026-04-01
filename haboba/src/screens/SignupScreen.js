@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,8 @@ import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../auth';
 import { useAccessibilityPreferences } from '../accessibility';
 import { HOME_COUNTRY, DIASPORA_COUNTRIES } from '../data/countries';
+import { trackEvent, AnalyticsEvents } from '../utils/analytics';
+import FlagBackdrop from '../components/FlagBackdrop';
 
 const PHONE_COUNTRIES = [HOME_COUNTRY, ...DIASPORA_COUNTRIES].filter(c => c.phoneCode);
 
@@ -42,10 +44,13 @@ const SignupScreen = ({ navigation }) => {
   const [countryCode, setCountryCode] = useState(HOME_COUNTRY);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const insets = useSafeAreaInsets();
-  const { startOtp, loginWithOtp } = useAuth();
+  const { startOtp, loginWithOtp, setDevBypass } = useAuth();
   const { prefs } = useAccessibilityPreferences();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  useEffect(() => {
+    trackEvent(AnalyticsEvents.SIGNUP_START);
+  }, []);
 
   // Refs for verification code inputs
   const codeRefs = useRef([]);
@@ -142,6 +147,7 @@ const SignupScreen = ({ navigation }) => {
           phone: selectedMethod === 'phone' ? `+1${phone.replace(/\D/g, '')}` : undefined,
           code,
         });
+        trackEvent(AnalyticsEvents.SIGNUP_COMPLETE, { method: selectedMethod });
         // Returning user with any profile data → go straight to Main
         const appUser = result?.appUser;
         const appProfile = appUser?.profile;
@@ -266,10 +272,7 @@ const SignupScreen = ({ navigation }) => {
   // ─── Input Screen (Phone/Email) ───
   return (
     <View style={styles.backgroundImage}>
-      <LinearGradient
-        colors={['#060606', '#080606', '#060608']}
-        style={StyleSheet.absoluteFill}
-      />
+      <FlagBackdrop dimOverlay={0.35} />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -277,12 +280,23 @@ const SignupScreen = ({ navigation }) => {
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={[styles.container, { paddingTop: insets.top }]}>
             {/* Back Button */}
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+            <View style={styles.headerRow}>
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+              >
+                <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+              {__DEV__ && (
+                <TouchableOpacity
+                  style={styles.devSkip}
+                  onPress={() => setDevBypass(true)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.devSkipText}>Skip</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* Logo */}
             <View style={styles.logoContainer}>
@@ -298,92 +312,99 @@ const SignupScreen = ({ navigation }) => {
               Join JuNubin and connect with South Sudanese worldwide.
             </Text>
 
-            {/* Method Toggle */}
-            <View style={styles.methodToggle}>
-              <TouchableOpacity
-                style={[styles.methodTab, selectedMethod === 'phone' && styles.methodTabActive]}
-                onPress={() => { setSelectedMethod('phone'); setInputError(''); }}
-              >
-                <Ionicons
-                  name="phone-portrait"
-                  size={16}
-                  color={selectedMethod === 'phone' ? '#1A1A1A' : 'rgba(255,255,255,0.5)'}
-                />
-                <Text style={[styles.methodTabText, selectedMethod === 'phone' && styles.methodTabTextActive]}>
-                  Phone
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.methodTab, selectedMethod === 'email' && styles.methodTabActive]}
-                onPress={() => { setSelectedMethod('email'); setInputError(''); }}
-              >
-                <Ionicons
-                  name="mail"
-                  size={16}
-                  color={selectedMethod === 'email' ? '#1A1A1A' : 'rgba(255,255,255,0.5)'}
-                />
-                <Text style={[styles.methodTabText, selectedMethod === 'email' && styles.methodTabTextActive]}>
-                  Email
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Phone Input */}
-            {selectedMethod === 'phone' && (
-              <View style={styles.inputGroup}>
+            <View style={styles.formCard}>
+              {/* Method Toggle */}
+              <View style={styles.methodToggle}>
                 <TouchableOpacity
-                  style={[styles.countryCode, phoneActive && styles.countryCodeActive]}
-                  onPress={() => setShowCountryPicker(true)}
-                  activeOpacity={0.7}
+                  style={[styles.methodTab, selectedMethod === 'phone' && styles.methodTabActive]}
+                  onPress={() => { setSelectedMethod('phone'); setInputError(''); }}
                 >
-                  <Text style={styles.countryCodeText}>{countryCode.flag} {countryCode.phoneCode}</Text>
-                  <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.5)" />
+                  <Ionicons
+                    name="phone-portrait"
+                    size={16}
+                    color={selectedMethod === 'phone' ? '#1A1A1A' : 'rgba(255,255,255,0.6)'}
+                  />
+                  <Text style={[styles.methodTabText, selectedMethod === 'phone' && styles.methodTabTextActive]}>
+                    Phone
+                  </Text>
                 </TouchableOpacity>
-                <TextInput
-                  style={[styles.input, phoneActive && styles.inputActive]}
-                  placeholder="(555) 123-4567"
-                  placeholderTextColor="rgba(255, 255, 255, 0.3)"
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={handlePhoneChange}
-                  onFocus={() => setPhoneActive(true)}
-                  onBlur={() => setPhoneActive(false)}
-                  maxLength={14}
-                />
+                <TouchableOpacity
+                  style={[styles.methodTab, selectedMethod === 'email' && styles.methodTabActive]}
+                  onPress={() => { setSelectedMethod('email'); setInputError(''); }}
+                >
+                  <Ionicons
+                    name="mail"
+                    size={16}
+                    color={selectedMethod === 'email' ? '#1A1A1A' : 'rgba(255,255,255,0.6)'}
+                  />
+                  <Text style={[styles.methodTabText, selectedMethod === 'email' && styles.methodTabTextActive]}>
+                    Email
+                  </Text>
+                </TouchableOpacity>
               </View>
-            )}
 
-            {/* Email Input */}
-            {selectedMethod === 'email' && (
-              <View style={styles.inputGroup}>
-                <TextInput
-                  style={[styles.input, styles.inputFull, emailActive && styles.inputActive]}
-                  placeholder="you@example.com"
-                  placeholderTextColor="rgba(255, 255, 255, 0.3)"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={handleEmailChange}
-                  onFocus={() => setEmailActive(true)}
-                  onBlur={() => setEmailActive(false)}
-                />
-              </View>
-            )}
+              {/* Phone Input */}
+              {selectedMethod === 'phone' && (
+                <View style={styles.inputGroup}>
+                  <TouchableOpacity
+                    style={[styles.countryCode, phoneActive && styles.countryCodeActive]}
+                    onPress={() => setShowCountryPicker(true)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.countryCodeText}>{countryCode.flag} {countryCode.phoneCode}</Text>
+                    <Ionicons name="chevron-down" size={12} color="rgba(255,255,255,0.6)" />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={[styles.input, phoneActive && styles.inputActive]}
+                    placeholder="(555) 123-4567"
+                    placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={handlePhoneChange}
+                    onFocus={() => setPhoneActive(true)}
+                    onBlur={() => setPhoneActive(false)}
+                    maxLength={14}
+                  />
+                </View>
+              )}
 
-            {/* Inline error */}
-            {inputError ? (
-              <View style={styles.inputErrorRow}>
-                <Ionicons name="alert-circle" size={15} color="#F05252" />
-                <Text style={styles.inputErrorText}>{inputError}</Text>
-              </View>
-            ) : null}
+              {/* Email Input */}
+              {selectedMethod === 'email' && (
+                <View style={styles.inputGroup}>
+                  <TextInput
+                    style={[styles.input, styles.inputFull, emailActive && styles.inputActive]}
+                    placeholder="you@example.com"
+                    placeholderTextColor="rgba(255, 255, 255, 0.4)"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    value={email}
+                    onChangeText={handleEmailChange}
+                    onFocus={() => setEmailActive(true)}
+                    onBlur={() => setEmailActive(false)}
+                  />
+                </View>
+              )}
+
+              {/* Inline error */}
+              {inputError ? (
+                <View style={styles.inputErrorRow}>
+                  <Ionicons name="alert-circle" size={15} color="#F05252" />
+                  <Text style={styles.inputErrorText}>{inputError}</Text>
+                </View>
+              ) : null}
+            </View>
 
             {/* Terms */}
             <View style={{ flex: 1 }} />
             <Text style={styles.termsText}>
               By continuing, you agree to our{' '}
-              <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
+              <Text style={styles.termsLink} onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'terms' })}>
+                Terms of Service
+              </Text>{' '}
+              and{' '}
+              <Text style={styles.termsLink} onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'privacy' })}>
+                Privacy Policy
+              </Text>
             </Text>
 
             {/* Next Button (BLK-style circle) — only visible when user has entered input */}
@@ -459,6 +480,26 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    marginTop: 4,
+  },
+  devSkip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  devSkipText: {
+    fontSize: 12,
+    fontFamily: FontFamily.semibold,
+    color: 'rgba(255,255,255,0.7)',
+  },
   backButtonVerify: {
     width: 44,
     height: 44,
@@ -489,20 +530,27 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   subheading: {
     ...Typography.bodySmall,
     color: 'rgba(255, 255, 255, 0.6)',
-    marginBottom: 36,
+    marginBottom: 22,
     lineHeight: 22,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
+  formCard: {
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
 
   // Method toggle
   methodToggle: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 16,
     padding: 4,
-    marginBottom: 24,
+    marginBottom: 18,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.08)',
   },
@@ -533,6 +581,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    marginBottom: 8,
   },
   countryCode: {
     flexDirection: 'row',
@@ -577,7 +626,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 12,
+    marginTop: 10,
   },
   inputErrorText: {
     fontSize: 13,
@@ -590,13 +639,13 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // Terms
   termsText: {
     ...Typography.caption,
-    color: 'rgba(255, 255, 255, 0.4)',
+    color: 'rgba(255, 255, 255, 0.5)',
     textAlign: 'center',
     lineHeight: 18,
-    marginBottom: 24,
+    marginBottom: 18,
   },
   termsLink: {
-    color: colors.black,
+    color: '#FCCD12',
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },

@@ -104,7 +104,7 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, hasRe
         onPress={() => { hapticLight(); onLike?.(); }}
         activeOpacity={0.75}
         accessibilityRole="button"
-        accessibilityLabel={mode === 'Social' ? 'Connect' : 'Like'}
+        accessibilityLabel={mode === 'Social' ? 'Follow' : 'Like'}
       >
         {mode === 'Social' ? (
           <Ionicons name="hand-left" size={23} color="#FFFFFF" />

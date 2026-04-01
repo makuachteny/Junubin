@@ -24,6 +24,7 @@ import { GraffitiLocation } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
 import { buildPostContent } from '../utils/postComposer';
 import PostCard from '../components/PostCard';
+import { normalizeHttpUrl } from '../utils/links';
 
 const themeKeys = Object.keys(POST_THEMES);
 
@@ -49,10 +50,14 @@ export default function CreatePostScreen({ navigation }) {
   const [signupLink, setSignupLink] = useState('');
   const [signupTitle, setSignupTitle] = useState('');
   const [activeComposerSection, setActiveComposerSection] = useState(null);
+  const [signupError, setSignupError] = useState('');
 
   const theme = POST_THEMES[selectedTheme];
   const isDarkCard = theme.bg === '#262626' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12'
     || theme.bg === '#0E4D64' || theme.bg === '#1A5276' || theme.bg === '#1B4332';
+
+  const normalizedSignupLink = normalizeHttpUrl(signupLink);
+  const hasInvalidSignup = Boolean(signupLink.trim()) && !normalizedSignupLink;
 
   const composedContent = buildPostContent({
     content,
@@ -77,9 +82,9 @@ export default function CreatePostScreen({ navigation }) {
     likes: 0,
     comments: 0,
     cardTheme: selectedTheme,
-    signupLink: signupLink.trim() || null,
+    signupLink: normalizedSignupLink || signupLink.trim() || null,
     signupTitle: signupTitle.trim() || null,
-  }), [composedContent, postImage, selectedTheme, signupLink, signupTitle, currentUser, location]);
+  }), [composedContent, postImage, selectedTheme, signupLink, signupTitle, currentUser, location, normalizedSignupLink]);
 
   // ── Handlers ──
   const handlePickImage = async () => {
@@ -114,9 +119,17 @@ export default function CreatePostScreen({ navigation }) {
   };
 
   const handlePost = () => {
+    if (hasInvalidSignup) {
+      setSignupError('Please enter a valid URL (e.g. https://example.com).');
+      Alert.alert('Invalid Link', 'Please enter a valid event link.');
+      return;
+    }
+    if (normalizedSignupLink && normalizedSignupLink !== signupLink.trim()) {
+      setSignupLink(normalizedSignupLink);
+    }
     navigation.navigate('Main', {
       screen: 'CommunityTab',
-      params: { createdPost: previewPost },
+      params: { createdPost: { ...previewPost, signupLink: normalizedSignupLink || null } },
     });
     navigation.goBack();
   };
@@ -125,6 +138,14 @@ export default function CreatePostScreen({ navigation }) {
     if (!canPost) {
       Alert.alert('Empty Post', 'Add text, photo, or an event link before continuing.');
       return;
+    }
+    if (hasInvalidSignup) {
+      setSignupError('Please enter a valid URL (e.g. https://example.com).');
+      Alert.alert('Invalid Link', 'Please enter a valid event link.');
+      return;
+    }
+    if (normalizedSignupLink && normalizedSignupLink !== signupLink.trim()) {
+      setSignupLink(normalizedSignupLink);
     }
     setStep('preview');
   };
@@ -287,7 +308,7 @@ export default function CreatePostScreen({ navigation }) {
                   {signupTitle.trim() || 'Event Sign Up'}
                 </Text>
                 <Text style={[styles.inlineSignupUrl, { color: isDarkCard ? 'rgba(255,255,255,0.4)' : colors.gray400 }]} numberOfLines={1}>
-                  {signupLink}
+                  {normalizedSignupLink || signupLink}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => { setSignupLink(''); setSignupTitle(''); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
@@ -481,12 +502,13 @@ export default function CreatePostScreen({ navigation }) {
               placeholder="https://eventbrite.com/your-event"
               placeholderTextColor={colors.gray400}
               value={signupLink}
-              onChangeText={setSignupLink}
+              onChangeText={(text) => { setSignupLink(text); if (signupError) setSignupError(''); }}
               maxLength={200}
               keyboardType="url"
               autoCapitalize="none"
               autoCorrect={false}
             />
+            {signupError ? <Text style={styles.errorText}>{signupError}</Text> : null}
           </View>
         )}
 
@@ -901,5 +923,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 14,
     fontFamily: FontFamily.medium,
     color: colors.accent,
+  },
+  errorText: {
+    ...Typography.caption,
+    color: colors.error,
+    marginTop: 6,
   },
 });

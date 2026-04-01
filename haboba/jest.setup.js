@@ -1,5 +1,7 @@
 import '@testing-library/jest-native/extend-expect';
 
+jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper', () => ({}), { virtual: true });
+
 // --- react-native-reanimated mock ---
 jest.mock('react-native-reanimated', () => {
   const React = require('react');
@@ -117,4 +119,37 @@ jest.mock('@expo/vector-icons', () => {
     MaterialCommunityIcons: Icon,
     FontAwesome5: Icon,
   };
+});
+
+const createMockNavigator = () => {
+  const React = require('react');
+  const Screen = ({ component: Component, children, ...props }) => {
+    if (Component) return React.createElement(Component, props);
+    return children || null;
+  };
+  const Navigator = ({ children, initialRouteName }) => {
+    const childArray = React.Children.toArray(children);
+    if (childArray.length === 0) return null;
+    if (initialRouteName) {
+      const match = childArray.find((child) => child?.props?.name === initialRouteName);
+      if (match) return match;
+    }
+    return childArray[0];
+  };
+  return { Navigator, Screen };
+};
+
+jest.mock('@react-navigation/stack', () => ({
+  createStackNavigator: () => createMockNavigator(),
+}));
+
+jest.mock('@react-navigation/bottom-tabs', () => ({
+  createBottomTabNavigator: () => createMockNavigator(),
+}));
+
+jest.mock('react-native-webview', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const WebView = React.forwardRef((props, ref) => React.createElement(View, { ...props, ref }, props.children));
+  return { WebView, default: WebView };
 });

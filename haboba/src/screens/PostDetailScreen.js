@@ -31,6 +31,7 @@ export default function PostDetailScreen({ navigation, route }) {
   const post = route.params?.post || {};
   const postId = post.id || 'post1';
   const initialComments = mockComments[postId] || [];
+  const [liked, setLiked] = useState(false);
 
   const [comments, setComments] = useState(initialComments);
   const [commentText, setCommentText] = useState('');
@@ -96,6 +97,33 @@ export default function PostDetailScreen({ navigation, route }) {
       >
         {/* ─── The Post itself — rendered as a full PostCard ─── */}
         <PostCard post={post} />
+
+        {/* ─── Engagement Bar (LinkedIn-style) ─── */}
+        <View style={styles.engagementBar}>
+          <View style={styles.engagementCounts}>
+            <Text style={styles.engagementText}>
+              {(post.likes || 0) + (liked ? 1 : 0)} likes
+            </Text>
+            <Text style={styles.engagementDot}>•</Text>
+            <Text style={styles.engagementText}>
+              {comments.length} comments
+            </Text>
+          </View>
+          <View style={styles.engagementActions}>
+            <TouchableOpacity style={styles.engagementBtn} onPress={() => setLiked((p) => !p)} activeOpacity={0.7}>
+              <GraffitiHeart size={16} color={liked ? colors.rose : colors.gray500} filled={liked} />
+              <Text style={[styles.engagementBtnText, liked && { color: colors.rose }]}>Like</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.engagementBtn} onPress={() => inputRef.current?.focus()} activeOpacity={0.7}>
+              <GraffitiChat size={16} color={colors.gray500} />
+              <Text style={styles.engagementBtnText}>Comment</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.engagementBtn} activeOpacity={0.7}>
+              <Ionicons name="share-outline" size={16} color={colors.gray500} />
+              <Text style={styles.engagementBtnText}>Share</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* ─── Comments Section Divider ─── */}
         <View style={styles.commentsDivider}>
@@ -283,6 +311,44 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     ...Typography.captionBold,
     fontSize: 13,
     color: colors.black,
+  },
+
+  // ─── Engagement Bar ───
+  engagementBar: {
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)',
+  },
+  engagementCounts: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  engagementText: {
+    ...Typography.caption,
+    color: colors.gray600,
+  },
+  engagementDot: {
+    color: colors.gray400,
+  },
+  engagementActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  engagementBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  engagementBtnText: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: colors.gray500,
   },
 
   // ─── Comments List ───

@@ -129,6 +129,7 @@ jest.mock('../MessagesScreen', () => () => {
 
 describe('screen smoke tests', () => {
   beforeEach(() => {
+    jest.useFakeTimers();
     mockUseTheme.mockReturnValue({
       isDark: false,
       toggleTheme: jest.fn(),
@@ -198,6 +199,11 @@ describe('screen smoke tests', () => {
     });
   });
 
+  afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
+  });
+
   it('renders Onboarding screen', () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() };
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
@@ -223,12 +229,12 @@ describe('screen smoke tests', () => {
     expect(getByText('Others')).toBeTruthy();
   });
 
-  it('renders Main app navigator for authenticated users', () => {
-    const { getByText } = render(
+  it('renders Main app navigator for authenticated users', async () => {
+    const { findByText } = render(
       <NavigationContainer>
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(getByText('Home Screen')).toBeTruthy();
+    expect(await findByText('Home Screen')).toBeTruthy();
   });
 });

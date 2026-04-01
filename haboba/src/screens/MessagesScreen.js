@@ -18,7 +18,7 @@ import { GraffitiChat } from '../components/icons';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, Typography, FontFamily, Gradients, Layout } from '../theme';
+import { useTheme, Typography, FontFamily, Layout } from '../theme';
 import { mockMatches, mockLikes } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
@@ -32,6 +32,7 @@ import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
 import { mockStories } from '../data/mockStories';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAccessibilityPreferences } from '../accessibility';
 
 export default function MessagesScreen({ navigation }) {
@@ -53,7 +54,15 @@ export default function MessagesScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [mode, setMode] = useState('Social');
   const isPlus = hasTier('plus');
+
+  // Read current mode
+  useEffect(() => {
+    AsyncStorage.getItem('@haboba_mode').then((stored) => {
+      if (stored === 'Dating' || stored === 'Social') setMode(stored);
+    });
+  }, []);
   const filtersLocked = !isPlus;
 
   const showFiltersLocked = useCallback(() => {
@@ -130,7 +139,7 @@ export default function MessagesScreen({ navigation }) {
 
   const handleLikePress = (like) => {
     if (!hasTier('junub')) {
-      Alert.alert('Junub Feature', 'Upgrade to Junub to message people who liked you.', [
+      Alert.alert('Junub Feature', `Upgrade to Junub to message people who ${mode === 'Social' ? 'waved at' : 'liked'} you.`, [
         { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
         { text: 'Cancel', style: 'cancel' },
       ]);
@@ -195,7 +204,7 @@ export default function MessagesScreen({ navigation }) {
             onPress={() => handleLikePress(item)}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, liked you recently` : item.name}
+            accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${mode === 'Social' ? 'waved at you' : 'liked you recently'}` : item.name}
           >
             <TouchableOpacity
               style={styles.avatarContainer}
@@ -205,22 +214,15 @@ export default function MessagesScreen({ navigation }) {
               }}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={Gradients.accent}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.avatarRing}
-              >
-                <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
-              </LinearGradient>
+              <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
             </TouchableOpacity>
             <View style={styles.msgInfo}>
               <Text style={styles.msgName}>{item.name}</Text>
-              <Text style={styles.msgPreview}>Liked you recently, match now!</Text>
+              <Text style={styles.msgPreview}>{mode === 'Social' ? 'Waved at you! Say hi back' : 'Liked you recently, match now!'}</Text>
             </View>
             <View style={styles.likesYouRight}>
               <View style={styles.likesYouBadge}>
-                <Text style={styles.likesYouText}>Likes You</Text>
+                <Text style={styles.likesYouText}>{mode === 'Social' ? 'Says Hi' : 'Likes You'}</Text>
               </View>
               <Ionicons name="chevron-forward" size={15} color={colors.gray400} />
             </View>
@@ -310,14 +312,25 @@ export default function MessagesScreen({ navigation }) {
           onPress={() => navigation.navigate('Elite')}
           activeOpacity={0.8}
         >
-          <View style={styles.upsellIconWrap}>
-            <Ionicons name="eye" size={18} color={colors.accent} />
+          <View style={styles.upsellAvatarStack}>
+            {likes.slice(0, 4).map((like, i) => (
+              <Image
+                key={like.id}
+                source={imageSource(like.images?.[0])}
+                style={[styles.upsellStackAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 4 - i }]}
+                blurRadius={8}
+              />
+            ))}
+            {likesCount > 4 && (
+              <View style={[styles.upsellStackAvatar, styles.upsellStackMore, { marginLeft: -10, zIndex: 0 }]}>
+                <Text style={styles.upsellStackMoreText}>+{likesCount - 4}</Text>
+              </View>
+            )}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.upsellTitle}>{likesCount} people liked you</Text>
-            <Text style={styles.upsellDesc}>Upgrade to Junub to see who</Text>
+            <Text style={styles.upsellTitle}>{likesCount} people {mode === 'Social' ? 'waved at you' : 'liked you'}</Text>
+            <Text style={styles.upsellDesc}>Tap to match instantly</Text>
           </View>
-          <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
         </TouchableOpacity>
       )}
     </>
@@ -505,7 +518,7 @@ export default function MessagesScreen({ navigation }) {
 const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.white,
+    backgroundColor: isDark ? colors.white : '#F4F2EE',
   },
 
   // ─── Header ───
@@ -665,19 +678,11 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     position: 'relative',
     marginRight: 12,
   },
-  avatarRing: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    padding: 2,
-  },
   msgAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.gray300,
-    borderWidth: 2,
-    borderColor: colors.white,
   },
   unreadDot: {
     width: 12,
@@ -832,29 +837,46 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 16,
-    marginBottom: 10,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: isDark ? 'rgba(206,17,38,0.06)' : 'rgba(206,17,38,0.04)',
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
     gap: 12,
   },
-  upsellIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: isDark ? 'rgba(206,17,38,0.12)' : 'rgba(206,17,38,0.08)',
+  upsellAvatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  upsellStackAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: isDark ? colors.gray200 : colors.white,
+    backgroundColor: colors.gray300,
+  },
+  upsellStackMore: {
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  upsellStackMoreText: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: '#FFFFFF',
+  },
   upsellTitle: {
-    ...Typography.bodySmallMedium,
     fontSize: 14,
-    color: colors.accent,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.black,
+    marginBottom: 1,
   },
   upsellDesc: {
-    ...Typography.caption,
     fontSize: 12,
+    fontFamily: FontFamily.regular,
     color: colors.gray500,
-    marginTop: 1,
   },
 });

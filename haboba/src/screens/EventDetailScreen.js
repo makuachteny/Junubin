@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import Button from '../components/Button';
 import { useSubscription } from '../payments';
+import CoinPurchaseSheet from '../components/CoinPurchaseSheet';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -23,6 +24,7 @@ export default function EventDetailScreen({ navigation, route }) {
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const event = route.params?.event || {};
   const [isAttending, setIsAttending] = useState(false);
+  const [showCoinSheet, setShowCoinSheet] = useState(false);
   const { coins, consumeCoins } = useSubscription();
 
   const isFree = event.isFree !== false;
@@ -60,14 +62,7 @@ export default function EventDetailScreen({ navigation, route }) {
               setIsAttending(true);
               Alert.alert('Ticket Purchased!', `You're attending "${event.title}". See you there!`);
             } else {
-              Alert.alert(
-                'Not Enough Coins',
-                `You need ${ticketPrice} coins but only have ${coins}. Get more coins to purchase this ticket.`,
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Get Coins', onPress: () => navigation.navigate('Elite') },
-                ]
-              );
+              setShowCoinSheet(true);
             }
           },
         },
@@ -139,6 +134,7 @@ export default function EventDetailScreen({ navigation, route }) {
           onPress={isFree ? handleRSVP : handleBuyTicket}
         />
       </ScrollView>
+      <CoinPurchaseSheet visible={showCoinSheet} onClose={() => setShowCoinSheet(false)} />
     </View>
   );
 }

@@ -1,485 +1,197 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, Dimensions, Linking, Share, Platform } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, Dimensions, Share, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, FontFamily, Typography } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 import { useNavigation } from '@react-navigation/native';
-import { POST_THEMES } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
-import { SpraySplatter } from './GraffitiAccents';
 import { useFollow } from '../hooks/useFollow';
-import { GraffitiHeart, GraffitiChat, GraffitiBookmark, GraffitiRepost, GraffitiShare } from './icons';
+import { normalizeHttpUrl } from '../utils/links';
 
-const { width: screenWidth } = Dimensions.get('window');
-const CARD_WIDTH = screenWidth - 32;
+const { width: W } = Dimensions.get('window');
 
 const PostCard = ({ post, reactionState, onLikeToggle }) => {
   const fallbackReaction = useMemo(() => ({ liked: false, likeCount: post.likes }), [post.likes]);
   const [localReaction, setLocalReaction] = useState(fallbackReaction);
-  const effectiveReaction = reactionState || localReaction;
-  const { isFollowing: following, isFriend, toggleFollow } = useFollow(post.user?.id);
+  const reaction = reactionState || localReaction;
+  const { isFollowing, isFriend, toggleFollow } = useFollow(post.user?.id);
   const { colors, isDark } = useTheme();
-  const navigation = useNavigation();
-  const [bookmarked, setBookmarked] = useState(false);
+  const nav = useNavigation();
+  const [expanded, setExpanded] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  const theme = POST_THEMES[post.cardTheme] || POST_THEMES.default;
-  const isDarkCard = theme.bg === '#262626' || theme.bg === '#0C4A6E' || theme.bg === '#14532D' || theme.bg === '#7C2D12'
-    || theme.bg === '#0E4D64' || theme.bg === '#1A5276' || theme.bg === '#1B4332';
-  const subtleColor = isDarkCard ? 'rgba(255,255,255,0.55)' : colors.gray500;
-  const boldColor = isDarkCard ? 'rgba(255,255,255,0.8)' : colors.black;
+  const sub = isDark ? colors.gray500 : colors.gray500;
+  const txt = colors.black;
 
   const handleLike = () => {
     if (onLikeToggle) { onLikeToggle(post.id); return; }
-    setLocalReaction((prev) => ({
-      liked: !prev.liked,
-      likeCount: !prev.liked ? prev.likeCount + 1 : Math.max(prev.likeCount - 1, 0),
-    }));
+    setLocalReaction((p) => ({ liked: !p.liked, likeCount: !p.liked ? p.likeCount + 1 : Math.max(p.likeCount - 1, 0) }));
   };
-
-  const handleComment = () => navigation.navigate('PostDetail', { post });
-  const handlePostPress = () => navigation.navigate('PostDetail', { post });
-  const handleFollow = () => toggleFollow();
-  const handleBookmark = () => setBookmarked(!bookmarked);
-
+  const goDetail = () => nav.navigate('PostDetail', { post });
   const handleShare = () => {
-    const postUrl = `https://haboba.app/post/${post.id}`;
-    Alert.alert(
-      'Share Post',
-      null,
-      [
-        {
-          text: 'Copy Link',
-          onPress: () => Alert.alert('Copied!', 'Post link copied to clipboard.'),
-        },
-        {
-          text: 'Send to Friend',
-          onPress: () => {
-            try {
-              navigation.navigate('Main', { screen: 'MessagesTab', params: { sharePost: post } });
-            } catch {
-              Alert.alert('Share', 'Open Messages to send this post to a friend.');
-            }
-          },
-        },
-        {
-          text: 'Share via...',
-          onPress: () => {
-            Share.share({
-              message: `${post.content ? post.content.slice(0, 120) + '...' : 'Check out this post!'}\n\n${postUrl}`,
-              url: Platform.OS === 'ios' ? postUrl : undefined,
-              title: `${post.user.name}'s post on Haboba`,
-            });
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    Share.share({ message: post.content ? post.content.slice(0, 120) : 'Check this out!', title: `${post.user.name}'s post` });
   };
-
-  const handleSignupLink = () => {
+  const handleSignup = () => {
     if (!post.signupLink) return;
-    Alert.alert(
-      post.signupTitle || 'Sign Up',
-      'You will be taken to an external page to register for this event.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Up Now',
-          onPress: () => Linking.openURL(post.signupLink).catch(() => Alert.alert('Error', 'Could not open link.')),
-        },
-        {
-          text: 'Share Event',
-          onPress: () => {
-            Share.share({
-              message: `${post.signupTitle || 'Check out this event!'}\n\nSign up here: ${post.signupLink}`,
-              title: post.signupTitle || 'Event',
-            });
-          },
-        },
-      ]
-    );
-  };
-
-  const handleMoreMenu = () => {
-    Alert.alert(
-      post.user.name,
-      null,
-      [
-        { text: 'Report Post', onPress: () => Alert.alert('Reported', 'This post has been reported. We\'ll review it shortly.'), style: 'destructive' },
-        { text: 'Block User', onPress: () => Alert.alert('Blocked', `${post.user.name} has been blocked.`), style: 'destructive' },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    const normalized = normalizeHttpUrl(post.signupLink);
+    if (!normalized) {
+      Alert.alert('Invalid Link', 'This event link is not valid.');
+      return;
+    }
+    nav.navigate('WebView', { url: normalized, title: post.signupTitle || 'Event' });
   };
 
   const hasImage = Boolean(post.image);
-  const hasSignupLink = Boolean(post.signupLink);
+  const hasLink = Boolean(post.signupLink);
+  const longText = post.content && post.content.length > 120;
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.bg, borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]}>
-      {/* Ambient spray */}
-      <View style={styles.sprayTopRight} pointerEvents="none">
-        <SpraySplatter size={28} color={theme.accent} opacity={0.06} />
-      </View>
+    <Pressable style={[$.card, { backgroundColor: colors.white }]} onPress={goDetail}>
 
-      {/* ─── Header ─── */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerLeft} activeOpacity={0.7}>
-          <View style={[styles.avatarRing, { borderColor: theme.accent }]}>
-            <Image source={imageSource(post.user.avatar)} style={[styles.avatar, { backgroundColor: colors.gray200 }]} />
+      {/* Header */}
+      <View style={$.header}>
+        <Image source={imageSource(post.user.avatar)} style={[$.avatar, { backgroundColor: colors.gray300 }]} />
+        <View style={$.hInfo}>
+          <View style={$.nameRow}>
+            <Text style={[$.name, { color: txt }]} numberOfLines={1}>{post.user.name}</Text>
+            {post.user.verified && <Ionicons name="checkmark-circle" size={14} color="#0A66C2" />}
           </View>
-          <View style={styles.headerInfo}>
-            <View style={styles.nameRow}>
-              <Text style={[styles.userName, { color: theme.text }]}>{post.user.name}</Text>
-              {post.user.verified && (
-                <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark" size={9} color="#FFF" />
-            </View>
-          )}
+          <Text style={[$.subtitle, { color: sub }]} numberOfLines={1}>{post.user.location}</Text>
+          <Text style={[$.time, { color: sub }]}>{post.timestamp}</Text>
         </View>
-        <View style={styles.metaRow}>
-          <Ionicons name="location-sharp" size={11} color={subtleColor} />
-          <Text style={[styles.meta, { color: subtleColor }]}>{post.user.location}</Text>
-          <Text style={[styles.metaDot, { color: subtleColor }]}>&middot;</Text>
-          <Text style={[styles.meta, { color: subtleColor }]}>{post.timestamp}</Text>
-        </View>
-          </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.followChip, {
-            backgroundColor: following ? 'transparent' : theme.accent,
-            borderColor: theme.accent,
-            borderWidth: following ? 1.5 : 0,
-          }]}
-          activeOpacity={0.8}
-          onPress={handleFollow}
-        >
-          {isFriend && <Ionicons name="people" size={11} color={theme.accent} style={{ marginRight: 2 }} />}
-          <Text style={[styles.followText, { color: following ? theme.accent : (isDarkCard ? '#000' : '#FFF') }]}>
-            {isFriend ? 'Friends' : following ? 'Following' : 'Follow'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.moreBtn} onPress={handleMoreMenu} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="ellipsis-horizontal" size={17} color={subtleColor} />
-        </TouchableOpacity>
-      </View>
-
-      {/* ─── Content ─── */}
-      {post.content && (
-        <TouchableOpacity activeOpacity={0.9} onPress={handlePostPress}>
-          <Text style={[styles.postText, { color: theme.text }]} numberOfLines={6}>
-            {post.content}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      {/* ─── Image ─── */}
-      {hasImage && (
-        <TouchableOpacity activeOpacity={0.95} onPress={handlePostPress} style={styles.imageWrap}>
-          <Image source={imageSource(post.image)} style={styles.postImage} />
-        </TouchableOpacity>
-      )}
-
-      {/* ─── Event Sign Up Banner ─── */}
-      {hasSignupLink && (
-        <TouchableOpacity style={styles.signupBanner} onPress={handleSignupLink} activeOpacity={0.85}>
-          <LinearGradient
-            colors={isDarkCard ? ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.03)'] : ['rgba(0,151,57,0.08)', 'rgba(0,151,57,0.02)']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.signupGradient}
-          >
-            <View style={[styles.signupIconWrap, { backgroundColor: isDarkCard ? 'rgba(72,201,176,0.15)' : 'rgba(0,151,57,0.12)' }]}>
-              <Ionicons name="ticket" size={18} color={isDarkCard ? '#48C9B0' : colors.green} />
-            </View>
-            <View style={styles.signupInfo}>
-              <Text style={[styles.signupTitle, { color: theme.text }]} numberOfLines={1}>
-                {post.signupTitle || 'Sign Up for This Event'}
-              </Text>
-              <Text style={[styles.signupUrl, { color: subtleColor }]} numberOfLines={1}>
-                Tap to register &middot; {post.signupLink.replace(/^https?:\/\//, '').split('/')[0]}
-              </Text>
-            </View>
-            <View style={[styles.signupArrow, { backgroundColor: isDarkCard ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
-              <Ionicons name="arrow-forward" size={14} color={isDarkCard ? '#48C9B0' : colors.green} />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
-
-      {/* ─── Engagement Stats ─── */}
-      <View style={styles.statsRow}>
-        <View style={styles.statsLeft}>
-          {effectiveReaction.likeCount > 0 && (
-            <Text style={[styles.statText, { color: subtleColor }]}>
-              {effectiveReaction.likeCount.toLocaleString()} {effectiveReaction.likeCount === 1 ? 'like' : 'likes'}
-            </Text>
-          )}
-        </View>
-        {post.comments > 0 && (
-          <TouchableOpacity onPress={handleComment}>
-            <Text style={[styles.statText, { color: subtleColor }]}>
-              {post.comments} {post.comments === 1 ? 'comment' : 'comments'}
-            </Text>
+        {!isFollowing && !isFriend && (
+          <TouchableOpacity onPress={toggleFollow} style={$.followBtn} activeOpacity={0.7}>
+            <Text style={[$.followLabel, { color: colors.accent }]}>Follow</Text>
           </TouchableOpacity>
         )}
+        <TouchableOpacity onPress={() => Alert.alert(post.user.name, null, [
+          { text: 'Report', style: 'destructive' }, { text: 'Cancel', style: 'cancel' },
+        ])} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Ionicons name="ellipsis-vertical" size={18} color={sub} />
+        </TouchableOpacity>
       </View>
 
-      {/* ─── Action Bar ─── */}
-      <View style={[styles.actionBar, { borderTopColor: isDarkCard ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-        {/* Like */}
-        <TouchableOpacity style={styles.actionBtn} onPress={handleLike} activeOpacity={0.7}>
-          <GraffitiHeart
-            size={19}
-            color={effectiveReaction.liked ? colors.rose : boldColor}
-            filled={effectiveReaction.liked}
-          />
-          <Text style={[styles.actionLabel, { color: effectiveReaction.liked ? colors.rose : subtleColor }]}>
-            Like
+      {/* Text */}
+      {post.content && (
+        <View style={$.textWrap}>
+          <Text style={[$.postText, { color: txt }]} numberOfLines={expanded ? undefined : 3}>
+            {post.content}
+          </Text>
+          {!expanded && longText && (
+            <TouchableOpacity onPress={() => setExpanded(true)}>
+              <Text style={[$.more, { color: sub }]}>...more</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Link */}
+      {hasLink && (
+        <TouchableOpacity onPress={handleSignup} style={$.linkRow} activeOpacity={0.7}>
+          <Ionicons name="link-outline" size={14} color={colors.accent} />
+          <Text style={[$.linkText, { color: colors.accent }]} numberOfLines={1}>
+            {post.signupTitle || post.signupLink.replace(/^https?:\/\//, '').split('/')[0]}
           </Text>
         </TouchableOpacity>
+      )}
 
-        {/* Comment */}
-        <TouchableOpacity style={styles.actionBtn} onPress={handleComment} activeOpacity={0.7}>
-          <GraffitiChat size={19} color={boldColor} />
-          <Text style={[styles.actionLabel, { color: subtleColor }]}>Comment</Text>
+      {/* Image */}
+      {hasImage && (
+        <TouchableOpacity activeOpacity={0.95} onPress={goDetail} style={$.imgWrap}>
+          <Image source={imageSource(post.image)} style={$.img} />
         </TouchableOpacity>
+      )}
 
-        {/* Repost */}
-        <TouchableOpacity
-          style={styles.actionBtn}
-          onPress={() => Alert.alert('Reposted!', 'This post has been shared to your feed.')}
-          activeOpacity={0.7}
-        >
-          <GraffitiRepost size={19} color={boldColor} />
-          <Text style={[styles.actionLabel, { color: subtleColor }]}>Repost</Text>
+      {/* Stats */}
+      {(reaction.likeCount > 0 || post.comments > 0) && (
+        <View style={[$.stats, { borderBottomColor: isDark ? colors.separator : 'rgba(0,0,0,0.08)' }]}>
+          {reaction.likeCount > 0 && (
+            <Text style={[$.statText, { color: sub }]}>
+              {reaction.likeCount.toLocaleString()}
+            </Text>
+          )}
+          <View style={{ flex: 1 }} />
+          {post.comments > 0 && (
+            <TouchableOpacity onPress={goDetail}>
+              <Text style={[$.statText, { color: sub }]}>{post.comments} comments</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* Actions */}
+      <View style={$.actions}>
+        <TouchableOpacity style={$.actBtn} onPress={handleLike}>
+          <Ionicons name={reaction.liked ? 'heart' : 'heart-outline'} size={20} color={reaction.liked ? colors.accent : sub} />
+          <Text style={[$.actLabel, { color: reaction.liked ? colors.accent : sub }]}>Like</Text>
         </TouchableOpacity>
-
-        {/* Share */}
-        <TouchableOpacity style={styles.actionBtn} onPress={handleShare} activeOpacity={0.7}>
-          <GraffitiShare size={19} color={boldColor} />
-          <Text style={[styles.actionLabel, { color: subtleColor }]}>Share</Text>
+        <TouchableOpacity style={$.actBtn} onPress={goDetail}>
+          <Ionicons name="chatbubble-outline" size={18} color={sub} />
+          <Text style={[$.actLabel, { color: sub }]}>Comment</Text>
         </TouchableOpacity>
-
-        {/* Bookmark */}
-        <TouchableOpacity style={styles.actionBtn} onPress={handleBookmark} activeOpacity={0.7}>
-          <GraffitiBookmark size={19} color={bookmarked ? colors.gold : boldColor} filled={bookmarked} />
-          <Text style={[styles.actionLabel, { color: bookmarked ? colors.gold : subtleColor }]}>Save</Text>
+        <TouchableOpacity style={$.actBtn} onPress={() => setSaved(!saved)}>
+          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={saved ? colors.accent : sub} />
+          <Text style={[$.actLabel, { color: saved ? colors.accent : sub }]}>Save</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={$.actBtn} onPress={handleShare}>
+          <Ionicons name="share-outline" size={20} color={sub} />
+          <Text style={[$.actLabel, { color: sub }]}>Share</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </Pressable>
   );
 };
 
 export default React.memo(PostCard);
 
-const styles = StyleSheet.create({
+const $ = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-  },
-  sprayTopRight: {
-    position: 'absolute',
-    right: 10,
-    top: 10,
-    zIndex: 0,
+    marginBottom: 6,
+    borderRadius: 0,
   },
 
-  // ─── Header ───
+  // Header
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 4,
+    flexDirection: 'row', alignItems: 'flex-start',
+    paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, gap: 10,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  avatar: { width: 48, height: 48, borderRadius: 24 },
+  hInfo: { flex: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  name: { fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
+  subtitle: { fontSize: 12, fontFamily: FontFamily.regular, marginTop: 1 },
+  time: { fontSize: 12, fontFamily: FontFamily.regular, marginTop: 1 },
+  followBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 2,
+    paddingHorizontal: 8, paddingVertical: 4,
   },
-  avatarRing: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1.5,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#E8E8EC',
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  userName: {
-    ...Typography.bodySmallMedium,
-    fontSize: 15,
-  },
-  verifiedBadge: {
-    width: 15,
-    height: 15,
-    borderRadius: 7.5,
-    backgroundColor: '#4DA6FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    marginTop: 2,
-  },
-  meta: {
-    fontSize: 12,
-    fontFamily: FontFamily.medium,
-  },
-  metaDot: {
-    fontSize: 12,
-    marginHorizontal: 1,
-  },
-  followChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 13,
-    paddingVertical: 6,
-    borderRadius: 15,
-  },
-  followText: {
-    ...Typography.captionBold,
-    fontSize: 12,
-  },
-  moreBtn: {
-    padding: 4,
-    marginLeft: 4,
-  },
+  followLabel: { fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
 
-  // ─── Content ───
-  postText: {
-    ...Typography.bodySmall,
-    fontSize: 15,
-    paddingHorizontal: 16,
-    paddingTop: 7,
-    paddingBottom: 9,
-  },
+  // Text
+  textWrap: { paddingHorizontal: 16, paddingBottom: 8 },
+  postText: { fontSize: 14, fontFamily: FontFamily.regular, lineHeight: 20 },
+  more: { fontSize: 13, fontFamily: FontFamily.medium, marginTop: 2 },
 
-  // ─── Image ───
-  imageWrap: {
-    marginHorizontal: 14,
-    marginBottom: 9,
-    borderRadius: 15,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  postImage: {
-    width: '100%',
-    height: CARD_WIDTH * 0.75,
-    resizeMode: 'cover',
-  },
+  // Link
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingBottom: 8 },
+  linkText: { fontSize: 13, fontFamily: FontFamily.medium },
 
-  // ─── Signup Banner ───
-  signupBanner: {
-    marginHorizontal: 14,
-    marginBottom: 10,
-    borderRadius: 14,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  signupGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    gap: 10,
-  },
-  signupIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  signupInfo: {
-    flex: 1,
-  },
-  signupTitle: {
-    ...Typography.label,
-    marginBottom: 2,
-  },
-  signupUrl: {
-    ...Typography.caption,
-    fontSize: 12,
-  },
-  signupArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  // Image — inset with same padding as text
+  imgWrap: { paddingHorizontal: 16 },
+  img: { width: '100%', height: (W - 32) * 0.7, resizeMode: 'cover', borderRadius: 8 },
 
-  // ─── Stats Row ───
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 5,
+  // Stats
+  stats: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  statsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  statText: {
-    ...Typography.caption,
-    fontSize: 13,
-  },
+  statText: { fontSize: 12, fontFamily: FontFamily.regular },
 
-  // ─── Action Bar ───
-  actionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 9,
-    paddingHorizontal: 8,
-    borderTopWidth: 1,
+  // Actions — LinkedIn style
+  actions: {
+    flexDirection: 'row', justifyContent: 'space-around',
+    paddingVertical: 4,
   },
-  actionBtn: {
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 1,
-    paddingHorizontal: 4,
-  },
-  actionLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-  },
+  actBtn: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, gap: 2 },
+  actLabel: { fontSize: 12, fontFamily: FontFamily.medium },
 });

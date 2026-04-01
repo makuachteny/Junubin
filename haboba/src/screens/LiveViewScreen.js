@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Pressable,
-  Alert,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +26,7 @@ import { hapticSelection } from '../utils/haptics';
 import { useFollow } from '../hooks/useFollow';
 import { useSubscription } from '../payments';
 import { GIFTS } from '../data/gifts';
+import CoinPurchaseSheet from '../components/CoinPurchaseSheet';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -54,6 +55,7 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
   const [commentText, setCommentText] = useState('');
   const [floatingReactions, setFloatingReactions] = useState([]);
   const [showGiftSheet, setShowGiftSheet] = useState(false);
+  const [showCoinSheet, setShowCoinSheet] = useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const joinAnim = useRef(new Animated.Value(0)).current;
@@ -143,14 +145,13 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
     if (!commentText.trim()) return;
     setComments(prev => [...prev, { id: `me-${Date.now()}`, user: 'You', text: commentText.trim(), isMe: true }]);
     setCommentText('');
+    Keyboard.dismiss();
   }, [commentText]);
 
   const handleSendGift = useCallback((gift) => {
     if (coins < gift.coins) {
-      Alert.alert('Not Enough Coins', `You need ${gift.coins} coins.`, [
-        { text: 'Get Coins', onPress: () => { setShowGiftSheet(false); navigation.navigate('Elite'); } },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+      setShowGiftSheet(false);
+      setShowCoinSheet(true);
       return;
     }
     consumeCoins(gift.coins);
@@ -170,36 +171,39 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
       <LinearGradient colors={['rgba(0,0,0,0.5)', 'transparent']} style={s.topGradient} pointerEvents="none" />
       <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={s.bottomGradient} pointerEvents="none" />
 
-      {/* Top bar — always visible */}
+      {/* Top bar */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
-        <View style={s.topBarLeft}>
-          <TouchableOpacity style={s.streamerInfo} activeOpacity={0.8}>
-            <Image source={{ uri: avatar }} style={s.streamerAvatar} />
-            <View>
-              <Text style={s.streamerName}>{userName || 'User'}</Text>
-              <View style={s.streamerMeta}>
-                <Animated.View style={[s.liveBadge, { transform: [{ scale: pulseAnim }] }]}>
-                  <View style={s.liveDot} />
-                  <Text style={s.liveLabel}>LIVE</Text>
-                </Animated.View>
-                <Text style={s.viewerText}>{viewerCount}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-
+        {/* Streamer chip — avatar + name + follow in one pill */}
+        <View style={s.streamerChip}>
+          <Image source={{ uri: avatar }} style={s.streamerAvatar} />
+          <View style={s.streamerTextCol}>
+            <Text style={s.streamerName} numberOfLines={1}>{userName || 'User'}</Text>
+            <Animated.View style={[s.liveBadge, { transform: [{ scale: pulseAnim }] }]}>
+              <View style={s.liveDot} />
+              <Text style={s.liveLabel}>LIVE</Text>
+            </Animated.View>
+          </View>
           <TouchableOpacity
-            style={[s.followBtn, (isFollowing || isFriend) && s.followBtnActive]}
+            style={[s.followPill, (isFollowing || isFriend) && s.followPillActive]}
             onPress={() => { toggleFollow(); hapticSelection?.(); }}
+            activeOpacity={0.8}
           >
-            <Text style={s.followBtnText}>
+            <Text style={s.followPillText}>
               {isFriend ? 'Friends' : isFollowing ? 'Following' : 'Follow'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={s.closeBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="close" size={24} color="#FFF" />
-        </TouchableOpacity>
+        {/* Right — viewers + close */}
+        <View style={s.topRight}>
+          <View style={s.viewerPill}>
+            <Ionicons name="eye" size={12} color="rgba(255,255,255,0.7)" />
+            <Text style={s.viewerText}>{viewerCount}</Text>
+          </View>
+          <TouchableOpacity style={s.closeBtn} onPress={() => navigation.goBack()}>
+            <Ionicons name="close" size={20} color="#FFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Comments, reactions, input — always visible */}
@@ -225,79 +229,60 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
           ))}
         </View>
 
-        {/* Comments — always visible */}
-        <View style={[s.commentsArea, { bottom: insets.bottom + 70 }]}>
+        {/* Comments */}
+        <View style={[s.commentsArea, { bottom: insets.bottom + 64 }]}>
           <FlatList
-            data={comments.slice(-8)}
+            data={comments.slice(-6)}
             keyExtractor={c => c.id}
             showsVerticalScrollIndicator={false}
             renderItem={({ item: c }) => (
-              <View style={s.commentBubble}>
-                <Text style={[s.commentUser, c.isMe && s.commentUserMe]}>{c.user}</Text>
-                <Text style={s.commentText}>{c.text}</Text>
-              </View>
+              <Text style={s.commentLine} numberOfLines={2}>
+                <Text style={[s.commentUser, c.isMe && s.commentUserMe]}>{c.user}  </Text>
+                <Text style={s.commentMsg}>{c.text}</Text>
+              </Text>
             )}
           />
         </View>
 
         {/* Bottom bar */}
-        <View style={[s.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-          {joinStatus === 'joined' ? (
-            /* Joined — show chat input + reactions + gift */
-            <View style={s.inputRow}>
-              <TextInput
-                style={s.commentInput}
-                placeholder="Say something..."
-                placeholderTextColor="rgba(255,255,255,0.4)"
-                value={commentText}
-                onChangeText={setCommentText}
-                maxLength={120}
-                returnKeyType="send"
-                onSubmitEditing={handleSendComment}
-              />
-              {commentText.trim() ? (
-                <TouchableOpacity style={s.sendBtn} onPress={handleSendComment}>
-                  <Ionicons name="send" size={18} color="#FFF" />
-                </TouchableOpacity>
-              ) : null}
-              {REACTION_EMOJIS.slice(0, 3).map(emoji => (
-                <TouchableOpacity key={emoji} style={s.quickReaction} onPress={() => { spawnReaction(emoji); hapticSelection?.(); }}>
-                  <Text style={{ fontSize: 18 }}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity style={s.giftBtn} onPress={() => setShowGiftSheet(true)}>
-                <Ionicons name="gift" size={20} color="#F97316" />
+        <View style={[s.bottomBar, { paddingBottom: insets.bottom + 10 }]}>
+          <View style={s.inputRow}>
+            <TextInput
+              style={s.commentInput}
+              placeholder="Say something..."
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={commentText}
+              onChangeText={setCommentText}
+              maxLength={120}
+              returnKeyType="send"
+              onSubmitEditing={handleSendComment}
+            />
+            {commentText.trim() ? (
+              <TouchableOpacity style={s.sendBtn} onPress={handleSendComment}>
+                <Ionicons name="send" size={16} color="#FFF" />
               </TouchableOpacity>
-            </View>
-          ) : (
-            /* Not joined — show request to join + pending state */
-            <View style={s.inputRow}>
-              {joinStatus === 'none' && (
-                <TouchableOpacity style={s.requestBtn} onPress={handleRequestJoin} activeOpacity={0.8}>
-                  <Ionicons name="hand-right" size={16} color="#FFFFFF" />
-                  <Text style={s.requestBtnText}>Request to Join</Text>
-                </TouchableOpacity>
-              )}
-              {joinStatus === 'pending' && (
-                <View style={s.pendingRow}>
-                  <View style={s.pendingPill}>
-                    <Ionicons name="time" size={14} color="#FFFFFF" />
-                    <Text style={s.pendingText}>Waiting for host...</Text>
-                  </View>
-                  <TouchableOpacity onPress={handleCancelRequest} activeOpacity={0.7}>
-                    <Text style={s.cancelRequestText}>Cancel</Text>
+            ) : (
+              <>
+                {joinStatus === 'none' ? (
+                  <TouchableOpacity style={s.joinBtn} onPress={handleRequestJoin} activeOpacity={0.8}>
+                    <Ionicons name="hand-right" size={16} color="#FFFFFF" />
                   </TouchableOpacity>
-                </View>
-              )}
-              {/* Quick reactions available even before joining */}
-              <View style={{ flex: 1 }} />
-              {REACTION_EMOJIS.slice(0, 3).map(emoji => (
-                <TouchableOpacity key={emoji} style={s.quickReaction} onPress={() => { spawnReaction(emoji); hapticSelection?.(); }}>
-                  <Text style={{ fontSize: 18 }}>{emoji}</Text>
+                ) : joinStatus === 'pending' ? (
+                  <TouchableOpacity style={s.joinBtnPending} onPress={handleCancelRequest} activeOpacity={0.8}>
+                    <Ionicons name="time" size={16} color="#FFFFFF" />
+                  </TouchableOpacity>
+                ) : null}
+                {REACTION_EMOJIS.slice(0, 3).map(emoji => (
+                  <TouchableOpacity key={emoji} style={s.quickReaction} onPress={() => { spawnReaction(emoji); hapticSelection?.(); }}>
+                    <Text style={{ fontSize: 18 }}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={s.giftBtn} onPress={() => setShowGiftSheet(true)}>
+                  <Ionicons name="gift" size={18} color="#F97316" />
                 </TouchableOpacity>
-              ))}
-            </View>
-          )}
+              </>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
 
@@ -324,12 +309,14 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={s.getCoinsBtn} onPress={() => { setShowGiftSheet(false); navigation.navigate('Elite'); }}>
+            <TouchableOpacity style={s.getCoinsBtn} onPress={() => { setShowGiftSheet(false); setShowCoinSheet(true); }}>
               <Text style={s.getCoinsBtnText}>Get More Coins</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
       </Modal>
+
+      <CoinPurchaseSheet visible={showCoinSheet} onClose={() => setShowCoinSheet(false)} />
     </View>
   );
 }
@@ -449,31 +436,52 @@ const s = StyleSheet.create({
   // Top bar
   topBar: {
     position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    paddingHorizontal: 12,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 10,
   },
-  topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-  streamerInfo: {
+
+  // Streamer chip — compact pill with avatar, name, live badge, follow
+  streamerChip: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 24, paddingRight: 12, paddingVertical: 4, paddingLeft: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 28,
+    paddingLeft: 3, paddingRight: 4, paddingVertical: 3,
   },
-  streamerAvatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#CE1126' },
-  streamerName: { fontSize: 14, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
-  streamerMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  streamerAvatar: {
+    width: 34, height: 34, borderRadius: 17,
+    borderWidth: 2, borderColor: '#CE1126',
+  },
+  streamerTextCol: {
+    gap: 2,
+  },
+  streamerName: {
+    fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF',
+    maxWidth: 100,
+  },
   liveBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-    backgroundColor: '#CE1126', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+    flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start',
+    backgroundColor: '#CE1126', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 4,
   },
-  liveDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#FFF' },
-  liveLabel: { fontSize: 9, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', letterSpacing: 0.5 },
-  viewerText: { fontSize: 12, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.6)' },
+  liveDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#FFF' },
+  liveLabel: { fontSize: 8, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', letterSpacing: 0.5 },
 
-  followBtn: { backgroundColor: '#CE1126', paddingHorizontal: 15, paddingVertical: 7, borderRadius: 17 },
-  followBtnActive: { backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  followBtnText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
+  followPill: {
+    backgroundColor: '#CE1126', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
+    marginLeft: 2,
+  },
+  followPillActive: {
+    backgroundColor: 'transparent', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)',
+  },
+  followPillText: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF' },
 
+  // Top right — viewers + close
+  topRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  viewerPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14,
+  },
+  viewerText: { fontSize: 12, fontWeight: '600', fontFamily: FontFamily.semibold, color: 'rgba(255,255,255,0.8)' },
   closeBtn: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(0,0,0,0.4)',
+    width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center', alignItems: 'center',
   },
 
@@ -484,28 +492,30 @@ const s = StyleSheet.create({
   floatingEmoji: { fontSize: 36, position: 'absolute', bottom: 0 },
 
   // Comments
-  commentsArea: { position: 'absolute', left: 12, right: 80, height: 200, zIndex: 15 },
-  commentBubble: {
-    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 7,
-    marginBottom: 6, alignSelf: 'flex-start', maxWidth: '90%',
+  commentsArea: { position: 'absolute', left: 14, right: 70, zIndex: 15 },
+  commentLine: {
+    marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
-  commentUser: { fontSize: 12, fontWeight: '700', fontFamily: FontFamily.bold, color: '#F97316', marginBottom: 1 },
-  commentUserMe: { color: '#CE1126' },
-  commentText: { fontSize: 14, fontFamily: FontFamily.regular, color: '#FFF', lineHeight: 19 },
+  commentUser: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: 'rgba(255,255,255,0.6)' },
+  commentUserMe: { color: '#FCCD12' },
+  commentMsg: { fontSize: 14, fontFamily: FontFamily.regular, color: '#FFFFFF' },
 
   // Bottom bar
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 20, paddingHorizontal: 12 },
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   commentInput: {
-    flex: 1, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.4)', color: '#FFF', paddingHorizontal: 16, paddingVertical: 10,
+    flex: 1, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.12)',
+    color: '#FFF', paddingHorizontal: 16, paddingVertical: 11,
     fontSize: 15, fontFamily: FontFamily.regular,
   },
   sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#CE1126', justifyContent: 'center', alignItems: 'center' },
-  quickReaction: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  joinBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#CE1126', justifyContent: 'center', alignItems: 'center' },
+  joinBtnPending: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(206,17,38,0.5)', justifyContent: 'center', alignItems: 'center' },
+  quickReaction: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center' },
   giftBtn: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(249,115,22,0.3)',
+    width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center', alignItems: 'center',
   },
 
   // Gift Sheet
