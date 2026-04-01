@@ -290,7 +290,7 @@ export default function CommunityScreen({ navigation, route }) {
                 <Ionicons
                   name={TAB_ICONS[tab] || 'ellipse-outline'}
                   size={13}
-                  color={isTabActive ? '#FFFFFF' : colors.gray500}
+                  color={isTabActive ? (isDark ? colors.black : '#FFFFFF') : colors.gray500}
                   style={{ marginRight: 4 }}
                 />
                 <Text style={[styles.segmentPillText, isTabActive && styles.segmentPillTextActive]}>
@@ -323,9 +323,9 @@ export default function CommunityScreen({ navigation, route }) {
                 activeOpacity={0.7}
               >
                 {GraffitiComp ? (
-                  <GraffitiComp size={13} color={isActive ? '#FFFFFF' : colors.gray600} filled={isActive} />
+                  <GraffitiComp size={13} color={isActive ? (isDark ? colors.black : '#FFFFFF') : colors.gray600} filled={isActive} />
                 ) : (
-                  <Ionicons name={filter.icon} size={13} color={isActive ? '#FFFFFF' : colors.gray600} />
+                  <Ionicons name={filter.icon} size={13} color={isActive ? (isDark ? colors.black : '#FFFFFF') : colors.gray600} />
                 )}
                 <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
                   {filter.label}
@@ -761,7 +761,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: isDark ? 'rgba(255,255,255,0.92)' : colors.gray700,
   },
   filterPillTextActive: {
-    color: '#FFFFFF',
+    color: isDark ? colors.black : '#FFFFFF',
     fontWeight: '700',
   },
 
@@ -984,7 +984,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: isDark ? 'rgba(255,255,255,0.92)' : colors.gray700,
   },
   segmentPillTextActive: {
-    color: '#FFFFFF',
+    color: isDark ? colors.black : '#FFFFFF',
     fontWeight: '700',
   },
   moreFilterBtn: {

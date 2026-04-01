@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, View, ActivityIndicator, ImageBackground } from 'react-native';
+import { StyleSheet, View, ActivityIndicator } from 'react-native';
 import { useFonts } from 'expo-font';
 
 import { ThemeProvider, useTheme, fontAssets } from './src/theme';
@@ -18,8 +18,6 @@ import { NetworkProvider } from './src/utils/useNetworkStatus';
 import { useNotifications } from './src/utils/useNotifications';
 
 import ErrorBoundary from './src/components/ErrorBoundary';
-
-const LANDING_IMAGE = require('./src/assets/landing.jpeg');
 
 function AppInner() {
   const { colors, isDark } = useTheme();
@@ -70,11 +68,9 @@ export default function App() {
 
   if (!fontsLoaded) {
     return (
-      <ImageBackground source={LANDING_IMAGE} style={styles.loadingImage} resizeMode="cover">
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#E8613C" />
-        </View>
-      </ImageBackground>
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color="#FCCD12" />
+      </View>
     );
   }
 
@@ -105,13 +101,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  loadingImage: {
-    flex: 1,
-  },
-  loadingOverlay: {
+  loadingScreen: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: '#060606',
   },
 });

@@ -88,7 +88,7 @@ function HomeTabs() {
 
   return (
       <Tab.Navigator
-        initialRouteName="HomeTab"
+        initialRouteName="CommunityTab"
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarShowLabel: true,
@@ -161,8 +161,8 @@ function HomeTabs() {
           },
         })}
       >
-        <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Discover' }} />
         <Tab.Screen name="CommunityTab" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
+        <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Discover' }} />
         <Tab.Screen name="LikesTab" component={LikesScreen} options={{ tabBarLabel: 'Likes' }} />
         <Tab.Screen name="MessagesTab" component={MessagesScreen} options={{ tabBarLabel: 'Chats' }} />
       </Tab.Navigator>

@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,6 +58,7 @@ export default function EventsScreen({ navigation }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('All');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     interactiveStore.getEventRooms().then((saved) => {
@@ -175,17 +178,27 @@ export default function EventsScreen({ navigation }) {
           <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Events</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('CreateEvent')} style={styles.headerAdd}>
-          <Ionicons name="add" size={22} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => setShowFilters(true)} style={styles.headerIconBtn}>
+            <Ionicons name="options-outline" size={20} color={colors.black} />
+            {activeFilterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => navigation.navigate('CreateEvent')} style={styles.headerAdd}>
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Search bar */}
       <View style={styles.searchWrap}>
-        <Ionicons name="search" size={18} color={colors.gray400} />
+        <Ionicons name="search" size={16} color={colors.gray400} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Search events, cities, categories..."
+          placeholder="Search events..."
           placeholderTextColor={colors.gray400}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -193,67 +206,65 @@ export default function EventsScreen({ navigation }) {
         />
         {searchQuery ? (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <Ionicons name="close-circle" size={18} color={colors.gray400} />
+            <Ionicons name="close-circle" size={16} color={colors.gray400} />
           </TouchableOpacity>
         ) : null}
       </View>
 
-      {/* City filter pills */}
-      <View style={styles.filterSection}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          <Ionicons name="location" size={14} color={colors.accent} style={{ marginRight: 6, marginTop: 1 }} />
-          {EVENT_CITIES.map((city) => {
-            const isActive = selectedCity === city;
-            return (
-              <TouchableOpacity
-                key={city}
-                style={[styles.filterPill, isActive && styles.filterPillActive]}
-                onPress={() => setSelectedCity(city)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                  {city}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+      {/* Filter modal */}
+      <Modal visible={showFilters} transparent animationType="fade" onRequestClose={() => setShowFilters(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowFilters(false)}>
+          <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Filter Events</Text>
 
-      {/* Category filter pills */}
-      <View style={styles.filterSection}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-          <Ionicons name="grid" size={14} color={colors.gray500} style={{ marginRight: 6, marginTop: 1 }} />
-          {EVENT_CATEGORIES.map((cat) => {
-            const isActive = selectedCategory === cat;
-            const catColor = CATEGORY_COLORS[cat] || colors.black;
-            return (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.filterPill, isActive && { backgroundColor: catColor, borderColor: catColor }]}
-                onPress={() => setSelectedCategory(cat)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+            <Text style={styles.modalLabel}>City</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modalPillRow}>
+              {EVENT_CITIES.map((city) => {
+                const isActive = selectedCity === city;
+                return (
+                  <TouchableOpacity
+                    key={city}
+                    style={[styles.modalPill, isActive && styles.modalPillActive]}
+                    onPress={() => setSelectedCity(city)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.modalPillText, isActive && styles.modalPillTextActive]}>{city}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
-      {/* Active filter count */}
-      {activeFilterCount > 0 && (
-        <View style={styles.activeFilterRow}>
-          <Text style={styles.activeFilterText}>
-            {filteredEvents.length} event{filteredEvents.length !== 1 ? 's' : ''} found
-          </Text>
-          <TouchableOpacity onPress={() => { setSelectedCity('All'); setSelectedCategory('All'); setSearchQuery(''); }}>
-            <Text style={styles.clearFilterText}>Clear all</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+            <Text style={styles.modalLabel}>Category</Text>
+            <View style={styles.modalPillWrap}>
+              {EVENT_CATEGORIES.map((cat) => {
+                const isActive = selectedCategory === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.modalPill, isActive && styles.modalPillActive]}
+                    onPress={() => setSelectedCategory(cat)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.modalPillText, isActive && styles.modalPillTextActive]}>{cat}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalActions}>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity style={styles.modalClear} onPress={() => { setSelectedCity('All'); setSelectedCategory('All'); }} activeOpacity={0.7}>
+                  <Text style={styles.modalClearText}>Reset</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.modalDone} onPress={() => setShowFilters(false)} activeOpacity={0.8}>
+                <Text style={styles.modalDoneText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
       {/* Event list */}
       {isLoading ? (
@@ -307,6 +318,37 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 20,
     color: colors.black,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: isDark ? colors.gray200 : colors.surfaceMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  filterBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
+  },
   headerAdd: {
     width: 36,
     height: 36,
@@ -339,54 +381,108 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingVertical: 0,
   },
 
-  // Filters
-  filterSection: {
-    marginBottom: 4,
+  // Filter modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
   },
-  filterRow: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+  modalSheet: {
+    backgroundColor: colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  modalHandle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)',
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: FontFamily.extrabold,
+    color: colors.black,
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.gray500,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+    marginTop: 8,
+  },
+  modalPillRow: {
     gap: 8,
-    alignItems: 'center',
+    paddingBottom: 8,
   },
-  filterPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 18,
+  modalPillWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 8,
+  },
+  modalPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
+    borderColor: isDark ? 'rgba(255,255,255,0.1)' : colors.separator,
     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.white,
   },
-  filterPillActive: {
+  modalPillActive: {
     backgroundColor: colors.black,
     borderColor: colors.black,
   },
-  filterPillText: {
-    ...Typography.label,
-    fontSize: 13,
+  modalPillText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: isDark ? 'rgba(255,255,255,0.7)' : colors.gray600,
   },
-  filterPillTextActive: {
-    color: '#FFFFFF',
+  modalPillTextActive: {
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
   },
-
-  // Active filter row
-  activeFilterRow: {
+  modalActions: {
     flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  modalClear: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: colors.gray300,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    justifyContent: 'center',
   },
-  activeFilterText: {
-    ...Typography.caption,
-    fontSize: 13,
-    color: colors.gray500,
+  modalClearText: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.gray600,
   },
-  clearFilterText: {
-    ...Typography.captionBold,
-    fontSize: 13,
-    color: colors.accent,
+  modalDone: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 24,
+    backgroundColor: colors.black,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalDoneText: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: isDark ? '#1A1A1A' : '#FFFFFF',
   },
 
   // List

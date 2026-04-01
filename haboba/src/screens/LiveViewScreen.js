@@ -83,9 +83,9 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
     return () => clearInterval(interval);
   }, [isActive]);
 
-  // Auto comments
+  // Auto comments — always visible (you can read chat without joining)
   useEffect(() => {
-    if (!isActive || joinStatus !== 'joined') return;
+    if (!isActive) return;
     const interval = setInterval(() => {
       if (commentIdxRef.current < MOCK_COMMENTS.length) {
         const c = MOCK_COMMENTS[commentIdxRef.current];
@@ -94,16 +94,16 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
       }
     }, 3500);
     return () => clearInterval(interval);
-  }, [isActive, joinStatus]);
+  }, [isActive]);
 
-  // Auto reactions
+  // Auto reactions — always visible
   useEffect(() => {
-    if (!isActive || joinStatus !== 'joined') return;
+    if (!isActive) return;
     const interval = setInterval(() => {
       spawnReaction(REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)]);
-    }, 3000);
+    }, 4000);
     return () => clearInterval(interval);
-  }, [isActive, joinStatus]);
+  }, [isActive]);
 
   const spawnReaction = useCallback((emoji) => {
     const id = `r-${reactionIdRef.current++}`;
@@ -166,45 +166,9 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
       <Image source={{ uri: image }} style={s.bgImage} blurRadius={0} />
       <View style={[s.bgOverlay, joinStatus === 'joined' && { backgroundColor: 'rgba(0,0,0,0.3)' }]} />
 
-      {/* Center content when not joined */}
-      {joinStatus !== 'joined' && (
-        <View style={s.preJoinCenter}>
-          <Image source={{ uri: image }} style={s.preJoinAvatar} />
-          <Text style={s.preJoinName}>{userName}, {item.age}</Text>
-          {title ? <Text style={s.preJoinCaption} numberOfLines={2}>{title}</Text> : null}
-          <View style={s.preJoinViewers}>
-            <Ionicons name="eye" size={14} color="rgba(255,255,255,0.7)" />
-            <Text style={s.preJoinViewerText}>{viewerCount} watching</Text>
-          </View>
-          <Text style={s.preJoinHint}>Request to join to chat, react, and send gifts.</Text>
-
-          {joinStatus === 'none' && (
-            <TouchableOpacity style={s.requestBtn} onPress={handleRequestJoin} activeOpacity={0.8}>
-              <Ionicons name="hand-right" size={18} color="#FFFFFF" />
-              <Text style={s.requestBtnText}>Request to Join</Text>
-            </TouchableOpacity>
-          )}
-          {joinStatus === 'pending' && (
-            <>
-              <Animated.View style={[s.pendingPill, { opacity: joinAnim }]}>
-                <Ionicons name="time" size={16} color="#FFFFFF" />
-                <Text style={s.pendingText}>Waiting for host...</Text>
-              </Animated.View>
-              <TouchableOpacity style={s.cancelRequestBtn} onPress={handleCancelRequest} activeOpacity={0.8}>
-                <Text style={s.cancelRequestText}>Cancel Request</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      )}
-
-      {/* Gradients (when joined) */}
-      {joinStatus === 'joined' && (
-        <>
-          <LinearGradient colors={['rgba(0,0,0,0.6)', 'transparent']} style={s.topGradient} pointerEvents="none" />
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={s.bottomGradient} pointerEvents="none" />
-        </>
-      )}
+      {/* Gradients — always visible for readability */}
+      <LinearGradient colors={['rgba(0,0,0,0.5)', 'transparent']} style={s.topGradient} pointerEvents="none" />
+      <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={s.bottomGradient} pointerEvents="none" />
 
       {/* Top bar — always visible */}
       <View style={[s.topBar, { paddingTop: insets.top + 8 }]}>
@@ -238,47 +202,48 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
         </TouchableOpacity>
       </View>
 
-      {/* Joined UI — comments, reactions, input */}
-      {joinStatus === 'joined' && (
-        <KeyboardAvoidingView
-          style={StyleSheet.absoluteFill}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          pointerEvents="box-none"
-        >
-          {/* Floating reactions */}
-          <View style={s.reactionsColumn} pointerEvents="none">
-            {floatingReactions.map(r => (
-              <Animated.Text
-                key={r.id}
-                style={[s.floatingEmoji, {
-                  opacity: r.anim.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 1, 0.8, 0] }),
-                  transform: [
-                    { translateY: r.anim.interpolate({ inputRange: [0, 1], outputRange: [0, -220] }) },
-                    { translateX: r.xOffset },
-                    { scale: r.anim.interpolate({ inputRange: [0, 0.15, 0.4, 1], outputRange: [0.3, 1.4, 1, 0.7] }) },
-                  ],
-                }]}
-              >{r.emoji}</Animated.Text>
-            ))}
-          </View>
+      {/* Comments, reactions, input — always visible */}
+      <KeyboardAvoidingView
+        style={StyleSheet.absoluteFill}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        pointerEvents="box-none"
+      >
+        {/* Floating reactions */}
+        <View style={s.reactionsColumn} pointerEvents="none">
+          {floatingReactions.map(r => (
+            <Animated.Text
+              key={r.id}
+              style={[s.floatingEmoji, {
+                opacity: r.anim.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 1, 0.8, 0] }),
+                transform: [
+                  { translateY: r.anim.interpolate({ inputRange: [0, 1], outputRange: [0, -220] }) },
+                  { translateX: r.xOffset },
+                  { scale: r.anim.interpolate({ inputRange: [0, 0.15, 0.4, 1], outputRange: [0.3, 1.4, 1, 0.7] }) },
+                ],
+              }]}
+            >{r.emoji}</Animated.Text>
+          ))}
+        </View>
 
-          {/* Comments */}
-          <View style={[s.commentsArea, { bottom: insets.bottom + 70 }]}>
-            <FlatList
-              data={comments.slice(-8)}
-              keyExtractor={c => c.id}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item: c }) => (
-                <View style={s.commentBubble}>
-                  <Text style={[s.commentUser, c.isMe && s.commentUserMe]}>{c.user}</Text>
-                  <Text style={s.commentText}>{c.text}</Text>
-                </View>
-              )}
-            />
-          </View>
+        {/* Comments — always visible */}
+        <View style={[s.commentsArea, { bottom: insets.bottom + 70 }]}>
+          <FlatList
+            data={comments.slice(-8)}
+            keyExtractor={c => c.id}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item: c }) => (
+              <View style={s.commentBubble}>
+                <Text style={[s.commentUser, c.isMe && s.commentUserMe]}>{c.user}</Text>
+                <Text style={s.commentText}>{c.text}</Text>
+              </View>
+            )}
+          />
+        </View>
 
-          {/* Bottom input */}
-          <View style={[s.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+        {/* Bottom bar */}
+        <View style={[s.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+          {joinStatus === 'joined' ? (
+            /* Joined — show chat input + reactions + gift */
             <View style={s.inputRow}>
               <TextInput
                 style={s.commentInput}
@@ -304,9 +269,37 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
                 <Ionicons name="gift" size={20} color="#F97316" />
               </TouchableOpacity>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      )}
+          ) : (
+            /* Not joined — show request to join + pending state */
+            <View style={s.inputRow}>
+              {joinStatus === 'none' && (
+                <TouchableOpacity style={s.requestBtn} onPress={handleRequestJoin} activeOpacity={0.8}>
+                  <Ionicons name="hand-right" size={16} color="#FFFFFF" />
+                  <Text style={s.requestBtnText}>Request to Join</Text>
+                </TouchableOpacity>
+              )}
+              {joinStatus === 'pending' && (
+                <View style={s.pendingRow}>
+                  <View style={s.pendingPill}>
+                    <Ionicons name="time" size={14} color="#FFFFFF" />
+                    <Text style={s.pendingText}>Waiting for host...</Text>
+                  </View>
+                  <TouchableOpacity onPress={handleCancelRequest} activeOpacity={0.7}>
+                    <Text style={s.cancelRequestText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {/* Quick reactions available even before joining */}
+              <View style={{ flex: 1 }} />
+              {REACTION_EMOJIS.slice(0, 3).map(emoji => (
+                <TouchableOpacity key={emoji} style={s.quickReaction} onPress={() => { spawnReaction(emoji); hapticSelection?.(); }}>
+                  <Text style={{ fontSize: 18 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
 
       {/* Gift Sheet */}
       <Modal visible={showGiftSheet} transparent animationType="slide" onRequestClose={() => setShowGiftSheet(false)}>
@@ -424,9 +417,12 @@ const s = StyleSheet.create({
   requestBtnText: {
     fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold, color: '#FFF', letterSpacing: 0.3,
   },
+  pendingRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
   pendingPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20,
   },
   pendingText: {
     fontSize: 14, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.8)',

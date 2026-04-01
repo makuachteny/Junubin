@@ -277,15 +277,15 @@ export default React.memo(PostCard);
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 22,
+    borderRadius: 16,
     marginHorizontal: 16,
-    marginVertical: 8,
+    marginVertical: 6,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
     borderWidth: 1,
   },
   sprayTopRight: {
@@ -299,9 +299,9 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 13,
-    paddingBottom: 6,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -309,18 +309,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   avatarRing: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#E8E8EC',
   },
   headerInfo: {

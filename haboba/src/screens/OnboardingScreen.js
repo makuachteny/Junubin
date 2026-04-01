@@ -1,9 +1,3 @@
-// ═══════════════════════════════════════════════════════════
-// JuNubin — Cinematic Onboarding
-// Full-bleed, dramatic, movie-poster energy.
-// Warm palette with gradient accents.
-// ═══════════════════════════════════════════════════════════
-
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
@@ -12,609 +6,425 @@ import {
   TouchableOpacity,
   Dimensions,
   ScrollView,
-  Image,
   Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { FontFamily, useTheme } from '../theme';
+import { FontFamily } from '../theme';
 import LogoMark from '../components/LogoMark';
 import { useAccessibilityPreferences } from '../accessibility';
 import { useAuth } from '../auth';
-import { SpraySplatter } from '../components/GraffitiAccents';
 
 const { width: W, height: H } = Dimensions.get('window');
-const LANDING_IMAGE = require('../assets/landing.jpeg');
-const ACCENT = '#FFFFFF';
-
-const PAGES = [{ id: 1 }, { id: 2 }];
+const PG = 3;
 
 const CITIES = [
-  'Juba.',
-  'London.',
-  'Minneapolis.',
-  'Cairo.',
-  'Nairobi.',
-  'Sydney.',
-  'Kampala.',
-  'Melbourne.',
-  'Des Moines.',
-  'Omaha.',
-  'Dallas.',
-  'Khartoum.',
-  'Addis Ababa.',
-  'Toronto.',
-  'Phoenix.',
-  'Kansas City.',
-  'Nashville.',
-  'Columbus.',
-  'Brisbane.',
-  'Perth.',
-  'Winnipeg.',
-  'Edmonton.',
-  'Manchester.',
-  'Birmingham.',
-  'Amsterdam.',
-  'Oslo.',
-  'Juba.',
-  'London.',
-  'Minneapolis.',
-  'Cairo.',
+  'Juba', 'London', 'Minneapolis', 'Nairobi', 'Sydney', 'Kampala',
+  'Melbourne', 'Dallas', 'Toronto', 'Khartoum', 'Nashville', 'Cairo',
+  'Addis Ababa', 'Manchester', 'Amsterdam', 'Perth', 'Brisbane',
+  'Juba', 'London', 'Minneapolis', 'Nairobi', 'Sydney', 'Kampala',
 ];
-const CITY_LINE_HEIGHT = 52;
-const VISIBLE_CITIES = 4;
+const LH = 62;
 
-const CITY_OPACITIES = [1, 0.55, 0.28, 0.12];
-
-const CityScroller = ({ isActive }) => {
-  const scrollAnim = useRef(new Animated.Value(0)).current;
-  const animRef = useRef(null);
-
+const CityTicker = ({ active }) => {
+  const y = useRef(new Animated.Value(0)).current;
+  const loop = useRef(null);
   useEffect(() => {
-    if (!isActive) {
-      scrollAnim.setValue(0);
-      if (animRef.current) animRef.current.stop();
-      return;
-    }
-
-    // Total scrollable cities (minus the visible window that's duplicated at end)
-    const totalSteps = CITIES.length - VISIBLE_CITIES;
-    const totalDistance = totalSteps * CITY_LINE_HEIGHT;
-
-    // Start after a brief pause, then scroll continuously
-    const timer = setTimeout(() => {
-      animRef.current = Animated.loop(
-        Animated.timing(scrollAnim, {
-          toValue: -totalDistance,
-          duration: totalSteps * 1400,
-          useNativeDriver: true,
-        }),
-      );
-      animRef.current.start();
-    }, 800);
-
-    return () => {
-      clearTimeout(timer);
-      if (animRef.current) animRef.current.stop();
-    };
-  }, [isActive, scrollAnim]);
-
-  // Interpolate per-city opacity based on scroll position
-  // Each city gets whiter (opacity → 1) as it reaches the top of the window
-  const cityAnimatedOpacities = CITIES.map((_, i) => {
-    const cityY = i * CITY_LINE_HEIGHT; // absolute Y of this city
-    // scrollAnim is negative, so effective position = cityY + scrollAnim
-    // When at top of window: position ≈ 0 → full white
-    // When at bottom: position ≈ (VISIBLE_CITIES-1)*LINE_HEIGHT → faint
-    return scrollAnim.interpolate({
-      inputRange: [
-        -(cityY + 3 * CITY_LINE_HEIGHT),
-        -(cityY + 2 * CITY_LINE_HEIGHT),
-        -(cityY + CITY_LINE_HEIGHT),
-        -cityY,
-      ],
-      outputRange: [0.12, 0.28, 0.55, 1],
-      extrapolate: 'clamp',
-    });
-  });
-
+    if (!active) { y.setValue(0); loop.current?.stop(); return; }
+    const n = CITIES.length - 6;
+    loop.current = Animated.loop(Animated.timing(y, { toValue: -(n * LH), duration: n * 1800, useNativeDriver: true }));
+    const t = setTimeout(() => loop.current?.start(), 300);
+    return () => { clearTimeout(t); loop.current?.stop(); };
+  }, [active, y]);
   return (
-    <View style={{ height: VISIBLE_CITIES * CITY_LINE_HEIGHT, overflow: 'hidden', marginBottom: 24 }}>
-      <Animated.View style={{ transform: [{ translateY: scrollAnim }] }}>
-        {CITIES.map((city, i) => (
-          <Animated.Text
-            key={`${city}-${i}`}
-            style={{
-              fontSize: 44,
-              fontWeight: '900',
-              fontFamily: FontFamily.black,
-              color: 'white',
-              opacity: cityAnimatedOpacities[i],
-              lineHeight: CITY_LINE_HEIGHT,
-              letterSpacing: -1.2,
-            }}
-          >
-            {city}
-          </Animated.Text>
+    <View style={{ height: 6 * LH, overflow: 'hidden' }}>
+      <Animated.View style={{ transform: [{ translateY: y }] }}>
+        {CITIES.map((c, i) => (
+          <Animated.Text key={`${c}${i}`} style={[$.city, {
+            opacity: y.interpolate({
+              inputRange: [-(i + 4) * LH, -(i + 3) * LH, -(i + 1) * LH, -i * LH],
+              outputRange: [0.03, 0.08, 0.3, 1], extrapolate: 'clamp',
+            }),
+          }]}>{c}</Animated.Text>
         ))}
       </Animated.View>
+      <LinearGradient colors={['#080808', 'transparent']} style={$.tickFadeTop} pointerEvents="none" />
+      <LinearGradient colors={['transparent', '#080808']} style={$.tickFadeBot} pointerEvents="none" />
     </View>
   );
 };
 
-const OnboardingScreen = ({ navigation }) => {
-  const { colors } = useTheme();
+// ── Graphic feature card — each one is a mini illustration ──
+const FeatureVis = ({ icon, iconColor, iconBg, label, desc, accent }) => (
+  <View style={$.feat}>
+    {/* Graphic circle with icon — the "illustration" */}
+    <View style={$.featVisual}>
+      <View style={[$.featRing, { borderColor: accent + '18' }]}>
+        <View style={[$.featCircle, { backgroundColor: iconBg }]}>
+          <Ionicons name={icon} size={28} color={iconColor} />
+        </View>
+      </View>
+      {/* Decorative arcs */}
+      <View style={[$.featArc, $.featArc1, { borderColor: accent + '10' }]} />
+      <View style={[$.featArc, $.featArc2, { borderColor: accent + '08' }]} />
+    </View>
+    <Text style={$.featLabel}>{label}</Text>
+    <Text style={$.featDesc}>{desc}</Text>
+  </View>
+);
+
+export default function OnboardingScreen({ navigation }) {
   const { prefs } = useAccessibilityPreferences();
-  const { isAuthenticated } = useAuth();
-  const [currentPage, setCurrentPage] = useState(0);
-  const scrollX = useRef(new Animated.Value(0)).current;
-  const scrollViewRef = useRef(null);
-  const insets = useSafeAreaInsets();
+  const { isAuthenticated, setDevBypass } = useAuth();
+  const [pg, setPg] = useState(0);
+  const sx = useRef(new Animated.Value(0)).current;
+  const sr = useRef(null);
+  const ins = useSafeAreaInsets();
 
-  // If user is already authenticated, skip onboarding entirely
+  useEffect(() => { if (isAuthenticated) navigation.replace('Main'); }, [isAuthenticated, navigation]);
+
+  // Staggered entrance — 4 beats
+  const e1 = useRef(new Animated.Value(0)).current;
+  const e2 = useRef(new Animated.Value(0)).current;
+  const e3 = useRef(new Animated.Value(0)).current;
+  const e4 = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    if (isAuthenticated) {
-      navigation.replace('Main');
-    }
-  }, [isAuthenticated, navigation]);
+    const t = prefs?.reducedMotion ? 60 : 180;
+    Animated.stagger(t, [
+      Animated.spring(e1, { toValue: 1, tension: 35, friction: 7, useNativeDriver: true }),
+      Animated.spring(e2, { toValue: 1, tension: 32, friction: 7, useNativeDriver: true }),
+      Animated.spring(e3, { toValue: 1, tension: 29, friction: 7, useNativeDriver: true }),
+      Animated.spring(e4, { toValue: 1, tension: 26, friction: 7, useNativeDriver: true }),
+    ]).start();
+  }, []);
 
-  // ── Entrance animation ──
-  const entrance = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (prefs?.reducedMotion) {
-      Animated.timing(entrance, {
-        toValue: 1,
-        duration: 140,
-        useNativeDriver: true,
-      }).start();
-      return;
-    }
-    Animated.spring(entrance, {
-      toValue: 1,
-      tension: 35,
-      friction: 9,
-      useNativeDriver: true,
-    }).start();
-  }, [entrance, prefs]);
-
-  // ── Subtle pulse for scroll hint ──
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (prefs?.reducedMotion) {
-      pulse.setValue(0);
-      return undefined;
-    }
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1400, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 1400, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse, prefs]);
-
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-    {
-      useNativeDriver: false,
-      listener: (e) => setCurrentPage(Math.round(e.nativeEvent.contentOffset.x / W)),
-    },
+  const onScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: sx } } }],
+    { useNativeDriver: false, listener: (ev) => setPg(Math.round(ev.nativeEvent.contentOffset.x / W)) },
   );
+  const next = useCallback(() => {
+    if (pg < PG - 1) sr.current?.scrollTo({ x: W * (pg + 1), animated: true });
+    else navigation.navigate('Signup');
+  }, [pg, navigation]);
+  const signup = useCallback(() => navigation.navigate('Signup'), [navigation]);
 
-  const goNext = useCallback(() => {
-    if (currentPage < PAGES.length - 1) {
-      scrollViewRef.current?.scrollTo({ x: W * (currentPage + 1), animated: true });
-    }
-  }, [currentPage]);
-
-  const goSignup = useCallback(() => navigation.navigate('Signup'), [navigation]);
-  const { setDevBypass } = useAuth();
-  const handleLandingSkip = useCallback(() => {
-    // Enable dev bypass; AppNavigator will swap to the authenticated stack.
-    setDevBypass(true);
-  }, [setDevBypass]);
-
-  // ── Page animation factory ──
-  const anim = (idx) => {
-    const r = [(idx - 1) * W, idx * W, (idx + 1) * W];
-    return {
-      opacity: scrollX.interpolate({ inputRange: r, outputRange: [0, 1, 0], extrapolate: 'clamp' }),
-      slideUp: scrollX.interpolate({ inputRange: r, outputRange: [60, 0, -60], extrapolate: 'clamp' }),
-      scale: scrollX.interpolate({ inputRange: r, outputRange: [0.9, 1, 0.9], extrapolate: 'clamp' }),
-      slideX: scrollX.interpolate({ inputRange: r, outputRange: [30, 0, -30], extrapolate: 'clamp' }),
-    };
-  };
-  const a0 = anim(0);
-  const a1 = anim(1);
-
-  // ── Background zoom ──
-  const imgScale = scrollX.interpolate({
-    inputRange: [0, W],
-    outputRange: [1, 1.06],
-    extrapolate: 'clamp',
+  const pf = (i) => ({
+    op: sx.interpolate({ inputRange: [(i - 1) * W, i * W, (i + 1) * W], outputRange: [0, 1, 0], extrapolate: 'clamp' }),
+    ty: sx.interpolate({ inputRange: [(i - 1) * W, i * W, (i + 1) * W], outputRange: [50, 0, -50], extrapolate: 'clamp' }),
   });
+  const f1 = pf(1), f2 = pf(2);
 
-  // ── Gradient darkens as you progress ──
-  const gradientOpacity = scrollX.interpolate({
-    inputRange: [0, W],
-    outputRange: [0.85, 0.95],
-    extrapolate: 'clamp',
+  const flagW = sx.interpolate({ inputRange: [0, W * (PG - 1)], outputRange: [48, W], extrapolate: 'clamp' });
+
+  const anim = (a) => ({
+    opacity: a,
+    transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }],
   });
-
-  // ── Logo entrance ──
-  const logoScale = entrance.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
-  const logoOpacity = entrance.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.3, 1] });
-  // Removed — text block replaced by minimal logo
-
-  // ── Pulse values ──
-  const pulseOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.6] });
-  const pulseX = pulse.interpolate({ inputRange: [0, 1], outputRange: [0, 6] });
-
-  // Bottom area height for proper content spacing
-  const bottomH = insets.bottom + 180;
 
   return (
-    <View style={s.root}>
-      {/* ── Background image — edge-to-edge cover ── */}
-      <Animated.View style={[s.bgWrap, { transform: [{ scale: imgScale }] }]}>
-        <Image source={LANDING_IMAGE} style={s.bgImage} resizeMode="cover" />
+    <View style={$.root}>
+      <LinearGradient colors={['#080808', '#0A0808', '#080808']} style={StyleSheet.absoluteFill} />
+
+      {/* Flag bar */}
+      <Animated.View style={[$.flagBar, { width: flagW }]}>
+        <LinearGradient colors={['#CE1126','#CE1126','#FCCD12','#009739','#0047AB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
       </Animated.View>
 
-      {/* ── Gradient overlay ── */}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: gradientOpacity }]}>
-        <LinearGradient
-          colors={[
-            'rgba(0, 0, 0, 0.6)',
-            'rgba(0, 0, 0, 0.3)',
-            'rgba(0, 0, 0, 0.3)',
-            'rgba(0, 0, 0, 0.5)',
-            'rgba(0, 0, 0, 0.75)',
-            'rgba(0, 0, 0, 0.92)',
-          ]}
-          locations={[0, 0.2, 0.4, 0.6, 0.8, 0.95]}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
-
-      {/* ── Top bar ── */}
-      <View style={[s.topBar, { paddingTop: insets.top + 12 }]}>
-        <Animated.View
-          style={{
-            opacity: scrollX.interpolate({ inputRange: [0, W * 0.5], outputRange: [0, 1], extrapolate: 'clamp' }),
-          }}
-        >
-          <LogoMark size={32} light />
-        </Animated.View>
-        {__DEV__ && currentPage < PAGES.length - 1 && (
-          <TouchableOpacity
-            testID="onboarding-skip"
-            onPress={handleLandingSkip}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Text style={s.skipText}>Skip</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* ── Pages ── */}
       <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        pagingEnabled
-        scrollEventThrottle={16}
-        onScroll={handleScroll}
-        showsHorizontalScrollIndicator={false}
-        style={StyleSheet.absoluteFill}
-        contentContainerStyle={{ width: W * PAGES.length }}
+        ref={sr} horizontal pagingEnabled scrollEventThrottle={16}
+        onScroll={onScroll} showsHorizontalScrollIndicator={false}
+        style={StyleSheet.absoluteFill} contentContainerStyle={{ width: W * PG }}
       >
-        {/* ──── PAGE 1: THE SPLASH ──── */}
-        <View style={s.pg}>
-          {/* Centered logo with crown — fills the screen like BLK splash */}
-          <View style={s.splashCenter}>
-            <Animated.View
-              style={{
-                opacity: a0.opacity,
-                transform: [{ scale: Animated.multiply(a0.scale, logoScale) }],
-                alignItems: 'center',
-              }}
-            >
-              <Animated.View style={{ opacity: logoOpacity, alignItems: 'center' }}>
-                <LogoMark size={80} light animated showSub={false} />
-                <View style={{ marginTop: 20, alignItems: 'center' }}>
-                  <Text testID="onboarding-hero-connect" style={s.splashHeadline}>Spread Love{'\n'}Make Friends</Text>
-                </View>
-              </Animated.View>
+        {/* ═══ PAGE 1 — Identity ═══ */}
+        <View style={$.pg}>
+          <View style={[$.page, { paddingTop: ins.top + H * 0.12 }]}>
+
+            <Animated.View style={anim(e1)}>
+              <LogoMark size={72} light />
+            </Animated.View>
+
+            <View style={{ height: H * 0.06 }} />
+
+            <Animated.View style={anim(e2)}>
+              <Text style={$.h1}>
+                Where{'\n'}Junubin{'\n'}
+                <Text style={$.h1Gold}>connect.</Text>
+              </Text>
+            </Animated.View>
+
+            <View style={{ height: 24 }} />
+
+            <Animated.View style={anim(e3)}>
+              <Text style={$.p1Sub}>
+                The app built by us, for us.{'\n'}Community first. Always.
+              </Text>
+            </Animated.View>
+
+            <View style={{ flex: 1 }} />
+
+            <Animated.View style={[anim(e4), { alignItems: 'flex-start' }]}>
+              <View style={$.flag}>
+                {['#1A1A1A','#CE1126','#FCCD12','#009739','#0047AB'].map((c, i) => (
+                  <View key={i} style={{ flex: i === 2 ? 0.5 : 1, backgroundColor: c, height: '100%' }} />
+                ))}
+              </View>
+            </Animated.View>
+
+          </View>
+        </View>
+
+        {/* ═══ PAGE 2 — Features with graphic cards ═══ */}
+        <View style={$.pg}>
+          <View style={[$.page, { paddingTop: ins.top + H * 0.08 }]}>
+            <Animated.View style={[$.flex1, { opacity: f1.op, transform: [{ translateY: f1.ty }] }]}>
+
+              <Text style={$.h2}>
+                More than{'\n'}an app.
+              </Text>
+              <View style={{ height: 6 }} />
+              <Text style={$.p2Sub}>
+                A space that moves with you.
+              </Text>
+
+              <View style={{ flex: 1, justifyContent: 'center' }} />
+
+              {/* 2x2 graphic feature grid */}
+              <View style={$.featGrid}>
+                <FeatureVis
+                  icon="people" iconColor="#FFF" iconBg="#CE1126"
+                  accent="#CE1126"
+                  label="Community" desc="Your tribe, organized"
+                />
+                <FeatureVis
+                  icon="chatbubbles" iconColor="#FFF" iconBg="#F0A030"
+                  accent="#F0A030"
+                  label="Socialize" desc="Friends, not followers"
+                />
+                <FeatureVis
+                  icon="globe" iconColor="#FFF" iconBg="#009739"
+                  accent="#009739"
+                  label="Network" desc="Junubin in every field"
+                />
+                <FeatureVis
+                  icon="heart" iconColor="#FFF" iconBg="#FCCD12"
+                  accent="#FCCD12"
+                  label="Dating" desc="When you're ready"
+                />
+              </View>
+
+              <View style={{ height: 8 }} />
+
             </Animated.View>
           </View>
         </View>
 
-        {/* ──── PAGE 2: THE INVITATION ──── */}
-        <View style={[s.pg, { paddingBottom: bottomH + 24 }]}>
-          {/* Ambient spray accents */}
-          <Animated.View style={[{ position: 'absolute', right: 24, top: H * 0.32 }, { opacity: a1.opacity }]} pointerEvents="none">
-            <SpraySplatter size={70} color="#009739" opacity={0.08} />
-          </Animated.View>
-          <Animated.View style={[{ position: 'absolute', left: 16, top: H * 0.24 }, { opacity: a1.opacity }]} pointerEvents="none">
-            <SpraySplatter size={50} color="#CE1126" opacity={0.06} />
-          </Animated.View>
+        {/* ═══ PAGE 3 — Cities ═══ */}
+        <View style={$.pg}>
+          <View style={[$.page, { paddingTop: ins.top + H * 0.08 }]}>
+            <Animated.View style={[$.flex1, { opacity: f2.op, transform: [{ translateY: f2.ty }] }]}>
 
-          <Animated.View style={[s.contentWrap, { opacity: a1.opacity, transform: [{ translateY: a1.slideUp }] }]}>
-            <Animated.Text style={[s.eyebrow, { transform: [{ translateX: a1.slideX }] }]}>
-              EVERYWHERE
-            </Animated.Text>
+              <Text style={$.eyebrow}>WE'RE EVERYWHERE</Text>
+              <View style={{ height: 12 }} />
 
-            <CityScroller isActive={currentPage === 1} />
+              <CityTicker active={pg === 2} />
 
-            <View style={s.rule} />
+              <View style={{ flex: 1 }} />
 
-            <Text style={s.bodyText}>
-              Doesn't matter where you are —{'\n'}
-              if you're one of us, you're already{' '}
-              <Text style={s.homeAccent}>home</Text>.
-            </Text>
-          </Animated.View>
+              <Text style={$.closing}>
+                Wherever you landed,{'\n'}
+                your people are already there.
+              </Text>
+              <Text style={$.closingGold}>Come find them.</Text>
+
+              <View style={{ height: 4 }} />
+
+            </Animated.View>
+          </View>
         </View>
+
       </ScrollView>
 
-      {/* ── Bottom controls ── */}
-      <View style={[s.bottom, { paddingBottom: insets.bottom + 20 }]}>
-        {/* Progress capsules */}
-        <View style={s.progressRow}>
-          {PAGES.map((_, i) => {
-            const isActive = currentPage === i;
-            return (
-              <View key={i} style={[s.dot, isActive && s.dotActive]} />
-            );
-          })}
-        </View>
-
-        {currentPage === PAGES.length - 1 ? (
-          <>
-            <TouchableOpacity style={s.ctaWrap} onPress={goSignup} activeOpacity={0.9}>
-              <View style={s.ctaGradient}>
-                <Text style={s.ctaText}>Get Started</Text>
-                <View style={s.ctaArrow}>
-                  <Ionicons name="arrow-forward" size={18} color="#1A1A1A" />
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <View style={s.altRow}>
-              <TouchableOpacity style={s.altBtn} onPress={goSignup} activeOpacity={0.7}>
-                <Ionicons name="call-outline" size={17} color="rgba(255,255,255,0.8)" />
-                <Text style={s.altText}>Phone</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.altBtn} onPress={goSignup} activeOpacity={0.7}>
-                <Ionicons name="mail-outline" size={17} color="rgba(255,255,255,0.8)" />
-                <Text style={s.altText}>Email</Text>
-              </TouchableOpacity>
-            </View>
-
-            <Text style={s.terms}>
-              By continuing, you agree to our{' '}
-              <Text style={s.termsLink}>Terms</Text> &{' '}
-              <Text style={s.termsLink}>Privacy Policy</Text>
-            </Text>
-          </>
-        ) : (
-          <TouchableOpacity testID="onboarding-next" style={s.nextBtnOuter} onPress={goNext} activeOpacity={0.85}>
-            <View style={s.nextBtnGradient}>
-              <Ionicons name="arrow-forward" size={24} color="#1A1A1A" />
-            </View>
+      {/* Top bar */}
+      <View style={[$.top, { paddingTop: ins.top + 6 }]}>
+        <Animated.View style={{ opacity: sx.interpolate({ inputRange: [0, W * 0.3], outputRange: [0, 1], extrapolate: 'clamp' }) }}>
+          <LogoMark size={22} light />
+        </Animated.View>
+        {__DEV__ && pg < PG - 1 && (
+          <TouchableOpacity testID="onboarding-skip" onPress={() => setDevBypass(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={$.skip}>Skip</Text>
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Bottom */}
+      <Animated.View style={[$.bot, { paddingBottom: ins.bottom + 12, opacity: e4, transform: [{ translateY: e4.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] }]}>
+        <View style={$.dots}>
+          {Array.from({ length: PG }).map((_, i) => (
+            <View key={i} style={[$.dot, pg === i && $.dotOn]} />
+          ))}
+        </View>
+
+        <TouchableOpacity style={$.cta} onPress={next} activeOpacity={0.92}>
+          <LinearGradient colors={['#FFFFFF', '#F0F0F0']} style={$.ctaIn}>
+            <Text style={$.ctaT}>{pg === PG - 1 ? 'Get Started' : 'Continue'}</Text>
+            <Ionicons name="arrow-forward" size={16} color="#080808" />
+          </LinearGradient>
+        </TouchableOpacity>
+
+        {pg === PG - 1 ? (
+          <TouchableOpacity onPress={signup} style={$.si} activeOpacity={0.7}>
+            <Text style={$.siT}>Already a member? <Text style={$.siB}>Sign in</Text></Text>
+          </TouchableOpacity>
+        ) : <View style={{ height: 28 }} />}
+
+        <Text style={$.leg}>Terms & Privacy</Text>
+      </Animated.View>
     </View>
   );
-};
+}
 
-// ═══════════════════════════════════════════════════════════
-const CONTENT_PAD = 28;
+const FEAT_W = (W - 56 - 14) / 2;
 
-const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
+const $ = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#080808' },
+  pg: { width: W, height: H },
+  flex1: { flex: 1 },
+  flagBar: { position: 'absolute', bottom: 0, left: 0, height: 3, zIndex: 5, overflow: 'hidden' },
 
-  // ── Background — true edge-to-edge cover ──
-  bgWrap: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
+  page: { flex: 1, paddingLeft: 28, paddingRight: 28, paddingBottom: 186 },
+
+  // ── Page 1 ──
+  h1: {
+    fontSize: 52, lineHeight: 58, letterSpacing: -2,
+    fontWeight: '900', fontFamily: FontFamily.black, color: '#FFFFFF',
   },
-  bgImage: {
-    width: W,
-    height: H,
+  h1Gold: {
+    color: '#FCCD12',
+    textShadowColor: 'rgba(252,205,18,0.12)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 28,
+  },
+  p1Sub: {
+    fontSize: 17, lineHeight: 26, fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.3)',
+  },
+  flag: {
+    flexDirection: 'row', width: 72, height: 4, borderRadius: 2, overflow: 'hidden',
   },
 
-  // ── Top bar ──
-  topBar: {
-    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: CONTENT_PAD,
+  // ── Page 2 ──
+  h2: {
+    fontSize: 44, lineHeight: 50, letterSpacing: -1.5,
+    fontWeight: '900', fontFamily: FontFamily.black, color: '#FFFFFF',
   },
-  skipText: {
-    fontSize: 15, fontWeight: '500', fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.6)', letterSpacing: 0.3,
+  p2Sub: {
+    fontSize: 16, lineHeight: 24, fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.25)',
   },
 
-  // ── Page base ──
-  pg: { width: W, height: H, justifyContent: 'flex-end' },
-
-  // ── Shared content wrapper (consistent left-aligned padding) ──
-  contentWrap: { paddingHorizontal: CONTENT_PAD },
-
-  // ══ PAGE 1 — Hero ══
-  heroWrap: { alignItems: 'center', paddingHorizontal: CONTENT_PAD, gap: 8 },
-  splashCenter: {
-    flex: 1,
-    justifyContent: 'flex-end',
+  // Feature grid — graphic cards
+  featGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 14,
+  },
+  feat: {
+    width: FEAT_W,
+    paddingTop: 18, paddingBottom: 16, paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  featVisual: {
+    width: 56, height: 56,
+    marginBottom: 14,
     alignItems: 'center',
-    paddingBottom: 200,
+    justifyContent: 'center',
   },
-  splashHeadline: {
-    fontSize: 26,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    lineHeight: 32,
-    letterSpacing: -0.5,
+  featRing: {
+    width: 56, height: 56, borderRadius: 28,
+    borderWidth: 2,
+    alignItems: 'center', justifyContent: 'center',
   },
-  splashRule: {
-    width: 40,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginVertical: 12,
+  featCircle: {
+    width: 42, height: 42, borderRadius: 21,
+    alignItems: 'center', justifyContent: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
-  splashSub: {
-    fontSize: 13,
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.45)',
-    letterSpacing: 2,
-    textTransform: 'uppercase',
+  featArc: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderRadius: 999,
   },
-  heroAccent: {
-    fontSize: 16, fontWeight: '500', fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.5)', textAlign: 'center', letterSpacing: 3,
-    textTransform: 'uppercase',
+  featArc1: {
+    width: 72, height: 72, top: -8, left: -8,
   },
-  heroRule: { width: 120, height: 2, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.32)' },
-  heroGlyphRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  heroDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.4)' },
-  heroDotAccent: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#009739' },
-  bigTitleRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  scrollHint: {
-    position: 'absolute', right: CONTENT_PAD,
-    flexDirection: 'row', alignItems: 'center', gap: 3,
+  featArc2: {
+    width: 88, height: 88, top: -16, left: -16,
   },
-  scrollHintText: {
-    fontSize: 10, fontWeight: '600', fontFamily: FontFamily.semibold,
-    color: 'rgba(255,255,255,0.35)', letterSpacing: 2,
+  featLabel: {
+    fontSize: 16, fontWeight: '700', fontFamily: FontFamily.bold,
+    color: '#FFFFFF', marginBottom: 4,
+  },
+  featDesc: {
+    fontSize: 12, fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.3)', lineHeight: 17,
   },
 
-  // ══ Shared text styles ══
+  // ── Page 3 ──
   eyebrow: {
     fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold,
-    color: ACCENT, letterSpacing: 3.5, marginBottom: 18,
+    color: 'rgba(255,255,255,0.2)', letterSpacing: 3,
   },
-  bigTitle: {
-    fontSize: 42, fontWeight: '900', fontFamily: FontFamily.black,
-    color: '#FFFFFF', lineHeight: 48, letterSpacing: -1.2, marginBottom: 22,
-    textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 12,
+  city: {
+    fontSize: 56, lineHeight: LH, letterSpacing: -2.2,
+    fontWeight: '900', fontFamily: FontFamily.black, color: '#FFFFFF',
   },
-  bigTitleGlow: {
-    color: ACCENT,
+  tickFadeTop: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: LH * 0.8,
   },
-  bodyText: {
-    fontSize: 16, fontWeight: '400', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.7)', lineHeight: 26, letterSpacing: 0.15, marginBottom: 28,
+  tickFadeBot: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, height: LH * 1.5,
   },
-  rule: {
-    width: 28, height: 2.5, borderRadius: 2,
-    backgroundColor: ACCENT, marginBottom: 22, opacity: 0.6,
+  closing: {
+    fontSize: 18, lineHeight: 28, fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.3)',
   },
-  pillRow: { flexDirection: 'row', gap: 10 },
-  pill: {
-    flexDirection: 'row', alignItems: 'center', gap: 7,
-    paddingVertical: 9, paddingHorizontal: 18, borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.10)',
-  },
-  pillText: {
-    fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold,
-    color: 'rgba(255,255,255,0.75)',
+  closingGold: {
+    fontSize: 18, lineHeight: 28, fontWeight: '700', fontFamily: FontFamily.bold,
+    color: '#FCCD12', marginTop: 2,
   },
 
-  // ══ PAGE 3 — Invitation ══
-  cityBright: {
-    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
-    color: '#FFFFFF', lineHeight: 52, letterSpacing: -1.2,
-    textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10,
+  // ── Chrome ──
+  top: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 24,
   },
-  cityMid: {
-    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
-    color: 'rgba(255,255,255,0.55)', lineHeight: 52, letterSpacing: -1.2,
-  },
-  cityFade: {
-    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
-    color: 'rgba(255,255,255,0.28)', lineHeight: 52, letterSpacing: -1.2,
-  },
-  cityFaintest: {
-    fontSize: 44, fontWeight: '900', fontFamily: FontFamily.black,
-    color: 'rgba(255,255,255,0.12)', lineHeight: 52, letterSpacing: -1.2,
-  },
-  homeAccent: {
-    color: ACCENT, fontWeight: '700', fontFamily: FontFamily.bold,
-  },
+  skip: { fontSize: 13, fontFamily: FontFamily.medium, color: 'rgba(255,255,255,0.25)' },
 
-  // ── Bottom ──
-  bottom: {
+  bot: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: CONTENT_PAD, zIndex: 20,
+    paddingHorizontal: 24, zIndex: 20,
   },
-  progressRow: {
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-    gap: 6, marginBottom: 28,
-  },
-  dot: {
-    width: 6, height: 6, borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-  },
-  dotActive: {
-    width: 28, height: 6, borderRadius: 3,
-    backgroundColor: ACCENT,
-  },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 5, marginBottom: 16 },
+  dot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: 'rgba(255,255,255,0.1)' },
+  dotOn: { width: 20, backgroundColor: '#FCCD12' },
 
-  // Next button — gradient circle
-  nextBtnOuter: {
-    width: 60, height: 60, borderRadius: 30,
-    alignSelf: 'center', overflow: 'hidden',
-    shadowColor: ACCENT, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 10,
+  cta: {
+    borderRadius: 28, overflow: 'hidden', marginBottom: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 16, elevation: 10,
   },
-  nextBtnGradient: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#FFFFFF', borderRadius: 30,
-  },
-
-  // CTA
-  ctaWrap: {
-    borderRadius: 28, overflow: 'hidden', marginBottom: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 8,
-  },
-  ctaGradient: {
+  ctaIn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 12, paddingVertical: 17, backgroundColor: '#FFFFFF', borderRadius: 28,
+    gap: 6, height: 54, borderRadius: 28,
   },
-  ctaText: {
-    fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold,
-    color: '#1A1A1A', letterSpacing: 0.3,
-  },
-  ctaArrow: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.08)', justifyContent: 'center', alignItems: 'center',
-  },
+  ctaT: { fontSize: 16, fontWeight: '700', fontFamily: FontFamily.bold, color: '#080808' },
 
-  // Alt
-  altRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  altBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 14, borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
-    borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.10)',
-  },
-  altText: {
-    fontSize: 15, fontWeight: '600', fontFamily: FontFamily.semibold,
-    color: 'rgba(255,255,255,0.75)',
-  },
-
-  // Terms
-  terms: {
-    fontSize: 11, fontWeight: '400', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.25)', textAlign: 'center', marginTop: 10, lineHeight: 17,
-  },
-  termsLink: { color: 'rgba(255,255,255,0.4)', fontWeight: '600', fontFamily: FontFamily.semibold },
+  si: { alignItems: 'center', paddingVertical: 10 },
+  siT: { fontSize: 13, fontFamily: FontFamily.regular, color: 'rgba(255,255,255,0.2)' },
+  siB: { color: 'rgba(255,255,255,0.5)', fontFamily: FontFamily.semibold },
+  leg: { fontSize: 10, color: 'rgba(255,255,255,0.07)', textAlign: 'center', fontFamily: FontFamily.regular },
 });
-
-export default OnboardingScreen;

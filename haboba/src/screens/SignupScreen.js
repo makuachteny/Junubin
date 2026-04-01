@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ImageBackground,
   Modal,
   Pressable,
   ScrollView,
@@ -29,7 +28,7 @@ const PHONE_COUNTRIES = [HOME_COUNTRY, ...DIASPORA_COUNTRIES].filter(c => c.phon
 
 const { width } = Dimensions.get('window');
 
-const LANDING_IMAGE = require('../assets/landing.jpeg');
+// No longer uses landing image — uses gradient background matching onboarding
 
 const SignupScreen = ({ navigation }) => {
   // Flow: input → verify
@@ -264,16 +263,11 @@ const SignupScreen = ({ navigation }) => {
     );
   }
 
-  // ─── Input Screen (Phone/Email) — with landing.JPG background ───
+  // ─── Input Screen (Phone/Email) ───
   return (
-    <ImageBackground
-      source={LANDING_IMAGE}
-      style={styles.backgroundImage}
-      resizeMode="cover"
-    >
+    <View style={styles.backgroundImage}>
       <LinearGradient
-        colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
-        locations={[0, 0.2, 0.4, 0.7, 1]}
+        colors={['#060606', '#080606', '#060608']}
         style={StyleSheet.absoluteFill}
       />
       <KeyboardAvoidingView
@@ -431,7 +425,7 @@ const SignupScreen = ({ navigation }) => {
           </View>
         </Pressable>
       </Modal>
-    </ImageBackground>
+    </View>
   );
 };
 

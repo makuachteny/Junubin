@@ -442,7 +442,7 @@ const FilterBar = ({
                   <Ionicons
                     name={filter.icon}
                     size={14}
-                    color={isActive ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.85)' : colors.gray600)}
+                    color={isActive ? (isDark ? colors.black : '#FFFFFF') : (isDark ? 'rgba(255,255,255,0.85)' : colors.gray600)}
                     style={styles.pillIcon}
                   />
                 )}
@@ -459,7 +459,7 @@ const FilterBar = ({
                   <Ionicons
                     name={isOpen ? 'chevron-up' : 'chevron-down'}
                     size={12}
-                    color={isActive ? '#FFFFFF' : (isDark ? 'rgba(255,255,255,0.85)' : colors.gray600)}
+                    color={isActive ? (isDark ? colors.black : '#FFFFFF') : (isDark ? 'rgba(255,255,255,0.85)' : colors.gray600)}
                     style={styles.chevron}
                   />
                 )}
@@ -651,7 +651,7 @@ const getStyles = (colors, isDark, insets) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
   },
   pillTextActive: {
-    color: '#FFFFFF',
+    color: isDark ? colors.black : '#FFFFFF',
     fontWeight: '700',
     fontFamily: FontFamily.bold,
   },

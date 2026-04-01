@@ -275,8 +275,8 @@ const HomeScreen = ({ navigation, route }) => {
   const [filterSelections, setFilterSelections] = useState({});
   const styles = useMemo(() => getStyles(colors, insets, isDark), [colors, insets, isDark]);
   const [matchData, setMatchData] = useState(null);
-  // Default mode from user's intention preference (Dating or Social)
-  const defaultMode = currentUser?.preferences?.mode === 'Social' ? 'Social' : 'Dating';
+  // Default mode — Socialize first
+  const defaultMode = currentUser?.preferences?.mode === 'Dating' ? 'Dating' : 'Social';
   const [mode, setMode] = useState(defaultMode);
   const [lastSwiped, setLastSwiped] = useState(null); // { profile, direction }
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
