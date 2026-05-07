@@ -1,0 +1,71 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Diagonal South Sudan flag blend: red at top-left, deep green at
+         bottom-right. The two stripe colors meet through a warm transition. -->
+    <linearGradient id="flagSweep" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0"    stop-color="#7A0815"/>
+      <stop offset="0.28" stop-color="#CE1126"/>
+      <stop offset="0.55" stop-color="#E27D2C"/>
+      <stop offset="0.78" stop-color="#0E7236"/>
+      <stop offset="1"    stop-color="#003C18"/>
+    </linearGradient>
+
+    <!-- Warm honey-gold core glow that lifts the JB out of the gradient. -->
+    <radialGradient id="goldCore" cx="0.5" cy="0.5" r="0.55">
+      <stop offset="0"    stop-color="#FCD116" stop-opacity="0.55"/>
+      <stop offset="0.45" stop-color="#F5B741" stop-opacity="0.20"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Cool flag-blue corner accent (top-right) — nods to the flag's
+         hoist triangle without copying the flag literally. -->
+    <radialGradient id="blueCorner" cx="0.85" cy="0.15" r="0.55">
+      <stop offset="0"    stop-color="#0F47AF" stop-opacity="0.55"/>
+      <stop offset="0.6"  stop-color="#0F47AF" stop-opacity="0.10"/>
+      <stop offset="1"    stop-color="#0F47AF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Subtle deep-black corner (bottom-left) for grounding weight. -->
+    <radialGradient id="inkCorner" cx="0.1" cy="0.95" r="0.45">
+      <stop offset="0"    stop-color="#000000" stop-opacity="0.45"/>
+      <stop offset="1"    stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Soft drop shadow on the JB to lift it off the colorful base. -->
+    <filter id="logoShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="6"/>
+      <feOffset dx="0" dy="4" result="off"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.55"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Layered backgrounds. iOS will round this to its own corner radius
+       on the home-screen icon — the rx=200 is for in-app + Android. -->
+  <rect width="1024" height="1024" rx="200" fill="url(#flagSweep)"/>
+  <rect width="1024" height="1024" rx="200" fill="url(#blueCorner)"/>
+  <rect width="1024" height="1024" rx="200" fill="url(#inkCorner)"/>
+  <rect width="1024" height="1024" rx="200" fill="url(#goldCore)"/>
+
+  <!-- Inner highlight ring — adds depth without a hard border. -->
+  <rect x="6" y="6" width="1012" height="1012" rx="194"
+        fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="2"/>
+
+  <!-- JB script — centered. Source paths preserved verbatim from the
+       prior icon so the lettering reads identically; only the transform
+       changes to anchor the artwork at the canvas centre.
+       Original artwork bounding box (in source units) ≈ x:40-152, y:122-216.
+       Centre ≈ (96, 169). At scale 4.5, that's (432, 760.5) in canvas units.
+       Translate to put it at (512, 512). -->
+  <g transform="translate(80, -248) scale(4.5)" filter="url(#logoShadow)">
+    <!-- J top fillet -->
+    <path d="M 62,132 C 66,128 80,126 92,127 C 97,127.5 100,130 98,133 C 96,136 84,137 74,136.5 C 66,136 60,135 62,132 Z"
+          fill="#FFFFFF"/>
+    <!-- J body -->
+    <path d="M 88,133 C 89,133 92,133 93,134 C 95,140 96,155 96,168 C 96,180 94,190 88,198 C 82,206 72,212 60,212 C 50,212 42,206 40,198 C 38,192 40,186 46,183 C 50,181 54,182 58,185 C 62,188 64,190 62,194 C 60,196 56,196 54,194 C 52,192 52,188 55,186 C 52,184 48,184 46,186 C 43,189 43,195 46,200 C 50,206 60,208 68,205 C 76,202 82,194 84,184 C 86,174 86,160 85,148 C 84,140 83,135 82,133 C 83,132 86,132 88,133 Z"
+          fill="#FFFFFF"/>
+    <!-- B (with two interior counters via even-odd) -->
+    <path fill-rule="evenodd" fill="#FFFFFF"
+          d="M 90,198 C 92,192 96,182 100,172 C 104,162 108,148 110,138 C 112,130 113,126 116,124 C 120,122 126,122 132,126 C 140,130 146,138 146,148 C 146,156 140,162 132,164 C 126,165.5 120,164 116,162 C 120,164 128,166 136,170 C 146,176 152,184 152,194 C 152,204 146,212 136,216 C 128,219 118,217 110,212 C 104,208 100,202 98,198 C 96,204 92,208 88,210 C 86,208 86,204 88,200 C 89,198 90,198 90,198 Z M 116,158 C 122,157 130,155 134,150 C 138,145 138,138 134,133 C 130,128 124,127 120,128 C 116,130 114,134 113,140 C 112,148 114,155 116,158 Z M 114,170 C 112,176 110,184 110,190 C 110,198 114,206 122,210 C 130,214 140,210 144,202 C 148,194 146,184 138,178 C 132,173 124,170 118,170 C 116,170 114,170 114,170 Z"/>
+  </g>
+</svg>

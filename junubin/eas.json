@@ -1,0 +1,46 @@
+{
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "APP_VARIANT": "development"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "APP_VARIANT": "preview"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "APP_VARIANT": "production"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "itsmakuach@gmail.com",
+        "ascAppId": "6766345463",
+        "appleTeamId": "7CW78SZQF9",
+        "ascApiKeyPath": "/Users/makuachtenygatluak/.appstoreconnect/AuthKey_NSBB4VSS9R.p8",
+        "ascApiKeyId": "NSBB4VSS9R",
+        "ascApiKeyIssuerId": "45681e55-f9bd-4d83-8933-de3f93bc4266"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-services.json",
+        "track": "internal"
+      }
+    }
+  }
+}
