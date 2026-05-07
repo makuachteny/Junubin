@@ -1,2 +1,3 @@
-# ss_haboba
-South Sudanse Dating app
+# ss_junubin
+
+South Sudanese Dating app
