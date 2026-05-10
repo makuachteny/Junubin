@@ -17,6 +17,19 @@ import { Alert } from 'react-native';
 
 export const PAYMENTS_ENABLED = false;
 
+// UI-level gate. While this is false, every payment-related surface is
+// hidden — the Elite tier sheet, the Boost spotlight purchase screen,
+// the coin/super-like purchase sheets, "Manage Subscription", "Restore
+// Purchases", the Cash Out button on GoLive, etc. App Review rejects
+// apps that show non-functional payment UI ("Subscribe" buttons that
+// lead to a "Coming soon" alert), so the v1 build hides all of it.
+//
+// This is the cosmetic counterpart to PAYMENTS_ENABLED above:
+//   PAYMENTS_ENABLED  — controls whether *transactions* succeed
+//   SHOW_PAYMENTS_UI  — controls whether *buttons* appear at all
+// Flip both true together when monetization launches.
+export const SHOW_PAYMENTS_UI = false;
+
 /**
  * Shows the "Coming soon" alert and returns a sentinel that purchase
  * call sites can short-circuit on. The shape mirrors what successful

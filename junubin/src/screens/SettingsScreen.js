@@ -18,7 +18,7 @@ import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
-import { useSubscription } from '../payments';
+import { useSubscription, SHOW_PAYMENTS_UI } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
@@ -268,8 +268,15 @@ export default function SettingsScreen({ navigation }) {
     { label: 'Privacy Policy', icon: 'shield-outline', onPress: () => handleInfoPagePress('privacy') },
     { label: 'Community Guidelines', icon: 'people-outline', onPress: () => handleInfoPagePress('guidelines') },
     { label: 'Safety Tips', icon: 'warning-outline', onPress: () => handleInfoPagePress('safety') },
-    { label: 'Manage Subscription', icon: 'card-outline', onPress: handleManageSubscription },
-    { label: 'Restore Purchases', icon: 'refresh-outline', onPress: handleRestore },
+    // Manage Subscription + Restore Purchases hidden during v1 launch —
+    // see SHOW_PAYMENTS_UI in src/payments/comingSoon.js. Restored
+    // automatically when payments go live.
+    ...(SHOW_PAYMENTS_UI
+      ? [
+          { label: 'Manage Subscription', icon: 'card-outline', onPress: handleManageSubscription },
+          { label: 'Restore Purchases', icon: 'refresh-outline', onPress: handleRestore },
+        ]
+      : []),
     { label: 'Manage Account', icon: 'person-outline', onPress: handleManageAccount },
   ], [handleInfoPagePress, handleManageAccount, handleManageSubscription, handleRestore, navigation]);
   const surveySnapshot = useMemo(() => [
@@ -349,16 +356,18 @@ export default function SettingsScreen({ navigation }) {
           )}
         </View>
 
-        <View style={styles.boostRow}>
-          <TouchableOpacity style={styles.boostCard} onPress={() => navigation.navigate('Boost')}>
-            <GraffitiFlame size={24} color={colors.accent} filled />
-            <Text style={styles.boostCardText}>GET MORE{'\n'}SPOTLIGHTS</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.superLikeCard} onPress={() => navigation.navigate('Elite')}>
-            <MaterialCommunityIcons name="crown" size={24} color={colors.gold} />
-            <Text style={styles.boostCardText}>GET MORE{'\n'}SUPER LIKES</Text>
-          </TouchableOpacity>
-        </View>
+        {SHOW_PAYMENTS_UI && (
+          <View style={styles.boostRow}>
+            <TouchableOpacity style={styles.boostCard} onPress={() => navigation.navigate('Boost')}>
+              <GraffitiFlame size={24} color={colors.accent} filled />
+              <Text style={styles.boostCardText}>GET MORE{'\n'}SPOTLIGHTS</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.superLikeCard} onPress={() => navigation.navigate('Elite')}>
+              <MaterialCommunityIcons name="crown" size={24} color={colors.gold} />
+              <Text style={styles.boostCardText}>GET MORE{'\n'}SUPER LIKES</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Others */}
         <View style={styles.othersSection}>

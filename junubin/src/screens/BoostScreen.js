@@ -13,7 +13,7 @@ import { SpraySplatter } from '../components/GraffitiAccents';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
 import BoostPulseRing from '../components/BoostPulseRing';
-import { useSubscription, PRODUCT_IDS } from '../payments';
+import { useSubscription, PRODUCT_IDS, SHOW_PAYMENTS_UI } from '../payments';
 import { formatPerUnit } from '../payments/pricing';
 
 // Fallback packs (USD) — replaced by localized prices when RevenueCat is active
@@ -47,7 +47,50 @@ function buildPacks(offerings) {
   });
 }
 
-export default function BoostScreen({ navigation }) {
+// v1 launch: spotlights are free for everyone via the consumeSpotlight
+// no-op gate (see consumeSpotlight in SubscriptionContext + ALL_FEATURES_FREE).
+// The purchase UI for additional spotlight packs is hidden so users
+// don't see a non-functional "Buy" surface that App Review would flag.
+function BoostScreenFree({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.surface, paddingHorizontal: 24, paddingTop: insets.top + 16 }}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center', marginLeft: -8 }}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons name="chevron-back" size={26} color={colors.black} />
+      </TouchableOpacity>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16, paddingBottom: 80 }}>
+        <Ionicons name="flash" size={48} color={colors.accent} />
+        <Text style={{ fontSize: 26, fontFamily: FontFamily.bold, fontWeight: '800', color: colors.black, textAlign: 'center', letterSpacing: -0.5 }}>
+          Spotlights are free
+        </Text>
+        <Text style={{ fontSize: 15, lineHeight: 22, fontFamily: FontFamily.regular, color: colors.gray700 || colors.gray500, textAlign: 'center' }}>
+          During launch, every JuNubin user gets unlimited spotlights at no
+          cost. Use them whenever you want extra visibility on your profile.
+        </Text>
+        <TouchableOpacity
+          style={{ marginTop: 16, paddingHorizontal: 32, paddingVertical: 14, borderRadius: 28, backgroundColor: colors.accent }}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 15, fontFamily: FontFamily.semibold, fontWeight: '700' }}>
+            Got it
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+export default function BoostScreen(props) {
+  if (!SHOW_PAYMENTS_UI) return <BoostScreenFree {...props} />;
+  return <BoostScreenPaid {...props} />;
+}
+
+function BoostScreenPaid({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);

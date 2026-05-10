@@ -28,7 +28,7 @@ import Button from '../components/Button';
 import InterstitialAd from '../components/InterstitialAd';
 import { mockProfiles } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription, hasUnlimitedLikes, canUseWhispers, ALL_FEATURES_FREE } from '../payments';
+import { useSubscription, hasUnlimitedLikes, canUseWhispers, ALL_FEATURES_FREE, SHOW_PAYMENTS_UI } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser, useEligibility } from '../hooks';
 import * as discoverService from '../api/services/discoverService';
@@ -1059,16 +1059,18 @@ const HomeScreen = ({ navigation, route }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Right — Boost + Avatar */}
+          {/* Right — Boost (hidden during v1 launch) + Avatar */}
           <View style={styles.headerRight}>
-            <TouchableOpacity
-              onPress={() => navigation?.navigate?.('Boost')}
-              activeOpacity={0.85}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.headerIconBtn}
-            >
-              <Ionicons name="flash" size={17} color={colors.black} />
-            </TouchableOpacity>
+            {SHOW_PAYMENTS_UI && (
+              <TouchableOpacity
+                onPress={() => navigation?.navigate?.('Boost')}
+                activeOpacity={0.85}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.headerIconBtn}
+              >
+                <Ionicons name="flash" size={17} color={colors.black} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               onPress={() => navigation?.navigate?.('Profile')}
               activeOpacity={0.85}

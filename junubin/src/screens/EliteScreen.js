@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
-import { useSubscription, PRODUCT_IDS } from '../payments';
+import { useSubscription, PRODUCT_IDS, SHOW_PAYMENTS_UI } from '../payments';
 import { formatPerMonth } from '../payments/pricing';
 import { GraffitiCrown, GraffitiShield } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
@@ -101,7 +101,54 @@ function buildPlans(offerings, tier) {
   return { plans, packages: pkgMap };
 }
 
-export default function EliteScreen({ navigation }) {
+// v1 launch: every premium feature is unlocked for everyone (see
+// ALL_FEATURES_FREE in src/payments/entitlements.js). The Elite
+// tier-purchase UI is hidden behind SHOW_PAYMENTS_UI so deep-links and
+// in-flight nav stacks don't accidentally land on a non-functional
+// purchase surface — App Review rejects apps that show "Subscribe"
+// buttons that don't actually charge. When the flag flips, the full
+// `EliteScreenPaid` below renders unchanged.
+function EliteScreenFree({ navigation }) {
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  return (
+    <View style={[styles.freeContainer, { paddingTop: insets.top + 16 }]}>
+      <TouchableOpacity
+        onPress={() => navigation.goBack()}
+        style={styles.freeBackBtn}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons name="chevron-back" size={26} color={colors.black} />
+      </TouchableOpacity>
+      <View style={styles.freeBody}>
+        <Ionicons name="sparkles" size={48} color={colors.accent} />
+        <Text style={styles.freeTitle}>Everything is on us</Text>
+        <Text style={styles.freeSubtitle}>
+          JuNubin is free during launch. Every feature — unlimited likes,
+          whispers, advanced filters, see who likes you, incognito,
+          video calls — is unlocked for everyone.
+        </Text>
+        <Text style={styles.freeNote}>
+          We'll let you know if and when paid plans go live.
+        </Text>
+        <TouchableOpacity
+          style={[styles.freeCta, { backgroundColor: colors.accent }]}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.freeCtaText}>Got it</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+export default function EliteScreen(props) {
+  if (!SHOW_PAYMENTS_UI) return <EliteScreenFree {...props} />;
+  return <EliteScreenPaid {...props} />;
+}
+
+function EliteScreenPaid({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
@@ -415,6 +462,62 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surfaceMuted,
+  },
+  // ── Free / v1 launch styles ──
+  freeContainer: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 24,
+  },
+  freeBackBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: -8,
+  },
+  freeBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    paddingBottom: 80,
+  },
+  freeTitle: {
+    fontSize: 28,
+    fontFamily: FontFamily.bold,
+    fontWeight: '800',
+    color: colors.black,
+    textAlign: 'center',
+    marginTop: 8,
+    letterSpacing: -0.5,
+  },
+  freeSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: FontFamily.regular,
+    color: colors.gray700 || colors.gray500,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  freeNote: {
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+    color: colors.gray500,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  freeCta: {
+    marginTop: 16,
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 28,
+  },
+  freeCtaText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontFamily: FontFamily.semibold,
+    fontWeight: '700',
   },
   closeBtn: {
     position: 'absolute',

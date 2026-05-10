@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Modal, Pressable, TouchableOpacity } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useSubscription } from '../payments';
+import { useSubscription, SHOW_PAYMENTS_UI } from '../payments';
 import { PRODUCT_IDS } from '../payments/products';
 import PaymentMethodSelector from './PaymentMethodSelector';
 import FlutterwaveCheckout from './FlutterwaveCheckout';
@@ -17,7 +17,17 @@ const COIN_PACKS = [
   { id: PRODUCT_IDS.COINS_1200, coins: 1200, price: '$14.99', badge: 'BEST VALUE' },
 ];
 
-export default function CoinPurchaseSheet({ visible, onClose }) {
+// v1 launch: never render the coin-purchase UI. Coins are infinite for
+// every user (consumeCoins always succeeds via ALL_FEATURES_FREE), so
+// there's no need to surface a sheet that would otherwise hit the
+// disabled payment path. App Review wouldn't let us ship a non-
+// functional purchase sheet anyway.
+export default function CoinPurchaseSheet(props) {
+  if (!SHOW_PAYMENTS_UI) return null;
+  return <CoinPurchaseSheetImpl {...props} />;
+}
+
+function CoinPurchaseSheetImpl({ visible, onClose }) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const { coins, purchase, purchaseWithFlutterwave, confirmFlutterwavePayment, purchaseInProgress } = useSubscription();

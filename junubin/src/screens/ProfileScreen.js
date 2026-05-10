@@ -15,7 +15,7 @@ import { useTheme, FontFamily, Layout } from '../theme';
 import Button from '../components/Button';
 import ProfileCompletenessCard from '../components/ProfileCompletenessCard';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription } from '../payments';
+import { useSubscription, SHOW_PAYMENTS_UI } from '../payments';
 import { useCurrentUser } from '../hooks';
 import { useMyFollowCounts } from '../hooks/useFollow';
 import { calculateCompleteness } from '../utils/profileCompleteness';
@@ -163,25 +163,32 @@ export default function ProfileScreen({ navigation }) {
           />
         </View>
 
-        {/* Stats */}
-        <Text style={styles.sectionLabel}>Your boosts</Text>
-        <View style={styles.statsRow}>
-          {statItems.map((item) => (
-            <TouchableOpacity
-              key={item.label}
-              style={styles.statCard}
-              onPress={() => item.screen && navigation.navigate(item.screen)}
-              activeOpacity={0.85}
-              disabled={!item.screen}
-            >
-              <View style={[styles.statIconWrap, { backgroundColor: colors.surfaceMuted }]}>
-                <Ionicons name={item.icon} size={18} color={item.iconColor} />
-              </View>
-              <Text style={styles.statCount}>{item.count}</Text>
-              <Text style={styles.statLabel}>{item.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {/* Stats — hidden during v1 launch (SHOW_PAYMENTS_UI). The tile
+            counts read consumable balances which are infinite-but-shown-
+            as-zero while ALL_FEATURES_FREE is on, so surfacing them
+            would confuse users. The features themselves still work. */}
+        {SHOW_PAYMENTS_UI && (
+          <>
+            <Text style={styles.sectionLabel}>Your boosts</Text>
+            <View style={styles.statsRow}>
+              {statItems.map((item) => (
+                <TouchableOpacity
+                  key={item.label}
+                  style={styles.statCard}
+                  onPress={() => item.screen && navigation.navigate(item.screen)}
+                  activeOpacity={0.85}
+                  disabled={!item.screen}
+                >
+                  <View style={[styles.statIconWrap, { backgroundColor: colors.surfaceMuted }]}>
+                    <Ionicons name={item.icon} size={18} color={item.iconColor} />
+                  </View>
+                  <Text style={styles.statCount}>{item.count}</Text>
+                  <Text style={styles.statLabel}>{item.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* Match More CTA — inline, properly bounded */}
         {showJunubCTA && (

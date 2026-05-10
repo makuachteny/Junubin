@@ -34,6 +34,7 @@ import * as liveService from '../api/services/liveService';
 import * as liveGiftsService from '../api/services/liveGiftsService';
 import * as payoutsService from '../api/services/payoutsService';
 import { supabase } from '../config/supabase';
+import { SHOW_PAYMENTS_UI } from '../payments';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -698,15 +699,20 @@ export default function GoLiveScreen({ navigation }) {
                 <Text style={s.viewerText}>{viewerCount}</Text>
               </View>
 
-              {/* Earnings — tappable shortcut to the earnings sheet */}
-              <TouchableOpacity
-                style={s.earningsBadge}
-                onPress={() => setShowEarningsSheet(true)}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="diamond" size={12} color="#FCCD12" />
-                <Text style={s.earningsText}>{totalCoins.toLocaleString()}</Text>
-              </TouchableOpacity>
+              {/* Earnings — hidden during v1 launch (SHOW_PAYMENTS_UI).
+                  Coins still accumulate via the LiveGiftEvent ledger so
+                  the data is preserved for when payouts go live, just
+                  not surfaced. */}
+              {SHOW_PAYMENTS_UI && (
+                <TouchableOpacity
+                  style={s.earningsBadge}
+                  onPress={() => setShowEarningsSheet(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="diamond" size={12} color="#FCCD12" />
+                  <Text style={s.earningsText}>{totalCoins.toLocaleString()}</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={s.topBarRight}>
@@ -872,13 +878,18 @@ export default function GoLiveScreen({ navigation }) {
                 <Ionicons name="happy-outline" size={18} color="#FFFFFF" />
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={s.giftBtn}
-                onPress={() => { hapticSelection?.(); setShowEarningsSheet(true); }}
-                accessibilityLabel="View gifts and earnings"
-              >
-                <Ionicons name="gift" size={18} color="#FCCD12" />
-              </TouchableOpacity>
+              {/* Gift / earnings shortcut — hidden during v1 launch.
+                  Live viewers can still send gifts (which are free now);
+                  this button only opened the host's earnings sheet. */}
+              {SHOW_PAYMENTS_UI && (
+                <TouchableOpacity
+                  style={s.giftBtn}
+                  onPress={() => { hapticSelection?.(); setShowEarningsSheet(true); }}
+                  accessibilityLabel="View gifts and earnings"
+                >
+                  <Ionicons name="gift" size={18} color="#FCCD12" />
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[s.sendBtn, !commentText.trim() && s.sendBtnDisabled]}
