@@ -1,0 +1,66 @@
+# EAS Build ignore file. When present, EAS uses this instead of
+# .gitignore to decide what to upload to the build server.
+#
+# Anything excluded here is NOT shipped to the build runner. Make sure
+# nothing the native build needs is listed below — if a build complains
+# "missing X", check whether X is matched here.
+
+# Dependencies — EAS reinstalls from package.json + the lockfile
+node_modules/
+
+# Local web export — only used by `expo export`, not the native build
+dist/
+.expo/web-build/
+
+# Local Xcode build artifacts (xcarchive, ipa, ExportOptions.plist).
+# 350+ MB of compiled output that EAS rebuilds from scratch anyway.
+build/
+
+# Detox + e2e build outputs
+e2e/build/
+e2e/artifacts/
+
+# Native folders — let EAS prebuild fresh from app.config.js +
+# managed plugins. Comment these out if you switch to the bare
+# workflow and want EAS to use your local ios/ + android/ as-is.
+ios/
+android/
+
+# Shouldn't be there but keep the safety net
+*.log
+*.zip
+*.tar.gz
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+
+# Tests, fixtures, and screenshots — App Store doesn't need them
+__tests__/
+**/__tests__/
+**/*.test.js
+**/*.test.ts
+**/*.test.tsx
+e2e/
+
+# Markdown docs aren't bundled into the binary
+*.md
+!app.json/*.md
+
+# Supabase migrations + Edge Function source — these run server-side,
+# not in the app. Trimming ~500 KB.
+supabase/
+
+# Backend tree (already gone, but keep the rule in case someone
+# regenerates anything under it)
+backend/
+
+# Detox config + build script
+detox.config.js
+
+# Render config (left over from the old Express deploy)
+render.yaml
