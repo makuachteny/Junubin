@@ -1,3 +1,13 @@
+// ── Crypto polyfill ────────────────────────────────────────────────
+// MUST be the very first import. @supabase/supabase-js uses
+// crypto.getRandomValues() during client init (for UUID generation +
+// session token signing). Without this polyfill the Hermes JS engine
+// throws inside an async queue on cold start, surfacing as a vague
+// native crash ("Junubin crashed: queue") before App.js even renders.
+// Don't move this below other imports — JS evaluates them top to
+// bottom and Supabase resolves on first import of its config module.
+import 'react-native-get-random-values';
+
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
