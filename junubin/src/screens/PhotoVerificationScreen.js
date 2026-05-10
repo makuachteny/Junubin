@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily } from '../theme';
 import Button from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 
 const STEPS = ['Instructions', 'Capture', 'Review', 'Submitted'];
 
@@ -20,7 +21,10 @@ export default function PhotoVerificationScreen({ navigation }) {
     try {
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (permission.status !== 'granted') {
-        Alert.alert('Camera Required', 'Please allow camera access to verify your photo.');
+        promptToOpenSettings({
+          title: 'Camera access needed',
+          message: 'JuNubin needs camera access to verify your profile photo. Enable it in Settings.',
+        });
         return;
       }
 

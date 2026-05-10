@@ -12,7 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 import { useAuth } from '../auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLinkTo } from '@react-navigation/native';
 import { hapticSelection } from '../utils/haptics';
+import * as pendingDeepLink from '../utils/pendingDeepLink';
 import { GraffitiCommunity, GraffitiHeart, GraffitiChat, GraffitiSwipeCard } from '../components/icons';
 import LogoMark from '../components/LogoMark';
 // Tab-bar screens stay eager — they render immediately when the user lands on
@@ -273,12 +275,47 @@ export default function AppNavigator() {
   // in the background and the navigator re-renders if the user has already
   // completed onboarding. Avoids blocking the navigator on a disk read.
   const [hasOnboarded, setHasOnboarded] = useState(false);
+  const linkTo = useLinkTo();
 
   useEffect(() => {
     AsyncStorage.getItem('@junubin_onboarded').then((val) => {
       if (val === 'true') setHasOnboarded(true);
     }).catch(() => {});
   }, []);
+
+  // Replay any deep link that was deferred while the user was on the
+  // auth stack. Fires once auth is ready, the user object has loaded,
+  // and the profile is complete enough to land on a real screen. If
+  // the user is mid-profile-setup we leave the link queued — the
+  // effect re-fires when `user` updates with the completed profile.
+  // Linking errors are swallowed: better to drop a pending tap than
+  // to crash the app on a stale URL.
+  const profileReady = !!(
+    user?.profile?.profileComplete ||
+    user?.profile?.accountPurpose ||
+    user?.profile?.displayName ||
+    user?.displayName
+  );
+  useEffect(() => {
+    if (!isAuthenticated || !user || !profileReady) return;
+    let cancelled = false;
+    pendingDeepLink.consumePending().then((url) => {
+      if (cancelled || !url) return;
+      const path = pendingDeepLink.pathFromUrl(url);
+      if (!path) return;
+      try { linkTo('/' + path); } catch {}
+    });
+    return () => { cancelled = true; };
+  }, [isAuthenticated, user, profileReady, linkTo]);
+
+  // Wipe any queued link when the user signs out, so a freshly-signed-in
+  // account doesn't inherit the previous user's pending tap.
+  useEffect(() => {
+    if (!ready) return;
+    if (!isAuthenticated) {
+      pendingDeepLink.clearPending().catch(() => {});
+    }
+  }, [ready, isAuthenticated]);
 
   if (!ready) return null;
 

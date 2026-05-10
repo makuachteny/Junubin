@@ -12,8 +12,10 @@ import {
   Dimensions,
   Modal,
   Pressable,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, Layout } from '../theme';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -56,6 +58,38 @@ const GRAFFITI_MAP = {
   star: GraffitiStar,
 };
 
+// Hydrate `liked` / `reposted` state on a batch of posts. Mock posts
+// (seeded by mockProfiles.js with simple ids like `post1`/`post2`) are
+// skipped so we don't waste a round trip looking them up — they
+// aren't in the DB. Real ids are UUID v4s from crypto.randomUUID(),
+// or the legacy `p_*` fallback. Errors are swallowed: stale chip
+// state on first paint is acceptable, the user's own taps will
+// repair it via the optimistic-toggle path.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isRealPostId = (id) => {
+  if (!id) return false;
+  const s = String(id);
+  return UUID_RE.test(s) || s.startsWith('p_');
+};
+
+async function hydrateInteractionState(posts) {
+  const realIds = posts.map((p) => p.id).filter(isRealPostId);
+  if (realIds.length === 0) return posts;
+  try {
+    const [likedSet, repostedSet] = await Promise.all([
+      postService.getLikedPostIds(realIds),
+      postService.getRepostedPostIds(realIds),
+    ]);
+    return posts.map((p) =>
+      likedSet.has(p.id) || repostedSet.has(p.id)
+        ? { ...p, liked: likedSet.has(p.id), reposted: repostedSet.has(p.id) }
+        : p,
+    );
+  } catch {
+    return posts;
+  }
+}
+
 export default function CommunityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
@@ -63,6 +97,10 @@ export default function CommunityScreen({ navigation, route }) {
   const [activeTab, setActiveTab] = useState('Feed');
   const visibleTabs = FIXED_TABS;
   const [activeFilters, setActiveFilters] = useState([]);
+  // Track whether persisted filter state has been hydrated from
+  // AsyncStorage. Used to gate the persistence write so the initial
+  // empty default can't overwrite stored selections.
+  const filtersHydratedRef = useRef(false);
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const feedListRef = useRef(null);
@@ -81,17 +119,60 @@ export default function CommunityScreen({ navigation, route }) {
     }).start();
   }, [contentAnim]);
 
+  // Hydrate persisted filter selections on mount so the user's last
+  // chips survive a cold start. Falls through to the empty default on
+  // missing key, parse error, or shape mismatch.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('@junubin_community_filters');
+        if (!cancelled && raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            setActiveFilters(parsed);
+          }
+        }
+      } catch {
+        // Fall through to default state on hydration error.
+      } finally {
+        if (!cancelled) filtersHydratedRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist active filters, debounced so a flurry of taps coalesces
+  // into a single write. Gated on hydration so the initial render can't
+  // clobber stored values before the read lands.
+  useEffect(() => {
+    if (!filtersHydratedRef.current) return;
+    const handle = setTimeout(() => {
+      AsyncStorage.setItem(
+        '@junubin_community_filters',
+        JSON.stringify(activeFilters),
+      ).catch(() => {});
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [activeFilters]);
+
   // Pull real posts from the API on mount. Falls back to mock data so
   // the feed isn't empty in dev / when the database is fresh — append
   // the mocks AFTER the real ones so user-generated content always
   // floats to the top.
+  //
+  // After loading the feed, batch-fetch which post IDs the caller has
+  // already liked / reposted so PostCard renders the correct chip
+  // state on first paint (rather than every chip showing un-liked then
+  // updating on tap).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const live = await postService.listPosts();
         if (cancelled) return;
-        setPosts(live.length > 0 ? [...live, ...mockPosts] : mockPosts);
+        const merged = live.length > 0 ? [...live, ...mockPosts] : mockPosts;
+        setPosts(await hydrateInteractionState(merged));
       } catch {
         if (!cancelled) setPosts(mockPosts);
       } finally {
@@ -116,7 +197,8 @@ export default function CommunityScreen({ navigation, route }) {
     setRefreshing(true);
     try {
       const live = await postService.listPosts();
-      setPosts(live.length > 0 ? [...live, ...mockPosts] : mockPosts);
+      const merged = live.length > 0 ? [...live, ...mockPosts] : mockPosts;
+      setPosts(await hydrateInteractionState(merged));
     } catch {
       setPosts(mockPosts);
     } finally {
@@ -405,8 +487,14 @@ export default function CommunityScreen({ navigation, route }) {
           >
             <Ionicons name="add" size={22} color={colors.gray500} />
           </TouchableOpacity>
+          {/* Disabled until the Notification table + service exist (v1.1). */}
           <TouchableOpacity
-            onPress={() => navigation.navigate('Notifications')}
+            onPress={() =>
+              Alert.alert(
+                'Coming soon',
+                'In-app notifications are landing in v1.1. For now, push notifications cover matches, likes, and messages.'
+              )
+            }
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >

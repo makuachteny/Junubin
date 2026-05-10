@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,20 @@ import { GraffitiSend } from '../components/icons';
 import PostCard from '../components/PostCard';
 import EmptyState from '../components/EmptyState';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
+import * as commentService from '../api/services/commentService';
+
+// Real posts have IDs from `crypto.randomUUID()` (UUID v4) or the
+// legacy `p_*` fallback in postService. Mock posts seeded by
+// mockProfiles.js use simple strings like `post1`, `post2`, … — those
+// have no row in the DB, so commentService calls would either return
+// [] or fail the FK check on insert. Detect them by *not* matching
+// either real-id shape.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const isMockPostId = (id) => {
+  if (!id) return true;
+  const s = String(id);
+  return !UUID_RE.test(s) && !s.startsWith('p_');
+};
 
 const QUICK_EMOJIS = ['❤️', '🙌', '🔥', '👏', '😢', '😍', '😮', '😂'];
 
@@ -100,7 +114,10 @@ export default function PostDetailScreen({ navigation, route }) {
 
   const post = route.params?.post;
   const postId = post?.id;
-  const initialComments = postId ? (mockComments[postId] || []) : [];
+  // For real posts, comments come from PostComment table via commentService.
+  // For mock posts (CommunityScreen demo seed), fall back to mockComments
+  // so the dev experience still has something to render.
+  const initialComments = postId && isMockPostId(postId) ? (mockComments[postId] || []) : [];
   const [liked, setLiked] = useState(false);
 
   const [comments, setComments] = useState(initialComments);
@@ -115,6 +132,16 @@ export default function PostDetailScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Load comments from the server for real posts. Mock posts skip this.
+  useEffect(() => {
+    if (!postId || isMockPostId(postId)) return;
+    let cancelled = false;
+    commentService.listComments(postId)
+      .then((rows) => { if (!cancelled) setComments(rows); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [postId]);
 
   // Group comments into top-level + replies-by-parent.
   const { topLevel, repliesByParent } = useMemo(() => {
@@ -133,50 +160,60 @@ export default function PostDetailScreen({ navigation, route }) {
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 300);
-  }, []);
+    if (!postId || isMockPostId(postId)) {
+      setTimeout(() => setRefreshing(false), 300);
+      return;
+    }
+    commentService.listComments(postId)
+      .then(setComments)
+      .catch(() => {})
+      .finally(() => setRefreshing(false));
+  }, [postId]);
 
-  const handleComment = () => {
-    const text = commentText.trim();
+  // Optimistic comment add: append a temp row immediately so the input
+  // clears and the user sees their comment, then swap it for the
+  // server-issued row (so subsequent operations like delete have the
+  // real id). On failure, drop the temp row and restore the input.
+  const postComment = useCallback(async (text) => {
     if (!text) return;
-    const id = `c-${Date.now()}`;
-    const newComment = {
-      id,
+    const parentId = replyTo?.parentId || null;
+    const tempId = `temp-${Date.now()}`;
+    const tempComment = {
+      id: tempId,
       user: { name: currentUser.name, avatar: currentUser.images?.[0] },
       text,
       time: 'Just now',
       likes: 0,
-      parentId: replyTo?.parentId || null,
+      parentId,
     };
-    setComments((prev) => [...prev, newComment]);
-    setCommentText('');
-    // If the new comment is a reply, auto-expand its thread so the user sees
-    // their post without tapping "View replies".
-    if (newComment.parentId) {
-      setExpandedThreads((prev) => new Set(prev).add(newComment.parentId));
+    setComments((prev) => [...prev, tempComment]);
+    if (parentId) {
+      setExpandedThreads((prev) => new Set(prev).add(parentId));
     }
     setReplyTo(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
+
+    if (!postId || isMockPostId(postId)) return; // demo post — keep local-only
+    try {
+      const real = await commentService.addComment({ postId, content: text, parentId });
+      setComments((prev) => prev.map((c) => (c.id === tempId ? real : c)));
+    } catch {
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setCommentText(text);
+    }
+  }, [currentUser, replyTo, postId]);
+
+  const handleComment = () => {
+    const text = commentText.trim();
+    if (!text) return;
+    setCommentText('');
+    postComment(text);
   };
 
   // One-tap emoji reaction — posts the emoji as its own comment.
   const handleEmojiPost = useCallback((emoji) => {
-    const id = `c-${Date.now()}-${emoji}`;
-    const newComment = {
-      id,
-      user: { name: currentUser.name, avatar: currentUser.images?.[0] },
-      text: emoji,
-      time: 'Just now',
-      likes: 0,
-      parentId: replyTo?.parentId || null,
-    };
-    setComments((prev) => [...prev, newComment]);
-    if (newComment.parentId) {
-      setExpandedThreads((prev) => new Set(prev).add(newComment.parentId));
-    }
-    setReplyTo(null);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
-  }, [currentUser, replyTo]);
+    postComment(emoji);
+  }, [postComment]);
 
   const handleCommentLike = (commentId) => {
     setCommentLikes((prev) => ({ ...prev, [commentId]: !prev[commentId] }));

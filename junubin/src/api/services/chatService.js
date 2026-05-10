@@ -224,6 +224,25 @@ export async function getReactions(messageIds) {
   return map;
 }
 
+/**
+ * Mark every inbound, unread message in the conversation as read.
+ * Wraps the `mark_conversation_read` RPC (00022_read_receipts.sql) which
+ * does the auth + membership check server-side and only flips `readAt`
+ * for messages the caller did not send. Returns the count of rows
+ * marked, so the caller can decrement local badge state if it wants.
+ *
+ * Fire-and-forget at most call sites — failures shouldn't block the
+ * UI. Callers should `.catch(() => {})` if they don't care.
+ */
+export async function markConversationRead(conversationId) {
+  if (!conversationId) return 0;
+  const { data, error } = await supabase.rpc('mark_conversation_read', {
+    conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return typeof data === 'number' ? data : 0;
+}
+
 function formatTime(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);

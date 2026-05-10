@@ -5,7 +5,10 @@
  * Used as a fallback when webhooks are delayed (common with mobile money).
  *
  * If the payment is still pending, optionally calls the Flutterwave
- * verify API to check if it has been completed.
+ * verify API to check if it has been completed. Note: this only flips
+ * the Payment row to 'succeeded' — granting consumables/tier still
+ * happens in flw-webhook so that path stays the single source of truth
+ * for entitlement.
  *
  * Request body: { txRef: string }
  * Response: { status: string, productId: string | null }
@@ -38,72 +41,102 @@ serve(async (req) => {
     const { txRef } = await req.json();
     if (!txRef) return errorResponse("Missing txRef");
 
-    // Look up the payment
-    const { data: payment, error: paymentErr } = await supabase
-      .from("payments")
-      .select("status, product_id, flw_transaction_id, user_auth_id")
-      .eq("flw_tx_ref", txRef)
-      .single();
+    // Resolve the caller's app User.id so we can scope the lookup.
+    const { data: appUser } = await supabase
+      .from("User")
+      .select("id")
+      .eq("auth_id", authUser.id)
+      .maybeSingle();
+    if (!appUser) return errorResponse("User not found", 404);
 
-    if (paymentErr || !payment) {
+    // Look up the Payment row in the canonical table (00009).
+    const { data: payment, error: paymentErr } = await supabase
+      .from("Payment")
+      .select("id, userId, junubinProductId, status, metadata")
+      .eq("provider", "flutterwave")
+      .eq("providerRef", txRef)
+      .maybeSingle();
+
+    if (paymentErr) {
+      console.error("Payment lookup failed:", paymentErr);
+      return errorResponse("Payment lookup failed", 500);
+    }
+    if (!payment) {
       return errorResponse("Payment not found", 404);
     }
 
-    // Ensure the requesting user owns this payment
-    if (payment.user_auth_id !== authUser.id) {
+    // Ensure the requesting user owns this payment.
+    if (payment.userId !== appUser.id) {
       return errorResponse("Unauthorized", 403);
     }
 
-    // If already resolved, return immediately
+    // If already resolved, return immediately.
     if (payment.status !== "pending") {
       return jsonResponse({
         status: payment.status,
-        productId: payment.product_id,
+        productId: payment.junubinProductId,
       });
     }
 
-    // If still pending and we have a Flutterwave transaction ID, try to verify
-    if (payment.flw_transaction_id && FLW_SECRET) {
+    // If still pending, ask Flutterwave directly. Their tx-ref-search
+    // endpoint accepts the merchant's tx_ref so we don't need to have
+    // captured the Flutterwave transaction id yet (which is what was
+    // missing from the previous version when no webhook had landed).
+    if (FLW_SECRET) {
       try {
         const verifyRes = await fetch(
-          `https://api.flutterwave.com/v3/transactions/${payment.flw_transaction_id}/verify`,
-          { headers: { Authorization: `Bearer ${FLW_SECRET}` } }
+          `https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${encodeURIComponent(txRef)}`,
+          { headers: { Authorization: `Bearer ${FLW_SECRET}` } },
         );
         const verifyData = await verifyRes.json();
+        const flwStatus = verifyData?.data?.status;
 
-        if (verifyData.data?.status === "successful") {
-          // Update payment status — the webhook handler will grant entitlements
-          // if it hasn't already
-          await supabase
-            .from("payments")
-            .update({ status: "successful", verified_at: new Date().toISOString() })
-            .eq("flw_tx_ref", txRef);
+        if (flwStatus === "successful") {
+          // Mark succeeded — but DO NOT grant entitlement here. The
+          // webhook is the single grant path; this poll just keeps
+          // the UI from spinning forever when the webhook is slow.
+          // Idempotency on (provider, providerRef) means a double
+          // grant from this path + the webhook is impossible, but
+          // splitting concerns keeps the audit trail clean.
+          const { error: updErr } = await supabase
+            .from("Payment")
+            .update({
+              status: "succeeded",
+              metadata: {
+                ...(payment.metadata || {}),
+                statusCheckedAt: new Date().toISOString(),
+              },
+              updatedAt: new Date().toISOString(),
+            })
+            .eq("id", payment.id);
+          if (updErr) console.error("Failed to mark Payment succeeded:", updErr);
 
           return jsonResponse({
-            status: "successful",
-            productId: payment.product_id,
+            status: "succeeded",
+            productId: payment.junubinProductId,
           });
         }
 
-        if (verifyData.data?.status === "failed") {
-          await supabase
-            .from("payments")
-            .update({ status: "failed" })
-            .eq("flw_tx_ref", txRef);
+        if (flwStatus === "failed") {
+          const { error: updErr } = await supabase
+            .from("Payment")
+            .update({ status: "failed", updatedAt: new Date().toISOString() })
+            .eq("id", payment.id);
+          if (updErr) console.error("Failed to mark Payment failed:", updErr);
 
           return jsonResponse({
             status: "failed",
-            productId: payment.product_id,
+            productId: payment.junubinProductId,
           });
         }
       } catch {
-        // Verification call failed — return current status
+        // Verification call failed — return current status.
       }
     }
 
     return jsonResponse({
       status: "pending",
-      productId: payment.product_id,
+      productId: payment.junubinProductId,
     });
   } catch (err) {
     console.error("flw-check-status error:", err);

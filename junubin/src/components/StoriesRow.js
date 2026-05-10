@@ -1,18 +1,51 @@
 // AnaJunubin — Stories Row (horizontal avatar circles with LIVE badges)
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import { mockStories, mockLiveStreams } from '../data/mockStories';
+import * as storyService from '../api/services/storyService';
 
-export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, colors }) {
-  // Sort: live users first
-  const sortedStories = [...mockStories].sort((a, b) => {
-    if (a.isLive && !b.isLive) return -1;
-    if (!a.isLive && b.isLive) return 1;
-    return 0;
-  });
+// Fallback stories for dev / empty DB. In production, an empty
+// `live` array means "no friends posted today" — the row only shows
+// the Create chip in that case.
+const getFallbackStories = () => (__DEV__ ? mockStories : []);
+
+export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, colors, refreshKey }) {
+  const [stories, setStories] = useState(() => getFallbackStories());
+
+  // Pull real stories from storyService. `refreshKey` lets the parent
+  // force a refetch (e.g. after a new story is created upstream).
+  useEffect(() => {
+    let cancelled = false;
+    storyService.listActiveStoryGroups()
+      .then((live) => {
+        if (cancelled) return;
+        // Merge real stories on top of mocks in dev so the row isn't
+        // empty when the DB is fresh; in prod just use the live set.
+        if (__DEV__) {
+          setStories(live.length > 0 ? [...live, ...mockStories] : mockStories);
+        } else {
+          setStories(live);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  // Sort: live users first. `useMemo` so this isn't recomputed on
+  // every parent re-render (the row re-renders whenever the parent
+  // tab/filter state changes — sorting the same array each time is
+  // wasted work).
+  const sortedStories = useMemo(() => {
+    return [...stories].sort((a, b) => {
+      if (a.isLive && !b.isLive) return -1;
+      if (!a.isLive && b.isLive) return 1;
+      return 0;
+    });
+  }, [stories]);
 
   return (
     <ScrollView
@@ -21,23 +54,30 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
       contentContainerStyle={styles.row}
     >
       {/* Create */}
-      <View style={styles.addGroup}>
-        <TouchableOpacity style={styles.storyItem} onPress={onCreatePress} activeOpacity={0.7}>
-          <View style={styles.avatarWrap}>
-            <View style={styles.addCenter}>
-              <Ionicons name="add" size={24} color="#FFFFFF" />
-            </View>
+      <TouchableOpacity style={styles.storyItem} onPress={onCreatePress} activeOpacity={0.7}>
+        <View style={styles.createRing}>
+          <View style={styles.addCenter}>
+            <Ionicons name="add" size={26} color={colors.black} />
           </View>
-          <Text style={[styles.name, { color: colors.black }]}>Create</Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+        <Text style={[styles.name, { color: colors.black }]} numberOfLines={1}>Create</Text>
+      </TouchableOpacity>
 
       {/* Story cards — live users get a special ring + badge */}
       {sortedStories.map((story, index) => {
         const isLive = story.isLive;
+        const isViewed = story.viewed === true;
         const liveData = isLive
           ? mockLiveStreams.find((l) => l.userId === story.userId)
           : null;
+
+        // Unviewed stories get the theme accent ring (solid).
+        // Viewed stories fade to a neutral gray.
+        // Live users get the same accent — the recording dot is the
+        // signal that distinguishes them, not a different ring color.
+        const ringColors = isViewed
+          ? ['#D4D4D8', '#D4D4D8']
+          : [colors.accent, colors.accent];
 
         return (
           <TouchableOpacity
@@ -52,18 +92,23 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
             }}
             activeOpacity={0.7}
           >
-            {isLive ? (
-              <View style={styles.liveAvatarWrap}>
-                <View style={styles.avatarWrap}>
+            <View style={styles.avatarOuter}>
+              <LinearGradient
+                colors={ringColors}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.ringGradient}
+              >
+                <View style={styles.avatarInner}>
                   <Image source={imageSource(story.avatar)} style={styles.avatar} />
                 </View>
-                <View style={styles.liveDot} />
-              </View>
-            ) : (
-              <View style={styles.avatarWrap}>
-                <Image source={imageSource(story.avatar)} style={styles.avatar} />
-              </View>
-            )}
+              </LinearGradient>
+              {isLive && (
+                <View pointerEvents="none" style={styles.liveDotWrap}>
+                  <View style={styles.liveDot} />
+                </View>
+              )}
+            </View>
             <Text
               style={[styles.name, { color: colors.black }]}
               numberOfLines={1}
@@ -79,58 +124,88 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
 
 const styles = StyleSheet.create({
   row: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 12,
-  },
-  addGroup: {
-    flexDirection: 'row',
-    gap: 12,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: 8,
+    gap: 14,
   },
   storyItem: {
     alignItems: 'center',
-    width: 66,
+    width: 72,
+    // Explicit minHeight so the row never collapses around the children
+    // and the name has guaranteed vertical space below the avatar.
+    minHeight: 96,
+  },
+  // "Create" tile — subtle dashed-style placeholder, distinct from real stories
+  createRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0.12)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.03)',
   },
   addCenter: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Outer wrapper carries position context for the LIVE badge
+  avatarOuter: {
+    width: 64,
+    height: 64,
+    position: 'relative',
+  },
+  ringGradient: {
     width: '100%',
     height: '100%',
-    borderRadius: 28,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
+    borderRadius: 32,
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2.5,
   },
-  avatarWrap: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    overflow: 'hidden',
+  avatarInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
     backgroundColor: '#FFFFFF',
     padding: 2,
-  },
-  liveAvatarWrap: {
-    position: 'relative',
   },
   avatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 29,
+    borderRadius: 28,
+  },
+  // LIVE indicator — a single recording dot at the bottom-right of the
+  // avatar. No pill, no text. Read alongside the theme-accent story ring.
+  liveDotWrap: {
+    position: 'absolute',
+    right: 2,
+    bottom: 2,
   },
   liveDot: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#22C55E',
-    borderWidth: 2,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#FF2A3C',
+    borderWidth: 2.5,
     borderColor: '#FFFFFF',
   },
   name: {
-    fontSize: 11,
+    fontSize: 12,
+    lineHeight: 18,
     fontWeight: '500',
     fontFamily: FontFamily.medium,
-    marginTop: 4,
+    marginTop: 8,
     textAlign: 'center',
+    width: '100%',
+    // Reserve enough vertical room for descenders (g, y, j, p) so the
+    // glyphs aren't sliced by the row's bottom padding.
+    paddingBottom: 2,
   },
 });

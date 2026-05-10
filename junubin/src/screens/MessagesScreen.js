@@ -18,8 +18,7 @@ import { GraffitiChat } from '../components/icons';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, Typography, FontFamily, Layout, Gradients } from '../theme';
+import { useTheme, Typography, FontFamily, Layout } from '../theme';
 import { mockMatches, mockLikes } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
@@ -27,8 +26,10 @@ import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as matchesService from '../api/services/matchesService';
 import * as likesService from '../api/services/likesService';
+import * as storyService from '../api/services/storyService';
 import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
+import StoriesRow from '../components/StoriesRow';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
@@ -36,7 +37,7 @@ import { mockStories } from '../data/mockStories';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAccessibilityPreferences } from '../accessibility';
 
-export default function MessagesScreen({ navigation }) {
+export default function MessagesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { prefs } = useAccessibilityPreferences();
@@ -60,6 +61,17 @@ export default function MessagesScreen({ navigation }) {
   const isPlus = hasTier('plus');
   const loadingTimeoutRef = useRef(null);
   const [seenConnections, setSeenConnections] = useState(new Set());
+  const [storiesRefreshKey, setStoriesRefreshKey] = useState(0);
+
+  // CreateStoryScreen returns the freshly-created story via
+  // route.params.createdStory. Bump the StoriesRow refreshKey so it
+  // refetches and the new story appears in the strip immediately.
+  useEffect(() => {
+    if (route?.params?.createdStory) {
+      setStoriesRefreshKey((k) => k + 1);
+      navigation.setParams({ createdStory: undefined });
+    }
+  }, [route?.params?.createdStory, navigation]);
 
   // Hydrate persisted prefs (mode + seen-connections) in a single round-trip.
   useEffect(() => {
@@ -164,14 +176,40 @@ export default function MessagesScreen({ navigation }) {
     navigation.navigate('Chat', { match });
   };
 
-  const handleOpenStoryIfAvailable = useCallback((person) => {
+  // Try to open the tapped person's active story, if they have one.
+  // Resolves real story groups via storyService (so a story posted by
+  // someone you matched with on the server actually plays here), and
+  // falls back to a name-based mockStories lookup for the demo deck.
+  // Returns true when a story was opened so the caller can short-circuit
+  // its default tap handler.
+  const handleOpenStoryIfAvailable = useCallback(async (person) => {
     const name = person?.name?.trim().toLowerCase();
+    const userId = person?.userId || person?.id;
+    if (!name && !userId) return false;
+    try {
+      const groups = await storyService.listActiveStoryGroups();
+      const index = groups.findIndex((g) => {
+        if (userId && g.userId === userId) return true;
+        if (name && g.userName?.trim().toLowerCase() === name) return true;
+        return false;
+      });
+      if (index >= 0) {
+        navigation.navigate('StoriesView', {
+          story: groups[index],
+          storyIndex: index,
+          storyList: groups,
+        });
+        return true;
+      }
+    } catch {
+      // Fall through to mock lookup.
+    }
     if (!name) return false;
-    const index = mockStories.findIndex((s) => s.userName?.trim().toLowerCase() === name);
-    if (index < 0) return false;
+    const mockIndex = mockStories.findIndex((s) => s.userName?.trim().toLowerCase() === name);
+    if (mockIndex < 0) return false;
     navigation.navigate('StoriesView', {
-      story: mockStories[index],
-      storyIndex: index,
+      story: mockStories[mockIndex],
+      storyIndex: mockIndex,
       storyList: mockStories,
     });
     return true;
@@ -277,14 +315,12 @@ export default function MessagesScreen({ navigation }) {
               }}
               activeOpacity={0.8}
             >
-              <LinearGradient
-                colors={isNew ? ['#CE1126', '#FF6B81'] : [colors.gray300, colors.gray300]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.avatarRing}
-              >
+              {/* Like rows mirror the story-row visual language: a solid
+                  accent ring on "new" items signals "actionable content".
+                  Once seen, the ring drops to neutral gray. */}
+              <View style={[styles.likeAvatarRing, !isNew && styles.likeAvatarRingSeen]}>
                 <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
-              </LinearGradient>
+              </View>
             </TouchableOpacity>
             <View style={styles.msgInfo}>
               <View style={styles.likeNameRow}>
@@ -307,14 +343,22 @@ export default function MessagesScreen({ navigation }) {
       );
     }
 
+    // Source of truth on initial paint and on tab-focus refetch is the
+    // server-derived `unreadCount` (matchesService computes it from
+    // Message.readAt). Local-state `unread` boolean stays as a
+    // fallback for any code path that hasn't been migrated yet.
+    const unreadCount = typeof item.unreadCount === 'number' ? item.unreadCount : (item.unread ? 1 : 0);
+    const isUnread = unreadCount > 0 || !!item.unread;
+    const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
+
     return (
       <Animated.View style={animStyle}>
         <TouchableOpacity
-          style={[styles.messageRow, item.unread && styles.messageRowUnread]}
+          style={styles.messageRow}
           onPress={() => handleMatchPress(item)}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${item.unread ? 'unread message' : 'message thread'}` : item.name}
+          accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${isUnread ? `${unreadCount || 1} unread message${(unreadCount || 1) === 1 ? '' : 's'}` : 'message thread'}` : item.name}
         >
           <TouchableOpacity
             style={styles.avatarContainer}
@@ -329,40 +373,38 @@ export default function MessagesScreen({ navigation }) {
             }}
             activeOpacity={0.8}
           >
-            <LinearGradient
-              colors={item.unread ? Gradients.accent : [colors.gray300, colors.gray300]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatarRing}
-            >
+            {/* Match rows: clean photo, no story ring. The colored ring is
+                reserved for stories + likes (actionable content). Unread
+                state is signalled exclusively by the count badge in the
+                right column + a bolder name. */}
+            <View style={styles.matchAvatarFrame}>
               <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
-            </LinearGradient>
-            {item.unread && <View style={styles.unreadDot} />}
+            </View>
             <View style={styles.onlineDot} />
           </TouchableOpacity>
           <View style={styles.msgInfo}>
             <View style={styles.msgNameRow}>
-              <Text style={[styles.msgName, item.unread && styles.msgNameBold]}>{item.name}</Text>
-              {item.unread && prefs?.nonColorCues && (
+              <Text style={[styles.msgName, isUnread && styles.msgNameBold]}>{item.name}</Text>
+              {isUnread && prefs?.nonColorCues && (
                 <View style={styles.unreadBadge}>
                   <Text style={styles.unreadBadgeText}>New</Text>
                 </View>
               )}
             </View>
-            <Text style={[styles.msgPreview, item.unread && styles.msgUnread]} numberOfLines={1}>
+            <Text style={[styles.msgPreview, isUnread && styles.msgUnread]} numberOfLines={1}>
               {item.lastMessage}
             </Text>
           </View>
           <View style={styles.rowRight}>
-            <Text style={[styles.msgTime, item.unread && styles.msgTimeUnread]}>{item.timestamp}</Text>
-            {item.unread && <View style={styles.unreadCountDot}><Text style={styles.unreadCountText}>1</Text></View>}
+            <Text style={styles.msgTime}>{item.timestamp}</Text>
+            {unreadCount > 0 && <View style={styles.unreadCountDot}><Text style={styles.unreadCountText}>{badgeText}</Text></View>}
           </View>
         </TouchableOpacity>
       </Animated.View>
     );
   };
 
-  const unreadMatchCount = useMemo(() => matches.filter((m) => m.unread).length, [matches]);
+  const unreadMatchCount = useMemo(() => matches.filter((m) => (m.unreadCount > 0) || m.unread).length, [matches]);
   const likesCount = likes.length;
   const CATEGORIES = [
     { label: 'All', badge: unreadMatchCount + likesCount },
@@ -377,12 +419,36 @@ export default function MessagesScreen({ navigation }) {
     return combined.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
   }, [likes, matches]);
 
-  const listHeader = useCallback(() => (
-    <>
-      {/* Filters + search scroll with content */}
-      {filtersPanel()}
+  // Stories scroll with the list (rendered as the first list item).
+  // Pulled out so the FlatList and the loading/empty ScrollViews can
+  // share the exact same component instance.
+  const renderStories = useCallback(() => (
+    <StoriesRow
+      colors={colors}
+      refreshKey={storiesRefreshKey}
+      onCreatePress={() => navigation.navigate('CreateStory')}
+      onStoryPress={(story, storyIndex, storyList) =>
+        navigation.navigate('StoriesView', { story, storyIndex, storyList })
+      }
+      onViewLive={(liveData) => {
+        // LiveViewScreen reads route.params.liveData (single) or
+        // route.params.allLives (carousel) — passing the bare object
+        // would land on neither and the FlatList would render empty.
+        // We also normalize the shape: mockLiveStreams uses `id` for
+        // the room id and `userId` for the host, but LiveStreamPage
+        // expects `item.id` to be the host User.id (it powers gift
+        // recording, join requests, and the realtime channel key).
+        const item = { ...liveData, id: liveData?.userId || liveData?.id };
+        navigation.navigate('LiveView', { liveData: item });
+      }}
+    />
+  ), [colors, storiesRefreshKey, navigation]);
 
-      {/* ─── Upsell Banner (free users) ─── */}
+  // Banners/ads/upsell — scroll BELOW the sticky filters. Always returns a
+  // wrapper view so this slot has a stable identity in the list (keeps the
+  // sticky-header index math predictable even when nothing is shown).
+  const renderBanners = useCallback(() => (
+    <View>
       {!hasTier('plus') && (
         <ProfilePromptBanner
           message="Unlock unlimited messages with JuNubin+"
@@ -390,11 +456,7 @@ export default function MessagesScreen({ navigation }) {
           colors={colors}
         />
       )}
-
-      {/* ─── Ad Banner (free tier) ─── */}
       <AdBanner />
-
-      {/* ─── See who likes you upsell (non-Junub) ─── */}
       {!hasTier('junub') && likesCount > 0 && (
         <TouchableOpacity
           style={styles.upsellCard}
@@ -422,9 +484,8 @@ export default function MessagesScreen({ navigation }) {
           </View>
         </TouchableOpacity>
       )}
-
-    </>
-  ), [colors, isDark, navigation, hasTier, likesCount, filtersPanel, newMatchAvatars]);
+    </View>
+  ), [colors, navigation, hasTier, likes, likesCount, mode, styles]);
 
   const filtersPanel = useCallback(() => (
     <View style={styles.filtersPanel}>
@@ -510,6 +571,31 @@ export default function MessagesScreen({ navigation }) {
     </View>
   ), [CATEGORIES, activeCategory, filtersLocked, searchQuery, colors, showFiltersLocked, notificationsMuted]);
 
+  // Unified data for the FlatList. Keeping a fixed prefix (stories,
+  // filters, banners) means stickyHeaderIndices=[1] always points at
+  // the filters strip. `__type` is read by the dispatcher below.
+  const listData = useMemo(() => {
+    const head = [
+      { __type: 'stories', id: '__stories' },
+      { __type: 'filters', id: '__filters' },
+      { __type: 'banners', id: '__banners' },
+    ];
+    // Tag each conversation with its position in conversationData so
+    // renderConversation can look up the right row-animation value
+    // (the FlatList index is offset by the head items above).
+    const convs = conversationData.map((c, i) => ({ ...c, __convIndex: i }));
+    return [...head, ...convs];
+  }, [conversationData]);
+
+  const renderListItem = useCallback(({ item }) => {
+    switch (item.__type) {
+      case 'stories': return renderStories();
+      case 'filters': return filtersPanel();
+      case 'banners': return renderBanners();
+      default: return renderConversation({ item, index: item.__convIndex });
+    }
+  }, [renderStories, filtersPanel, renderBanners]);
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ─── Header ─── */}
@@ -535,15 +621,31 @@ export default function MessagesScreen({ navigation }) {
         </View>
       </Animated.View>
 
-      {/* ─── Everything scrolls together ─── */}
+      {/* ─── Everything scrolls together ───
+          Layout contract:
+            - index 0 (stories) scrolls up and off-screen
+            - index 1 (filters + search) sticks to the top once it
+              reaches it; everything below it scrolls underneath
+            - index 2 (banners/ads/upsell) and beyond scroll normally
+      */}
       {isLoading ? (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {listHeader()}
+        <ScrollView
+          stickyHeaderIndices={[1]}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderStories()}
+          {filtersPanel()}
+          {renderBanners()}
           <MessageListSkeleton />
         </ScrollView>
       ) : conversationData.length === 0 && !searchQuery ? (
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {listHeader()}
+        <ScrollView
+          stickyHeaderIndices={[1]}
+          showsVerticalScrollIndicator={false}
+        >
+          {renderStories()}
+          {filtersPanel()}
+          {renderBanners()}
           <View style={styles.emptyMessages}>
             <GraffitiChat size={50} color={colors.gray400} />
             <Text style={styles.emptyText}>No messages yet</Text>
@@ -552,17 +654,16 @@ export default function MessagesScreen({ navigation }) {
         </ScrollView>
       ) : (
         <FlatList
-          data={conversationData}
+          data={listData}
           keyExtractor={(item) => item.id}
-          renderItem={renderConversation}
-          ListHeaderComponent={listHeader}
+          renderItem={renderListItem}
+          stickyHeaderIndices={[1]}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
-          initialNumToRender={8}
+          initialNumToRender={10}
           maxToRenderPerBatch={8}
           windowSize={5}
-          removeClippedSubviews
           updateCellsBatchingPeriod={50}
           removeClippedSubviews={true}
           refreshControl={
@@ -654,7 +755,14 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   },
 
   filtersPanel: {
-    backgroundColor: 'transparent',
+    // Opaque background — this strip is sticky-pinned, so content
+    // scrolling underneath must not bleed through.
+    backgroundColor: colors.surfaceMuted,
+    paddingTop: 2,
+    // Hairline divider on the bottom (was top) — when pinned, the
+    // separation that matters is between the strip and the list below.
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
   },
 
   // ─── New Matches horizontal row ───
@@ -735,8 +843,8 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 2,
-    paddingBottom: 6,
+    paddingTop: 4,
+    paddingBottom: 8,
     gap: 8,
   },
   categoryChips: {
@@ -860,38 +968,51 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   messageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: prefs?.largerTouchTargets ? 16 : 13,
-    marginHorizontal: 10,
-    marginVertical: 3,
-    borderRadius: 16,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'transparent',
+    paddingHorizontal: 14,
+    paddingVertical: prefs?.largerTouchTargets ? 14 : 11,
+    marginHorizontal: 8,
+    marginVertical: 2,
+    borderRadius: 14,
+    backgroundColor: 'transparent',
   },
-  messageRowUnread: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(206,17,38,0.03)',
-  },
+  // Like rows are the only "actionable" inbox state — keep a barely-
+  // there tint so the row reads as different without competing with the
+  // ring + badge that already carry the signal.
   likeRowNew: {
-    backgroundColor: isDark ? 'rgba(206,17,38,0.08)' : 'rgba(206,17,38,0.04)',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(206,17,38,0.025)',
   },
   avatarContainer: {
     position: 'relative',
-    marginRight: 14,
+    marginRight: 12,
   },
-  msgAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  // Plain frame for match rows — clean photo, hairline border for crispness
+  matchAvatarFrame: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    overflow: 'hidden',
     backgroundColor: colors.gray300,
-    borderWidth: 2,
-    borderColor: colors.cardBg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
   },
-  avatarRing: {
+  // Like rows mirror the story ring — solid theme accent for "new"
+  likeAvatarRing: {
     width: 56,
     height: 56,
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 2,
+    padding: 2.5,
+    backgroundColor: colors.accent,
+  },
+  likeAvatarRingSeen: {
+    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
+  },
+  msgAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: colors.gray300,
   },
   likeEmojiDot: {
     position: 'absolute',
@@ -919,22 +1040,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     right: 0,
     borderWidth: 2.5,
     borderColor: colors.cardBg,
-  },
-  unreadDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.accent,
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    borderWidth: 2,
-    borderColor: colors.white,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
-    elevation: 3,
   },
   msgInfo: {
     flex: 1,
@@ -971,11 +1076,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     ...Typography.caption,
     fontSize: 12,
     color: prefs?.highContrast ? colors.gray700 : colors.gray500,
-  },
-  msgTimeUnread: {
-    color: colors.accent,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
   },
   unreadCountDot: {
     width: 20,

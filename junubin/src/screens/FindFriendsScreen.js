@@ -20,8 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 import { useAuth, useRequireAuth } from '../auth';
-import { useSubscription } from '../payments';
 import * as followService from '../api/services/followService';
 
 // Simulated backend lookup — in production this would POST phone numbers
@@ -51,7 +51,6 @@ const FindFriendsScreen = ({ navigation }) => {
   const { colors, isDark } = useTheme();
   const { session } = useAuth();
   const requireAuth = useRequireAuth();
-  const { canUseDiasporaConnect } = useSubscription();
   const [permissionStatus, setPermissionStatus] = useState(null); // null | 'granted' | 'denied'
   const [loading, setLoading] = useState(false);
   const [contacts, setContacts] = useState([]); // all contacts
@@ -234,6 +233,16 @@ const FindFriendsScreen = ({ navigation }) => {
           <Text style={styles.permissionDesc}>
             To find friends on JuNubin, please enable contacts access in your device settings.
           </Text>
+          <TouchableOpacity
+            style={[styles.permissionBtn, { backgroundColor: colors.accent, marginTop: 16 }]}
+            onPress={() => promptToOpenSettings({
+              title: 'Contacts access needed',
+              message: 'JuNubin needs contacts to find your friends. Enable it in Settings.',
+            })}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.permissionBtnText}>Open Settings</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -355,30 +364,6 @@ const FindFriendsScreen = ({ navigation }) => {
         <Text style={styles.headerTitle}>Find Friends</Text>
         <View style={styles.backBtn} />
       </View>
-
-      {/* Diaspora Connect */}
-      <TouchableOpacity
-        style={styles.diasporaBtn}
-        onPress={() => {
-          if (!canUseDiasporaConnect()) {
-            Alert.alert(
-              'Junub Feature',
-              'Diaspora Connect lets you find South Sudanese across cities and countries. Upgrade to Junub to unlock.',
-              [
-                { text: 'See Plans', onPress: () => navigation.navigate('Elite') },
-                { text: 'Cancel', style: 'cancel' },
-              ]
-            );
-            return;
-          }
-          Alert.alert('Diaspora Connect', 'Search for South Sudanese in other cities and countries coming soon!');
-        }}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="globe-outline" size={18} color={colors.accent} />
-        <Text style={styles.diasporaBtnText}>Diaspora Connect</Text>
-        <Ionicons name="chevron-forward" size={16} color={isDark ? 'rgba(255,255,255,0.3)' : colors.gray400} />
-      </TouchableOpacity>
 
       {/* Search */}
       <View style={styles.searchWrap}>

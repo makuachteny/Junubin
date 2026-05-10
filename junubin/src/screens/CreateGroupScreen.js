@@ -70,7 +70,7 @@ export default function CreateGroupScreen({ navigation }) {
       description: description.trim(),
       category,
       privacy,
-      rules: rules.filter((r) => r.trim()),
+      rules: rules.map((r) => r.trim()).filter((r) => r.length > 0),
       members: 1,
       createdAt: new Date().toISOString(),
     };
@@ -201,21 +201,24 @@ export default function CreateGroupScreen({ navigation }) {
           )}
         </View>
         {rules.map((rule, index) => (
-          <View key={index} style={styles.ruleInputRow}>
-            <View style={styles.ruleNumber}>
-              <Text style={styles.ruleNumberText}>{index + 1}</Text>
+          <View key={index} style={styles.ruleInputBlock}>
+            <View style={styles.ruleInputRow}>
+              <View style={styles.ruleNumber}>
+                <Text style={styles.ruleNumberText}>{index + 1}</Text>
+              </View>
+              <TextInput
+                style={styles.ruleInput}
+                placeholder={`Rule ${index + 1}`}
+                placeholderTextColor={colors.gray400}
+                value={rule}
+                onChangeText={(text) => handleUpdateRule(index, text)}
+                maxLength={200}
+              />
+              <TouchableOpacity onPress={() => handleRemoveRule(index)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={20} color={colors.gray400} />
+              </TouchableOpacity>
             </View>
-            <TextInput
-              style={styles.ruleInput}
-              placeholder={`Rule ${index + 1}`}
-              placeholderTextColor={colors.gray400}
-              value={rule}
-              onChangeText={(text) => handleUpdateRule(index, text)}
-              maxLength={100}
-            />
-            <TouchableOpacity onPress={() => handleRemoveRule(index)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={20} color={colors.gray400} />
-            </TouchableOpacity>
+            <Text style={styles.ruleCharHint}>{rule.length}/200</Text>
           </View>
         ))}
 
@@ -389,11 +392,20 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     ...Typography.captionBold,
     color: colors.accent,
   },
+  ruleInputBlock: {
+    marginBottom: 10,
+  },
   ruleInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    marginBottom: 10,
+  },
+  ruleCharHint: {
+    ...Typography.caption,
+    color: colors.gray400,
+    textAlign: 'right',
+    marginTop: 2,
+    marginRight: 30,
   },
   ruleNumber: {
     width: 26,

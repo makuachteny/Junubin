@@ -31,8 +31,14 @@ export default function GroupDetailScreen({ navigation, route }) {
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   const group = route.params?.group || {};
+  const groupRules = useMemo(
+    () => (Array.isArray(group.rules) ? group.rules.filter((r) => typeof r === 'string' && r.trim()) : []),
+    [group.rules]
+  );
+  const isMembersOnly = group.privacy === 'members' || group.privacy === 'private';
   const [joined, setJoined] = useState(route.params?.isMember || false);
   const [pinned, setPinned] = useState(false);
+  const [rulesExpanded, setRulesExpanded] = useState(true);
   const [memberCount, setMemberCount] = useState(group.members || 0);
   const [refreshing, setRefreshing] = useState(false);
   const [activeSection, setActiveSection] = useState('posts');
@@ -152,6 +158,44 @@ export default function GroupDetailScreen({ navigation, route }) {
           </View>
         </LinearGradient>
 
+        {/* Group Rules — prominent surface */}
+        {groupRules.length > 0 && (
+          <View style={styles.rulesBanner}>
+            <TouchableOpacity
+              style={styles.rulesBannerHeader}
+              onPress={() => setRulesExpanded((v) => !v)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.rulesBannerTitleWrap}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={colors.accent} />
+                <Text style={styles.rulesBannerTitle}>Group rules</Text>
+                <View style={styles.rulesCountBadge}>
+                  <Text style={styles.rulesCountText}>
+                    {groupRules.length} {groupRules.length === 1 ? 'rule' : 'rules'}
+                  </Text>
+                </View>
+              </View>
+              <Ionicons
+                name={rulesExpanded ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={colors.gray500}
+              />
+            </TouchableOpacity>
+            {rulesExpanded && (
+              <View style={styles.rulesBannerList}>
+                {groupRules.map((rule, i) => (
+                  <View key={`rule-${i}`} style={styles.ruleRow}>
+                    <View style={styles.ruleNum}>
+                      <Text style={styles.ruleNumText}>{i + 1}</Text>
+                    </View>
+                    <Text style={styles.ruleText}>{rule}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Section Tabs */}
         <View style={styles.sectionTabs}>
           {[
@@ -208,10 +252,16 @@ export default function GroupDetailScreen({ navigation, route }) {
                 <View style={styles.lockIconWrap}>
                   <Ionicons name="lock-closed" size={24} color={colors.gray400} />
                 </View>
-                <Text style={styles.lockTitle}>Join to participate</Text>
-                <Text style={styles.lockDesc}>Become a member to see all posts and join the conversation</Text>
+                <Text style={styles.lockTitle}>
+                  {isMembersOnly ? 'Members only' : 'Join to participate'}
+                </Text>
+                <Text style={styles.lockDesc}>
+                  {isMembersOnly
+                    ? 'Only members can post in this group. Join to start the conversation.'
+                    : 'Become a member to see all posts and join the conversation'}
+                </Text>
                 <TouchableOpacity style={styles.lockBtn} onPress={handleJoin} activeOpacity={0.8}>
-                  <Text style={styles.lockBtnText}>Join Group</Text>
+                  <Text style={styles.lockBtnText}>{isMembersOnly ? 'Join to post' : 'Join Group'}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -228,17 +278,19 @@ export default function GroupDetailScreen({ navigation, route }) {
               </View>
             )}
 
-            <View style={styles.aboutCard}>
-              <Text style={styles.aboutLabel}>Group Rules</Text>
-              {['Be respectful and kind to all members', 'No spam, self-promotion, or irrelevant content', 'Keep discussions relevant to the group topic'].map((rule, i) => (
-                <View key={i} style={styles.ruleRow}>
-                  <View style={styles.ruleNum}>
-                    <Text style={styles.ruleNumText}>{i + 1}</Text>
+            {groupRules.length > 0 && (
+              <View style={styles.aboutCard}>
+                <Text style={styles.aboutLabel}>Group Rules</Text>
+                {groupRules.map((rule, i) => (
+                  <View key={`about-rule-${i}`} style={styles.ruleRow}>
+                    <View style={styles.ruleNum}>
+                      <Text style={styles.ruleNumText}>{i + 1}</Text>
+                    </View>
+                    <Text style={styles.ruleText}>{rule}</Text>
                   </View>
-                  <Text style={styles.ruleText}>{rule}</Text>
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+            )}
 
             <View style={styles.aboutCard}>
               <Text style={styles.aboutLabel}>Info</Text>
@@ -248,7 +300,7 @@ export default function GroupDetailScreen({ navigation, route }) {
               </View>
               <View style={styles.infoRow}>
                 <Ionicons name="earth-outline" size={16} color={colors.gray500} />
-                <Text style={styles.infoText}>{group.privacy === 'private' ? 'Private group' : 'Public group'}</Text>
+                <Text style={styles.infoText}>{isMembersOnly ? 'Members-only group' : 'Public group'}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Ionicons name="people-outline" size={16} color={colors.gray500} />
@@ -437,6 +489,52 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+
+  // ─── Rules Banner ───
+  rulesBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    backgroundColor: isDark ? 'rgba(206,17,38,0.08)' : 'rgba(206,17,38,0.04)',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(206,17,38,0.2)' : 'rgba(206,17,38,0.12)',
+    overflow: 'hidden',
+  },
+  rulesBannerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  rulesBannerTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  rulesBannerTitle: {
+    ...Typography.bodySmallMedium,
+    color: colors.black,
+  },
+  rulesCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    backgroundColor: isDark ? 'rgba(206,17,38,0.18)' : 'rgba(206,17,38,0.1)',
+    marginLeft: 4,
+  },
+  rulesCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    color: colors.accent,
+  },
+  rulesBannerList: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    paddingTop: 2,
   },
 
   // ─── Section Tabs ───

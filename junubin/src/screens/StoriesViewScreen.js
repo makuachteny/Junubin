@@ -92,20 +92,10 @@ export default function StoriesViewScreen({ navigation, route }) {
     }).start();
   }, [currentIndex, dotSlideAnim]);
 
-  useEffect(() => {
-    if (!story) return;
-    progressAnim.setValue(0);
-    const anim = Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: prefs?.reducedMotion ? Math.min(story.duration || STORY_DURATION, 3500) : (story.duration || STORY_DURATION),
-      useNativeDriver: false,
-    });
-    anim.start(({ finished }) => {
-      if (finished) goNext();
-    });
-    return () => anim.stop();
-  }, [story, goNext, progressAnim, prefs]);
-
+  // Navigation must be declared BEFORE the auto-advance timer effect
+  // below, because that effect lists goNext in its dependency array —
+  // referencing a `const` before declaration would throw a TDZ
+  // ReferenceError during render and the timer would never register.
   const goNext = useCallback(() => {
     if (currentIndex < stories.length - 1) {
       setCurrentIndex((i) => i + 1);
@@ -131,6 +121,23 @@ export default function StoriesViewScreen({ navigation, route }) {
       setCurrentIndex(Math.max(prevStories.length - 1, 0));
     }
   }, [currentIndex, currentGroupIndex, groups]);
+
+  // Auto-advance timer. Resets when `story` changes — so each story in
+  // each group gets its own fresh duration. When the timer fires, goNext
+  // walks: next story in group → next group → if at the very end, close.
+  useEffect(() => {
+    if (!story) return;
+    progressAnim.setValue(0);
+    const anim = Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: prefs?.reducedMotion ? Math.min(story.duration || STORY_DURATION, 3500) : (story.duration || STORY_DURATION),
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished) goNext();
+    });
+    return () => anim.stop();
+  }, [story, goNext, progressAnim, prefs]);
 
   const postReply = useCallback((rawValue) => {
     if (!hasTier('junub')) {

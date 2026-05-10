@@ -26,6 +26,7 @@ import { buildPostContent } from '../utils/postComposer';
 import PostCard from '../components/PostCard';
 import { normalizeHttpUrl } from '../utils/links';
 import * as postService from '../api/services/postService';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 
 const themeKeys = Object.keys(POST_THEMES);
 
@@ -39,15 +40,16 @@ export default function CreatePostScreen({ navigation }) {
   const [step, setStep] = useState('compose'); // 'compose' | 'preview'
   const [content, setContent] = useState('');
   const [postImage, setPostImage] = useState(null);
+  // Media metadata captured at picker time so the new aspect-aware
+  // PostCard can render the media at its natural ratio without doing
+  // a deferred Image.getSize round trip on every feed render. Video
+  // posts also need mediaType to render the right component.
+  const [mediaType, setMediaType] = useState(null);    // 'image' | 'video' | null
+  const [aspectRatio, setAspectRatio] = useState(null);
   const [selectedTheme, setSelectedTheme] = useState('default');
   const [location, setLocation] = useState('');
   const [liveLocationEnabled, setLiveLocationEnabled] = useState(false);
   const [fetchingLocation, setFetchingLocation] = useState(false);
-  const [tagInput, setTagInput] = useState('');
-  const [tags, setTags] = useState([]);
-  const [pollQuestion, setPollQuestion] = useState('');
-  const [pollOptionA, setPollOptionA] = useState('');
-  const [pollOptionB, setPollOptionB] = useState('');
   const [signupLink, setSignupLink] = useState('');
   const [signupTitle, setSignupTitle] = useState('');
   const [activeComposerSection, setActiveComposerSection] = useState(null);
@@ -63,9 +65,6 @@ export default function CreatePostScreen({ navigation }) {
   const composedContent = buildPostContent({
     content,
     location,
-    tags,
-    pollQuestion,
-    pollOptions: [pollOptionA, pollOptionB],
   });
   const canPost = Boolean(composedContent.trim() || postImage || signupLink.trim());
 
@@ -85,45 +84,56 @@ export default function CreatePostScreen({ navigation }) {
     },
     timestamp: 'Just now',
     content: composedContent,
-    image: postImage,
+    image: mediaType === 'video' ? null : postImage,
+    video: mediaType === 'video' ? postImage : null,
+    mediaType: postImage ? mediaType : null,
+    aspectRatio,
     likes: 0,
     comments: 0,
     cardTheme: selectedTheme,
     signupLink: normalizedSignupLink || signupLink.trim() || null,
     signupTitle: signupTitle.trim() || null,
-  }), [composedContent, postImage, selectedTheme, signupLink, signupTitle, currentUser, location, normalizedSignupLink]);
+  }), [composedContent, postImage, mediaType, aspectRatio, selectedTheme, signupLink, signupTitle, currentUser, location, normalizedSignupLink]);
 
   // ── Handlers ──
-  const handlePickImage = async () => {
+  // The picker accepts both photos and videos. ImagePicker returns
+  // width + height on the asset, so we compute aspect ratio here
+  // (instead of measuring after upload) and pass it through to the
+  // Post row — the renderer reads it directly without a getSize call.
+  const handlePickMedia = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Please allow photo access to add images.');
+      promptToOpenSettings({
+        title: 'Photo access needed',
+        message: 'JuNubin needs photo & video access to add media to your post. Open Settings to enable it.',
+      });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
+      mediaTypes: ['images', 'videos'],
+      // Disabled for videos — Expo's editor only crops images. For
+      // photos, allowsEditing locks 1:1 which we don't want now that
+      // the renderer is aspect-aware. So leave it false.
+      allowsEditing: false,
       quality: 0.8,
+      videoMaxDuration: 60,
     });
-    if (!result.canceled) {
-      setPostImage(result.assets[0].uri);
-    }
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const isVideo = asset.type === 'video' || asset.mimeType?.startsWith('video/');
+    const w = Number(asset.width) || 1;
+    const h = Number(asset.height) || 1;
+    setPostImage(asset.uri);
+    setMediaType(isVideo ? 'video' : 'image');
+    // Clamp the aspect ratio to a usable range. Anything more extreme
+    // than 0.5..2.0 turns into a wall-of-card or a sliver in the feed
+    // — Instagram does the same kind of clamp on uploads.
+    const raw = w / h;
+    setAspectRatio(Math.min(Math.max(raw, 0.5625), 1.91));
   };
 
-  const handleAddTag = () => {
-    const clean = tagInput.trim().replace(/^@+/, '');
-    if (!clean) return;
-    if (tags.some((name) => name.toLowerCase() === clean.toLowerCase())) {
-      setTagInput('');
-      return;
-    }
-    setTags((prev) => [...prev, clean]);
-    setTagInput('');
-  };
-
-  const handleRemoveTag = (name) => {
-    setTags((prev) => prev.filter((t) => t !== name));
-  };
+  // Back-compat alias — older render branches reference `handlePickImage`.
+  const handlePickImage = handlePickMedia;
 
   const [posting, setPosting] = useState(false);
 
@@ -141,9 +151,10 @@ export default function CreatePostScreen({ navigation }) {
     try {
       const created = await postService.createPost({
         content: composedContent.trim(),
-        imageUri: postImage,
+        mediaUri: postImage,
+        mediaType,
+        aspectRatio,
         location,
-        tags,
         cardTheme: selectedTheme,
         signupLink: normalizedSignupLink || null,
         signupTitle: signupTitle.trim() || null,
@@ -188,7 +199,10 @@ export default function CreatePostScreen({ navigation }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Needed', 'Allow location access to share where you are posting from.');
+        promptToOpenSettings({
+          title: 'Location access needed',
+          message: 'Share where you’re posting from. You can enable location for JuNubin in Settings.',
+        });
         setFetchingLocation(false);
         return;
       }
@@ -308,13 +322,23 @@ export default function CreatePostScreen({ navigation }) {
             {content.length}/500
           </Text>
 
-          {/* Attached image */}
+          {/* Attached image / video */}
           {postImage && (
             <View style={styles.attachedImageWrap}>
               <Image source={{ uri: postImage }} style={styles.attachedImage} />
+              {mediaType === 'video' && (
+                <View style={styles.videoBadge} pointerEvents="none">
+                  <Ionicons name="videocam" size={14} color="#FFF" />
+                  <Text style={styles.videoBadgeText}>Video</Text>
+                </View>
+              )}
               <TouchableOpacity
                 style={styles.removeImageBtn}
-                onPress={() => setPostImage(null)}
+                onPress={() => {
+                  setPostImage(null);
+                  setMediaType(null);
+                  setAspectRatio(null);
+                }}
               >
                 <Ionicons name="close" size={16} color="#FFF" />
               </TouchableOpacity>
@@ -382,20 +406,6 @@ export default function CreatePostScreen({ navigation }) {
             <GraffitiLocation size={20} color={colors.royal} filled />
             <Text style={styles.mediaBtnText}>Location</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.mediaBtn, activeComposerSection === 'tag' && styles.mediaBtnActive]}
-            onPress={() => setActiveComposerSection((prev) => (prev === 'tag' ? null : 'tag'))}
-          >
-            <Ionicons name="people" size={20} color="#10B981" />
-            <Text style={styles.mediaBtnText}>Tag</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.mediaBtn, activeComposerSection === 'poll' && styles.mediaBtnActive]}
-            onPress={() => setActiveComposerSection((prev) => (prev === 'poll' ? null : 'poll'))}
-          >
-            <Ionicons name="bar-chart" size={20} color="#F59E0B" />
-            <Text style={styles.mediaBtnText}>Poll</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Event link button */}
@@ -443,67 +453,6 @@ export default function CreatePostScreen({ navigation }) {
                 />
               </>
             )}
-          </View>
-        )}
-
-        {activeComposerSection === 'tag' && (
-          <View style={styles.composeCard}>
-            <Text style={styles.composeTitle}>Tag people</Text>
-            <View style={styles.tagInputRow}>
-              <TextInput
-                style={[styles.composeInput, styles.tagInput]}
-                placeholder="Type a name"
-                placeholderTextColor={colors.gray400}
-                value={tagInput}
-                onChangeText={setTagInput}
-                onSubmitEditing={handleAddTag}
-                returnKeyType="done"
-                maxLength={20}
-              />
-              <TouchableOpacity style={styles.addTagBtn} onPress={handleAddTag} activeOpacity={0.8}>
-                <Text style={styles.addTagBtnText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-            {tags.length > 0 && (
-              <View style={styles.tagChipWrap}>
-                {tags.map((name) => (
-                  <TouchableOpacity key={name} style={styles.tagChip} onPress={() => handleRemoveTag(name)}>
-                    <Text style={styles.tagChipText}>@{name}</Text>
-                    <Ionicons name="close" size={12} color={colors.accent} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        {activeComposerSection === 'poll' && (
-          <View style={styles.composeCard}>
-            <Text style={styles.composeTitle}>Create poll</Text>
-            <TextInput
-              style={styles.composeInput}
-              placeholder="Poll question"
-              placeholderTextColor={colors.gray400}
-              value={pollQuestion}
-              onChangeText={setPollQuestion}
-              maxLength={80}
-            />
-            <TextInput
-              style={[styles.composeInput, styles.composeInputGap]}
-              placeholder="Option 1"
-              placeholderTextColor={colors.gray400}
-              value={pollOptionA}
-              onChangeText={setPollOptionA}
-              maxLength={40}
-            />
-            <TextInput
-              style={[styles.composeInput, styles.composeInputGap]}
-              placeholder="Option 2"
-              placeholderTextColor={colors.gray400}
-              value={pollOptionB}
-              onChangeText={setPollOptionB}
-              maxLength={40}
-            />
           </View>
         )}
 
@@ -679,6 +628,24 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     borderRadius: 14,
     padding: 5,
+  },
+  videoBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  videoBadgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
   },
   inlineSignup: {
     flexDirection: 'row',
@@ -864,49 +831,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
 
   // Tags
-  tagInputRow: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  tagInput: {
-    flex: 1,
-  },
-  addTagBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: colors.accent,
-  },
-  addTagBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
-  },
-  tagChipWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-  },
-  tagChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.08)' : colors.separator,
-  },
-  tagChipText: {
-    fontSize: 13,
-    fontFamily: FontFamily.semibold,
-    color: colors.accent,
-  },
-
   // ─── Preview Step ───
   previewBody: {
     flex: 1,

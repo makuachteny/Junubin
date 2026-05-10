@@ -594,15 +594,58 @@ export const mockPosts = [
 // ── Community groups ────────────────────────────────────────
 export const mockGroups = {
   myGroups: [
-    { id: 'g1', name: 'Junub in DC', members: 342 },
-    { id: 'g2', name: 'Dinka Singles', members: 1205 },
-    { id: 'g3', name: 'SS Foodies', members: 567 },
+    {
+      id: 'g1',
+      name: 'Junub in DC',
+      members: 342,
+      privacy: 'public',
+      rules: [
+        'Be respectful and kind to all members.',
+        'Keep discussions relevant to the DC-area Junub community.',
+        'No spam, self-promotion, or irrelevant content.',
+      ],
+    },
+    {
+      id: 'g2',
+      name: 'Dinka Singles',
+      members: 1205,
+      privacy: 'members',
+      rules: [
+        'Members only — please introduce yourself when you join.',
+        'No screenshots or sharing of private conversations.',
+        'Keep it respectful — this is a space for genuine connection.',
+      ],
+    },
+    { id: 'g3', name: 'SS Foodies', members: 567, privacy: 'public' },
   ],
   discover: [
-    { id: 'g4', name: 'South Sudanese Professionals', members: 2340, description: 'Networking and career opportunities for South Sudanese professionals worldwide.' },
-    { id: 'g5', name: 'Junub Culture & Heritage', members: 1890, description: 'Celebrating and preserving South Sudanese traditions, languages, and cultural practices.' },
-    { id: 'g6', name: 'SS Sports Hub', members: 890, description: 'Basketball, soccer, and all sports for the South Sudanese community.' },
-    { id: 'g7', name: 'Faith & Fellowship', members: 1560, description: 'A space for spiritual growth and connection within our community.' },
+    {
+      id: 'g4',
+      name: 'South Sudanese Professionals',
+      members: 2340,
+      privacy: 'members',
+      description: 'Networking and career opportunities for South Sudanese professionals worldwide.',
+      rules: [
+        'Verified professionals only — fill out your profile before posting.',
+        'Job postings welcome on Mondays and Thursdays.',
+        'No multi-level marketing or pyramid schemes.',
+        'Keep critique constructive.',
+      ],
+    },
+    {
+      id: 'g5',
+      name: 'Junub Culture & Heritage',
+      members: 1890,
+      privacy: 'public',
+      description: 'Celebrating and preserving South Sudanese traditions, languages, and cultural practices.',
+      rules: [
+        'Cite sources when sharing historical content.',
+        'Honour all 64+ tribes — no inter-tribal hostility.',
+        'Original posts preferred; credit creators when reposting.',
+      ],
+    },
+    { id: 'g6', name: 'SS Sports Hub', members: 890, privacy: 'public', description: 'Basketball, soccer, and all sports for the South Sudanese community.' },
+    { id: 'g7', name: 'Faith & Fellowship', members: 1560, privacy: 'public', description: 'A space for spiritual growth and connection within our community.' },
   ],
 };
 

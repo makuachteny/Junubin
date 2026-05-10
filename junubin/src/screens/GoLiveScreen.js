@@ -23,6 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FontFamily, useTheme } from '../theme';
 import { hapticSelection } from '../utils/haptics';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import { useLiveChannel } from '../api/hooks/useLiveChannel';
@@ -30,6 +31,8 @@ import { useDailyCall } from '../api/hooks/useDailyCall';
 import { getOrCreateDailyRoom } from '../api/services/dailyService';
 import { DailyMediaView } from '@daily-co/react-native-daily-js';
 import * as liveService from '../api/services/liveService';
+import * as liveGiftsService from '../api/services/liveGiftsService';
+import * as payoutsService from '../api/services/payoutsService';
 import { supabase } from '../config/supabase';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -64,6 +67,19 @@ const GIFTS = [
 // they understand what the running coin count converts to.
 const COINS_PER_USD = 100;
 
+// Minimum coin balance required to submit a payout request. ~$10 USD
+// at the COINS_PER_USD rate above. Submit button is disabled and a
+// hint is shown below this threshold so creators know what to aim for.
+const PAYOUT_MIN_COINS = 1000;
+
+// Payout method options surfaced in the cash-out sheet. The `key`
+// matches the migration's CHECK constraint (00021_payout_requests.sql).
+const PAYOUT_METHODS = [
+  { key: 'stripe_connect', label: 'Stripe (international)', placeholder: 'Email tied to Stripe account', icon: 'card' },
+  { key: 'mobile_money',  label: 'M-Pesa / MTN MoMo',     placeholder: 'Phone number (e.g. +254712345678)', icon: 'phone-portrait' },
+  { key: 'bank_transfer', label: 'Bank transfer',         placeholder: 'IBAN or account number', icon: 'business' },
+];
+
 export default function GoLiveScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -87,6 +103,30 @@ export default function GoLiveScreen({ navigation }) {
   const [totalCoins, setTotalCoins] = useState(0);
   const [recentGifts, setRecentGifts] = useState([]);
   const [giftEvents, setGiftEvents] = useState([]);
+
+  // Lifetime balance from the User row (totalGiftCoinsReceived) — what
+  // the cash-out sheet operates on. Distinct from `totalCoins` which is
+  // the per-session counter for the floating UI. Loaded on mount and
+  // refreshed after a successful payout request so the displayed
+  // balance reflects the post-debit value.
+  const [lifetimeCoins, setLifetimeCoins] = useState(0);
+  const [showCashOutSheet, setShowCashOutSheet] = useState(false);
+  const [payoutMethod, setPayoutMethod] = useState('stripe_connect');
+  const [payoutDestination, setPayoutDestination] = useState('');
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+  const [payoutError, setPayoutError] = useState(null);
+  const [myPayoutRequests, setMyPayoutRequests] = useState([]);
+  const [payoutSuccessId, setPayoutSuccessId] = useState(null);
+  // Stripe Connect onboarding state — populated from getMyConnectStatus
+  // whenever the cash-out sheet opens. When `payoutsEnabled` is false
+  // and the user picks the Stripe method, we replace the destination
+  // input + submit button with a "Set up Stripe payouts" CTA.
+  const [connectStatus, setConnectStatus] = useState({
+    accountId: null,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+  });
+  const [connectStarting, setConnectStarting] = useState(false);
 
   // Host's own id is the streamId — viewers tune to `live:<userId>`.
   const { user } = useAuth();
@@ -116,7 +156,16 @@ export default function GoLiveScreen({ navigation }) {
     },
     onGift: ({ sender, gift, count }) => {
       // Real viewer gifts merge with the simulated stream of mock ones.
-      setTotalCoins((c) => c + (gift?.cost || 0) * (count || 1));
+      const totalCoinDelta = (gift?.cost || 0) * (count || 1);
+      setTotalCoins((c) => c + totalCoinDelta);
+      // NOTE: Persistence to LiveGiftEvent happens on the *viewer's*
+      // side (LiveViewScreen.handleSendGift) because the RLS INSERT
+      // policy keys on auth.uid() = giverUserId. Recording here would
+      // double-count: the host's auth.uid matches host.id, so an
+      // insert from the host produces a {host=H, giver=H} self-row
+      // whose trigger ALSO bumps totalGiftCoinsReceived. The local
+      // setTotalCoins bump above is purely a UI counter — the
+      // server-of-record is the row the viewer wrote.
       setRecentGifts((prev) => [
         { id: `gf-${Date.now()}`, gift, sender, ts: Date.now() },
         ...prev.slice(0, 19),
@@ -228,6 +277,10 @@ export default function GoLiveScreen({ navigation }) {
 
       // Credit + log.
       setTotalCoins((c) => c + gift.cost);
+      // NOTE: No recordLiveGift call here either — see the matching
+      // comment in the `onGift` callback above. The mock simulator is
+      // a UI-only path; in production the viewer's LiveViewScreen
+      // writes the LiveGiftEvent row.
       setRecentGifts((prev) => [
         { id, gift, sender, ts: Date.now() },
         ...prev.slice(0, 19),
@@ -380,17 +433,109 @@ export default function GoLiveScreen({ navigation }) {
   }, []);
 
   const earnedUsd = useMemo(() => (totalCoins / COINS_PER_USD).toFixed(2), [totalCoins]);
+  const lifetimeUsd = useMemo(() => (lifetimeCoins / COINS_PER_USD).toFixed(2), [lifetimeCoins]);
+  const meetsPayoutThreshold = lifetimeCoins >= PAYOUT_MIN_COINS;
+  const selectedMethodMeta = useMemo(
+    () => PAYOUT_METHODS.find((m) => m.key === payoutMethod) || PAYOUT_METHODS[0],
+    [payoutMethod],
+  );
 
-  const handleCashOut = useCallback(() => {
-    if (totalCoins <= 0) {
-      Alert.alert('Nothing to cash out yet', 'Once viewers send gifts, your earnings will appear here.');
+  // Load lifetime earnings + payout history whenever the cash-out
+  // sheet opens. Cheap (two single-row reads) and ensures a fresh
+  // balance after a payout request was submitted on another device.
+  const refreshPayoutData = useCallback(async () => {
+    try {
+      const [{ totalCoins: lifetime }, history, status] = await Promise.all([
+        liveGiftsService.getEarningsSummary(),
+        payoutsService.listMyPayoutRequests(),
+        payoutsService.getMyConnectStatus(),
+      ]);
+      setLifetimeCoins(lifetime || 0);
+      setMyPayoutRequests(history || []);
+      if (status) setConnectStatus(status);
+    } catch {
+      // Best-effort — sheet still renders with whatever we already had.
+    }
+  }, []);
+
+  // Open Stripe's hosted onboarding form in the in-app WebView. When
+  // the user finishes, Stripe redirects to STRIPE_CONNECT_RETURN_URL
+  // and the account.updated webhook flips payoutsEnabled — refresh the
+  // sheet on focus so the CTA swaps to "Request payout" without a
+  // manual reload.
+  const handleStartConnectOnboarding = useCallback(async () => {
+    if (connectStarting) return;
+    setConnectStarting(true);
+    setPayoutError(null);
+    try {
+      const { url } = await payoutsService.startStripeConnectOnboarding();
+      setShowCashOutSheet(false);
+      navigation.navigate('WebView', { url, title: 'Set up payouts' });
+    } catch (e) {
+      setPayoutError(e?.message || 'Could not start Stripe onboarding');
+    } finally {
+      setConnectStarting(false);
+    }
+  }, [connectStarting, navigation]);
+
+  useEffect(() => {
+    if (showCashOutSheet) {
+      refreshPayoutData();
+    }
+  }, [showCashOutSheet, refreshPayoutData]);
+
+  // Initial fetch so the earnings badge in the in-stream sheet shows a
+  // lifetime number even before the host opens cash-out.
+  useEffect(() => { refreshPayoutData(); }, [refreshPayoutData]);
+
+  const handleOpenCashOut = useCallback(() => {
+    setPayoutError(null);
+    setPayoutSuccessId(null);
+    setPayoutDestination('');
+    setShowCashOutSheet(true);
+  }, []);
+
+  const handleSubmitPayout = useCallback(async () => {
+    if (payoutSubmitting) return;
+    if (!meetsPayoutThreshold) return;
+    // Stripe Connect destination is the connected account on file —
+    // no text input. Mobile money / bank transfer still need the user
+    // to type their MSISDN / account number for the operator to parse.
+    const isStripe = payoutMethod === 'stripe_connect';
+    if (!isStripe && !payoutDestination.trim()) {
+      setPayoutError('Enter a payout destination so we know where to send it.');
       return;
     }
-    Alert.alert(
-      'Cash out coming soon',
-      `You've earned ${totalCoins.toLocaleString()} coins (~$${earnedUsd}) this stream. Payouts will be available once payment routing is wired (Stripe Connect / Flutterwave for Africa).`,
-    );
-  }, [totalCoins, earnedUsd]);
+    setPayoutSubmitting(true);
+    setPayoutError(null);
+    try {
+      const destination = isStripe
+        ? { connectAccountId: connectStatus.accountId }
+        : { value: payoutDestination.trim() };
+      const { requestId, balance } = await payoutsService.requestPayout({
+        coinAmount: lifetimeCoins,
+        method: payoutMethod,
+        destination,
+      });
+      setLifetimeCoins(balance);
+      setPayoutSuccessId(requestId);
+      setPayoutDestination('');
+      // Refresh history so the new pending row shows up at the top.
+      const history = await payoutsService.listMyPayoutRequests();
+      setMyPayoutRequests(history || []);
+    } catch (e) {
+      setPayoutError(e?.message || 'Could not submit payout request');
+    } finally {
+      setPayoutSubmitting(false);
+    }
+  }, [payoutSubmitting, meetsPayoutThreshold, payoutDestination, lifetimeCoins, payoutMethod, connectStatus.accountId]);
+
+  const handleCashOut = useCallback(() => {
+    // Close the earnings sheet first so the cash-out modal doesn't
+    // stack on top of it (iOS lets you, but the visual is muddy).
+    setShowEarningsSheet(false);
+    handleOpenCashOut();
+  }, [handleOpenCashOut]);
 
   // Permission screen — both camera AND microphone are required for
   // a live stream. Request whichever is missing first; the user can
@@ -399,7 +544,23 @@ export default function GoLiveScreen({ navigation }) {
   if (!permission.granted || !micPermission.granted) {
     const needsCamera = !permission.granted;
     const needsMic = !micPermission.granted;
+    // iOS only fires the OS dialog once. After that, `canAskAgain` is
+    // false and request*Permission() resolves silently as `denied`.
+    // Detect that case and route the user to Settings instead, so they
+    // don't tap "Allow Access" repeatedly with nothing happening.
+    const cameraBlocked = needsCamera && permission.canAskAgain === false;
+    const micBlocked = needsMic && micPermission.canAskAgain === false;
+    const mustOpenSettings = cameraBlocked || micBlocked;
     const handleAllow = async () => {
+      if (mustOpenSettings) {
+        promptToOpenSettings({
+          title: needsCamera && needsMic
+            ? 'Camera & microphone needed'
+            : needsCamera ? 'Camera needed' : 'Microphone needed',
+          message: 'Live streams need both. Enable them in Settings to go live.',
+        });
+        return;
+      }
       if (needsCamera) await requestPermission();
       if (needsMic) await requestMicPermission();
     };
@@ -786,6 +947,196 @@ export default function GoLiveScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* ── Cash-out request sheet ──
+          MVP collector: records the creator's request + destination
+          into the PayoutRequest queue so the team can fulfill it
+          manually. Real Stripe Connect / Flutterwave Transfer routing
+          is a separate ticket. */}
+      <Modal
+        visible={showCashOutSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowCashOutSheet(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={s.giftOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCashOutSheet(false)} />
+            <View style={s.giftSheet}>
+              <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <View style={s.giftSheetHeader}>
+                  <Text style={s.giftSheetTitle}>Cash out</Text>
+                  <TouchableOpacity onPress={() => setShowCashOutSheet(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="close" size={22} color="rgba(255,255,255,0.6)" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Balance hero — shows the lifetime running total
+                    rather than the per-stream counter. The conversion
+                    rate is documented inline so creators see what
+                    they'll actually receive. */}
+                <View style={s.earningsHero}>
+                  <View style={s.earningsCoinRow}>
+                    <Ionicons name="diamond" size={22} color="#FCCD12" />
+                    <Text style={s.earningsCoinNum}>{lifetimeCoins.toLocaleString()}</Text>
+                  </View>
+                  <Text style={s.earningsUsd}>≈ ${lifetimeUsd}</Text>
+                  <Text style={s.earningsHint}>
+                    Available balance · 100 coins ≈ $1 USD
+                  </Text>
+                </View>
+
+                {payoutSuccessId ? (
+                  <View style={s.payoutSuccessBox}>
+                    <Ionicons name="checkmark-circle" size={20} color="#FCCD12" />
+                    <Text style={s.payoutSuccessText}>
+                      Payout requested. Pending review — payouts process in 3-5 business days.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {!meetsPayoutThreshold ? (
+                  <View style={s.payoutThresholdBox}>
+                    <Ionicons name="lock-closed" size={16} color="rgba(255,255,255,0.7)" />
+                    <Text style={s.payoutThresholdText}>
+                      Earn {PAYOUT_MIN_COINS.toLocaleString()} coins to request a payout
+                      ({(PAYOUT_MIN_COINS - lifetimeCoins).toLocaleString()} to go).
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={s.recentLabel}>Method</Text>
+                    <View style={s.methodRow}>
+                      {PAYOUT_METHODS.map((m) => {
+                        const selected = payoutMethod === m.key;
+                        return (
+                          <TouchableOpacity
+                            key={m.key}
+                            onPress={() => { setPayoutMethod(m.key); setPayoutError(null); }}
+                            style={[s.methodBtn, selected && s.methodBtnActive]}
+                            activeOpacity={0.85}
+                          >
+                            <Ionicons
+                              name={m.icon}
+                              size={16}
+                              color={selected ? '#000' : 'rgba(255,255,255,0.7)'}
+                            />
+                            <Text style={[s.methodBtnText, selected && s.methodBtnTextActive]}>
+                              {m.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {/*
+                      Stripe Connect branch: when the user picks Stripe
+                      and hasn't finished Connect onboarding (or the
+                      account isn't payouts-ready yet), swap the
+                      destination input + submit button for an onboarding
+                      CTA. KYC is delegated entirely to Stripe — we
+                      never see bank numbers.
+                    */}
+                    {payoutMethod === 'stripe_connect' && !connectStatus.payoutsEnabled ? (
+                      <>
+                        {payoutError ? (
+                          <Text style={s.payoutErrorText}>{payoutError}</Text>
+                        ) : null}
+                        <TouchableOpacity
+                          style={[s.cashOutBtn, connectStarting && s.sendBtnDisabled]}
+                          onPress={handleStartConnectOnboarding}
+                          disabled={connectStarting}
+                          activeOpacity={0.85}
+                        >
+                          <Ionicons name="card" size={18} color="#000" />
+                          <Text style={s.cashOutText}>
+                            {connectStarting ? 'Opening Stripe...' : 'Set up Stripe payouts'}
+                          </Text>
+                        </TouchableOpacity>
+                        <Text style={s.payoutFinePrint}>
+                          You'll fill out a short Stripe form (ID, bank
+                          details) so they can pay you directly. Junubin
+                          never sees your bank info.
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={s.recentLabel}>Destination</Text>
+                        {payoutMethod === 'stripe_connect' ? (
+                          /*
+                            Stripe Connect destination is implicit (the
+                            connected account on file). Render a
+                            read-only display rather than a text input
+                            so the user can't accidentally type into it.
+                          */
+                          <View style={s.destinationInput}>
+                            <Text style={{ color: '#fff', fontFamily: FontFamily.regular }}>
+                              {`Stripe Connect (••••${(connectStatus.accountId || '').slice(-4) || '----'})`}
+                            </Text>
+                          </View>
+                        ) : (
+                          <TextInput
+                            style={s.destinationInput}
+                            placeholder={selectedMethodMeta.placeholder}
+                            placeholderTextColor="rgba(255,255,255,0.35)"
+                            value={payoutDestination}
+                            onChangeText={(v) => { setPayoutDestination(v); setPayoutError(null); }}
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                          />
+                        )}
+
+                        {payoutError ? (
+                          <Text style={s.payoutErrorText}>{payoutError}</Text>
+                        ) : null}
+
+                        <TouchableOpacity
+                          style={[s.cashOutBtn, payoutSubmitting && s.sendBtnDisabled]}
+                          onPress={handleSubmitPayout}
+                          disabled={payoutSubmitting}
+                          activeOpacity={0.85}
+                        >
+                          <Ionicons name="cash-outline" size={18} color="#000" />
+                          <Text style={s.cashOutText}>
+                            {payoutSubmitting ? 'Submitting...' : `Request payout (${lifetimeCoins.toLocaleString()} coins)`}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <Text style={s.payoutFinePrint}>
+                          Pending review — payouts process in 3-5 business days. We'll
+                          notify you when funds are sent.
+                        </Text>
+                      </>
+                    )}
+                  </>
+                )}
+
+                {myPayoutRequests.length > 0 ? (
+                  <>
+                    <Text style={[s.recentLabel, { marginTop: 18 }]}>Recent requests</Text>
+                    {myPayoutRequests.slice(0, 5).map((req) => (
+                      <View key={req.id} style={s.payoutHistoryRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.payoutHistoryAmount}>
+                            {req.coinAmount.toLocaleString()} coins · {req.method.replace('_', ' ')}
+                          </Text>
+                          <Text style={s.payoutHistoryStatus}>
+                            {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                            {req.rejectionReason ? ` — ${req.rejectionReason}` : ''}
+                          </Text>
+                        </View>
+                      </View>
+                    ))}
+                  </>
+                ) : null}
+              </ScrollView>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1118,5 +1469,83 @@ const s = StyleSheet.create({
   cashOutText: {
     fontSize: 15, fontFamily: FontFamily.bold, fontWeight: '700',
     color: '#000', letterSpacing: -0.1,
+  },
+
+  // Cash-out request sheet
+  payoutThresholdBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 14,
+    marginBottom: 12,
+  },
+  payoutThresholdText: {
+    flex: 1,
+    fontSize: 13, fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.75)', lineHeight: 18,
+  },
+  payoutSuccessBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: 'rgba(252,205,18,0.12)',
+    borderWidth: 1, borderColor: 'rgba(252,205,18,0.35)',
+    borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 12,
+    marginBottom: 12,
+  },
+  payoutSuccessText: {
+    flex: 1,
+    fontSize: 13, fontFamily: FontFamily.semibold,
+    color: '#FCCD12', lineHeight: 18,
+  },
+  methodRow: { gap: 8, marginBottom: 14 },
+  methodBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+  },
+  methodBtnActive: {
+    backgroundColor: '#FCCD12',
+    borderColor: '#FCCD12',
+  },
+  methodBtnText: {
+    fontSize: 14, fontFamily: FontFamily.semibold,
+    color: 'rgba(255,255,255,0.85)',
+  },
+  methodBtnTextActive: { color: '#000' },
+  destinationInput: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, fontFamily: FontFamily.medium,
+    color: '#FFF',
+    marginBottom: 12,
+  },
+  payoutErrorText: {
+    fontSize: 12, fontFamily: FontFamily.medium,
+    color: '#FF6B6B', marginBottom: 8,
+  },
+  payoutFinePrint: {
+    fontSize: 11, fontFamily: FontFamily.regular,
+    color: 'rgba(255,255,255,0.45)', textAlign: 'center',
+    marginTop: 10, lineHeight: 16,
+  },
+  payoutHistoryRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  payoutHistoryAmount: {
+    fontSize: 13, fontFamily: FontFamily.semibold,
+    color: '#FFF',
+  },
+  payoutHistoryStatus: {
+    fontSize: 11, fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.55)', marginTop: 2,
+    textTransform: 'capitalize',
   },
 });

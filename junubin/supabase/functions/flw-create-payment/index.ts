@@ -60,12 +60,17 @@ serve(async (req) => {
     // Get user profile for customer info + moderation gate. Banned
     // accounts shouldn't be able to start a new payment flow even
     // through the Flutterwave path; mirror the Stripe-side guard.
+    // We also need User.id (the app-level user id) to write the Payment
+    // row — Payment.userId references User.id, not auth.id.
     const { data: userProfile } = await supabase
       .from("User")
-      .select("displayName, email, phone, moderationStatus")
+      .select("id, displayName, email, phone, moderationStatus")
       .eq("auth_id", authUser.id)
       .single();
-    if (userProfile?.moderationStatus === "banned") {
+    if (!userProfile) {
+      return errorResponse("User record not found", 404);
+    }
+    if (userProfile.moderationStatus === "banned") {
       return errorResponse("Account is closed", 403);
     }
 
@@ -123,17 +128,33 @@ serve(async (req) => {
       return errorResponse(flwData.message || "Failed to create payment", 502);
     }
 
-    // Insert pending payment record
-    await supabase.from("payments").insert({
-      user_auth_id: authUser.id,
-      flw_tx_ref: txRef,
-      product_id: productId,
-      amount,
+    // Insert pending payment record into the canonical `Payment` table
+    // (the same table Stripe writes to — provider/providerRef
+    // discriminate). Amount is stored in minor units (cents) to match
+    // the Stripe code path; Flutterwave reports amounts in major units
+    // so we multiply by 100 here.
+    //
+    // The (provider, providerRef) unique index makes this insert
+    // idempotent — a re-issued txRef will surface as a 23505 the
+    // caller can treat as "already created" without leaking duplicates.
+    const { error: insertError } = await supabase.from("Payment").insert({
+      id: crypto.randomUUID(),
+      userId: userProfile.id,
+      provider: "flutterwave",
+      providerRef: txRef,
+      providerCustomerId: null,
+      junubinProductId: productId,
+      amountCents: Math.round(amount * 100),
       currency,
-      payment_method: paymentMethod,
       status: "pending",
-      metadata: eventMeta || {},
+      subscriptionId: null,
+      metadata: { ...(eventMeta || {}), paymentMethod },
     });
+
+    if (insertError && insertError.code !== "23505") {
+      console.error("flw-create-payment Payment insert failed:", insertError);
+      return errorResponse("Failed to record payment", 500);
+    }
 
     return jsonResponse({
       paymentLink: flwData.data.link,

@@ -22,6 +22,7 @@ import { migrateLegacyStorageKeys } from './src/utils/migrateLegacyKeys';
 import { useAppStateRefresh } from './src/utils/useAppStateRefresh';
 import { useSubscription } from './src/payments';
 import * as Linking from 'expo-linking';
+import * as pendingDeepLink from './src/utils/pendingDeepLink';
 
 // Deep-link map. Reachable as `junubin://<path>` (custom scheme set in
 // app.config.js → expo.scheme) and `https://junubin.app/<path>` (web /
@@ -37,6 +38,18 @@ import * as Linking from 'expo-linking';
 //
 // The ProfileSetup screen reads `route.params.resumeAt` (which the URL
 // query param maps to via `parse`).
+//
+// Auth gate: paths under chat/, live/, event/, survey/ require an
+// authenticated session. If one of those URLs arrives while the user
+// is on the auth stack (cold-launched from a push notification while
+// signed out), React Navigation can't resolve the route and the link
+// is dropped. We work around this by:
+//
+//   1. `getInitialURL` defers auth-required URLs to AsyncStorage and
+//      returns undefined so RN doesn't try to navigate yet.
+//   2. `subscribe` does the same for URLs that arrive while running.
+//   3. `AppNavigator` watches auth state and replays any pending URL
+//      via `useLinkTo` after the session resolves.
 const DEEP_LINK_PREFIX = Linking.createURL('/');
 const linkingConfig = {
   prefixes: [DEEP_LINK_PREFIX, 'junubin://', 'https://junubin.app'],
@@ -56,6 +69,29 @@ const linkingConfig = {
         },
       },
     },
+  },
+  async getInitialURL() {
+    const url = await Linking.getInitialURL();
+    if (!url) return undefined;
+    if (pendingDeepLink.urlRequiresAuth(url)) {
+      // Always defer auth-required URLs. AppNavigator's effect picks
+      // them up as soon as the session is ready — at most one render
+      // of latency for already-signed-in users.
+      await pendingDeepLink.setPending(url);
+      return undefined;
+    }
+    return url;
+  },
+  subscribe(listener) {
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      if (pendingDeepLink.urlRequiresAuth(url)) {
+        // Don't forward to RN; the consume effect will fire instead.
+        pendingDeepLink.setPending(url).catch(() => {});
+        return;
+      }
+      listener(url);
+    });
+    return () => sub.remove();
   },
 };
 

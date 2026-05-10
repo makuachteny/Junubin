@@ -34,8 +34,16 @@ import { useCurrentUser, useEligibility } from '../hooks';
 import * as discoverService from '../api/services/discoverService';
 import * as profileService from '../api/services/profileService';
 import { hapticHeavy } from '../utils/haptics';
+import {
+  promptForPushPermission,
+  getNotificationPermissionStatus,
+} from '../utils/notifications';
 
 import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightScheduler';
+
+// Storage key — bump if we ever want to re-ask everyone (e.g. switching
+// providers, big onboarding redesign).
+const FIRST_MATCH_NOTIFY_PROMPT_KEY = '@junubin/first_match_notify_prompt_v1';
 
 const MIN_DECK_CARDS = 10;
 const shuffleArray = (arr) => {
@@ -46,6 +54,13 @@ const shuffleArray = (arr) => {
   }
   return shuffled;
 };
+
+// Mock-data fallback for the swipe deck. Returns [] in production so
+// real users never see seeded fake profiles in their feed; the empty
+// state (line ~901) and CardSkeleton (line ~838) cover the UX while
+// the discover API loads or returns nothing. In __DEV__, returns the
+// buildDeck result so devs can iterate without a live database.
+const getFallbackDeck = (mode = 'Dating') => (__DEV__ ? buildDeck(mode) : []);
 
 const buildDeck = (mode = 'Dating') => {
   const base = mockProfiles.filter((p) => {
@@ -291,10 +306,14 @@ const HomeScreen = ({ navigation, route }) => {
   // / 'restricted' show alerts; tier_required falls through to the
   // existing paywall paths in handleSuperLike / handleSendWhisper.
   const { gate, nudge: surveyNudge } = useEligibility();
-  const [profiles, setProfiles] = useState(() => buildDeck('Dating'));
+  const [profiles, setProfiles] = useState(() => getFallbackDeck('Dating'));
   const [unfilteredProfiles, setUnfilteredProfiles] = useState(null); // holds API or base profiles before filtering
   const [activeFilters, setActiveFilters] = useState([]);
   const [filterSelections, setFilterSelections] = useState({});
+  // Track whether persisted filter state has been hydrated from AsyncStorage.
+  // We gate the persistence write effect on this so the hydration round-trip
+  // can't be clobbered by an initial empty-default save before the read lands.
+  const filtersHydratedRef = useRef(false);
   const styles = useMemo(() => getStyles(colors, insets, isDark), [colors, insets, isDark]);
   const [matchData, setMatchData] = useState(null);
   // Default mode — Socialize first. Real survey-driven mode lands later
@@ -320,10 +339,11 @@ const HomeScreen = ({ navigation, route }) => {
     // Reset filters when switching modes — dating and social have different filter sets
     setActiveFilters([]);
     setFilterSelections({});
-    // Rebuild local deck for the new mode
-    const newDeck = buildDeck(nextMode);
+    // Reset deck for the new mode. The mode-aware getProfiles effect
+    // will re-fetch immediately and populate; until then the loading
+    // skeleton (or empty state) renders.
     setUnfilteredProfiles(null);
-    setProfiles(newDeck);
+    setProfiles(getFallbackDeck(nextMode));
     // Local fast-path cache — survives cold starts before the network
     // round-trip lands.
     AsyncStorage.setItem('@junubin_mode', nextMode).catch(() => {});
@@ -347,9 +367,8 @@ const HomeScreen = ({ navigation, route }) => {
       setMode(apiMode);
       setActiveFilters([]);
       setFilterSelections({});
-      const newDeck = buildDeck(apiMode);
       setUnfilteredProfiles(null);
-      setProfiles(newDeck);
+      setProfiles(getFallbackDeck(apiMode));
     }
   }, [currentUser?.preferences?.mode, mode]);
   // Check if spotlight should show
@@ -361,6 +380,48 @@ const HomeScreen = ({ navigation, route }) => {
       }
     });
   }, [hasTier]);
+
+  // Hydrate persisted filter selections on mount so the user's last
+  // chips/selections survive a cold start. Falls through to the default
+  // empty state on missing key, parse error, or shape mismatch.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('@junubin_home_filters');
+        if (!cancelled && raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object') {
+            if (Array.isArray(parsed.activeFilters)) {
+              setActiveFilters(parsed.activeFilters);
+            }
+            if (parsed.filterSelections && typeof parsed.filterSelections === 'object') {
+              setFilterSelections(parsed.filterSelections);
+            }
+          }
+        }
+      } catch {
+        // Fall through to default state on hydration error.
+      } finally {
+        if (!cancelled) filtersHydratedRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist filter selections, debounced so a flurry of taps coalesces
+  // into a single write. Gated on `filtersHydratedRef` so the initial
+  // empty-default render can't overwrite the hydration round-trip.
+  useEffect(() => {
+    if (!filtersHydratedRef.current) return;
+    const handle = setTimeout(() => {
+      AsyncStorage.setItem(
+        '@junubin_home_filters',
+        JSON.stringify({ activeFilters, filterSelections }),
+      ).catch(() => {});
+    }, 500);
+    return () => clearTimeout(handle);
+  }, [activeFilters, filterSelections]);
 
   // Mode toggle is now in the header — no need to poll AsyncStorage
 
@@ -413,7 +474,10 @@ const HomeScreen = ({ navigation, route }) => {
         apiCursorRef.current = nextCursor;
       }
     }).catch((err) => {
-      // Keep mock data on failure
+      // On failure we leave whatever's already in `profiles`. In dev that's
+      // the seeded mock deck; in prod it's [] and the empty state renders.
+      // We don't surface a toast here because the loading effect re-runs
+      // on focus and on mode change — most users won't even notice.
       if (__DEV__) console.warn('Profile fetch failed:', err);
     }).finally(() => setIsLoadingProfiles(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -477,7 +541,7 @@ const HomeScreen = ({ navigation, route }) => {
   useFocusEffect(
     useCallback(() => {
       const unsubscribe = navigation.addListener('tabPress', () => {
-        const baseDeck = unfilteredProfiles || buildDeck(mode);
+        const baseDeck = unfilteredProfiles || getFallbackDeck(mode);
         setProfiles(applyFilters(baseDeck, activeFilters, filterSelections));
       });
       return unsubscribe;
@@ -485,7 +549,7 @@ const HomeScreen = ({ navigation, route }) => {
   );
 
   useEffect(() => {
-    const baseDeck = unfilteredProfiles || buildDeck(mode);
+    const baseDeck = unfilteredProfiles || getFallbackDeck(mode);
     const filteredDeck = applyFilters(baseDeck, activeFilters, filterSelections);
     setProfiles(filteredDeck);
   }, [activeFilters, filterSelections, unfilteredProfiles, mode]);
@@ -792,10 +856,40 @@ const HomeScreen = ({ navigation, route }) => {
     images: authUser?.photos?.map((p) => p.url) || currentUser?.images,
   }), [authUser?.displayName, authUser?.photos, currentUser?.name, currentUser?.images]);
 
+  // App Review-friendly contextual push prompt. Fires at most once,
+  // immediately after the user dismisses their first match overlay —
+  // they've just seen something worth being notified about, so the
+  // OS dialog has the right framing. We persist a one-shot flag so
+  // we don't pester anyone who declined.
+  const maybePromptForPush = useCallback(async () => {
+    try {
+      const seen = await AsyncStorage.getItem(FIRST_MATCH_NOTIFY_PROMPT_KEY);
+      if (seen) return;
+      await AsyncStorage.setItem(FIRST_MATCH_NOTIFY_PROMPT_KEY, '1');
+      const status = await getNotificationPermissionStatus();
+      if (status === 'granted' || status === 'denied') return; // already answered, nothing to do
+      // Brief in-app pre-prompt before the OS dialog so the user
+      // understands the value. Apple guidance: never call the OS
+      // permission dialog cold.
+      Alert.alert(
+        'Get a heads-up next time?',
+        'Turn on notifications to know the moment someone matches with you, sends a message, or likes your post.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Turn on', onPress: () => { promptForPushPermission().catch(() => {}); } },
+        ],
+      );
+    } catch {
+      // AsyncStorage hiccups shouldn't break the match flow — just
+      // skip the prompt this round.
+    }
+  }, []);
+
   const handleMatchSendMessage = useCallback(() => {
     const convId = matchData?.conversationId;
     const matched = matchData?.matchedUser;
     setMatchData(null);
+    maybePromptForPush();
     if (convId) {
       navigation?.navigate?.('Chat', {
         conversationId: convId,
@@ -805,9 +899,12 @@ const HomeScreen = ({ navigation, route }) => {
         fromMatch: true,
       });
     }
-  }, [matchData?.conversationId, matchData?.matchedUser, navigation]);
+  }, [matchData?.conversationId, matchData?.matchedUser, navigation, maybePromptForPush]);
 
-  const handleKeepSwiping = useCallback(() => setMatchData(null), []);
+  const handleKeepSwiping = useCallback(() => {
+    setMatchData(null);
+    maybePromptForPush();
+  }, [maybePromptForPush]);
 
   // Prefetch images for the next few profiles so they're cached when the card mounts
   const prefetchedRef = useRef(new Set());

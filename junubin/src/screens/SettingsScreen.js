@@ -24,6 +24,11 @@ import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
 import * as safetyService from '../api/services/safetyService';
 import { supabase } from '../config/supabase';
+import {
+  promptForPushPermission,
+  getNotificationPermissionStatus,
+} from '../utils/notifications';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TIER_LABELS = { free: 'Free', plus: 'JuNubin+', junub: 'Junub' };
@@ -364,7 +369,40 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
           </PressableRow>
 
-          <PressableRow style={styles.menuRow} onPress={() => navigation.navigate('Notifications')}>
+          {/* Push notifications — distinct from the (deferred) in-app
+              notification feed. The OS-level permission powers the real
+              push pipeline (00013 triggers → push-send). Tapping this
+              row either prompts the user the first time, or opens the
+              system Settings if they've already denied. */}
+          <PressableRow
+            style={styles.menuRow}
+            onPress={async () => {
+              const status = await getNotificationPermissionStatus();
+              if (status === 'granted') {
+                Alert.alert(
+                  'Notifications on',
+                  'You\'ll get a heads-up when someone matches with you, sends a message, or likes your post.',
+                );
+                return;
+              }
+              if (status === 'denied') {
+                promptToOpenSettings({
+                  title: 'Notifications turned off',
+                  message: 'Open Settings to let JuNubin send you push notifications about matches, messages, and likes.',
+                });
+                return;
+              }
+              const token = await promptForPushPermission();
+              if (token) {
+                Alert.alert('Notifications on', 'You\'re all set.');
+              } else {
+                promptToOpenSettings({
+                  title: 'Notifications still off',
+                  message: 'You can enable JuNubin notifications in Settings whenever you change your mind.',
+                });
+              }
+            }}
+          >
             <Text style={styles.menuLabel}>Push Notifications</Text>
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
           </PressableRow>

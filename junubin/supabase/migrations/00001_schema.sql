@@ -255,4 +255,6 @@ ALTER TABLE "UserPopularity" ADD CONSTRAINT "UserPopularity_userId_fkey"
 -- ============================================================================
 -- Storage bucket for photos
 -- ============================================================================
-INSERT INTO storage.buckets (id, name, public) VALUES ('photos', 'photos', true);
+INSERT INTO storage.buckets (id, name, public)
+  VALUES ('photos', 'photos', true)
+  ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;

@@ -20,16 +20,7 @@ const DEFAULT_STATE = {
   promoEndsAt: null,
   adsEnabled: true,
   purchaseHistory: [],
-  // Tracks the YYYY-MM in which the current Junub subscriber last received their
-  // monthly free spotlight, so we grant exactly one per calendar month.
-  lastMonthlySpotlightAt: null,
 };
-
-// Returns the calendar period (YYYY-MM) for a given timestamp/Date.
-function monthKey(date = new Date()) {
-  const d = date instanceof Date ? date : new Date(date);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-}
 
 const SubscriptionStateContext = createContext(null);
 const SubscriptionActionsContext = createContext(null);
@@ -195,32 +186,21 @@ export function SubscriptionProvider({ children }) {
     return () => subscription.unsubscribe();
   }, [loadServerState]);
 
-  // Junub subscribers receive 1 free spotlight per calendar month. We grant it
-  // the first time we observe an active junub tier in a new month and persist
-  // the grant period to prevent double-granting on app reopens.
-  const claimMonthlyJunubSpotlight = useCallback(() => {
-    let granted = false;
-    setState((prev) => {
-      const effective = getEffectiveTier(prev.tier, prev.promoTier, prev.promoEndsAt);
-      if (effective !== 'junub') return prev;
-      const now = monthKey();
-      if (prev.lastMonthlySpotlightAt === now) return prev;
-      granted = true;
-      return {
-        ...prev,
-        spotlights: prev.spotlights + 1,
-        lastMonthlySpotlightAt: now,
-      };
-    });
-    if (granted) {
-      supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-        if (authUser) {
-          supabase.rpc('add_spotlights', { user_auth_id: authUser.id, amount: 1 }).catch(() => {});
-        }
-      }).catch(() => {});
+  // Junub subscribers receive 1 free spotlight per calendar month. The
+  // grant is decided server-side via `claim_monthly_spotlight` (00020),
+  // which checks the calendar-month gate against `User.lastMonthlySpotlightAt`
+  // — so reinstalling the app no longer re-grants. The server is the
+  // authority on the resulting balance; we just mirror it locally.
+  const claimMonthlyJunubSpotlight = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc('claim_monthly_spotlight');
+      if (error || !data?.[0]?.granted) return false;
+      setState((prev) => ({ ...prev, spotlights: data[0].spotlights }));
+      return true;
+    } catch {
+      return false;
     }
-    return granted;
-  }, [getEffectiveTier]);
+  }, []);
 
   useEffect(() => {
     if (!loaded) return;

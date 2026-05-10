@@ -17,6 +17,10 @@ export async function getMatches() {
   if (!appUser) throw new Error('User not found');
   const userId = appUser.id;
 
+  // We pull `readAt` and `senderId` on each message so we can derive
+  // `unreadCount` per match without a follow-up query — it's just a
+  // filter over the messages we're already loading for the last-message
+  // preview. Cheaper than firing N count queries (one per match).
   const { data: matches, error } = await supabase
     .from('Match')
     .select(`
@@ -29,7 +33,7 @@ export async function getMatches() {
       conversation:Conversation(
         id,
         messages:Message(
-          id, body, senderId, createdAt,
+          id, body, senderId, createdAt, readAt,
           sender:User!senderId(id, displayName)
         )
       ),
@@ -50,6 +54,15 @@ export async function getMatches() {
       ? msgs.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
       : null;
 
+    // Server-truth unread count: messages from the other party that
+    // haven't been marked read yet (Message.readAt IS NULL). Stays
+    // additive to the existing return shape — `unreadCount` is new,
+    // `unread` keeps the old boolean meaning for any consumer that
+    // hasn't migrated to the count yet.
+    const unreadCount = msgs.reduce((acc, msg) => (
+      msg.senderId !== userId && !msg.readAt ? acc + 1 : acc
+    ), 0);
+
     const photos = (otherUser?.photos || [])
       .sort((a, b) => a.sortOrder - b.sortOrder)
       .map((p) => p.url);
@@ -64,7 +77,8 @@ export async function getMatches() {
       timestamp: lastMessage
         ? formatTimestamp(lastMessage.createdAt)
         : formatTimestamp(m.createdAt),
-      unread: false,
+      unread: unreadCount > 0,
+      unreadCount,
       userId: otherUser?.id,
     };
   });

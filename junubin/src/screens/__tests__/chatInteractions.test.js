@@ -29,6 +29,13 @@ jest.mock('../../hooks', () => ({
   useEligibility: () => ({ gate: () => true, lastVerdict: () => null, nudge: null }),
 }));
 
+// ChatScreen calls useFocusEffect for read-receipt persistence; tests
+// render outside a NavigationContainer so we stub it to a no-op.
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return { ...actual, useFocusEffect: jest.fn() };
+});
+
 jest.mock('../../api/hooks/useRealtime', () => ({
   useRealtime: () => ({
     onMessage: () => () => {},
@@ -48,6 +55,7 @@ jest.mock('../../api/services/chatService', () => ({
   sendAudioMessage: jest.fn(async () => ({ id: 'audio-1' })),
   toggleReaction: jest.fn(async () => ({ added: true })),
   getReactions: jest.fn(async () => ({})),
+  markConversationRead: jest.fn(async () => 0),
 }));
 
 jest.mock('../../utils/useScreenshotProtection', () => ({

@@ -29,6 +29,7 @@ import { useLiveChannel } from '../api/hooks/useLiveChannel';
 import { useDailyCall } from '../api/hooks/useDailyCall';
 import { getOrCreateDailyRoom } from '../api/services/dailyService';
 import * as liveService from '../api/services/liveService';
+import * as liveGiftsService from '../api/services/liveGiftsService';
 import { supabase } from '../config/supabase';
 import { DailyMediaView } from '@daily-co/react-native-daily-js';
 
@@ -293,8 +294,23 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
     // Broadcast to the host so their earnings counter ticks up + the
     // gift banner appears for them too.
     liveChannel.sendGift({ sender: myDisplayName, gift, count: 1 });
+    // Persist to the LiveGiftEvent ledger so the host's
+    // totalGiftCoinsReceived stays authoritative across sessions. Fire-
+    // and-forget — the floating animation shouldn't wait on the
+    // round-trip, and RLS will silently reject anything off-pattern
+    // (mirrors GoLiveScreen / ChatScreen's pattern).
+    if (item.id && gift?.id && gift?.cost > 0) {
+      liveGiftsService
+        .recordLiveGift({
+          hostUserId: item.id,
+          giftType: gift.id,
+          coinAmount: gift.cost,
+          context: 'live',
+        })
+        .catch(() => {});
+    }
     // Keep the sheet open so the sender can chain gifts (TikTok pattern).
-  }, [isWatching, requireAuth, coins, consumeCoins, spawnReaction, pushGiftEvent, myDisplayName, liveChannel]);
+  }, [isWatching, requireAuth, coins, consumeCoins, spawnReaction, pushGiftEvent, myDisplayName, liveChannel, item.id]);
 
   // Mock incoming gifts from other viewers so the banner overlay shows
   // life — also gives the broadcaster's earnings counter content during

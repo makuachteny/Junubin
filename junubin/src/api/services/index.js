@@ -8,3 +8,5 @@ export * as followService from './followService';
 export * as safetyService from './safetyService';
 export * as postService from './postService';
 export * as liveService from './liveService';
+export * as liveGiftsService from './liveGiftsService';
+export * as payoutsService from './payoutsService';

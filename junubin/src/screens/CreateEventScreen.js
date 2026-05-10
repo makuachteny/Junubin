@@ -8,6 +8,80 @@ import Button from '../components/Button';
 import { useCurrentUser } from '../hooks';
 import { saveEvent } from '../utils/eventStore';
 
+// Date / time validation helpers — we don't have @react-native-community/datetimepicker
+// installed and the brief forbids adding deps, so we keep TextInput entries but
+// strictly validate + preview the parsed value. parseEventDate accepts YYYY-MM-DD,
+// parseEventTime accepts H:MM (AM|PM) or 24h HH:MM; both return null on bad input.
+const parseEventDate = (raw) => {
+  const s = String(raw || '').trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(year, month - 1, day);
+  if (
+    d.getFullYear() !== year ||
+    d.getMonth() !== month - 1 ||
+    d.getDate() !== day
+  ) return null;
+  return d;
+};
+
+const parseEventTime = (raw) => {
+  const s = String(raw || '').trim();
+  // 12-hour with AM/PM: "7:00 PM", "07:30 am"
+  const m12 = /^(\d{1,2}):(\d{2})\s*([AaPp])\.?[Mm]\.?$/.exec(s);
+  if (m12) {
+    let h = Number(m12[1]);
+    const min = Number(m12[2]);
+    const isPm = m12[3].toLowerCase() === 'p';
+    if (h < 1 || h > 12 || min < 0 || min > 59) return null;
+    if (h === 12) h = 0;
+    if (isPm) h += 12;
+    return { hours: h, minutes: min };
+  }
+  // 24-hour: "19:00"
+  const m24 = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (m24) {
+    const h = Number(m24[1]);
+    const min = Number(m24[2]);
+    if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+    return { hours: h, minutes: min };
+  }
+  return null;
+};
+
+const combineDateTime = (date, time) => {
+  if (!date) return null;
+  const d = new Date(date.getTime());
+  if (time) {
+    d.setHours(time.hours, time.minutes, 0, 0);
+  } else {
+    d.setHours(23, 59, 0, 0); // end-of-day fallback when only a date is given
+  }
+  return d;
+};
+
+const formatDatePreview = (date) => {
+  if (!date) return null;
+  return date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+};
+
+const formatTimePreview = (time) => {
+  if (!time) return null;
+  const h12 = time.hours === 0 ? 12 : time.hours > 12 ? time.hours - 12 : time.hours;
+  const ampm = time.hours >= 12 ? 'PM' : 'AM';
+  const mm = String(time.minutes).padStart(2, '0');
+  return `${h12}:${mm} ${ampm}`;
+};
+
 export default function CreateEventScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -29,6 +103,22 @@ export default function CreateEventScreen({ navigation }) {
       Alert.alert('Missing Title', 'Please give your event a name.');
       return;
     }
+    // Date / time validation — reject empty, malformed, and past datetimes.
+    const parsedDate = parseEventDate(date);
+    if (!parsedDate) {
+      Alert.alert('Invalid Date', 'Please enter the date as YYYY-MM-DD (e.g., 2026-06-15).');
+      return;
+    }
+    const parsedTime = parseEventTime(time);
+    if (time.trim() && !parsedTime) {
+      Alert.alert('Invalid Time', 'Use H:MM AM/PM (e.g., 7:00 PM) or 24-hour HH:MM (e.g., 19:00).');
+      return;
+    }
+    const eventStart = combineDateTime(parsedDate, parsedTime);
+    if (!eventStart || eventStart.getTime() <= Date.now()) {
+      Alert.alert('Date In The Past', 'Pick a date and time in the future.');
+      return;
+    }
     // Validate ticket price for paid events — must be a non-negative number.
     let parsedPrice = 0;
     if (!isFree) {
@@ -46,8 +136,8 @@ export default function CreateEventScreen({ navigation }) {
       location: location.trim() || 'TBD',
       city: city.trim() || 'All',
       category: category.trim() || 'Social',
-      date: date.trim() || '2026-01-01',
-      time: time.trim() || '7:00 PM',
+      date: date.trim(),
+      time: time.trim() || (parsedTime ? formatTimePreview(parsedTime) : ''),
       isFree,
       ticketPrice: isFree ? 0 : parsedPrice,
       ticketsTotal: isFree ? null : parsedTickets,
@@ -93,10 +183,50 @@ export default function CreateEventScreen({ navigation }) {
         <TextInput style={styles.input} value={category} onChangeText={setCategory} placeholder="e.g., Cultural" placeholderTextColor={colors.gray400} />
 
         <Text style={styles.label}>Date</Text>
-        <TextInput style={styles.input} value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" placeholderTextColor={colors.gray400} />
+        <TextInput
+          style={styles.input}
+          value={date}
+          onChangeText={setDate}
+          placeholder="YYYY-MM-DD"
+          placeholderTextColor={colors.gray400}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="numbers-and-punctuation"
+        />
+        {date.trim().length > 0 ? (
+          (() => {
+            const parsed = parseEventDate(date);
+            if (!parsed) {
+              return <Text style={styles.previewError}>Use format YYYY-MM-DD.</Text>;
+            }
+            const isPast = parsed.getTime() < new Date().setHours(0, 0, 0, 0);
+            return (
+              <Text style={[styles.previewText, isPast && styles.previewError]}>
+                {formatDatePreview(parsed)}{isPast ? '  (in the past)' : ''}
+              </Text>
+            );
+          })()
+        ) : null}
 
         <Text style={styles.label}>Time</Text>
-        <TextInput style={styles.input} value={time} onChangeText={setTime} placeholder="e.g., 7:00 PM" placeholderTextColor={colors.gray400} />
+        <TextInput
+          style={styles.input}
+          value={time}
+          onChangeText={setTime}
+          placeholder="e.g., 7:00 PM or 19:00"
+          placeholderTextColor={colors.gray400}
+          autoCapitalize="characters"
+          autoCorrect={false}
+        />
+        {time.trim().length > 0 ? (
+          (() => {
+            const parsedT = parseEventTime(time);
+            if (!parsedT) {
+              return <Text style={styles.previewError}>Use H:MM AM/PM or 24-hour HH:MM.</Text>;
+            }
+            return <Text style={styles.previewText}>{formatTimePreview(parsedT)}</Text>;
+          })()
+        ) : null}
 
         <View style={styles.toggleRow}>
           <Text style={styles.toggleLabel}>Free Event</Text>
@@ -175,6 +305,18 @@ const getStyles = (colors) => StyleSheet.create({
   textArea: {
     minHeight: 100,
     textAlignVertical: 'top',
+  },
+  previewText: {
+    ...Typography.caption,
+    color: colors.gray,
+    marginTop: 6,
+    marginLeft: 4,
+  },
+  previewError: {
+    ...Typography.caption,
+    color: '#C62828',
+    marginTop: 6,
+    marginLeft: 4,
   },
   toggleRow: {
     flexDirection: 'row',

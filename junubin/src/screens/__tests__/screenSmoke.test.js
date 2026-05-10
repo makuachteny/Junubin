@@ -34,6 +34,15 @@ jest.mock('../../hooks', () => ({
   useEligibility: () => ({ gate: () => true, lastVerdict: () => null, nudge: null }),
 }));
 
+// ChatScreen now uses useFocusEffect to mark the conversation read on
+// focus. The smoke test renders ChatScreen without a NavigationContainer
+// (the AppNavigator suite uses one), so stub useFocusEffect to a no-op
+// here while preserving everything else from the real module.
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return { ...actual, useFocusEffect: jest.fn() };
+});
+
 jest.mock('../../api/hooks/useRealtime', () => ({
   useRealtime: () => ({
     onMessage: () => () => {},
@@ -50,6 +59,7 @@ jest.mock('../../api/hooks/useRealtime', () => ({
 jest.mock('../../api/services/chatService', () => ({
   getMessages: jest.fn(async () => []),
   sendMessage: jest.fn(async () => ({ id: 'sent-1' })),
+  markConversationRead: jest.fn(async () => 0),
 }));
 
 jest.mock('../../utils/useScreenshotProtection', () => ({

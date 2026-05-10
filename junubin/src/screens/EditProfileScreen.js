@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useReducer, useCallback } from 'react';
+import React, { useState, useMemo, useReducer, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { CULTURAL_STICKERS } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 import { GraffitiStickerIcon } from '../components/icons';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
@@ -49,6 +50,64 @@ export default function EditProfileScreen({ navigation }) {
     lookingFor: currentUser.lookingFor || 'Something serious',
   });
   const setField = useCallback((key, value) => dispatch({ type: 'SET_FIELD', key, value }), []);
+
+  // Optimistic text-field saves — local state updates instantly via the reducer
+  // (typing stays snappy); we debounce the actual profileService.updateProfile
+  // call to ~600ms after the user stops typing. Photos, radio chips, and
+  // sticker selections still go through the explicit Save button.
+  const TEXT_DEBOUNCE_MS = 600;
+  const textSaveTimerRef = useRef(null);
+  const isMountedRef = useRef(false);
+  const skipFirstRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (textSaveTimerRef.current) {
+        clearTimeout(textSaveTimerRef.current);
+        textSaveTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Skip the initial hydrate render — only debounce on actual user edits.
+    if (skipFirstRef.current) {
+      skipFirstRef.current = false;
+      return;
+    }
+    if (!session) return;
+    if (textSaveTimerRef.current) clearTimeout(textSaveTimerRef.current);
+    textSaveTimerRef.current = setTimeout(() => {
+      textSaveTimerRef.current = null;
+      profileService
+        .updateProfile({
+          displayName: form.name.trim(),
+          bio: form.bio.trim(),
+          job: form.job.trim(),
+          school: form.school.trim(),
+        })
+        .then((user) => {
+          if (!isMountedRef.current) return;
+          if (user) updateUser(user);
+        })
+        .catch((err) => {
+          if (!isMountedRef.current) return;
+          // Leave local state alone so the user can keep editing — just
+          // surface the error so they know the save didn't land.
+          Alert.alert("Couldn't save changes", err?.message || 'We will retry on your next edit.');
+        });
+    }, TEXT_DEBOUNCE_MS);
+    return () => {
+      if (textSaveTimerRef.current) {
+        clearTimeout(textSaveTimerRef.current);
+        textSaveTimerRef.current = null;
+      }
+    };
+    // Only depend on the four text fields — radio/sticker changes shouldn't
+    // trigger this auto-save path.
+  }, [form.name, form.bio, form.job, form.school, session, updateUser]);
+
   // Hydrate stickers from the user's saved selection if present, else
   // default to Dinka + Junub. Mapping persisted sticker labels back
   // to their CULTURAL_STICKERS index so the toggle UI shows the
@@ -84,7 +143,10 @@ export default function EditProfileScreen({ navigation }) {
   const handleAddPhoto = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Please allow photo access to add photos.');
+      promptToOpenSettings({
+        title: 'Photo access needed',
+        message: 'JuNubin needs photo access to add profile photos. Enable it in Settings.',
+      });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({

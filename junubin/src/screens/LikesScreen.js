@@ -407,8 +407,14 @@ export default function LikesScreen({ navigation }) {
       >
         <Text style={styles.headerTitle}>Likes</Text>
         <View style={styles.headerRight}>
+          {/* Disabled until the Notification table + service exist (v1.1). */}
           <TouchableOpacity
-            onPress={() => navigation.navigate('Notifications')}
+            onPress={() =>
+              Alert.alert(
+                'Coming soon',
+                'In-app notifications are landing in v1.1. For now, push notifications cover matches, likes, and messages.'
+              )
+            }
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >

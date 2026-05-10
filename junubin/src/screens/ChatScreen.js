@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { GraffitiSend } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { mockMessages } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
@@ -27,6 +28,7 @@ import { useFollow } from '../hooks/useFollow';
 import * as callService from '../api/services/callService';
 import * as chatService from '../api/services/chatService';
 import * as safetyService from '../api/services/safetyService';
+import * as liveGiftsService from '../api/services/liveGiftsService';
 import { useEligibility } from '../hooks';
 import { supabase } from '../config/supabase';
 import { useRealtime } from '../api/hooks/useRealtime';
@@ -426,6 +428,12 @@ export default function ChatScreen({ navigation, route }) {
         read: true,
       }]);
       setMissionState((prev) => ({ ...prev, response: true }));
+      // The user is actively on this screen, so anything that lands
+      // here is already "read". Flip server-side too so the badge
+      // doesn't tick up on their other devices. Fire-and-forget.
+      if (msg.senderId !== currentUser?.id) {
+        chatService.markConversationRead(conversationId).catch(() => {});
+      }
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     });
     return unsub;
@@ -482,23 +490,48 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [conversationId, emitReadReceipt]);
 
+  // Persist read state server-side via the mark_conversation_read RPC.
+  // This is the source-of-truth flip that clears the unread badge across
+  // all of this user's devices (matches list re-fetch picks up
+  // unreadCount=0). Re-fires every time the screen regains focus so a
+  // user who came back from settings or another tab also clears state.
+  // Fire-and-forget — don't block the UI on the round-trip.
+  useFocusEffect(
+    useCallback(() => {
+      if (!session || !conversationId) return undefined;
+      chatService.markConversationRead(conversationId).catch(() => {});
+      return undefined;
+    }, [session, conversationId]),
+  );
+
   // ── Game timeout check: every 10s, mark waiting games as timed out ──
+  // Surfaces a toast for any game that just transitioned to timed-out so
+  // the user gets feedback instead of the previous silent flip — they
+  // were sending answers into a game that had already ended.
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveGames((prev) => {
         let changed = false;
+        let timedOutCount = 0;
         const next = new Map(prev);
         for (const [id, s] of next) {
           if (isTimedOut(s)) {
             next.set(id, markTimedOut(s));
             changed = true;
+            timedOutCount += 1;
           }
+        }
+        if (timedOutCount > 0) {
+          const subtitle = timedOutCount === 1
+            ? 'Send a new one to keep playing.'
+            : `${timedOutCount} games ran out of time.`;
+          showProgressToast('Game ended', subtitle);
         }
         return changed ? next : prev;
       });
     }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [showProgressToast]);
 
   // ── Game persistence: save activeGames on change, restore on mount ──
   useEffect(() => {
@@ -524,15 +557,59 @@ export default function ChatScreen({ navigation, route }) {
     });
   }, [conversationId]);
 
-  // ── Offline resilience: queue game answers when offline, process on reconnect ──
+  // ── Offline resilience: queue game answers + text sends when offline,
+  // drain on reconnect. Each handler throws on failure so the queue
+  // keeps the action for the next reconnect cycle (see offlineQueue
+  // semantics). For text_message we additionally swap the local
+  // optimistic row over to the server-issued id so the failed bubble
+  // morphs into a normal sent bubble in place — no jarring re-render.
   useEffect(() => {
     if (!isConnected || !conversationId) return;
     processQueue(async (action) => {
-      if (action.type === 'game_answer' && action.conversationId === conversationId) {
+      if (action.conversationId !== conversationId) return;
+      if (action.type === 'game_answer') {
         await chatService.sendMessage(action.conversationId, action.body, 'game');
+        return;
+      }
+      if (action.type === 'text_message') {
+        const result = await chatService.sendMessage(action.conversationId, action.body);
+        if (result?.id) {
+          sentIdsRef.current.add(result.id);
+          if (action.tempId) {
+            setMessages((prev) => prev.map((m) => (
+              m.id === action.tempId ? { ...m, id: result.id, read: true, status: 'sent' } : m
+            )));
+          }
+        }
       }
     });
   }, [isConnected, conversationId]);
+
+  // Attempt to actually persist a text message to the server. Pulled
+  // out of handleSend so the failed-bubble retry tap can re-use it
+  // verbatim. On success the optimistic row gets its tempId swapped
+  // for the server-issued id; on failure the row is flipped to
+  // status:'failed' and queued for the auto-retry-on-reconnect drain.
+  const persistTextMessage = useCallback(async (tempId, text) => {
+    if (!conversationId) return;
+    try {
+      const result = await chatService.sendMessage(conversationId, text);
+      if (result?.id) {
+        sentIdsRef.current.add(result.id);
+        setMessages((prev) => prev.map((m) => (
+          m.id === tempId ? { ...m, id: result.id, read: true, status: 'sent' } : m
+        )));
+      }
+    } catch (err) {
+      if (__DEV__) console.warn('Failed to send message:', err);
+      setMessages((prev) => prev.map((m) => (
+        m.id === tempId ? { ...m, status: 'failed' } : m
+      )));
+      // Queue for auto-retry when network comes back. The drain runs
+      // from the existing offlineQueue useEffect below.
+      enqueueAction({ type: 'text_message', conversationId, body: text, tempId });
+    }
+  }, [conversationId]);
 
   const handleSend = useCallback(() => {
     if (!inputText.trim()) return;
@@ -558,6 +635,7 @@ export default function ChatScreen({ navigation, route }) {
       type: 'text',
       time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       read: false,
+      status: conversationId ? 'sending' : 'sent',
     };
 
     setMessages((prev) => [...prev, newMessage]);
@@ -570,18 +648,23 @@ export default function ChatScreen({ navigation, route }) {
     if (showMatchBanner) setShowMatchBanner(false);
 
     if (conversationId) {
-      chatService.sendMessage(conversationId, text).then((result) => {
-        if (result?.id) {
-          sentIdsRef.current.add(result.id);
-          setMessages((prev) => prev.map((m) => m.id === optimisticId ? { ...m, id: result.id, read: true } : m));
-        }
-      }).catch((err) => {
-        if (__DEV__) console.warn('Failed to send message:', err);
-      });
+      persistTextMessage(optimisticId, text);
     }
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [inputText, conversationId, emitTypingStop, pendingWhisper, consumeWhisper]);
+  }, [inputText, conversationId, emitTypingStop, pendingWhisper, consumeWhisper, persistTextMessage, showMatchBanner]);
+
+  // User tapped a failed bubble — flip back to sending and re-attempt.
+  // Success swaps in the real id; another failure puts it back into
+  // the failed state for the next tap (or for the network-restore drain).
+  const handleRetryFailed = useCallback((messageId) => {
+    setMessages((prev) => prev.map((m) => (
+      m.id === messageId ? { ...m, status: 'sending' } : m
+    )));
+    const target = messages.find((m) => m.id === messageId);
+    if (!target) return;
+    persistTextMessage(messageId, target.text);
+  }, [messages, persistTextMessage]);
 
   const handlePhoto = useCallback(() => {
     // Placeholder: add image message
@@ -914,6 +997,24 @@ export default function ChatScreen({ navigation, route }) {
     setShowGiftPicker(false);
     setGiftAnimation(gift);
 
+    // Persist server-side so the recipient's running total survives
+    // the chat session. The peer is the host of this gift (same id
+    // resolution used elsewhere in the screen for unmatch / report).
+    // Fire-and-forget — local UI shouldn't wait on the round-trip.
+    const peerId = match.userId || match.id;
+    const giftType = gift.id || gift.type || gift.name || 'unknown';
+    const coinAmount = Number(gift.coins) || 0;
+    if (peerId && coinAmount > 0) {
+      liveGiftsService
+        .recordLiveGift({
+          hostUserId: peerId,
+          giftType,
+          coinAmount,
+          context: 'chat',
+        })
+        .catch(() => {});
+    }
+
     LayoutAnimation.configureNext(SPRING_ANIM);
     const msg = {
       id: `msg-gift-${Date.now()}`,
@@ -925,7 +1026,7 @@ export default function ChatScreen({ navigation, route }) {
     };
     setMessages((prev) => [...prev, msg]);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [consumeCoins, navigation]);
+  }, [consumeCoins, navigation, match.userId, match.id]);
 
   const handleGameSelect = useCallback((game) => {
     setShowGamePicker(false);
@@ -1078,36 +1179,57 @@ export default function ChatScreen({ navigation, route }) {
     }
 
     // Text message (default)
+    const isFailed = isMe && item.status === 'failed';
     return (
       <TouchableOpacity
         style={[styles.messageBubbleWrap, isMe ? styles.myMessage : styles.theirMessage]}
         onLongPress={(e) => handleLongPressMessage(item, e)}
+        onPress={isFailed ? () => handleRetryFailed(item.id) : undefined}
         activeOpacity={0.8}
         delayLongPress={300}
+        accessibilityHint={isFailed ? 'Tap to retry sending this message' : undefined}
       >
-        <View style={[styles.bubble, isMe ? styles.myBubble : styles.theirBubble]}>
+        <View style={[
+          styles.bubble,
+          isMe ? styles.myBubble : styles.theirBubble,
+          isFailed && styles.failedBubble,
+        ]}>
           <Text style={[styles.bubbleText, isMe ? styles.myBubbleText : styles.theirBubbleText]}>
             {item.text}
           </Text>
         </View>
         <View style={[styles.timeRow, isMe && { justifyContent: 'flex-end' }]}>
           {item.reaction && <Text style={styles.reactionEmoji}>{item.reaction}</Text>}
-          <Text style={styles.timeText}>{item.time}</Text>
-          {isMe && prefs?.nonColorCues && (
-            <Text style={styles.deliveryText}>{item.read ? 'Read' : 'Sent'}</Text>
-          )}
-          {isMe && (
-            <Ionicons
-              name={item.read ? 'checkmark-done' : 'checkmark'}
-              size={14}
-              color={item.read ? colors.accent : colors.gray400}
-              style={{ marginLeft: 4 }}
-            />
+          {isFailed ? (
+            <>
+              <Ionicons
+                name="alert-circle"
+                size={13}
+                color={colors.error || '#D33A3A'}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.failedText}>Failed · Tap to retry</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.timeText}>{item.time}</Text>
+              {isMe && prefs?.nonColorCues && (
+                <Text style={styles.deliveryText}>{item.read ? 'Read' : 'Sent'}</Text>
+              )}
+              {isMe && (
+                <Ionicons
+                  name={item.read ? 'checkmark-done' : 'checkmark'}
+                  size={14}
+                  color={item.read ? colors.accent : colors.gray400}
+                  style={{ marginLeft: 4 }}
+                />
+              )}
+            </>
           )}
         </View>
       </TouchableOpacity>
     );
-  }, [colors, styles, prefs, handleLongPressMessage, activeGames, handleGameAnswer, handleGamePlayAgain, match.name]);
+  }, [colors, styles, prefs, handleLongPressMessage, handleRetryFailed, activeGames, handleGameAnswer, handleGamePlayAgain, match.name]);
 
   return (
     <View style={styles.container}>
@@ -1967,6 +2089,20 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     fontSize: 11,
     color: colors.gray600,
     marginLeft: 5,
+  },
+  // Subtle red border + failed caption — informative, not alarming.
+  // Bubble background is unchanged so the whole conversation visually
+  // still flows; only the chrome shifts.
+  failedBubble: {
+    borderWidth: 1,
+    borderColor: colors.error || '#D33A3A',
+  },
+  failedText: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: colors.error || '#D33A3A',
+    fontWeight: '500',
+    fontFamily: FontFamily.medium,
   },
   reactionEmoji: {
     fontSize: 14,

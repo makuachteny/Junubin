@@ -69,6 +69,38 @@ const SignupScreen = ({ navigation, route }) => {
   // Refs for verification code inputs
   const codeRefs = useRef([]);
 
+  // Resend cooldown — gate the Resend button for 30s after each tap so
+  // users can't hammer the OTP service. Interval is cleared on unmount.
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const cooldownTimerRef = useRef(null);
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) {
+        clearInterval(cooldownTimerRef.current);
+        cooldownTimerRef.current = null;
+      }
+    };
+  }, []);
+  const startResendCooldown = () => {
+    if (cooldownTimerRef.current) {
+      clearInterval(cooldownTimerRef.current);
+      cooldownTimerRef.current = null;
+    }
+    setCooldownSeconds(30);
+    cooldownTimerRef.current = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (prev <= 1) {
+          if (cooldownTimerRef.current) {
+            clearInterval(cooldownTimerRef.current);
+            cooldownTimerRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const handleEmailChange = (text) => {
     if (inputError) setInputError('');
     setEmail(text);
@@ -155,6 +187,8 @@ const SignupScreen = ({ navigation, route }) => {
   };
 
   const handleResend = () => {
+    if (cooldownSeconds > 0) return;
+    startResendCooldown();
     (async () => {
       try {
         await startOtp({
@@ -243,9 +277,23 @@ const SignupScreen = ({ navigation, route }) => {
                   ))}
                 </View>
 
-                <TouchableOpacity onPress={handleResend} style={styles.resendBtn}>
-                  <Text style={styles.resendText}>Didn't receive a code? </Text>
-                  <Text style={styles.resendLink}>Resend</Text>
+                <TouchableOpacity
+                  onPress={handleResend}
+                  style={styles.resendBtn}
+                  disabled={cooldownSeconds > 0}
+                  activeOpacity={cooldownSeconds > 0 ? 1 : 0.6}
+                  accessibilityState={{ disabled: cooldownSeconds > 0 }}
+                >
+                  {cooldownSeconds > 0 ? (
+                    <Text style={styles.resendTextDisabled}>
+                      Resend in {cooldownSeconds}s
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={styles.resendText}>Didn't receive a code? </Text>
+                      <Text style={styles.resendLink}>Resend code</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
 
@@ -806,6 +854,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontWeight: '700',
     color: WARM.link,
+  },
+  resendTextDisabled: {
+    fontSize: 14,
+    fontFamily: FontFamily.medium,
+    color: 'rgba(255,255,255,0.40)',
   },
 
   // Country picker — tall bottom sheet

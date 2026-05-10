@@ -28,6 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import LogoMark from '../components/LogoMark';
 import { getEthnicIdentity } from '../utils/ethnicIdentity';
 import { ALL_TRIBE_KEYS } from '../data/tribes';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 
 const { width } = Dimensions.get('window');
 
@@ -375,7 +376,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const handlePhotoTap = async (index) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      promptToOpenSettings({
+        title: 'Photo access needed',
+        message: 'JuNubin needs photo access to add profile photos. Enable it in Settings.',
+      });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -710,7 +714,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                   onPress={async () => {
                     const { status } = await ImagePicker.requestCameraPermissionsAsync();
                     if (status !== 'granted') {
-                      Alert.alert('Permission needed', 'Camera access is required for verification.');
+                      promptToOpenSettings({
+                        title: 'Camera access needed',
+                        message: 'JuNubin needs camera access to verify your profile. Enable it in Settings.',
+                      });
                       return;
                     }
                     const result = await ImagePicker.launchCameraAsync({
