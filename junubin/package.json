@@ -67,7 +67,7 @@
     "react-native": "0.81.5",
     "react-native-background-timer": "^2.4.1",
     "react-native-gesture-handler": "~2.28.0",
-    "react-native-get-random-values": "^2.0.0",
+    "react-native-get-random-values": "~1.11.0",
     "react-native-purchases": "^8.12.0",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
@@ -91,5 +91,16 @@
     "sharp": "^0.34.5",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "@daily-co/react-native-daily-js",
+          "@daily-co/react-native-webrtc",
+          "react-native-background-timer"
+        ]
+      }
+    }
+  }
 }
