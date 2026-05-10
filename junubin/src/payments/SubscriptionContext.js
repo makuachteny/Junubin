@@ -6,6 +6,7 @@ import FlutterwaveService from './FlutterwaveService';
 import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { supabase } from '../config/supabase';
 import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
+import { PAYMENTS_ENABLED, showPaymentsComingSoon } from './comingSoon';
 
 const STORAGE_KEY = '@junubin_subscription';
 
@@ -232,6 +233,13 @@ export function SubscriptionProvider({ children }) {
   }, [state, loaded]);
 
   const purchase = useCallback(async (packageOrProductId) => {
+    // Payments-coming-soon gate: return a friendly alert instead of
+    // hitting the real RevenueCat path. Flip PAYMENTS_ENABLED in
+    // src/payments/comingSoon.js to enable the purchase flow.
+    if (!PAYMENTS_ENABLED) {
+      return showPaymentsComingSoon();
+    }
+
     // Determine the product for state updates
     const productId = typeof packageOrProductId === 'string'
       ? packageOrProductId
@@ -306,6 +314,10 @@ export function SubscriptionProvider({ children }) {
    * Entitlements are granted server-side via webhook after payment completes.
    */
   const purchaseWithFlutterwave = useCallback(async ({ productId, paymentMethod, currency, phoneNumber, eventMeta }) => {
+    // Same coming-soon gate as the RevenueCat path.
+    if (!PAYMENTS_ENABLED) {
+      return showPaymentsComingSoon();
+    }
     setPurchaseInProgress(true);
     try {
       const result = await FlutterwaveService.createPayment({

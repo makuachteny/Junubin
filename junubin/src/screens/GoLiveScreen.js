@@ -468,9 +468,10 @@ export default function GoLiveScreen({ navigation }) {
     setConnectStarting(true);
     setPayoutError(null);
     try {
-      const { url } = await payoutsService.startStripeConnectOnboarding();
+      const result = await payoutsService.startStripeConnectOnboarding();
+      if (result?.disabled) return; // Coming-soon alert already fired.
       setShowCashOutSheet(false);
-      navigation.navigate('WebView', { url, title: 'Set up payouts' });
+      navigation.navigate('WebView', { url: result.url, title: 'Set up payouts' });
     } catch (e) {
       setPayoutError(e?.message || 'Could not start Stripe onboarding');
     } finally {
@@ -512,13 +513,18 @@ export default function GoLiveScreen({ navigation }) {
       const destination = isStripe
         ? { connectAccountId: connectStatus.accountId }
         : { value: payoutDestination.trim() };
-      const { requestId, balance } = await payoutsService.requestPayout({
+      const result = await payoutsService.requestPayout({
         coinAmount: lifetimeCoins,
         method: payoutMethod,
         destination,
       });
-      setLifetimeCoins(balance);
-      setPayoutSuccessId(requestId);
+      // Payments-coming-soon gate: requestPayout shows its own alert
+      // and returns { disabled: true }. Bail without clearing the form
+      // so the user can still see what they entered if they want to
+      // come back later.
+      if (result?.disabled) return;
+      setLifetimeCoins(result.balance);
+      setPayoutSuccessId(result.requestId);
       setPayoutDestination('');
       // Refresh history so the new pending row shows up at the top.
       const history = await payoutsService.listMyPayoutRequests();

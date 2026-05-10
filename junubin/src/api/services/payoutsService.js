@@ -8,6 +8,7 @@
 // coins can't be requested twice.
 
 import { supabase } from '../../config/supabase';
+import { PAYMENTS_ENABLED, showPaymentsComingSoon } from '../../payments/comingSoon';
 
 const ALLOWED_METHODS = ['stripe_connect', 'mobile_money', 'bank_transfer'];
 
@@ -64,6 +65,11 @@ function normalizePayoutRequest(raw) {
  * insufficient balance, or invalid method.
  */
 export async function requestPayout({ coinAmount, method, destination }) {
+  // Payouts gated behind the same flag as purchases for v1 launch.
+  if (!PAYMENTS_ENABLED) {
+    showPaymentsComingSoon();
+    return { requestId: null, balance: 0, disabled: true };
+  }
   if (!Number.isFinite(coinAmount) || coinAmount <= 0) {
     throw new Error('coinAmount must be a positive number');
   }
@@ -141,6 +147,10 @@ export async function cancelPayoutRequest(requestId) {
  * Returns { url, accountId }. Throws on auth failure or Stripe error.
  */
 export async function startStripeConnectOnboarding() {
+  if (!PAYMENTS_ENABLED) {
+    showPaymentsComingSoon();
+    return { url: null, accountId: null, disabled: true };
+  }
   const { data, error } = await supabase.functions.invoke('stripe-connect-onboard', {
     body: {},
   });
