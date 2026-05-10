@@ -9,6 +9,8 @@
 // Subscription tier never bypasses survey or moderation. That's the
 // rule the audit enforced and the place every loophole used to live.
 
+import { ALL_FEATURES_FREE } from '../payments/entitlements';
+
 export const DATING_ACTIONS = new Set([
   'swipe_like',
   'swipe_pass',         // note: pass is technically dating-mode but we
@@ -92,9 +94,13 @@ export function checkActionAllowed({ user, action }) {
     }
   }
 
-  const requiredTier = TIER_REQUIRED[action];
-  if (requiredTier && !tierAtLeast(user.subscriptionTier, requiredTier)) {
-    return { ok: false, reason: 'tier_required', tier: requiredTier };
+  // Free-for-all gate: skip tier requirements while every feature is
+  // unlocked. Banned / restricted / survey_required still apply.
+  if (!ALL_FEATURES_FREE) {
+    const requiredTier = TIER_REQUIRED[action];
+    if (requiredTier && !tierAtLeast(user.subscriptionTier, requiredTier)) {
+      return { ok: false, reason: 'tier_required', tier: requiredTier };
+    }
   }
 
   return { ok: true };

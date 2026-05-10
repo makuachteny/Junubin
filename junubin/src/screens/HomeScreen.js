@@ -28,7 +28,7 @@ import Button from '../components/Button';
 import InterstitialAd from '../components/InterstitialAd';
 import { mockProfiles } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription, hasUnlimitedLikes, canUseWhispers } from '../payments';
+import { useSubscription, hasUnlimitedLikes, canUseWhispers, ALL_FEATURES_FREE } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser, useEligibility } from '../hooks';
 import * as discoverService from '../api/services/discoverService';
@@ -647,10 +647,10 @@ const HomeScreen = ({ navigation, route }) => {
     // banned alert / restricted alert as appropriate. The free-tier
     // "no super likes" path below remains the paywall route.
     if (!gate('super_like')) return;
-    if (superLikes <= 0) {
-      // Super Likes are sold via the Elite paywall (BoostScreen sells
-      // Spotlights, not Super Likes — routing there used to land users
-      // on the wrong product page).
+    // Free-for-all: skip the balance gate while ALL_FEATURES_FREE is
+    // on. consumeSuperLike() also short-circuits to true so the call
+    // below stays harmless.
+    if (!ALL_FEATURES_FREE && superLikes <= 0) {
       Alert.alert('No Super Likes', 'You\'re out of Super Likes!', [
         { text: 'Get More', onPress: () => navigation?.navigate?.('Elite') },
         { text: 'Cancel', style: 'cancel' },
@@ -709,7 +709,7 @@ const HomeScreen = ({ navigation, route }) => {
       ]);
       return;
     }
-    if (whispers <= 0) {
+    if (!ALL_FEATURES_FREE && whispers <= 0) {
       Alert.alert('No Whispers', 'You\'re out of whispers!', [
         { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
         { text: 'Cancel', style: 'cancel' },
@@ -730,7 +730,7 @@ const HomeScreen = ({ navigation, route }) => {
       Alert.alert('Write a whisper', 'Please type a whisper before sending.');
       return;
     }
-    if ((whispers ?? 0) <= 0) {
+    if (!ALL_FEATURES_FREE && (whispers ?? 0) <= 0) {
       Alert.alert('No Whispers', 'You\'re out of whispers!');
       return;
     }

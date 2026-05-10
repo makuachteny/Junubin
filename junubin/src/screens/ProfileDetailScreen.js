@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription, canUseWhispers } from '../payments';
+import { useSubscription, canUseWhispers, ALL_FEATURES_FREE } from '../payments';
 import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
 import { useMyFollowCounts, useFollow } from '../hooks/useFollow';
@@ -122,7 +122,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
       ]);
       return;
     }
-    if (whispers <= 0) {
+    if (!ALL_FEATURES_FREE && whispers <= 0) {
       Alert.alert('No Whispers', 'You\'re out of whispers!', [
         { text: 'Get More', onPress: () => navigation.navigate('Elite') },
         { text: 'Cancel', style: 'cancel' },
@@ -136,8 +136,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   };
 
   const handleSuperLike = () => {
-    if (superLikes <= 0) {
-      // Route to Elite paywall (Boost only sells Spotlights).
+    if (!ALL_FEATURES_FREE && superLikes <= 0) {
       Alert.alert('No Super Likes', 'You\'re out of Super Likes!', [
         { text: 'Get More', onPress: () => { navigation.goBack(); navigation.navigate('Elite'); } },
         { text: 'Cancel', style: 'cancel' },

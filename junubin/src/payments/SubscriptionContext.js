@@ -5,7 +5,7 @@ import PaymentService from './PaymentService';
 import FlutterwaveService from './FlutterwaveService';
 import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { supabase } from '../config/supabase';
-import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed } from './entitlements';
+import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed, ALL_FEATURES_FREE } from './entitlements';
 import { PAYMENTS_ENABLED, showPaymentsComingSoon } from './comingSoon';
 
 const STORAGE_KEY = '@junubin_subscription';
@@ -414,7 +414,13 @@ export function SubscriptionProvider({ children }) {
     }
   }, []);
 
+  // Free-for-all gate: while ALL_FEATURES_FREE is on (see
+  // entitlements.js), every consume action succeeds without
+  // decrementing the balance or hitting the server-side reconcile
+  // RPC. Returning `true` lets the caller proceed exactly as if the
+  // balance were sufficient.
   const consumeSpotlight = useCallback(() => {
+    if (ALL_FEATURES_FREE) return true;
     if ((stateRef.current?.spotlights ?? 0) <= 0) return false;
     setState((prev) => ({ ...prev, spotlights: Math.max(0, (prev.spotlights ?? 0) - 1) }));
     reconcileBalance('spotlights', 1)('try_consume_spotlight', {});
@@ -422,6 +428,7 @@ export function SubscriptionProvider({ children }) {
   }, [reconcileBalance]);
 
   const consumeSuperLike = useCallback(() => {
+    if (ALL_FEATURES_FREE) return true;
     if ((stateRef.current?.superLikes ?? 0) <= 0) return false;
     setState((prev) => ({ ...prev, superLikes: Math.max(0, (prev.superLikes ?? 0) - 1) }));
     reconcileBalance('superLikes', 1)('try_consume_superlike', {});
@@ -429,6 +436,7 @@ export function SubscriptionProvider({ children }) {
   }, [reconcileBalance]);
 
   const consumeWhisper = useCallback(() => {
+    if (ALL_FEATURES_FREE) return true;
     if ((stateRef.current?.whispers ?? 0) <= 0) return false;
     setState((prev) => ({ ...prev, whispers: Math.max(0, (prev.whispers ?? 0) - 1) }));
     reconcileBalance('whispers', 1)('try_consume_whisper', {});
@@ -436,6 +444,7 @@ export function SubscriptionProvider({ children }) {
   }, [reconcileBalance]);
 
   const consumeCoins = useCallback((amount) => {
+    if (ALL_FEATURES_FREE) return true;
     if ((stateRef.current?.coins ?? 0) < amount) return false;
     setState((prev) => ({ ...prev, coins: Math.max(0, (prev.coins ?? 0) - amount) }));
     reconcileBalance('coins', amount)('try_consume_coins', { p_amount: amount });

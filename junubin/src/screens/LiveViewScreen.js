@@ -23,7 +23,7 @@ import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import { hapticSelection } from '../utils/haptics';
 import { useAuth, useRequireAuth } from '../auth';
-import { useSubscription } from '../payments';
+import { useSubscription, ALL_FEATURES_FREE } from '../payments';
 import CoinPurchaseSheet from '../components/CoinPurchaseSheet';
 import { useLiveChannel } from '../api/hooks/useLiveChannel';
 import { useDailyCall } from '../api/hooks/useDailyCall';
@@ -277,7 +277,7 @@ function LiveStreamPage({ item, navigation, isActive, insets }) {
   const handleSendGift = useCallback((gift) => {
     if (!isWatching) return;
     if (!requireAuth('Sign in to send gifts on JuNubin lives.')) return;
-    if (coins < gift.cost) {
+    if (!ALL_FEATURES_FREE && coins < gift.cost) {
       setShowGiftSheet(false);
       setShowCoinSheet(true);
       return;
