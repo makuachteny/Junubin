@@ -89,4 +89,26 @@ export const interactiveStore = {
       await AsyncStorage.removeItem(`@junubin_active_games_${conversationId}`);
     } catch {}
   },
+  // ── Match Mission state ──
+  // Keyed by conversationId so each thread tracks its own intro / question
+  // / response progress. Default shape matches the in-memory state used by
+  // ChatScreen so a missing record reads like a fresh thread.
+  async getMatchMission(conversationId) {
+    return readJson(`@junubin_match_mission_${conversationId}`, {
+      intro: false,
+      question: false,
+      response: false,
+    });
+  },
+  async setMatchMission(conversationId, state) {
+    return writeJson(`@junubin_match_mission_${conversationId}`, state);
+  },
+  // Per-conversation flag for "user dismissed the Match Mission card".
+  // Separate key so re-enabling the card later doesn't wipe progress.
+  async getMissionDismissed(conversationId) {
+    return readJson(`@junubin_mission_dismissed_${conversationId}`, false);
+  },
+  async setMissionDismissed(conversationId, dismissed) {
+    return writeJson(`@junubin_mission_dismissed_${conversationId}`, dismissed);
+  },
 };

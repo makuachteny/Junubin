@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import PostCard from '../components/PostCard';
-import { mockPosts } from '../data/mockProfiles';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import { GraffitiCommunity } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
@@ -37,22 +36,38 @@ export default function GroupDetailScreen({ navigation, route }) {
   );
   const isMembersOnly = group.privacy === 'members' || group.privacy === 'private';
   const [joined, setJoined] = useState(route.params?.isMember || false);
+  // Sync membership flag when the route param changes (e.g. user
+  // joined via the discover modal in another tab while this screen
+  // was alive). useState alone would have captured the first-mount
+  // value forever.
+  useEffect(() => {
+    setJoined(!!route.params?.isMember);
+  }, [route.params?.isMember]);
   const [pinned, setPinned] = useState(false);
   const [rulesExpanded, setRulesExpanded] = useState(true);
   const [memberCount, setMemberCount] = useState(group.members || 0);
   const [refreshing, setRefreshing] = useState(false);
   const [activeSection, setActiveSection] = useState('posts');
 
+  // Track the pull-to-refresh timeout in a ref so we can cancel it
+  // on unmount — otherwise a fast back-swipe right after pulling to
+  // refresh would trigger a setState on an unmounted component and
+  // warn about a memory leak.
+  const refreshTimerRef = useRef(null);
+  useEffect(() => () => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+  }, []);
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => setRefreshing(false), 800);
   }, []);
 
-  const groupPosts = mockPosts.slice(0, 3).map((p, i) => ({
-    ...p,
-    id: `group-post-${i}`,
-    user: { ...p.user, location: group.name },
-  }));
+  // Groups feed is empty until real group-scoped Post rows land via
+  // a server-side groupPosts API. The previous mock-seeded preview
+  // was removed along with the rest of the __dev__ bundle — the
+  // screen's empty state covers the no-posts case.
+  const groupPosts = [];
 
   const handleJoin = () => {
     if (joined) {

@@ -8,6 +8,29 @@
 // bottom and Supabase resolves on first import of its config module.
 import 'react-native-get-random-values';
 
+// ── Sentry crash reporting (wired-but-dormant) ──────────────────────
+// Gated on EXPO_PUBLIC_SENTRY_DSN so this wire-up is a no-op when the
+// DSN is not set in EAS env vars. To activate:
+//   1. `npm i sentry-expo` (and rebuild — it's a native dep)
+//   2. Set EXPO_PUBLIC_SENTRY_DSN in EAS env vars
+// The require() is intentionally dynamic + try/catch so the bundle
+// doesn't fail when sentry-expo isn't installed yet.
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN) {
+  try {
+    // eslint-disable-next-line global-require, import/no-unresolved
+    const Sentry = require('sentry-expo');
+    Sentry.init({
+      dsn: SENTRY_DSN,
+      enableInExpoDevelopment: false,
+      debug: __DEV__,
+      tracesSampleRate: 0.2,
+    });
+  } catch (e) {
+    if (__DEV__) console.warn('[Sentry] not initialised — sentry-expo is not installed.', e?.message);
+  }
+}
+
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
@@ -61,11 +84,27 @@ import * as pendingDeepLink from './src/utils/pendingDeepLink';
 //   3. `AppNavigator` watches auth state and replays any pending URL
 //      via `useLinkTo` after the session resolves.
 const DEEP_LINK_PREFIX = Linking.createURL('/');
+
+// Allowlist for the `step` query param on the `survey` deep link.
+// Without this, a crafted URL like `junubin://survey?step=__proto__`
+// (or any unknown string) would land as ProfileSetup's `resumeAt` and
+// either no-op silently or, worse, surface in a step-key lookup that
+// we extend later. Keep this in sync with RESUME_KEY_BY_ELIGIBILITY_ID
+// in ProfileSetupScreen.js.
+const ALLOWED_SURVEY_STEPS = new Set([
+  'purpose', 'displayName', 'dob', 'gender', 'photos',
+  'interestedIn', 'datingIntentions', 'bio',
+]);
+const sanitizeSurveyStep = (s) => {
+  if (typeof s !== 'string') return undefined;
+  return ALLOWED_SURVEY_STEPS.has(s) ? s : undefined;
+};
+
 const linkingConfig = {
   prefixes: [DEEP_LINK_PREFIX, 'junubin://', 'https://junubin.app'],
   config: {
     screens: {
-      ProfileSetup:       { path: 'survey', parse: { step: (s) => s } },
+      ProfileSetup:       { path: 'survey', parse: { step: sanitizeSurveyStep } },
       AccessibilitySurvey: 'accessibility-survey',
       Chat:               { path: 'chat/:conversationId' },
       LiveView:           { path: 'live/:hostId' },
@@ -113,8 +152,9 @@ function AppInner() {
   const { refreshServerState } = useSubscription();
   const [showSplash, setShowSplash] = useState(true);
   const navigationRef = useRef(null);
-  // Push notification deep-linking
-  useNotifications(navigationRef);
+  // Push notification deep-linking — only register once the user is signed in,
+  // otherwise we'd ask for push permission on the auth/splash stack.
+  useNotifications(navigationRef, isAuthenticated);
 
   // Multi-device staleness fix: when the app returns from background
   // after >60s, re-fetch the User row (catches profile edits made on

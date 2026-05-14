@@ -1,12 +1,13 @@
 // AnaJunubin — Photo Verification Flow (4-step)
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily } from '../theme';
 import Button from '../components/Button';
 import * as ImagePicker from 'expo-image-picker';
 import { promptToOpenSettings } from '../utils/permissionAlert';
+import { supabase } from '../config/supabase';
 
 const STEPS = ['Instructions', 'Capture', 'Review', 'Submitted'];
 
@@ -16,6 +17,7 @@ export default function PhotoVerificationScreen({ navigation }) {
   const styles = useMemo(() => getStyles(colors), [colors]);
   const [step, setStep] = useState(0);
   const [photo, setPhoto] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const handleCapture = async () => {
     try {
@@ -43,9 +45,61 @@ export default function PhotoVerificationScreen({ navigation }) {
     }
   };
 
-  const handleSubmit = () => {
-    // In production, upload to backend for verification
-    setStep(3);
+  const handleSubmit = async () => {
+    if (!photo || submitting) return;
+    setSubmitting(true);
+    try {
+      // Resolve the app User row (the same auth-id → User lookup
+      // every service does).
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error('You must be signed in to verify.');
+      const { data: appUser, error: userErr } = await supabase
+        .from('User').select('id').eq('auth_id', authUser.id).single();
+      if (userErr || !appUser) throw new Error('Could not load your account.');
+
+      // Upload selfie into the photos bucket under
+      // `<userId>/verification/<ts>.jpg` so the existing photos-bucket
+      // INSERT policy (first-path-segment must equal caller's User.id)
+      // accepts the write. Reusing the bucket keeps the moderation
+      // pipeline simple — a reviewer scans both profile photos and
+      // verification selfies from the same Storage explorer view.
+      const response = await fetch(photo);
+      const arrayBuffer = await response.arrayBuffer();
+      if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+        throw new Error('Selected image was empty — retake the photo.');
+      }
+      const storagePath = `${appUser.id}/verification/${Date.now()}.jpg`;
+      const { error: uploadErr } = await supabase.storage
+        .from('photos')
+        .upload(storagePath, arrayBuffer, { contentType: 'image/jpeg', upsert: false });
+      if (uploadErr) throw uploadErr;
+
+      const { data: pub } = supabase.storage.from('photos').getPublicUrl(storagePath);
+
+      // Write the pending VerificationRequest row. The 00029 trigger
+      // mirrors status → User.isVerified once an admin approves the
+      // row from the Supabase dashboard. The client NEVER sets
+      // isVerified directly — RLS blocks that, and we want a paper
+      // trail before the badge appears on the profile.
+      const { error: insertErr } = await supabase
+        .from('VerificationRequest')
+        .insert({
+          userId: appUser.id,
+          photoUrl: pub.publicUrl,
+          storagePath,
+          status: 'pending',
+        });
+      if (insertErr) throw insertErr;
+
+      setStep(3);
+    } catch (err) {
+      Alert.alert(
+        'Could not submit',
+        err?.message || 'Try again when you have a connection.',
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderStep = () => {
@@ -96,8 +150,15 @@ export default function PhotoVerificationScreen({ navigation }) {
               <Text style={styles.stepDesc}>Does this photo clearly show your face?</Text>
             </View>
             <View style={styles.reviewActions}>
-              <Button title="Retake" variant="outline" size="md" onPress={() => setStep(1)} style={{ flex: 1 }} />
-              <Button title="Submit" variant="primary" size="md" onPress={handleSubmit} style={{ flex: 1 }} />
+              <Button title="Retake" variant="outline" size="md" onPress={() => setStep(1)} disabled={submitting} style={{ flex: 1 }} />
+              <Button
+                title={submitting ? 'Submitting…' : 'Submit'}
+                variant="primary"
+                size="md"
+                onPress={handleSubmit}
+                disabled={submitting}
+                style={{ flex: 1 }}
+              />
             </View>
           </View>
         );

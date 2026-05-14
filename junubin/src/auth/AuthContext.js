@@ -9,16 +9,9 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
-  const [devBypass, setDevBypass] = useState(false);
   const fetchingRef = useRef(false);
-  const DEV_BYPASS_ENABLED = process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH === 'true';
 
   useEffect(() => {
-    if (DEV_BYPASS_ENABLED) {
-      AsyncStorage.getItem('@dev_bypass_auth').then((val) => {
-        if (val === 'true') setDevBypass(true);
-      }).catch(() => {});
-    }
     // Get initial session. We mark ready as soon as the session resolves so
     // the navigator can mount and the splash can dismiss. The user record
     // fetch (Supabase round-trip) runs in the background and updates state
@@ -150,7 +143,7 @@ export function AuthProvider({ children }) {
     // is enumerated dynamically so future keys are covered too.
     try {
       const allKeys = await AsyncStorage.getAllKeys();
-      const keepers = new Set(['@junubin_keys_migrated_v1', '@dev_bypass_auth']);
+      const keepers = new Set(['@junubin_keys_migrated_v1']);
       const clearable = allKeys.filter((k) =>
         k.startsWith('@junubin_') && !keepers.has(k)
       );
@@ -168,36 +161,34 @@ export function AuthProvider({ children }) {
     setUser(userData);
   }, []);
 
+  // refreshUser captures the session via a ref so the function
+  // identity stays stable across re-renders and consumers can put it
+  // in dependency arrays without retriggering effects on every auth
+  // state change. The ref always points at the latest session, so
+  // there's no risk of fetching the old user id after a re-auth.
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
   const refreshUser = useCallback(async () => {
-    if (session?.user?.id) {
-      await fetchUser(session.user.id);
+    const s = sessionRef.current;
+    if (s?.user?.id) {
+      await fetchUser(s.user.id);
     }
-  }, [session, fetchUser]);
+  }, [fetchUser]);
 
   const value = useMemo(
     () => ({
       user,
       session,
       ready,
-      isAuthenticated: !!session || devBypass,
-      devBypass,
-      setDevBypass: async (next) => {
-        setDevBypass(!!next);
-        if (DEV_BYPASS_ENABLED) {
-          try {
-            await AsyncStorage.setItem('@dev_bypass_auth', next ? 'true' : 'false');
-          } catch {
-            // ignore persistence errors
-          }
-        }
-      },
+      isAuthenticated: !!session,
       startOtp,
       loginWithOtp,
       logout,
       updateUser,
       refreshUser,
     }),
-    [user, session, ready, devBypass, startOtp, loginWithOtp, logout, updateUser, refreshUser]
+    [user, session, ready, startOtp, loginWithOtp, logout, updateUser, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

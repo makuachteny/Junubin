@@ -167,7 +167,12 @@ export default function FlutterwaveCheckout({
 
         {/* Loading indicator */}
         {loading && !verifying && (
-          <View style={styles.loadingOverlay}>
+          <View
+            style={[
+              styles.loadingOverlay,
+              { backgroundColor: isDark ? 'rgba(12,12,14,0.92)' : 'rgba(255,255,255,0.92)' },
+            ]}
+          >
             <ActivityIndicator size="large" color={colors.accent} />
             <Text style={[styles.loadingText, { color: colors.gray500 }]}>
               Loading checkout...
@@ -216,7 +221,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
     gap: 12,
   },
   loadingText: {

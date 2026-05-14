@@ -43,5 +43,10 @@ yarn-error.log
 *.apk
 *.aab
 
+# Secrets — ASC API keys, Google service accounts, signing keys
+.secrets/
+google-services.json
+google-service-account.json
+
 # Claude Code
 .claude/

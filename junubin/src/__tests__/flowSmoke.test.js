@@ -11,7 +11,6 @@ const mockUseTheme = jest.fn();
 const mockUseAuth = jest.fn();
 const mockUseSubscription = jest.fn();
 const mockUseCurrentUser = jest.fn();
-const mockSetDevBypass = jest.fn();
 
 jest.mock('../theme', () => {
   const actual = jest.requireActual('../theme');
@@ -98,7 +97,6 @@ describe('Flow smoke tests', () => {
       isAuthenticated: false,
       session: null,
       user: null,
-      setDevBypass: mockSetDevBypass,
       startOtp: jest.fn(),
       loginWithOtp: jest.fn(),
     });
@@ -124,20 +122,6 @@ describe('Flow smoke tests', () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     fireEvent.press(getByText('Get Started'));
     expect(navigation.navigate).toHaveBeenCalledWith('Signup');
-  });
-
-  it('signup dev skip sets dev bypass when EXPO_PUBLIC_DEV_BYPASS_AUTH is true', () => {
-    const original = process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH;
-    process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH = 'true';
-    try {
-      const navigation = { goBack: jest.fn(), navigate: jest.fn(), canGoBack: () => false };
-      const { getByText } = render(<SignupScreen navigation={navigation} />);
-      fireEvent.press(getByText('Skip'));
-      expect(mockSetDevBypass).toHaveBeenCalledWith(true);
-    } finally {
-      if (original === undefined) delete process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH;
-      else process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH = original;
-    }
   });
 
   it('post card opens detail on card press, not on like', () => {

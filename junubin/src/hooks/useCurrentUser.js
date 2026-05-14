@@ -2,9 +2,39 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
-import { currentUser as mockCurrentUser } from '../data/mockProfiles';
 
 const MODE_KEY = '@junubin_mode';
+
+// Neutral defaults for a brand-new account. Previously these came
+// from the deleted `mockCurrentUser` fixture; now they live here so
+// the hook has zero dependency on demo data.
+const DEFAULT_LOOKING_FOR = 'Everyone';
+const DEFAULT_AGE_RANGE   = [18, 99];
+const DEFAULT_DISTANCE_MI = 50; // ~80km
+const DEFAULT_AVATAR      = null;
+
+// Empty placeholder returned to consumers when no User row exists yet
+// (unauthenticated screens, the brief window between sign-in and the
+// User fetch landing). Shape matches what consumer screens dereference
+// so optional-chaining isn't required everywhere.
+const EMPTY_CURRENT_USER = Object.freeze({
+  id: null,
+  name: '',
+  email: '',
+  avatar: DEFAULT_AVATAR,
+  images: [],
+  bio: '',
+  preferences: Object.freeze({
+    mode: 'Social',
+    showMe: true,
+    lookingFor: DEFAULT_LOOKING_FOR,
+    ageRange: DEFAULT_AGE_RANGE,
+    distance: DEFAULT_DISTANCE_MI,
+  }),
+  boosts: 0,
+  superLikes: 0,
+  notes: 0,
+});
 
 // Resolve the user's preferred app mode (Dating vs Social).
 //
@@ -13,12 +43,6 @@ const MODE_KEY = '@junubin_mode';
 //   2. Profile.accountPurpose — set during ProfileSetup, also cross-device.
 //   3. AsyncStorage @junubin_mode — local fallback for legacy installs.
 //   4. 'Social' as a safe default.
-//
-// `appMode` is a small addition (00016 migration) that lets a user
-// flip between modes without rewriting their stated purpose. Without
-// it, a "dating" account that wanted to browse Social today would have
-// to overwrite their purpose. Now they just toggle and `accountPurpose`
-// remains the answer to "what brought you here".
 const resolveMode = (user, storedMode) => {
   const appMode = user?.profile?.appMode;
   if (appMode === 'social') return 'Social';
@@ -26,6 +50,9 @@ const resolveMode = (user, storedMode) => {
   const purpose = user?.profile?.accountPurpose;
   if (purpose === 'socialize' || purpose === 'social') return 'Social';
   if (purpose === 'dating' || purpose === 'date') return 'Dating';
+  if (purpose === 'both') {
+    return storedMode === 'Dating' || storedMode === 'Social' ? storedMode : 'Social';
+  }
   if (storedMode === 'Social' || storedMode === 'Dating') return storedMode;
   return 'Social';
 };
@@ -33,7 +60,7 @@ const resolveMode = (user, storedMode) => {
 /**
  * Core hook replacing all direct `currentUser` imports.
  * Returns a normalized profile matching the shape screens expect.
- * Falls back to mock data when unauthenticated or after API failure in __DEV__.
+ * Returns the empty placeholder when unauthenticated — no mock user.
  */
 export function useCurrentUser() {
   const { user, session, refreshUser: authRefresh } = useAuth();
@@ -61,21 +88,20 @@ export function useCurrentUser() {
     setLoading(true);
     const normalized = profileService.normalizeProfile(user);
     if (normalized) {
-      // Synthesize preferences from Profile table columns
       const p = user.profile || {};
       normalized.preferences = {
         mode: resolveMode(user, storedMode),
         showMe: p.showMe ?? true,
-        lookingFor: p.lookingForGender || mockCurrentUser.preferences.lookingFor,
+        lookingFor: p.lookingForGender || DEFAULT_LOOKING_FOR,
         ageRange: [
-          p.minPreferredAge ?? mockCurrentUser.preferences.ageRange[0],
-          p.maxPreferredAge ?? mockCurrentUser.preferences.ageRange[1],
+          p.minPreferredAge ?? DEFAULT_AGE_RANGE[0],
+          p.maxPreferredAge ?? DEFAULT_AGE_RANGE[1],
         ],
         distance: p.maxDistanceKm
           ? Math.round(p.maxDistanceKm / 1.6)
-          : mockCurrentUser.preferences.distance,
+          : DEFAULT_DISTANCE_MI,
       };
-      normalized.avatar = normalized.images?.[0] || mockCurrentUser.avatar;
+      normalized.avatar = normalized.images?.[0] || DEFAULT_AVATAR;
       normalized.boosts = 0;
       normalized.superLikes = 0;
       normalized.notes = 0;
@@ -92,12 +118,7 @@ export function useCurrentUser() {
     }
   }, [authRefresh]);
 
-  const currentUser = useMemo(() => {
-    if (profile) return profile;
-    // Fall back to mock when not authenticated or in dev after API failure
-    return mockCurrentUser;
-  }, [profile]);
-
+  const currentUser = useMemo(() => profile || EMPTY_CURRENT_USER, [profile]);
   const isAuthenticated = !!session;
 
   return { currentUser, refreshUser, isAuthenticated, loading };

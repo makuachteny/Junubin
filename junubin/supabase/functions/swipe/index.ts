@@ -30,7 +30,13 @@ Deno.serve(async (req: Request) => {
     if (!userId) return errorResponse("Unauthorized", 401);
 
     const body = await req.json();
-    const { toUserId, type, whisper: rawWhisper } = body;
+    // Allowlist the fields we accept from the body. Anything else is
+    // dropped silently — the client's recordSwipe(extra) spread used
+    // to forward arbitrary keys (a typo'd `{ email }` would land in
+    // the Swipe row's body shape via a future schema migration if the
+    // server ever stored extras). Pin the contract here so it's
+    // impossible to leak PII via this endpoint.
+    const { toUserId, type, whisper: rawWhisper, mode: rawMode } = body || {};
 
     if (!toUserId || !["like", "pass", "super_like"].includes(type)) {
       return errorResponse("Invalid payload: toUserId and type (like|pass|super_like) required", 400);
@@ -46,6 +52,20 @@ Deno.serve(async (req: Request) => {
         ? rawWhisper.trim().slice(0, 280) || null
         : null;
 
+    // Mode the swiper was in when they made this swipe. Used to scope
+    // surfacing in MessagesScreen ("show Dating chats first"). Defaults
+    // to the swiper's Profile.appMode/accountPurpose if the client
+    // didn't pass it explicitly — legacy clients that haven't been
+    // updated still get a correct mode rather than the column default.
+    let mode: "dating" | "social" | null = null;
+    if (rawMode === "dating" || rawMode === "social") {
+      mode = rawMode;
+    } else if (rawMode === "Dating") {
+      mode = "dating";
+    } else if (rawMode === "Social") {
+      mode = "social";
+    }
+
     // ── Safety gates ────────────────────────────────────────────────
     // The discover Edge Function already filters out users we'd refuse
     // to write a swipe against, but the swipe endpoint accepts a raw
@@ -57,12 +77,25 @@ Deno.serve(async (req: Request) => {
     //    AuthContext force-signs-out banned users — defensive).
     const { data: callerSafety } = await supabase
       .from("User")
-      .select(`moderationStatus, profile:Profile(surveyCompletedAt, accountPurpose)`)
+      .select(`moderationStatus, profile:Profile(surveyCompletedAt, accountPurpose, appMode)`)
       .eq("id", userId)
       .maybeSingle();
     if (!callerSafety) return errorResponse("User not found", 404);
     if (callerSafety.moderationStatus && callerSafety.moderationStatus !== "active") {
       return errorResponse("Account is restricted", 403);
+    }
+
+    // Fall back to the swiper's stored mode if the client didn't pass
+    // one. Order matches the client-side resolveMode() in useCurrentUser:
+    // appMode > accountPurpose > 'dating'.
+    if (!mode) {
+      const profileForMode = (callerSafety as any).profile;
+      const am = profileForMode?.appMode;
+      const ap = profileForMode?.accountPurpose;
+      if (am === "social") mode = "social";
+      else if (am === "dating") mode = "dating";
+      else if (ap === "socialize") mode = "social";
+      else mode = "dating";
     }
 
     // 2. Dating-mode actions require a completed survey. Pass
@@ -158,7 +191,7 @@ Deno.serve(async (req: Request) => {
     // `whisper` is only set when the swipe carries one — re-swiping the
     // same user without a new whisper preserves the existing value
     // rather than wiping it.
-    const upsertRow: Record<string, unknown> = { fromUserId: userId, toUserId, type };
+    const upsertRow: Record<string, unknown> = { fromUserId: userId, toUserId, type, mode };
     if (whisper !== null) upsertRow.whisper = whisper;
     await supabase
       .from("Swipe")
@@ -176,9 +209,14 @@ Deno.serve(async (req: Request) => {
     // Check for match on like/super_like
     let match = null;
     if (type === "like" || type === "super_like") {
+      // Fetch the reciprocal swipe once, pulling everything we need:
+      //   - `id`/`type` to confirm reciprocity
+      //   - `mode` to attribute the new Match to whichever mode the
+      //     pairing started in (the other side liked us first, so their
+      //     mode is the originator).
       const { data: reciprocal } = await supabase
         .from("Swipe")
-        .select("id, type")
+        .select("id, type, mode")
         .eq("fromUserId", toUserId)
         .eq("toUserId", userId)
         .in("type", ["like", "super_like"])
@@ -189,13 +227,18 @@ Deno.serve(async (req: Request) => {
         const userAId = [userId, toUserId].sort()[0];
         const userBId = [userId, toUserId].sort()[1];
 
+        // Match.mode = mode of whichever side initiated the connection.
+        // Fall through to the swiper's current mode if the reciprocal
+        // is somehow missing it (legacy rows pre-backfill).
+        const matchMode = reciprocal.mode || mode;
+
         // Try INSERT first; on 23505 (the Match_pairKey_key unique
         // constraint already exists from a concurrent swipe) fall through to
         // a re-fetch. Single round-trip on the happy path.
         let newMatch = null;
         const { data: insertResult, error: insertErr } = await supabase
           .from("Match")
-          .insert({ pairKey, userAId, userBId })
+          .insert({ pairKey, userAId, userBId, mode: matchMode })
           .select("*")
           .maybeSingle();
         newMatch = insertResult;

@@ -32,7 +32,12 @@ export default {
     name: getAppName(),
     slug: 'junubin',
     owner: 'tmakua01',
-    version: '1.0.0',
+    // URL scheme for deep links. Required for production builds — without
+    // it `junubin://chat/...` etc. crash on cold launch. The dev/preview
+    // variants advertise their own schemes so a single device can host all
+    // three builds without push notifications routing to the wrong app.
+    scheme: IS_DEV ? 'junubin-dev' : IS_PREVIEW ? 'junubin-preview' : 'junubin',
+    version: '1.0.1',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'automatic',
@@ -61,7 +66,13 @@ export default {
         NSLocationWhenInUseUsageDescription: 'JuNubin uses your location to show people nearby and let you tag posts with where they were taken. Location is only collected while you are using the app.',
         NSContactsUsageDescription: 'JuNubin can scan your contacts to find friends who already have an account. Contact data is only used for this lookup and is never shown to other users.',
         NSFaceIDUsageDescription: 'JuNubin can use Face ID to quickly unlock your account on this device.',
-        NSUserTrackingUsageDescription: 'JuNubin does not track you across other companies\' apps or websites for advertising.',
+        // NSUserTrackingUsageDescription intentionally OMITTED.
+        // App Review treats a tracking permission string without the
+        // matching ATT prompt at runtime as a rejection vector — and
+        // we don't run any cross-app tracking / attribution SDK. Add
+        // this back together with `expo-tracking-transparency` and a
+        // pre-prompt UI if/when we ever integrate Facebook SDK,
+        // AppsFlyer, Branch, etc.
         // Encryption export-compliance flag — set in addition to ios.config so
         // older Expo SDK versions still see it.
         ITSAppUsesNonExemptEncryption: false,

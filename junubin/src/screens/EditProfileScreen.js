@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { CULTURAL_STICKERS } from '../data/mockProfiles';
+import { CULTURAL_STICKERS } from '../data/culturalStickers';
 import { imageSource } from '../utils/imageSource';
 import { promptToOpenSettings } from '../utils/permissionAlert';
 import { GraffitiStickerIcon } from '../components/icons';
@@ -24,6 +24,19 @@ import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
 import CurrentlyIntoSelector from '../components/CurrentlyIntoSelector';
+import { ALL_TRIBE_KEYS } from '../data/tribes';
+
+// Source-of-truth lists mirrored from ProfileSetupScreen so the two
+// screens write to the same vocabulary. If you add an option in one,
+// add it in the other — there's no shared catalogue file yet.
+const ETHNICITY_OPTIONS = ALL_TRIBE_KEYS;
+const PRONOUN_OPTIONS   = ['she/her/hers', 'he/him/his', 'they/them/theirs', 'ze/zir/zirs'];
+const EDUCATION_OPTIONS = ['High school', 'Some college', 'Associate degree', "Bachelor's degree", "Master's degree", 'Doctorate', 'Trade school', 'Prefer not to say'];
+const INTEREST_OPTIONS  = [
+  'Cooking', 'Basketball', 'Music', 'Travel', 'Fashion', 'Faith', 'Fitness', 'Tech',
+  'Art', 'Reading', 'Movies', 'Gaming', 'Dancing', 'Business', 'Photography', 'Soccer',
+  'Poetry', 'Singing', 'Running', 'Volunteering', 'Food', 'Nature', 'Languages', 'History',
+];
 
 const formReducer = (state, action) => {
   switch (action.type) {
@@ -48,6 +61,14 @@ export default function EditProfileScreen({ navigation }) {
     job: currentUser.job || '',
     school: currentUser.school || '',
     lookingFor: currentUser.lookingFor || 'Something serious',
+    // Identity fields previously editable only via the onboarding
+    // survey. Hydrated from the same paths useCurrentUser reads.
+    ethnicity:  currentUser?._raw?.profile?.ethnicity  || '',
+    education:  currentUser?._raw?.profile?.education  || '',
+    pronouns:   currentUser?._raw?.profile?.pronouns   || '',
+    interests:  Array.isArray(currentUser?._raw?.profile?.interests)
+                  ? currentUser._raw.profile.interests
+                  : [],
   });
   const setField = useCallback((key, value) => dispatch({ type: 'SET_FIELD', key, value }), []);
 
@@ -170,6 +191,28 @@ export default function EditProfileScreen({ navigation }) {
     }
   };
 
+  const handleSetPrimary = useCallback((photoId) => {
+    if (!session || !photoId) return;
+    Alert.alert(
+      'Set as main photo?',
+      'This photo will be the first one people see on your profile.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Set as main',
+          onPress: () => {
+            profileService
+              .setPrimaryPhoto(photoId)
+              .then(() => refreshUser())
+              .catch((err) => {
+                Alert.alert('Could not set as main', err?.message || 'Try again in a moment.');
+              });
+          },
+        },
+      ],
+    );
+  }, [session, refreshUser]);
+
   const handleSave = async () => {
     if (!session) {
       navigation.goBack();
@@ -184,6 +227,10 @@ export default function EditProfileScreen({ navigation }) {
         job: form.job.trim(),
         school: form.school.trim(),
         lookingFor: form.lookingFor,
+        ethnicity: form.ethnicity || null,
+        education: form.education || null,
+        pronouns: form.pronouns || '',
+        interests: form.interests,
         stickers,
         currentlyInto,
       });
@@ -219,15 +266,40 @@ export default function EditProfileScreen({ navigation }) {
         {/* Photos */}
         <Text style={styles.sectionTitle}>Photos</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosRow}>
-          {(currentUser.images || []).map((img, i) => (
+          {(currentUser.images || []).map((img, i) => {
+            const rawPhoto = currentUser._raw?.photos?.[i];
+            return (
             <View key={i} style={styles.photoCard}>
-              <Image source={imageSource(img)} style={styles.photo} />
+              <TouchableOpacity
+                activeOpacity={i === 0 ? 1 : 0.75}
+                onPress={() => {
+                  // Tap a non-main photo to promote it. The main photo
+                  // is non-interactive — there's nowhere to promote
+                  // it to. Long enough touch target that this doesn't
+                  // collide with the X-button hit-slop.
+                  if (i === 0 || !rawPhoto?.id) return;
+                  handleSetPrimary(rawPhoto.id);
+                }}
+              >
+                <Image source={imageSource(img)} style={styles.photo} />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.photoRemove}
                 onPress={() => {
                   if (!session || !currentUser._raw) return;
                   const photo = currentUser._raw?.photos?.[i];
                   if (!photo) return;
+                  // Enforce the 3-photo floor — ProfileSetup requires at
+                  // least 3 photos to complete the survey, and we must
+                  // not let EditProfile drop a user below that minimum.
+                  const photoCount = currentUser._raw?.photos?.length || 0;
+                  if (photoCount <= 3) {
+                    Alert.alert(
+                      'Minimum photos required',
+                      'You must keep at least 3 photos on your profile. Add a new photo before removing this one.',
+                    );
+                    return;
+                  }
                   Alert.alert('Remove Photo', 'Delete this photo?', [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Delete', style: 'destructive', onPress: () => {
@@ -245,8 +317,15 @@ export default function EditProfileScreen({ navigation }) {
                   <Text style={styles.mainBadgeText}>Main</Text>
                 </View>
               )}
+              {i !== 0 && (
+                <View style={styles.setMainHint}>
+                  <Ionicons name="star-outline" size={11} color="#FFFFFF" />
+                  <Text style={styles.setMainHintText}>Tap to set as main</Text>
+                </View>
+              )}
             </View>
-          ))}
+          );
+          })}
           {/* Add photo button */}
           <TouchableOpacity
             style={styles.addPhotoCard}
@@ -332,6 +411,79 @@ export default function EditProfileScreen({ navigation }) {
         <Text style={styles.sectionTitle}>Currently Into</Text>
         <Text style={styles.sectionSub}>What are you vibing with right now?</Text>
         <CurrentlyIntoSelector value={currentlyInto} onChange={setCurrentlyInto} />
+
+        {/* More about you — fields that used to be edit-only during the
+            ProfileSetup survey. Compact chip pickers; tap to toggle.
+            Pronouns + interests accept multiple values; the rest are
+            single-select. All hydrated from the same Profile columns
+            ProfileSetup writes, so a returning user sees what they
+            already picked. */}
+        <Text style={styles.sectionTitle}>More about you</Text>
+
+        <Text style={styles.fieldLabel}>Ethnicity</Text>
+        <View style={styles.optionsRow}>
+          {ETHNICITY_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option}
+              style={[styles.optionChip, form.ethnicity === option && styles.optionChipActive]}
+              onPress={() => setField('ethnicity', form.ethnicity === option ? '' : option)}
+            >
+              <Text style={[styles.optionText, form.ethnicity === option && styles.optionTextActive]}>{option}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.fieldLabel}>Pronouns</Text>
+        <View style={styles.optionsRow}>
+          {PRONOUN_OPTIONS.map((option) => {
+            const arr = (form.pronouns || '').split(',').map((s) => s.trim()).filter(Boolean);
+            const isOn = arr.includes(option);
+            return (
+              <TouchableOpacity
+                key={option}
+                style={[styles.optionChip, isOn && styles.optionChipActive]}
+                onPress={() => {
+                  const next = isOn ? arr.filter((p) => p !== option) : (arr.length >= 4 ? arr : [...arr, option]);
+                  setField('pronouns', next.join(', '));
+                }}
+              >
+                <Text style={[styles.optionText, isOn && styles.optionTextActive]}>{option}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Text style={styles.fieldLabel}>Education</Text>
+        <View style={styles.optionsRow}>
+          {EDUCATION_OPTIONS.map((option) => (
+            <TouchableOpacity
+              key={option}
+              style={[styles.optionChip, form.education === option && styles.optionChipActive]}
+              onPress={() => setField('education', form.education === option ? '' : option)}
+            >
+              <Text style={[styles.optionText, form.education === option && styles.optionTextActive]}>{option}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.fieldLabel}>Interests</Text>
+        <View style={styles.optionsRow}>
+          {INTEREST_OPTIONS.map((option) => {
+            const isOn = form.interests.includes(option);
+            return (
+              <TouchableOpacity
+                key={option}
+                style={[styles.optionChip, isOn && styles.optionChipActive]}
+                onPress={() => {
+                  const next = isOn ? form.interests.filter((i) => i !== option) : [...form.interests, option];
+                  setField('interests', next);
+                }}
+              >
+                <Text style={[styles.optionText, isOn && styles.optionTextActive]}>{option}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         {/* Identity Stickers */}
         <Text style={styles.sectionTitle}>Identity Stickers</Text>
@@ -453,6 +605,29 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     fontSize: 11,
+  },
+  // Subtle hint on non-main photos so users know what tapping does.
+  // Sits flush with the bottom of the card; fades into the photo via
+  // a low-opacity dark overlay rather than a full pill — too prominent
+  // a label competes with the photo itself.
+  setMainHint: {
+    position: 'absolute',
+    bottom: 6,
+    left: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  setMainHintText: {
+    fontSize: 10,
+    fontFamily: FontFamily.semibold,
+    color: '#FFFFFF',
+    letterSpacing: 0.2,
   },
   addPhotoCard: {
     width: 100,

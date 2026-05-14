@@ -89,12 +89,16 @@ export default function MyTicketsScreen({ navigation }) {
           <Text style={styles.emptyBody}>
             RSVP to an event in Community and your ticket will appear here.
           </Text>
-          <TouchableOpacity
-            style={styles.emptyCta}
-            onPress={() => navigation.navigate('Events')}
-          >
-            <Text style={styles.emptyCtaText}>Browse events</Text>
-          </TouchableOpacity>
+          {/* Hidden in v1 — Events stack not yet server-backed. Re-enable when
+              eventStore.js is migrated off AsyncStorage to Supabase. */}
+          {false && (
+            <TouchableOpacity
+              style={styles.emptyCta}
+              onPress={() => navigation.navigate('Events')}
+            >
+              <Text style={styles.emptyCtaText}>Browse events</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <FlatList

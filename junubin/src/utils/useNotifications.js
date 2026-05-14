@@ -18,20 +18,45 @@ export function useNotifications(navigationRef, isAuthenticated = true) {
     registerForPushNotifications().catch(() => {});
 
     // Handle notification taps → deep link
+    //
+    // The server-side push payload shape (00013_push_triggers.sql) is:
+    //
+    //   { type: 'match',   matchId, peerId }
+    //   { type: 'message', conversationId, messageId, senderId }
+    //   { type: 'like'   }   (LikesTab; no extra context needed)
+    //
+    // The old handler read `data.match` for both message + match taps,
+    // which was always undefined — ChatScreen then mounted with no
+    // route.params.match and no conversationId, and crashed on the
+    // first `match.id` access. Now we route off the actual payload:
+    //
+    //   - 'message' → Chat with conversationId. ChatScreen pulls
+    //                 the match data from getMatches() once it has
+    //                 the conversationId.
+    //   - 'match'   → Messages tab. The new match floats to the top
+    //                 (current-mode sort) and the user can tap to
+    //                 open. We don't open Chat directly because the
+    //                 payload doesn't carry a conversationId — only
+    //                 matchId — and one extra tap is cheaper than a
+    //                 cold-start round trip to resolve it.
     responseListenerRef.current = addNotificationResponseListener((response) => {
-      const data = response.notification.request.content.data;
+      const data = response.notification.request.content.data || {};
       const nav = navigationRef?.current;
       if (!nav) return;
 
-      switch (data?.type) {
+      switch (data.type) {
         case 'message':
-          nav.navigate('Chat', { match: data.match });
+          if (data.conversationId) {
+            nav.navigate('Chat', { conversationId: data.conversationId });
+          } else {
+            nav.navigate('Main', { screen: 'MessagesTab' });
+          }
           break;
         case 'like':
           nav.navigate('Main', { screen: 'LikesTab' });
           break;
         case 'match':
-          nav.navigate('Chat', { match: data.match });
+          nav.navigate('Main', { screen: 'MessagesTab' });
           break;
         case 'community':
           nav.navigate('Main', { screen: 'CommunityTab' });

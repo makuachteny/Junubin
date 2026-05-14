@@ -21,9 +21,9 @@ import { imageSource } from '../utils/imageSource';
 import { useSubscription, canUseWhispers, ALL_FEATURES_FREE } from '../payments';
 import { useAuth } from '../auth';
 import * as discoverService from '../api/services/discoverService';
+import * as safetyService from '../api/services/safetyService';
 import { useMyFollowCounts, useFollow } from '../hooks/useFollow';
 import { useCurrentUser, useEligibility } from '../hooks';
-import AdBanner from '../components/AdBanner';
 import { getEthnicIdentity } from '../utils/ethnicIdentity';
 import { getCountryByCode } from '../data/countries';
 
@@ -68,18 +68,23 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const { gate, nudge: surveyNudge } = useEligibility();
   const isOwnProfile = !!currentUser?.id && currentUser.id === profile.id;
 
+  // Mode the user is currently in — records on the Swipe row so
+  // MessagesScreen can sort conversations by the mode they originated
+  // in. Falls back to 'dating' when the profile context hasn't loaded.
+  const swipeMode = currentUser?.preferences?.mode === 'Social' ? 'social' : 'dating';
+
   const goBackWithSwipe = (direction) => {
     navigation.navigate({ name: 'Main', params: { screen: 'HomeTab', params: { swipeAction: direction, swipedProfileId: profile.id } }, merge: true });
   };
 
   const handlePass = () => {
-    if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass').catch((e) => { if (__DEV__) console.warn('Pass swipe failed:', e); });
+    if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass', { mode: swipeMode }).catch((e) => { if (__DEV__) console.warn('Pass swipe failed:', e); });
     goBackWithSwipe('left');
   };
   const handleLike = () => {
     if (!gate('swipe_like')) return;
     if (session && profile.id) {
-      discoverService.recordSwipe(profile.id, 'like').then((r) => {
+      discoverService.recordSwipe(profile.id, 'like', { mode: swipeMode }).then((r) => {
         if (r?.match) Alert.alert('It\'s a Match!', `You and ${profile.name} liked each other!`);
       }).catch((e) => { if (__DEV__) console.warn('Like swipe failed:', e); });
     }
@@ -94,7 +99,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
     // Conversation id lives at `match.conversation.id` — same shape
     // HomeScreen already consumes; keep the read paths in sync.
     if (session && profile.id) {
-      discoverService.recordSwipe(profile.id, 'like').then((r) => {
+      discoverService.recordSwipe(profile.id, 'like', { mode: swipeMode }).then((r) => {
         if (r?.match) {
           const convId = r.match.conversation?.id;
           navigation.replace('Chat', {
@@ -145,8 +150,79 @@ const ProfileDetailScreen = ({ navigation, route }) => {
     }
     const consumed = consumeSuperLike();
     if (consumed === false) return;
-    if (session && profile.id) discoverService.recordSwipe(profile.id, 'super_like').catch((e) => { if (__DEV__) console.warn('Super like failed:', e); });
+    if (session && profile.id) discoverService.recordSwipe(profile.id, 'super_like', { mode: swipeMode }).catch((e) => { if (__DEV__) console.warn('Super like failed:', e); });
     goBackWithSwipe('right');
+  };
+
+  // ── Header overflow menu — Report / Block ──
+  // App Review requires safety actions to be reachable from a user's
+  // profile, not just from inside an active chat. Both `reportUser` and
+  // `blockUser` operate on the User row; `reportAndBlock` does both in
+  // a single RPC. Mirrors the tone of ChatScreen's handleHeaderMenu.
+  const handleProfileMenu = () => {
+    if (isOwnProfile) return;
+    const targetId = profile.userId || profile.id;
+    const displayName = profile.name || 'this person';
+    Alert.alert(displayName, null, [
+      {
+        text: 'Report',
+        style: 'destructive',
+        onPress: () => Alert.alert(
+          `Report ${displayName}?`,
+          'Our safety team will review this account. The user will not be told you reported them.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Report',
+              style: 'destructive',
+              onPress: async () => {
+                if (!targetId) {
+                  Alert.alert('Reported', 'Thanks — our team will review this account.');
+                  navigation.goBack();
+                  return;
+                }
+                try {
+                  await safetyService.reportUser({ reportedId: targetId, reason: 'profile_report' });
+                  Alert.alert('Reported', 'Thanks — our team will review this account.');
+                  navigation.goBack();
+                } catch (e) {
+                  Alert.alert('Could not file report', e?.message || 'Try again later.');
+                }
+              },
+            },
+          ]
+        ),
+      },
+      {
+        text: 'Block',
+        style: 'destructive',
+        onPress: () => Alert.alert(
+          `Block ${displayName}?`,
+          'You will both stop seeing each other in matches, chats, and discovery.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Block',
+              style: 'destructive',
+              onPress: async () => {
+                if (!targetId) {
+                  navigation.goBack();
+                  return;
+                }
+                try {
+                  await safetyService.blockUser(targetId);
+                  Alert.alert('Blocked', `${displayName} has been blocked.`);
+                  navigation.goBack();
+                } catch (e) {
+                  Alert.alert('Could not block', e?.message || 'Try again later.');
+                }
+              },
+            },
+          ]
+        ),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   // Section entrance animations
@@ -200,6 +276,18 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           <TouchableOpacity style={[s.backBtn, { top: insets.top + 10 }]} onPress={() => navigation.goBack()} activeOpacity={0.7}>
             <Ionicons name="chevron-back" size={26} color="#FFF" />
           </TouchableOpacity>
+
+          {!isOwnProfile && (
+            <TouchableOpacity
+              style={[s.moreBtn, { top: insets.top + 10 }]}
+              onPress={handleProfileMenu}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="More options"
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color="#FFF" />
+            </TouchableOpacity>
+          )}
 
           {/* Gradient that bleeds into the info area */}
           <LinearGradient
@@ -415,9 +503,6 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         <InlinePhoto index={5} />
 
         <View style={s.sectionBody}>
-          {/* ── Ad Banner ── */}
-          <AdBanner style={{ marginBottom: 12 }} />
-
           <View style={{ height: 110 }} />
         </View>
       </ScrollView>
@@ -490,6 +575,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // ── Photo ──
   photoWrap: { width: SW, height: PHOTO_H, backgroundColor: colors.gray200 },
   backBtn: { position: 'absolute', left: 14, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  moreBtn: { position: 'absolute', right: 14, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
   photoGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 160 },
   inlinePhotoCard: { marginHorizontal: 18, borderRadius: 20, overflow: 'hidden', marginVertical: 0, height: (SW - 36) * 1.25, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 },
   nameOverlay: { position: 'absolute', bottom: 16, left: 18, right: 18, zIndex: 5 },

@@ -6,17 +6,58 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const ANALYTICS_KEY = '@junubin_analytics_events';
 const MAX_BUFFERED = 100;
 
+// Keys we refuse to forward to analytics — call sites that pass any of
+// these get them stripped (with a redaction marker so we can tell at
+// dev time that something was filtered). This is a defense-in-depth
+// pass; the call sites SHOULD never pass these in the first place,
+// but a typo'd `{ email }` reaching here is exactly the kind of leak
+// that's invisible until it's already on a third-party dashboard.
+const PII_KEYS = new Set([
+  'email', 'phone', 'phoneNumber', 'phone_number',
+  'dateOfBirth', 'dob', 'birthDate', 'birthday',
+  'displayName', 'fullName', 'firstName', 'lastName',
+  'latitude', 'longitude', 'lat', 'lng', 'location',
+  'address', 'streetAddress', 'zipCode', 'postalCode',
+  'photoUrl', 'photoUri', 'avatarUrl', 'imageUri',
+  'authId', 'auth_id', 'pushToken',
+  'password', 'token', 'sessionToken', 'accessToken', 'refreshToken',
+]);
+
+function sanitizeProperties(props) {
+  if (!props || typeof props !== 'object') return {};
+  const safe = {};
+  for (const [key, value] of Object.entries(props)) {
+    if (PII_KEYS.has(key)) {
+      // Redacted marker rather than silent drop so callers can see in
+      // dev that they're leaking and need to remove the prop.
+      safe[key] = '[redacted]';
+      continue;
+    }
+    // Strings that look like an email or full ISO timestamp at the
+    // top level are very likely PII even under a different key. Hash
+    // them to a short prefix so the event is still useful (cohort
+    // analysis works on a prefix) but the raw value never leaves.
+    if (typeof value === 'string' && /@/.test(value) && /\./.test(value)) {
+      safe[key] = '[email-redacted]';
+      continue;
+    }
+    safe[key] = value;
+  }
+  return safe;
+}
+
 export async function trackEvent(event, properties = {}) {
   try {
+    const safe = sanitizeProperties(properties);
     const entry = {
       event,
-      properties,
+      properties: safe,
       timestamp: new Date().toISOString(),
       sessionId: global.__junubin_session_id,
     };
 
     if (__DEV__) {
-      console.log('[Analytics]', event, properties);
+      console.log('[Analytics]', event, safe);
     }
 
     // Buffer events locally

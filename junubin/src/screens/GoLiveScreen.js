@@ -38,13 +38,18 @@ import { SHOW_PAYMENTS_UI } from '../payments';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-// Mock live comments for development
-const MOCK_COMMENTS = [
+// Mock live comments for development only. In production builds the
+// array is empty so the simulated-comments interval below never fires —
+// the only comments that appear come from real viewers via the Daily
+// realtime channel. App Store reviewers running a fresh install would
+// otherwise see seeded names ("Akuol", "Nyajima"…) bubble in during a
+// solo broadcast, which is grounds for a "fake engagement" rejection.
+const MOCK_COMMENTS = __DEV__ ? [
   { id: '1', user: 'Akuol', text: 'You look amazing! \u{1F525}', time: Date.now() - 30000 },
   { id: '2', user: 'Nyajima', text: 'Where are you rn?', time: Date.now() - 25000 },
   { id: '3', user: 'Chan', text: 'YESSSS \u{2728}\u{2728}', time: Date.now() - 15000 },
   { id: '4', user: 'Adut', text: 'This is fire', time: Date.now() - 8000 },
-];
+] : [];
 
 const REACTION_EMOJIS = ['\u{1F525}', '\u{2764}\u{FE0F}', '\u{1F60D}', '\u{1F64F}', '\u{1F389}', '\u{1F4AB}'];
 
@@ -204,8 +209,9 @@ export default function GoLiveScreen({ navigation }) {
     return () => loop.stop();
   }, [isLive, pulseAnim]);
 
-  // Simulate viewers joining
+  // Simulate viewers joining (dev only — production gets real counts via realtime).
   useEffect(() => {
+    if (!__DEV__) return;
     if (!isLive) return;
     const interval = setInterval(() => {
       setViewerCount((v) => {
@@ -236,8 +242,9 @@ export default function GoLiveScreen({ navigation }) {
     return () => clearInterval(durationRef.current);
   }, [isLive]);
 
-  // Simulate floating reactions
+  // Simulate floating reactions (dev only — real reactions arrive via realtime).
   useEffect(() => {
+    if (!__DEV__) return;
     if (!isLive) return;
     const interval = setInterval(() => {
       const emoji = REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
@@ -255,7 +262,9 @@ export default function GoLiveScreen({ navigation }) {
   // jackpot gifts (Crown, Rocket, Lion, Trophy) are rare. Each gift fires
   // a floating animation AND credits the host's coin balance, so the
   // counter at the top reflects real-time earnings.
+  // Dev only — production paths get gifts from LiveGiftEvent rows via realtime.
   useEffect(() => {
+    if (!__DEV__) return;
     if (!isLive) return;
     const interval = setInterval(() => {
       const r = Math.random();
@@ -401,9 +410,12 @@ export default function GoLiveScreen({ navigation }) {
         text: 'End',
         style: 'destructive',
         onPress: () => {
-          setIsLive(false);
           clearInterval(durationRef.current);
+          // Navigate away BEFORE flipping `isLive`. If we flip first, the
+          // pre-live `<CameraView>` re-mounts and reopens the camera for a
+          // few frames until React tears the screen down.
           navigation.goBack();
+          setIsLive(false);
         },
       },
     ]);

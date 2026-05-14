@@ -28,6 +28,7 @@ export async function getMatches() {
       userAId,
       userBId,
       status,
+      mode,
       createdAt,
       updatedAt,
       conversation:Conversation(
@@ -80,6 +81,13 @@ export async function getMatches() {
       unread: unreadCount > 0,
       unreadCount,
       userId: otherUser?.id,
+      // Mode the match originated in ('dating' | 'social'). Used by
+      // MessagesScreen to surface current-mode conversations first.
+      // Defaults to 'dating' for legacy rows that pre-date 00025.
+      mode: m.mode || 'dating',
+      // Keep the raw timestamp around so sortByMode() can do a proper
+      // numeric comparison without re-parsing the localized string.
+      updatedAt: lastMessage?.createdAt || m.updatedAt || m.createdAt,
     };
   });
 

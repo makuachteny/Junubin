@@ -31,6 +31,16 @@ android/
 *.zip
 *.tar.gz
 
+# Asset rollback backups (e.g. icon.original.png.bak) — assetBundlePatterns
+# is `**/*` so without this rule the original 1.2MB icon would ship inside
+# the binary alongside the compressed one.
+assets/*.bak
+assets/*.original.*
+
+# Secrets — these are read at submit-time via eas.json paths, but should
+# never be uploaded to the build runner.
+.secrets/
+
 # OS junk
 .DS_Store
 Thumbs.db

@@ -83,12 +83,23 @@ export function checkActionAllowed({ user, action }) {
   }
 
   if (DATING_ACTIONS.has(action)) {
-    const surveyDone = !!user.profile?.surveyCompletedAt;
-    if (!surveyDone) {
+    // A dating action implies the user is actively in dating mode for
+    // this tap, regardless of their stored accountPurpose. A social-
+    // onboarded user who flips the HomeScreen toggle to Dating and
+    // tries to like someone still needs to have answered the dating-
+    // only fields (sexuality, lookingForGender, intention). Forcing
+    // `mode: 'dating'` here makes the step iterator check those
+    // fields even when accountPurpose is 'socialize'.
+    //
+    // The user only sees the nudge when something is *actually*
+    // missing — a previously-completed dating user toggling Social→
+    // Dating won't get nudged because their dating fields are filled.
+    const missing = nextIncompleteStep(user.profile, user, { mode: 'dating' });
+    if (missing !== null) {
       return {
         ok: false,
         reason: 'survey_required',
-        resumeAt: nextIncompleteStep(user.profile),
+        resumeAt: missing,
         from: action,
       };
     }
@@ -126,11 +137,25 @@ const STEP_ORDER = [
   { id: 'survey', test: (p) => !!p?.surveyCompletedAt, onlyDating: true },
 ];
 
-export function nextIncompleteStep(profile, user) {
+/**
+ * Returns the id of the first unanswered step, or null if the user is
+ * fully set up for the requested mode.
+ *
+ * `opts.mode` ('dating' | 'social' | undefined): which mode to validate
+ * against. When omitted, falls back to the user's stored accountPurpose
+ * — the historic behavior. When passed explicitly (e.g. by the
+ * eligibility helper for a dating action), it overrides accountPurpose
+ * so a Social-onboarded user who toggles to Dating still gets gated on
+ * the dating-only fields they haven't filled yet.
+ */
+export function nextIncompleteStep(profile, user, opts = {}) {
   if (!profile) return 'purpose';
-  const isDating = profile.accountPurpose === 'dating' || profile.accountPurpose === 'both';
+  const modeIsDating = opts.mode === 'dating'
+    || (!opts.mode && (
+      profile.accountPurpose === 'dating' || profile.accountPurpose === 'both'
+    ));
   for (const step of STEP_ORDER) {
-    if (step.onlyDating && !isDating) continue;
+    if (step.onlyDating && !modeIsDating) continue;
     if (!step.test(profile, user)) return step.id;
   }
   return null; // fully complete
@@ -140,10 +165,13 @@ export function nextIncompleteStep(profile, user) {
  * Convenience: rough percent-complete for the profile completeness ring.
  * Counts only steps relevant to the user's chosen mode.
  */
-export function profilePercentComplete(profile, user) {
+export function profilePercentComplete(profile, user, opts = {}) {
   if (!profile) return 0;
-  const isDating = profile.accountPurpose === 'dating' || profile.accountPurpose === 'both';
-  const relevant = STEP_ORDER.filter((s) => !s.onlyDating || isDating);
+  const modeIsDating = opts.mode === 'dating'
+    || (!opts.mode && (
+      profile.accountPurpose === 'dating' || profile.accountPurpose === 'both'
+    ));
+  const relevant = STEP_ORDER.filter((s) => !s.onlyDating || modeIsDating);
   if (relevant.length === 0) return 0;
   const done = relevant.filter((s) => s.test(profile, user)).length;
   return Math.round((done / relevant.length) * 100);

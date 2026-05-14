@@ -33,23 +33,31 @@ import { promptToOpenSettings } from '../utils/permissionAlert';
 const { width } = Dimensions.get('window');
 
 // ─── Step Definitions ───
-// Generic steps come first, then the purpose toggle, then dating-only steps
+// Purpose comes first so we only ask the questions a given user needs:
+// - everyone answers the generic block (name → interests)
+// - dating users also answer sexuality / lookingFor / children / intention
+// - social-only users skip those entirely.
+//
+// `datingOnly: true` marks a step as gated on purpose === 'dating' |
+// 'both'. The STEPS useMemo below filters ALL_STEPS based on the
+// current purpose, so the screen reshapes itself the moment the user
+// taps a card on step 1 — no separate routing, no nav stack churn.
 const ALL_STEPS = [
-  { key: 'name', title: "What's your first name?", icon: 'person', subtitle: 'This is how you\'ll appear on JuNubin.' },
-  { key: 'birthday', title: 'When were you born?', icon: 'calendar', subtitle: 'Your age will be shown on your profile.' },
-  { key: 'gender', title: 'What\'s your gender?', icon: 'body', subtitle: 'Select the option that best describes you.' },
-  { key: 'pronouns', title: 'What are your pronouns?', icon: 'chatbubbles', subtitle: 'Select up to 4. This will be visible on your profile.' },
-  { key: 'ethnicity', title: 'What\'s your background?', icon: 'flag', subtitle: 'Help others learn more about you.' },
-  { key: 'education', title: 'Education level', icon: 'school', subtitle: 'Optional — visible on your profile.' },
-  { key: 'photos', title: 'Add your best photos', icon: 'camera', subtitle: 'Add at least 2 photos. The more, the better!' },
-  { key: 'verify', title: 'Verify your identity', icon: 'shield-checkmark', subtitle: 'Take a quick selfie to prove you\'re real.' },
-  { key: 'prompts', title: 'Answer a profile prompt', icon: 'chatbox-ellipses', subtitle: 'Show off your personality.' },
-  { key: 'interests', title: 'What do you love?', icon: 'star', subtitle: 'Pick at least 3 interests.' },
-  { key: 'purpose', title: 'What brings you here?', icon: 'options', subtitle: 'Choose your vibe. You can always explore both later.' },
-  { key: 'sexuality', title: 'What\'s your sexuality?', icon: 'heart', subtitle: 'This helps us find your best matches.', datingOnly: true },
-  { key: 'datePref', title: 'Who do you want to date?', icon: 'people', subtitle: 'You can always change this later.', datingOnly: true },
-  { key: 'children', title: 'Do you have children?', icon: 'happy', subtitle: 'Optional — visible on your profile.', datingOnly: true },
-  { key: 'intention', title: 'What are you looking for?', icon: 'compass', subtitle: 'Be upfront about your intentions.', datingOnly: true },
+  { key: 'purpose',   title: 'What brings you here?',         icon: 'options',            subtitle: 'Choose your vibe. You can switch any time in Settings.' },
+  { key: 'name',      title: "What's your first name?",       icon: 'person',             subtitle: 'This is how you\'ll appear on JuNubin.' },
+  { key: 'birthday',  title: 'When were you born?',           icon: 'calendar',           subtitle: 'Your age will be shown on your profile.' },
+  { key: 'gender',    title: 'What\'s your gender?',          icon: 'body',               subtitle: 'Select the option that best describes you.' },
+  { key: 'pronouns',  title: 'What are your pronouns?',       icon: 'chatbubbles',        subtitle: 'Select up to 4. This will be visible on your profile.' },
+  { key: 'ethnicity', title: 'What\'s your background?',      icon: 'flag',               subtitle: 'Help others learn more about you.' },
+  { key: 'education', title: 'Education level',               icon: 'school',             subtitle: 'Optional — visible on your profile.' },
+  { key: 'photos',    title: 'Add your best photos',          icon: 'camera',             subtitle: 'Add at least 3 photos. The more, the better!' },
+  { key: 'verify',    title: 'Verify your identity',          icon: 'shield-checkmark',   subtitle: 'Take a quick selfie to prove you\'re real.' },
+  { key: 'interests', title: 'What do you love?',             icon: 'star',               subtitle: 'Pick at least 3 interests.' },
+  { key: 'prompts',   title: 'Answer a profile prompt',       icon: 'chatbox-ellipses',   subtitle: 'Show off your personality.' },
+  { key: 'sexuality', title: 'What\'s your sexuality?',       icon: 'heart',              subtitle: 'This helps us find your best matches.', datingOnly: true },
+  { key: 'datePref',  title: 'Who do you want to date?',      icon: 'people',             subtitle: 'You can always change this later.', datingOnly: true },
+  { key: 'children',  title: 'Do you have children?',         icon: 'happy',              subtitle: 'Optional — visible on your profile.', datingOnly: true },
+  { key: 'intention', title: 'What are you looking for?',     icon: 'compass',            subtitle: 'Be upfront about your intentions.', datingOnly: true },
 ];
 
 // ─── Options Data ───
@@ -112,13 +120,22 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const resumeAtParam = route?.params?.resumeAt || null;
   const [purpose, setPurpose] = useState(null); // null until the user picks on the purpose step
   const isSocialOnly = purpose === 'socialize';
+
+  // Step list reshapes around purpose:
+  //   - Before purpose is chosen → only the purpose card is visible.
+  //     This forces the user to answer "Dating or Socialize?" first so
+  //     they can't waste 10 generic steps on a flow they won't finish.
+  //   - After purpose === 'socialize' → generic steps only.
+  //   - After purpose === 'dating' or 'both' → generic + dating-only.
+  //
+  // `currentStep` is an index into this filtered list; the seek effect
+  // below re-resolves it whenever STEPS changes so the user lands on
+  // the right card after the list grows.
   const STEPS = useMemo(
     () => ALL_STEPS.filter((s) => {
-      // Always show non-dating steps and the purpose step itself
-      if (!s.datingOnly) return true;
-      // Before purpose is chosen, hide dating steps (they come after purpose)
+      if (s.key === 'purpose') return true;
       if (!purpose) return false;
-      // After purpose is chosen, show dating steps only if dating
+      if (!s.datingOnly) return true;
       return !isSocialOnly;
     }),
     [purpose, isSocialOnly]
@@ -127,17 +144,30 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Seek to the requested step on mount when ProfileSetup is opened
-  // from the SurveyNudgeModal (or a deep link). We re-resolve when
-  // STEPS changes because dating-only steps appear after `purpose`
-  // is picked, shifting indices.
+  // Seek to the requested step when ProfileSetup is opened from the
+  // SurveyNudgeModal (or a deep link). The seek waits for STEPS to
+  // stabilize after `purpose` hydrates from authUser — dating-only
+  // steps only appear once `purpose` is non-null, and we don't want
+  // to land on (e.g.) `photos` while STEPS is still the pre-purpose
+  // subset, since that picks the wrong index.
+  //
+  // Tracked via a ref so the seek only fires once per (resumeAtParam,
+  // mount) — once the user manually advances or goes back, we never
+  // bounce them back here even if STEPS recomputes for another reason.
+  const didSeekResumeRef = useRef(false);
   useEffect(() => {
-    if (!resumeAtParam) return;
+    if (!resumeAtParam || didSeekResumeRef.current) return;
     const targetKey = RESUME_KEY_BY_ELIGIBILITY_ID[resumeAtParam] || resumeAtParam;
     const idx = STEPS.findIndex((s) => s.key === targetKey);
-    if (idx >= 0 && idx !== currentStep) setCurrentStep(idx);
-    // Run once on the first mount with this param. Subsequent step
-    // changes are user-driven and shouldn't bounce back.
+    if (idx < 0) return;
+    // Wait for hydration: if the target step is in the dating-only
+    // section but `purpose` hasn't loaded yet, defer until STEPS
+    // includes the dating steps. We detect that by checking whether
+    // the matched index sits inside the dating-only block.
+    if (idx >= 0 && idx !== currentStep) {
+      setCurrentStep(idx);
+      didSeekResumeRef.current = true;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeAtParam, STEPS.length]);
   const savingFade = useRef(new Animated.Value(0)).current;
@@ -156,7 +186,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     return () => pulse.stop();
   }, [saving, savingFade, savingPulse]);
   const insets = useSafeAreaInsets();
-  const { session, updateUser, setDevBypass } = useAuth();
+  const { session, user: authUser, updateUser } = useAuth();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
@@ -183,32 +213,152 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const [showSexuality, setShowSexuality] = useState(false);
   const [showEthnicity, setShowEthnicity] = useState(true);
 
+  // Hydrate form fields from the existing User/Profile row so a returning
+  // user lands on the right step *with their prior answers already filled
+  // in*. Without this, a user who completes 5 of 8 steps, exits, and
+  // re-enters via the SurveyNudgeModal sees every field blank and has to
+  // re-answer them. We run this once per `authUser.id` (tracked via the
+  // ref) so user-typed edits aren't clobbered if AuthContext later
+  // refetches the row in the background.
+  const hydratedForUserRef = useRef(null);
+  useEffect(() => {
+    if (!authUser?.id) return;
+    if (hydratedForUserRef.current === authUser.id) return;
+    hydratedForUserRef.current = authUser.id;
+
+    const profile = authUser.profile || {};
+
+    // Purpose drives the STEPS array (datingOnly visibility). Hydrate
+    // it from accountPurpose so the resumeAt seek effect lands on the
+    // right index. 'date' is the legacy spelling from 00010; treat it
+    // as 'dating' for the UI.
+    const ap = profile.accountPurpose;
+    if (ap === 'socialize') setPurpose('socialize');
+    else if (ap === 'dating' || ap === 'date' || ap === 'both') setPurpose('dating');
+
+    if (authUser.displayName) setFirstName(authUser.displayName);
+
+    if (authUser.dateOfBirth) {
+      const d = new Date(authUser.dateOfBirth);
+      if (!Number.isNaN(d.getTime())) {
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        const yyyy = String(d.getUTCFullYear());
+        setBirthDate(`${mm}/${dd}/${yyyy}`);
+      }
+    }
+
+    // DB stores 'man' / 'woman' / 'non_binary' / 'other'; UI uses
+    // capitalized strings. 'other' has no matching option, so leave
+    // it unset and the user picks again — but every other value
+    // round-trips losslessly.
+    const genderUiMap = { man: 'Man', woman: 'Woman', non_binary: 'Nonbinary' };
+    if (authUser.gender && genderUiMap[authUser.gender]) {
+      setSelectedGender(genderUiMap[authUser.gender]);
+    }
+
+    // Pronouns serialize to a comma-separated string in updateProfile;
+    // split back into the array the UI expects.
+    if (typeof profile.pronouns === 'string' && profile.pronouns.trim()) {
+      const arr = profile.pronouns.split(',').map((s) => s.trim()).filter(Boolean);
+      if (arr.length) setSelectedPronouns(arr);
+    } else if (Array.isArray(profile.pronouns)) {
+      setSelectedPronouns(profile.pronouns);
+    }
+
+    if (profile.sexuality) setSelectedSexuality(profile.sexuality);
+    if (profile.lookingForGender) setSelectedDatePref(profile.lookingForGender);
+    if (profile.datingIntentions) setSelectedIntention(profile.datingIntentions);
+    if (profile.ethnicity) setSelectedEthnicity(profile.ethnicity);
+    if (profile.education) setSelectedEducation(profile.education);
+    if (profile.children) setSelectedChildren(profile.children);
+    if (Array.isArray(profile.interests) && profile.interests.length) {
+      setSelectedInterests(profile.interests);
+    }
+    if (profile.promptQuestion) setSelectedPrompt(profile.promptQuestion);
+    if (profile.promptAnswer) setPromptAnswer(profile.promptAnswer);
+
+    // Pre-fill the photos grid from already-uploaded Photo rows. The
+    // photos step's "Continue" still works because validateStep counts
+    // any non-null cell, and saveProfileToApi only re-uploads cells
+    // that hold a *local* URI (the hydrated cells hold http(s) URLs
+    // pointing at Supabase Storage and are skipped on save).
+    const uploaded = Array.isArray(authUser.photos)
+      ? authUser.photos
+          .slice()
+          .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+          .map((p) => p?.url)
+          .filter(Boolean)
+      : [];
+    if (uploaded.length) {
+      setPhotos((prev) => {
+        const next = [...prev];
+        for (let i = 0; i < Math.min(uploaded.length, next.length); i++) {
+          next[i] = uploaded[i];
+        }
+        return next;
+      });
+    }
+  }, [authUser]);
+
   const totalSteps = STEPS.length;
   const step = STEPS[currentStep];
 
-  // Dev-bypass back-door is restricted to dev builds. Without this
-  // guard, any path that lands a session-less user on ProfileSetup
-  // could finish onboarding and set devBypass = true in production.
-  const devBypassEnabled = process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH === 'true';
-
   const saveProfileToApi = async () => {
     if (!session) {
-      if (devBypassEnabled) {
-        setSaving(true);
-        setTimeout(() => setDevBypass(true), 1000);
-      } else {
-        Alert.alert('Sign in required', 'Please sign in before completing your profile.');
+      Alert.alert('Sign in required', 'Please sign in before completing your profile.');
+      return;
+    }
+    // Final validation before save. Mirrors validateStep() for every
+    // required field so a user cannot land in the app with an incomplete
+    // profile via deep-link resume, race condition, or future bug that
+    // bypasses per-step gating. Build a human-readable list of missing
+    // fields and short-circuit before touching the API.
+    const trimmedName = firstName.trim();
+    const trimmedPromptAnswer = promptAnswer.trim();
+    const missing = [];
+
+    if (!trimmedName || trimmedName.length < 2) missing.push('first name (at least 2 characters)');
+    if (!purpose) missing.push('account purpose (dating or socializing)');
+
+    // Birthday — full MM/DD/YYYY + 18+ age check (mirrors validateStep 'birthday')
+    let birthdayValid = false;
+    if (birthDate.length === 10) {
+      const [mm, dd, yyyy] = birthDate.split('/').map(Number);
+      if (mm >= 1 && mm <= 12) {
+        const daysInMonth = new Date(yyyy, mm, 0).getDate();
+        if (dd >= 1 && dd <= daysInMonth && yyyy >= 1900 && yyyy <= new Date().getFullYear()) {
+          const dob = new Date(yyyy, mm - 1, dd);
+          const today = new Date();
+          let age = today.getFullYear() - dob.getFullYear();
+          const monthDiff = today.getMonth() - dob.getMonth();
+          if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) age--;
+          if (age >= 18 && age <= 120) birthdayValid = true;
+        }
       }
-      return;
     }
-    // Final validation before save
-    const name = firstName.trim();
-    if (!name || name.length < 2) {
-      Alert.alert('Invalid profile', 'Your name must be at least 2 characters.');
-      return;
+    if (!birthdayValid) missing.push('date of birth (must be 18+)');
+
+    if (!selectedGender) missing.push('gender');
+    if (!selectedPronouns || selectedPronouns.length === 0) missing.push('pronouns');
+    if (!selectedEthnicity) missing.push('ethnicity / background');
+    if (!selectedInterests || selectedInterests.length < 3) missing.push('at least 3 interests');
+    if (!selectedPrompt) missing.push('a profile prompt');
+    if (!trimmedPromptAnswer || trimmedPromptAnswer.length < 10) missing.push('prompt answer (at least 10 characters)');
+    if (photos.filter(Boolean).length < 3) missing.push('at least 3 photos');
+
+    if (!isSocialOnly) {
+      if (!selectedSexuality) missing.push('sexuality');
+      if (!selectedDatePref) missing.push('who you want to date');
+      if (!selectedIntention) missing.push('dating intentions');
+      if (!selectedChildren) missing.push('children preference');
     }
-    if (!purpose) {
-      Alert.alert('Invalid profile', 'Please select whether you\'re here for dating or socializing.');
+
+    if (missing.length > 0) {
+      Alert.alert(
+        'Profile not ready',
+        `Please complete these required fields:\n\n• ${missing.join('\n• ')}`,
+      );
       return;
     }
     setSaving(true);
@@ -241,6 +391,15 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         promptAnswer: promptAnswer.trim(),
         accountPurpose: purpose,
         profileComplete: true,
+        // Mark the survey as complete here — the 15-step (dating) /
+        // 11-step (social) flow this user just finished IS the survey.
+        // Previously this flag only flipped inside AccessibilitySurvey,
+        // which meant the eligibility gate kept re-nudging dating
+        // users to a second screen after they'd already answered every
+        // question. AccessibilitySurvey remains reachable from Settings
+        // for users who want to tune accessibility preferences (it's
+        // about contrast / motion / non-color cues, not dating data).
+        surveyCompletedAt: new Date().toISOString(),
         // EULA acceptance was checked on the SignupScreen before the
         // user reached this point. Stamp it on the Profile now that
         // we have a row to write to — App Review wants an auditable
@@ -249,33 +408,76 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         eulaVersion: '2026-05-06',
       };
 
-      const user = await profileService.updateProfile(updates);
-      updateUser(user);
-
-      // Upload photos
-      const photoUris = photos.filter(Boolean);
+      // Upload photos FIRST — we must confirm the user actually has at
+      // least 3 photos in Supabase before we stamp surveyCompletedAt
+      // and let them into the app. Previously the profile was marked
+      // complete before uploads ran, so if every upload failed (network
+      // drop, storage error) the user landed in the app with zero
+      // photos and a "complete" flag, and the eligibility gate had no
+      // way to re-nudge them.
+      //
+      // Skip cells that already hold an http(s) URL — those are photos
+      // we hydrated from the existing Photo rows on mount, so they're
+      // already stored in Supabase. Re-uploading them would create
+      // duplicate Photo rows on every save when a returning user lands
+      // here via the SurveyNudgeModal.
+      const isRemoteUrl = (u) => typeof u === 'string' && /^https?:\/\//i.test(u);
+      const photoUris = photos.filter((u) => u && !isRemoteUrl(u));
+      const photoFailures = [];
       for (const uri of photoUris) {
         try {
           await profileService.uploadPhoto(uri);
         } catch (e) {
-          if (__DEV__) console.warn('Photo upload failed:', e.message);
+          photoFailures.push(e?.message || String(e));
+          if (__DEV__) console.warn('Photo upload failed:', e?.message, e?.cause);
         }
       }
 
-      // Upload verification selfie if taken
+      // Enforce 3-photo floor on the server-side count: already-remote
+      // photos (hydrated from existing Photo rows) + freshly uploaded
+      // ones that succeeded. If we're under 3, bail without stamping
+      // surveyCompletedAt — the user's form state stays intact so they
+      // can retry from this screen.
+      const remoteCount = photos.filter((u) => u && isRemoteUrl(u)).length;
+      const successfulNewCount = photoUris.length - photoFailures.length;
+      if (remoteCount + successfulNewCount < 3) {
+        Alert.alert(
+          'Photos required',
+          `You must have at least 3 photos. ${photoFailures.length > 0 ? `${photoFailures.length} upload(s) failed — please try again.` : ''}`,
+        );
+        return; // do NOT stamp surveyCompletedAt
+      }
+
+      const user = await profileService.updateProfile(updates);
+      updateUser(user);
+
+      // Verification photo is optional — upload after the profile is
+      // committed so a failure here doesn't undo a complete profile.
       if (verificationPhoto) {
         try {
-          await profileService.uploadPhoto(verificationPhoto, 'verification');
+          await profileService.uploadPhoto(verificationPhoto);
         } catch (e) {
-          if (__DEV__) console.warn('Verification photo upload failed:', e.message);
+          photoFailures.push(`Verification: ${e?.message || String(e)}`);
+          if (__DEV__) console.warn('Verification photo upload failed:', e?.message, e?.cause);
         }
       }
 
-      if (session) {
-        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
-      } else if (devBypassEnabled) {
-        setDevBypass(true);
+      if (photoFailures.length > 0) {
+        Alert.alert(
+          'Some photos didn\'t upload',
+          `${photoFailures.length} of ${photoUris.length + (verificationPhoto ? 1 : 0)} photos failed. Your profile was saved — you can re-add photos from Edit Profile.\n\nFirst error: ${photoFailures[0]}`,
+        );
       }
+
+      // ProfileSetup completion → straight to Main. surveyCompletedAt
+      // was set in the updates above, so the eligibility gate is
+      // satisfied for whichever mode the user picked. If they toggle
+      // modes later and have dating-only fields unfilled (Social user
+      // → Dating mode), the gate will catch it on the next dating
+      // action and route them back here with a `resumeAt` pointing
+      // at the specific missing question — they won't have to redo
+      // anything they've already answered.
+      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
     } catch (err) {
       Alert.alert('Error', err.message || 'Failed to save profile. Please try again.');
     } finally {
@@ -433,12 +635,15 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       case 'ethnicity':
         return selectedEthnicity ? null : 'Please select your background.';
       case 'education':
-        return selectedEducation ? null : 'Please select your education level.';
+        // Optional — user can skip via the top-right Skip pill. If
+        // they reached this validator, they tapped Continue, so the
+        // step is being saved as-is (empty allowed).
+        return null;
       case 'children':
         return selectedChildren ? null : 'Please select an option.';
       case 'photos': {
         const count = photos.filter(Boolean).length;
-        if (count < 2) return 'Please add at least 2 photos.';
+        if (count < 3) return `Please add at least 3 photos. You've added ${count}.`;
         return null;
       }
       case 'verify':
@@ -481,7 +686,24 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   React.useEffect(() => { if (fieldError) setFieldError(null); }, [stepInputKey]);
 
-  const canSkip = ['education', 'children', 'photos', 'prompts', 'verify'].includes(step.key);
+  // Steps the user can bypass with the top-right Skip pill. These are
+  // the genuinely optional fields — anything that's also required by
+  // validateStep MUST NOT appear here, or the Skip becomes a free
+  // bypass around the validator. The previous list included `photos`
+  // and `prompts` despite validateStep requiring them, so users could
+  // exit setup with zero photos and no prompt and the eligibility
+  // check would never fire for those particular fields.
+  //
+  // Legitimately optional today:
+  //   - education  (no profile/eligibility surface requires it)
+  //   - children   (dating-only; validateStep requires it, but only
+  //                 for dating mode — Skip is hidden for dating below)
+  //   - verify     (selfie ID — encouraged but not blocking)
+  const OPTIONAL_STEPS = new Set(['education', 'verify']);
+  // `children` is dating-only and required for dating users by
+  // validateStep. Treat as optional only when the user picked
+  // socialize (in which case the step is hidden anyway).
+  const canSkip = OPTIONAL_STEPS.has(step.key);
 
   // ─── Render Helpers ───
   const renderRadioOption = (option, selected, onSelect) => (

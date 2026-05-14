@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DailyMediaView } from '@daily-co/react-native-daily-js';
+import { Camera } from 'expo-camera';
+import { Audio } from 'expo-av';
 import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import { SpraySplatter } from '../components/GraffitiAccents';
@@ -48,11 +50,37 @@ export default function CallScreen({ navigation, route }) {
   useEffect(() => {
     if (callState !== 'connected' || !conversationId) return;
     let cancelled = false;
-    getOrCreateDailyRoom({ kind: 'call', context: conversationId, isOwner: direction === 'outgoing' })
-      .then((room) => { if (!cancelled) setDailyRoom(room); })
-      .catch((e) => { if (!cancelled) setDailyError(e?.message || 'Could not start media'); });
+    (async () => {
+      // Gate the call on OS-level camera/mic permission. Without this,
+      // Daily silently joins with no tracks and the user sees a black/silent
+      // screen with no explanation.
+      try {
+        const micPerm = await Audio.requestPermissionsAsync();
+        const camPerm = callType === 'video'
+          ? await Camera.requestCameraPermissionsAsync()
+          : { granted: true };
+        if (cancelled) return;
+        if (!micPerm.granted || !camPerm.granted) {
+          Alert.alert(
+            'Camera or mic blocked',
+            'JuNubin needs camera and microphone access for calls. Enable them in Settings.',
+          );
+          navigation.goBack();
+          return;
+        }
+      } catch (e) {
+        if (!cancelled) setDailyError(e?.message || 'Permission check failed');
+        return;
+      }
+      try {
+        const room = await getOrCreateDailyRoom({ kind: 'call', context: conversationId, isOwner: direction === 'outgoing' });
+        if (!cancelled) setDailyRoom(room);
+      } catch (e) {
+        if (!cancelled) setDailyError(e?.message || 'Could not start media');
+      }
+    })();
     return () => { cancelled = true; };
-  }, [callState, conversationId, direction]);
+  }, [callState, conversationId, direction, callType, navigation]);
 
   const dailyCall = useDailyCall({
     roomUrl: dailyRoom?.url,
@@ -154,7 +182,7 @@ export default function CallScreen({ navigation, route }) {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleEnd = useCallback(() => {
+  const handleEnd = useCallback(async () => {
     if (endedRef.current) return;
     endedRef.current = true;
     if (timerRef.current) clearInterval(timerRef.current);
@@ -184,8 +212,15 @@ export default function CallScreen({ navigation, route }) {
         status: 'cancelled',
       });
     }
+    // Explicitly leave the Daily call so camera/mic are released before
+    // React unmounts the screen (otherwise the indicator stays hot until GC).
+    try {
+      await dailyCall.leave?.();
+    } catch {
+      // Swallow — best-effort teardown.
+    }
     navigation.goBack();
-  }, [navigation, match, callId, callType, direction, callState, callDuration]);
+  }, [navigation, match, callId, callType, direction, callState, callDuration, dailyCall]);
 
   const statusLabel = (() => {
     if (callState === 'dialing') return 'Calling…';
@@ -284,7 +319,13 @@ export default function CallScreen({ navigation, route }) {
 
         <TouchableOpacity
           style={[styles.controlBtn, isSpeaker && styles.controlActive]}
-          onPress={() => setIsSpeaker(!isSpeaker)}
+          onPress={() => {
+            const next = !isSpeaker;
+            setIsSpeaker(next);
+            // Tell Daily / iOS to actually route audio — flipping local
+            // state alone changes nothing on the audio session.
+            dailyCall.setAudioDevice?.(next ? 'speakerphone' : 'wired');
+          }}
           accessibilityRole="button"
           accessibilityState={{ selected: isSpeaker }}
         >

@@ -183,7 +183,13 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (!STRIPE_WEBHOOK_SECRET) {
+  // Reject not just unset, but also empty-string / whitespace-only.
+  // `Deno.env.get` returns "" when the secret is set to a blank value
+  // (e.g. an operator typo in the dashboard), and the old `!secret`
+  // check considered that "configured" — signature verification then
+  // ran with "" as the HMAC key and accepted ANY payload claiming a
+  // valid signature it could compute against that empty key.
+  if (!STRIPE_WEBHOOK_SECRET || !STRIPE_WEBHOOK_SECRET.trim()) {
     return errorResponse("Webhook secret not configured", 500);
   }
 

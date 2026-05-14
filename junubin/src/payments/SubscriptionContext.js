@@ -7,6 +7,7 @@ import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { supabase } from '../config/supabase';
 import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed, ALL_FEATURES_FREE } from './entitlements';
 import { PAYMENTS_ENABLED, showPaymentsComingSoon } from './comingSoon';
+import { useTheme } from '../theme';
 
 const STORAGE_KEY = '@junubin_subscription';
 
@@ -27,6 +28,7 @@ const SubscriptionStateContext = createContext(null);
 const SubscriptionActionsContext = createContext(null);
 
 export function SubscriptionProvider({ children }) {
+  const { colors } = useTheme();
   const [state, setState] = useState(DEFAULT_STATE);
   const [loaded, setLoaded] = useState(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
@@ -563,7 +565,7 @@ export function SubscriptionProvider({ children }) {
 
   if (!loaded) {
     return (
-      <View style={styles.loading}>
+      <View style={[styles.loading, { backgroundColor: colors.cream }]}>
         <ActivityIndicator size="large" color="#CE1126" />
       </View>
     );
@@ -602,6 +604,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#000000',
   },
 });

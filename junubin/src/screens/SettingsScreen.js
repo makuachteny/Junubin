@@ -71,7 +71,7 @@ function PressableRow({ style, onPress, children }) {
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
-  const { logout, session, setDevBypass } = useAuth();
+  const { logout, session } = useAuth();
   const { currentUser } = useCurrentUser();
   const mode = currentUser.preferences?.mode || 'Dating';
   const [showMe, setShowMe] = useState(currentUser.preferences?.showMe ?? true);
@@ -82,7 +82,7 @@ export default function SettingsScreen({ navigation }) {
       profileService.updateProfile({ showMe: val }).catch(() => {});
     }
   };
-  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, canUseIncognito, restorePurchases, isSubscribed, reset, spotlights, superLikes, adsEnabled, setAdsEnabled } = useSubscription();
+  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, canUseIncognito, restorePurchases, isSubscribed, reset, spotlights, superLikes } = useSubscription();
   const [incognito, setIncognitoState] = useState(false);
   const [distanceUnit, setDistanceUnitState] = useState('mi');
 
@@ -242,7 +242,6 @@ export default function SettingsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            await setDevBypass(false);
             await reset();
           },
         },
@@ -262,6 +261,11 @@ export default function SettingsScreen({ navigation }) {
     { label: 'Invite Friends', icon: 'gift-outline', onPress: () => navigation.navigate('Referral') },
     { label: 'Find Friends', icon: 'people-circle-outline', onPress: () => navigation.navigate('FindFriends') },
     { label: 'Verify Your Photo', icon: 'camera-outline', onPress: () => navigation.navigate('PhotoVerification') },
+    // Accessibility prefs are a one-time onboarding step but the
+    // screen is reusable for tuning later — exposing it here gives
+    // a user who skipped it (or who developed new needs) a way back
+    // in without flipping accountPurpose.
+    { label: 'Accessibility Preferences', icon: 'accessibility-outline', onPress: () => navigation.navigate('AccessibilitySurvey', { returnTo: 'back' }) },
     { label: 'FAQ', icon: 'help-circle-outline', onPress: () => handleInfoPagePress('faq') },
     { label: 'Contact Us', icon: 'mail-outline', onPress: () => handleInfoPagePress('contact') },
     { label: 'Terms of Use', icon: 'document-text-outline', onPress: () => handleInfoPagePress('terms') },
@@ -288,11 +292,10 @@ export default function SettingsScreen({ navigation }) {
   ], [mode, lookingFor, showMe]);
   const appChanges = useMemo(() => [
     { label: 'Theme', value: isDark ? 'Dark' : 'Light' },
-    { label: 'Ads', value: adsEnabled ? 'On' : 'Off' },
     { label: 'Membership', value: tierLabel },
     { label: 'Spotlights', value: `${spotlights}` },
     { label: 'Super Likes', value: `${superLikes}` },
-  ], [isDark, adsEnabled, tierLabel, spotlights, superLikes]);
+  ], [isDark, tierLabel, spotlights, superLikes]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -437,16 +440,6 @@ export default function SettingsScreen({ navigation }) {
           </View>
 
           <View style={styles.switchRow}>
-            <Text style={styles.menuLabel}>Ads</Text>
-            <Switch
-              value={adsEnabled}
-              onValueChange={setAdsEnabled}
-              trackColor={{ false: colors.gray300, true: colors.black }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.menuLabel}>Incognito Mode</Text>
               <Text style={styles.switchDesc}>
@@ -580,8 +573,7 @@ export default function SettingsScreen({ navigation }) {
                     } catch {}
                   }
                   await logout();
-                  await setDevBypass(false);
-                  await reset();
+                        await reset();
                 },
               },
             ]

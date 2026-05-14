@@ -1,39 +1,61 @@
 // AnaJunubin — Stories Row (horizontal avatar circles with LIVE badges)
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
-import { mockStories, mockLiveStreams } from '../data/mockStories';
 import * as storyService from '../api/services/storyService';
-
-// Fallback stories for dev / empty DB. In production, an empty
-// `live` array means "no friends posted today" — the row only shows
-// the Create chip in that case.
-const getFallbackStories = () => (__DEV__ ? mockStories : []);
+import { supabase } from '../config/supabase';
 
 export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, colors, refreshKey }) {
-  const [stories, setStories] = useState(() => getFallbackStories());
+  // Empty initial state. The Create chip always renders; the row
+  // populates from storyService once it lands. Brand-new installs
+  // see just the Create chip, which is the correct empty state.
+  const [stories, setStories] = useState([]);
+  // Internal bump triggered by realtime Story INSERTs.
+  const [realtimeBump, setRealtimeBump] = useState(0);
 
-  // Pull real stories from storyService. `refreshKey` lets the parent
-  // force a refetch (e.g. after a new story is created upstream).
+  // Pull real stories from storyService. `refreshKey` and `realtimeBump`
+  // both trigger refetches — `refreshKey` is the imperative "I just
+  // posted, refetch now" signal from the parent; `realtimeBump`
+  // increments whenever any user posts a new Story row anywhere in
+  // the system (subscribed via supabase_realtime, see 00031 migration).
   useEffect(() => {
     let cancelled = false;
     storyService.listActiveStoryGroups()
       .then((live) => {
         if (cancelled) return;
-        // Merge real stories on top of mocks in dev so the row isn't
-        // empty when the DB is fresh; in prod just use the live set.
-        if (__DEV__) {
-          setStories(live.length > 0 ? [...live, ...mockStories] : mockStories);
-        } else {
-          setStories(live);
-        }
+        setStories(live || []);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [refreshKey, realtimeBump]);
+
+  // Subscribe to Story INSERTs so new posts surface live in the row.
+  // The subscription debounces on a short window so a flurry of
+  // simultaneous inserts (rare but possible during a community event)
+  // doesn't trigger N back-to-back refetches.
+  useEffect(() => {
+    const debounceRef = { current: null };
+    const channel = supabase
+      .channel('stories-row-live')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'Story' },
+        () => {
+          if (debounceRef.current) clearTimeout(debounceRef.current);
+          debounceRef.current = setTimeout(() => {
+            setRealtimeBump((n) => n + 1);
+          }, 400);
+        },
+      )
+      .subscribe();
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, []);
 
   // Sort: live users first. `useMemo` so this isn't recomputed on
   // every parent re-render (the row re-renders whenever the parent
@@ -67,9 +89,10 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
       {sortedStories.map((story, index) => {
         const isLive = story.isLive;
         const isViewed = story.viewed === true;
-        const liveData = isLive
-          ? mockLiveStreams.find((l) => l.userId === story.userId)
-          : null;
+        // Real live-stream metadata travels on the Story row itself
+        // when a host kicks off a broadcast. The deleted mock
+        // mockLiveStreams catalogue is no longer the source.
+        const liveData = isLive ? story.live || null : null;
 
         // Unviewed stories get the theme accent ring (solid).
         // Viewed stories fade to a neutral gray.

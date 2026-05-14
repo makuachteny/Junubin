@@ -25,8 +25,7 @@ import HeartBurstOverlay from '../components/HeartBurstOverlay';
 import CardSkeleton from '../components/CardSkeleton';
 import Button from '../components/Button';
 // SpotlightCard removed — spotlights now appear inline in the swipe deck
-import InterstitialAd from '../components/InterstitialAd';
-import { mockProfiles } from '../data/mockProfiles';
+import { POPULAR_TRIBE_KEYS } from '../data/tribes';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription, hasUnlimitedLikes, canUseWhispers, ALL_FEATURES_FREE, SHOW_PAYMENTS_UI } from '../payments';
 import { useAuth } from '../auth';
@@ -34,6 +33,8 @@ import { useCurrentUser, useEligibility } from '../hooks';
 import * as discoverService from '../api/services/discoverService';
 import * as profileService from '../api/services/profileService';
 import { hapticHeavy } from '../utils/haptics';
+import { enqueueAction, processQueue } from '../utils/offlineQueue';
+import { useNetworkStatus } from '../utils/useNetworkStatus';
 import {
   promptForPushPermission,
   getNotificationPermissionStatus,
@@ -45,59 +46,12 @@ import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightSchedule
 // providers, big onboarding redesign).
 const FIRST_MATCH_NOTIFY_PROMPT_KEY = '@junubin/first_match_notify_prompt_v1';
 
-const MIN_DECK_CARDS = 10;
-const shuffleArray = (arr) => {
-  const shuffled = [...arr];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-};
-
-// Mock-data fallback for the swipe deck. Returns [] in production so
-// real users never see seeded fake profiles in their feed; the empty
-// state (line ~901) and CardSkeleton (line ~838) cover the UX while
-// the discover API loads or returns nothing. In __DEV__, returns the
-// buildDeck result so devs can iterate without a live database.
-const getFallbackDeck = (mode = 'Dating') => (__DEV__ ? buildDeck(mode) : []);
-
-const buildDeck = (mode = 'Dating') => {
-  const base = mockProfiles.filter((p) => {
-    if (!p || !p.id || !p.name || !p.images?.length) return false;
-    // Filter by mode: 'Both' profiles show in either mode
-    if (mode === 'Dating') return p.mode === 'Dating' || p.mode === 'Both';
-    if (mode === 'Social') return p.mode === 'Social' || p.mode === 'Both';
-    return true;
-  });
-  if (base.length === 0) return [];
-  const deck = base.length >= MIN_DECK_CARDS ? [...base] : (() => {
-    const filled = [...base];
-    let i = 0;
-    while (filled.length < MIN_DECK_CARDS) {
-      const source = base[i % base.length];
-      filled.push({ ...source, id: `${source.id}-clone-${i}` });
-      i += 1;
-    }
-    return filled;
-  })();
-  const shuffled = shuffleArray(deck);
-  // Inject spotlight profiles every 5 cards
-  const withSpotlights = [];
-  for (let i = 0; i < shuffled.length; i++) {
-    withSpotlights.push(shuffled[i]);
-    if ((i + 1) % 5 === 0 && i + 1 < shuffled.length) {
-      // Pick a random profile as spotlight
-      const spotlightSource = base[Math.floor(Math.random() * base.length)];
-      withSpotlights.push({
-        ...spotlightSource,
-        id: `spotlight-${spotlightSource.id}-${i}`,
-        spotlight: true,
-      });
-    }
-  }
-  return withSpotlights;
-};
+// Swipe-deck fallback when the discover API hasn't replied yet. Now
+// returns an empty array in every environment — the mock-profiles
+// seed list was removed along with the rest of the __dev__ bundle.
+// CardSkeleton covers the loading window; the empty-state card
+// (line ~901) covers "out of profiles" / network-down.
+const getFallbackDeck = () => [];
 
 // Social-mode filter options (replace dating-specific ones)
 const SOCIAL_FILTERS = [
@@ -127,15 +81,13 @@ const SOCIAL_FILTER_OPTIONS = {
     { label: '100 miles', value: '100' },
     { label: 'Anywhere', value: 'any' },
   ],
+  // Pull from the central tribe registry so this list stays in sync with
+  // the rest of the app (profile picker, FilterBar, dating-mode filter).
+  // POPULAR_TRIBE_KEYS already includes "Other"; the full 64-tribe list
+  // (ALL_TRIBE_KEYS) is too many chips for a filter row.
   Ethnicity: [
     { label: 'Any ethnicity', value: 'any' },
-    { label: 'Dinka', value: 'Dinka' },
-    { label: 'Nuer', value: 'Nuer' },
-    { label: 'Bari', value: 'Bari' },
-    { label: 'Shilluk', value: 'Shilluk' },
-    { label: 'Azande', value: 'Azande' },
-    { label: 'Mundari', value: 'Mundari' },
-    { label: 'Other', value: 'Other' },
+    ...POPULAR_TRIBE_KEYS.map((key) => ({ label: key, value: key })),
   ],
   Interests: [
     { label: 'Any interest', value: 'any' },
@@ -299,7 +251,7 @@ const HomeScreen = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { consumeSuperLike, consumeWhisper, superLikes, whispers, hasTier, tier } = useSubscription();
-  const { session, user: authUser } = useAuth();
+  const { session, user: authUser, refreshUser } = useAuth();
   const { currentUser } = useCurrentUser();
   // Single eligibility gate for swipe-deck dating actions. Reasons that
   // bubble back: 'survey_required' shows the SurveyNudgeModal; 'banned'
@@ -327,7 +279,6 @@ const HomeScreen = ({ navigation, route }) => {
   const [lastSwiped, setLastSwiped] = useState(null); // { profile, direction }
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
   const [heartBurst, setHeartBurst] = useState(null); // { x, y }
-  const [showInterstitial, setShowInterstitial] = useState(false);
   const swipeCountRef = useRef(0);
   const [showSpotlight, setShowSpotlight] = useState(false);
   const [likeStatus, setLikeStatus] = useState(null); // { used, limit, remaining }
@@ -352,9 +303,17 @@ const HomeScreen = ({ navigation, route }) => {
     // silently if the migration hasn't been applied yet.
     if (session) {
       const dbValue = nextMode === 'Dating' ? 'dating' : 'social';
-      profileService.updateProfile({ appMode: dbValue }).catch(() => {});
+      profileService
+        .updateProfile({ appMode: dbValue })
+        // Propagate the toggle to other tabs (MessagesScreen reads
+        // currentUser.preferences.mode) by refreshing the User row in
+        // AuthContext. Without this, flipping the toggle here only
+        // affects HomeScreen's local state until the next cold start
+        // or background→foreground refresh, and the inbox sort lags.
+        .then(() => { try { refreshUser?.(); } catch {} })
+        .catch(() => {});
     }
-  }, [session]);
+  }, [session, refreshUser]);
 
   // When the real profile lands (post-ProfileSetup), `currentUser.preferences.mode`
   // updates from the mock fallback to the survey-derived value. The local `mode`
@@ -378,7 +337,7 @@ const HomeScreen = ({ navigation, route }) => {
         setShowSpotlight(true);
         markSpotlightShown();
       }
-    });
+    }).catch(() => {});
   }, [hasTier]);
 
   // Hydrate persisted filter selections on mount so the user's last
@@ -548,6 +507,24 @@ const HomeScreen = ({ navigation, route }) => {
     }, [navigation, activeFilters, filterSelections, unfilteredProfiles, mode])
   );
 
+  // Drain queued offline swipes when the network comes back. Each
+  // queued swipe was enqueued in the catch-block above; replaying it
+  // hits the same recordSwipe path. The dedupe set inside the queue
+  // (00030-aligned actionIdentity) makes this safe to call on every
+  // reconnect even if multiple screens trigger it.
+  const { isConnected } = useNetworkStatus();
+  useEffect(() => {
+    if (!isConnected || !session) return;
+    processQueue(async (action) => {
+      if (action.kind !== 'swipe') return;
+      // The server-side swipe endpoint is idempotent on
+      // (fromUserId, toUserId) — re-issuing the same swipe just
+      // refreshes the existing row. So we don't need to dedupe
+      // against the user's swipe history here.
+      await discoverService.recordSwipe(action.toUserId, action.type, { mode: action.mode });
+    }).catch(() => {});
+  }, [isConnected, session]);
+
   useEffect(() => {
     const baseDeck = unfilteredProfiles || getFallbackDeck(mode);
     const filteredDeck = applyFilters(baseDeck, activeFilters, filterSelections);
@@ -578,17 +555,21 @@ const HomeScreen = ({ navigation, route }) => {
     setLastSwiped({ profile: swipedProfile, direction });
     setProfiles((prev) => prev.slice(1));
 
-
-    // Show interstitial ad every 10 swipes for free users
     swipeCountRef.current += 1;
-    if (swipeCountRef.current % 10 === 0 && !hasTier('plus')) {
-      setShowInterstitial(true);
-    }
 
-    // Record swipe via API (fire-and-forget)
+    // Record swipe via API (fire-and-forget). Pass the current mode so
+    // the swipe/match rows record provenance and MessagesScreen can
+    // sort current-mode conversations to the top.
+    //
+    // On network failure (offline, transient 5xx), queue the swipe so
+    // it replays on reconnect. Without this, swipes made offline used
+    // to vanish silently — the OfflineBanner showed but the user's
+    // intent was lost. Daily-limit 429s are NOT queued; they're a real
+    // server-side rejection.
     if (session && swipedProfile?.id) {
       const type = direction === 'right' ? 'like' : 'pass';
-      discoverService.recordSwipe(swipedProfile.id, type).then((result) => {
+      const swipeMode = mode === 'Social' ? 'social' : 'dating';
+      discoverService.recordSwipe(swipedProfile.id, type, { mode: swipeMode }).then((result) => {
         if (result?.match) {
           hapticHeavy();
           setMatchData({
@@ -596,14 +577,33 @@ const HomeScreen = ({ navigation, route }) => {
             conversationId: result.match.conversation?.id,
           });
         }
-        // Update like status after a swipe
-        if (direction === 'right') {
+        // Reconcile with server-authoritative dailyStatus, not a
+        // local optimistic decrement. Avoids the drift the audit
+        // flagged: local "remaining" could fall out of sync with the
+        // server count under concurrent swipes.
+        if (result?.dailyStatus) {
+          setLikeStatus(result.dailyStatus);
+        } else if (direction === 'right') {
           setLikeStatus((prev) => prev ? { ...prev, used: prev.used + 1, remaining: Math.max(0, prev.remaining - 1) } : prev);
         }
       }).catch((err) => {
-        // Handle 429 daily limit from backend
-        if (err?.status === 429) {
+        const status = err?.status || err?.statusCode;
+        if (status === 429) {
           setLikeStatus((prev) => prev ? { ...prev, remaining: 0 } : { used: 25, limit: 25, remaining: 0 });
+          return;
+        }
+        // Transient errors (no network, 5xx, fetch aborts) → queue
+        // for replay. The offline queue dedupes on (toUserId, type)
+        // so re-tries don't pile up.
+        const transient = !status || (status >= 500 && status < 600) || /network|fetch|timeout/i.test(err?.message || '');
+        if (transient) {
+          enqueueAction({
+            kind: 'swipe',
+            toUserId: swipedProfile.id,
+            type,
+            mode: swipeMode,
+            enqueuedAt: Date.now(),
+          }).catch(() => {});
         }
       });
     }
@@ -752,7 +752,7 @@ const HomeScreen = ({ navigation, route }) => {
     // whisper and skip the consume too.
     if (targetId && session) {
       discoverService
-        .recordSwipe(targetId, 'like', { whisper: text })
+        .recordSwipe(targetId, 'like', { whisper: text, mode: mode === 'Social' ? 'social' : 'dating' })
         .then(() => {
           consumeWhisper();
           Alert.alert('Whisper sent', `If they like you back, they'll see: "${text}"`);
@@ -826,7 +826,8 @@ const HomeScreen = ({ navigation, route }) => {
   const handleReaction = useCallback((emoji) => {
     // Send reaction as a super-like with the emoji attached
     if (currentProfile?.id && session) {
-      discoverService.recordSwipe(currentProfile.id, 'super_like').catch((err) => {
+      const swipeMode = mode === 'Social' ? 'social' : 'dating';
+      discoverService.recordSwipe(currentProfile.id, 'super_like', { mode: swipeMode }).catch((err) => {
         if (__DEV__) console.warn('Reaction swipe failed:', err);
       });
     }
@@ -1179,14 +1180,6 @@ const HomeScreen = ({ navigation, route }) => {
           </View>
         </View>
       </Modal>
-
-      {/* ─── INTERSTITIAL AD (free tier, every 5 swipes) ─── */}
-      <InterstitialAd
-        visible={showInterstitial}
-        onClose={() => setShowInterstitial(false)}
-        onUpgrade={() => { setShowInterstitial(false); navigation?.navigate?.('Elite'); }}
-        colors={colors}
-      />
 
       {/* Survey-completion prompt for any blocked dating action. The
           modal owns its own visibility, navigation, and copy — see

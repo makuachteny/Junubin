@@ -20,7 +20,7 @@ export async function getReceivedLikes() {
   const { data: swipes, error } = await supabase
     .from('Swipe')
     .select(`
-      id, type, createdAt,
+      id, type, mode, createdAt,
       fromUser:User!fromUserId(
         id, displayName, dateOfBirth, isVerified, city, gender,
         photos:Photo(*),
@@ -49,6 +49,9 @@ export async function getReceivedLikes() {
         likeId: s.id,
         likeType: s.type,
         likedAt: s.createdAt,
+        // Mode the liker was in when they swiped. Used to bucket
+        // received likes alongside their matches in MessagesScreen.
+        mode: s.mode || 'dating',
       };
     });
 

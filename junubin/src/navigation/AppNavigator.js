@@ -270,7 +270,7 @@ function MainNavigator({ initialRouteName = 'Main' }) {
 }
 
 export default function AppNavigator() {
-  const { isAuthenticated, user, ready, devBypass } = useAuth();
+  const { isAuthenticated, user, ready } = useAuth();
   // Default to false — show Onboarding on first launch. AsyncStorage hydrates
   // in the background and the navigator re-renders if the user has already
   // completed onboarding. Avoids blocking the navigator on a disk read.
@@ -304,7 +304,7 @@ export default function AppNavigator() {
       const path = pendingDeepLink.pathFromUrl(url);
       if (!path) return;
       try { linkTo('/' + path); } catch {}
-    });
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [isAuthenticated, user, profileReady, linkTo]);
 
@@ -318,8 +318,6 @@ export default function AppNavigator() {
   }, [ready, isAuthenticated]);
 
   if (!ready) return null;
-
-  if (devBypass) return <MainNavigator initialRouteName="Main" />;
 
   if (!isAuthenticated) {
     return <AuthNavigator initialRouteName={hasOnboarded ? 'Signup' : 'Onboarding'} />;

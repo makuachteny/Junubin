@@ -20,7 +20,6 @@ import { GAME_CATALOG } from '../data/games';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import * as matchesService from '../api/services/matchesService';
-import { mockMatches } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 
 const TABS = ['Games', 'Challenges', 'Leaderboard'];
@@ -73,14 +72,11 @@ export default function InteractivityHubScreen({ navigation }) {
 
   useEffect(() => {
     let mounted = true;
-    const fallback = mockMatches.map((m) => ({
-      id: m.id,
-      name: m.name,
-      images: m.images,
-    }));
 
     if (!session) {
-      setConnections(fallback);
+      // Unauthenticated → empty connections list. The screen renders
+      // its real empty state. No mock seed.
+      setConnections([]);
       return () => { mounted = false; };
     }
 
@@ -93,10 +89,10 @@ export default function InteractivityHubScreen({ navigation }) {
           images: m.images,
         })));
       } else {
-        setConnections(fallback);
+        setConnections([]);
       }
     }).catch(() => {
-      if (mounted) setConnections(fallback);
+      if (mounted) setConnections([]);
     });
 
     return () => { mounted = false; };

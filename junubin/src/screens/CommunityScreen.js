@@ -25,8 +25,6 @@ import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import EmptyState from '../components/EmptyState';
 import Toast from '../components/Toast';
 import SkeletonShimmer from '../components/SkeletonShimmer';
-import AdBanner from '../components/AdBanner';
-import { mockPosts } from '../data/mockProfiles';
 import * as postService from '../api/services/postService';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../auth';
@@ -171,10 +169,9 @@ export default function CommunityScreen({ navigation, route }) {
       try {
         const live = await postService.listPosts();
         if (cancelled) return;
-        const merged = live.length > 0 ? [...live, ...mockPosts] : mockPosts;
-        setPosts(await hydrateInteractionState(merged));
+        setPosts(await hydrateInteractionState(live));
       } catch {
-        if (!cancelled) setPosts(mockPosts);
+        if (!cancelled) setPosts([]);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -197,10 +194,9 @@ export default function CommunityScreen({ navigation, route }) {
     setRefreshing(true);
     try {
       const live = await postService.listPosts();
-      const merged = live.length > 0 ? [...live, ...mockPosts] : mockPosts;
-      setPosts(await hydrateInteractionState(merged));
+      setPosts(await hydrateInteractionState(live));
     } catch {
-      setPosts(mockPosts);
+      setPosts([]);
     } finally {
       setRefreshing(false);
     }
@@ -419,32 +415,35 @@ export default function CommunityScreen({ navigation, route }) {
   );
 
   // Shared header for both Feed and Live tabs. Ensures the tabs row,
-  // filter chips, active-filter meta, AdBanner, and Events CTA stay
-  // anchored in place when toggling between the two tabs.
+  // filter chips, active-filter meta, and Events CTA stay anchored in
+  // place when toggling between the two tabs.
   const feedHeader = (
     <View>
       {tabsAndFilters}
       {renderActiveMeta()}
-      <AdBanner />
-      <TouchableOpacity
-        onPress={() => navigation.navigate('Events')}
-        activeOpacity={0.85}
-        style={[styles.eventsCtaCard, {
-          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-          borderColor: isDark ? 'rgba(255,255,255,0.10)' : colors.gray200,
-        }]}
-        accessibilityRole="button"
-        accessibilityLabel="See community events"
-      >
-        <View style={[styles.eventsCtaIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray100 }]}>
-          <Ionicons name="calendar-outline" size={18} color={colors.black} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.eventsCtaTitle, { color: colors.black }]}>Community Events</Text>
-          <Text style={[styles.eventsCtaSub, { color: colors.gray500 }]}>Tap to see what's happening</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.gray500} />
-      </TouchableOpacity>
+      {/* Hidden in v1 — Events stack not yet server-backed. Re-enable when
+          eventStore.js is migrated off AsyncStorage to Supabase. */}
+      {false && (
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Events')}
+          activeOpacity={0.85}
+          style={[styles.eventsCtaCard, {
+            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+            borderColor: isDark ? 'rgba(255,255,255,0.10)' : colors.gray200,
+          }]}
+          accessibilityRole="button"
+          accessibilityLabel="See community events"
+        >
+          <View style={[styles.eventsCtaIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray100 }]}>
+            <Ionicons name="calendar-outline" size={18} color={colors.black} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.eventsCtaTitle, { color: colors.black }]}>Community Events</Text>
+            <Text style={[styles.eventsCtaSub, { color: colors.gray500 }]}>Tap to see what's happening</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.gray500} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -547,11 +546,10 @@ export default function CommunityScreen({ navigation, route }) {
       </Modal>
 
       {/* ─── Content ─── */}
-      {/* The tab row, filter chips, active-filter meta, AdBanner, and
-          Events CTA are rendered as a single header for BOTH Feed and
-          Live so swapping tabs only changes the list area below — the
-          upgrade banner and chrome stay put instead of flopping in
-          and out. */}
+      {/* The tab row, filter chips, active-filter meta, and Events CTA
+          are rendered as a single header for BOTH Feed and Live so
+          swapping tabs only changes the list area below — the chrome
+          stays put instead of flopping in and out. */}
       <Animated.View
         style={[
           styles.content,
@@ -722,10 +720,10 @@ function LiveTab({ navigation, headerComponent }) {
 
 const liveStyles = StyleSheet.create({
   // No horizontal padding on the contentContainerStyle — that would
-  // also inset the ListHeaderComponent (the shared tabs/filter row +
-  // AdBanner), causing a visible shift when you toggle Feed → Live.
-  // Instead, the row wrapper carries the horizontal inset, so only
-  // the card grid is padded; the header lines up with the Feed.
+  // also inset the ListHeaderComponent (the shared tabs/filter row),
+  // causing a visible shift when you toggle Feed → Live. Instead, the
+  // row wrapper carries the horizontal inset, so only the card grid
+  // is padded; the header lines up with the Feed.
   grid: {
     paddingTop: 4,
     paddingBottom: 80,

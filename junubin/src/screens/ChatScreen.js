@@ -16,17 +16,19 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { GraffitiSend } from '../components/icons';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { mockMessages } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useFollow } from '../hooks/useFollow';
 import * as callService from '../api/services/callService';
 import * as chatService from '../api/services/chatService';
+import * as matchesService from '../api/services/matchesService';
 import * as safetyService from '../api/services/safetyService';
 import * as liveGiftsService from '../api/services/liveGiftsService';
 import { useEligibility } from '../hooks';
@@ -77,8 +79,11 @@ const getIcebreakers = (match, currentUser) => {
   return lines.slice(0, 3);
 };
 const CHAT_STICKERS = ['🔥', '✨', '💫', '🎧', '💌'];
-const MINI_GAME_PROMPT = 'Quick pick: rooftop dinner or street food run?';
-const POLL_PROMPT = 'Duo Poll: Beach day or road trip?';
+// MINI_GAME_PROMPT / POLL_PROMPT removed — the inline mini-game and
+// duo-poll widgets they fed were dropped in the v1 chat simplification,
+// leaving the constants orphaned. Whoever brings those features back
+// should source the copy from src/data/games.js or a server-driven
+// catalogue rather than reintroducing the hardcoded strings here.
 const WHEEL_LINES = [
   'Tell me one thing that made you laugh today.',
   'What is your comfort movie?',
@@ -115,7 +120,15 @@ export default function ChatScreen({ navigation, route }) {
   // Set when ProfileDetail navigates here with `whisperIntent: true`.
   // The first send consumes one whisper credit; subsequent sends are
   // free (the conversation is now an ordinary chat).
+  //
+  // Sync with route.params on every change — useState(route.params)
+  // would only read on first mount, so re-entering the screen with a
+  // fresh `whisperIntent: true` would silently keep the old false
+  // state and the user's whisper credit would never debit.
   const [pendingWhisper, setPendingWhisper] = useState(!!route.params?.whisperIntent);
+  useEffect(() => {
+    setPendingWhisper(!!route.params?.whisperIntent);
+  }, [route.params?.whisperIntent]);
   const { session, user: currentUser } = useAuth();
   const { isConnected } = useNetworkStatus();
   // Eligibility gate for call buttons. Survey/restricted/banned win
@@ -126,14 +139,36 @@ export default function ChatScreen({ navigation, route }) {
   // Screenshot protection for private chats
   useScreenshotProtection();
 
-  const match = route.params?.match || {};
-  const matchId = match.id || 'match1';
-  // Some callers (the match-celebration overlay in HomeScreen) pass
-  // conversationId as a top-level param next to `match`. Older callers
-  // and persisted matches carry it inside the match object. Prefer the
-  // top-level value when present so the realtime subscription wires up
-  // correctly for fresh matches.
+  // Some entry points only know the conversationId (push notification
+  // taps in particular — the server payload carries conversationId +
+  // messageId + senderId but not a full match object). When that's all
+  // we have, resolve the match record from matchesService so the
+  // header, avatar, follow status, and call buttons all populate
+  // correctly. Without this lookup, ChatScreen mounted with `match =
+  // {}` and crashed on `match.id` accesses inside `useFollow`.
+  const initialMatch = route.params?.match || null;
+  const [resolvedMatch, setResolvedMatch] = useState(initialMatch);
+  const match = resolvedMatch || {};
+  const matchId = match.id || route.params?.conversationId || 'match1';
+
+  // Same precedence note as before: top-level conversationId wins over
+  // the match-object copy, because fresh-match overlays pass it
+  // alongside the (sometimes incomplete) match object.
   const conversationId = route.params?.conversationId || match.conversationId;
+
+  useEffect(() => {
+    if (resolvedMatch?.id) return;
+    if (!conversationId) return;
+    let cancelled = false;
+    matchesService.getMatches()
+      .then((list) => {
+        if (cancelled) return;
+        const found = (list || []).find((m) => m.conversationId === conversationId);
+        if (found) setResolvedMatch(found);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [conversationId, resolvedMatch?.id]);
   // "You matched" banner is shown only when we arrive directly from the match
   // celebration overlay (`fromMatch: true`). It dismisses on first scroll,
   // first message sent, or explicit close.
@@ -154,8 +189,10 @@ export default function ChatScreen({ navigation, route }) {
     return false;
   }, [canConnect, match.name]);
 
-  // Start empty — API or realtime fills in; fall back to mock if no conversationId
-  const [messages, setMessages] = useState(conversationId ? [] : (mockMessages[matchId] || []));
+  // Start empty in every case — API or realtime fills in. We no longer seed
+  // mockMessages here; a brand-new match should show the Match Mission
+  // empty-state, not a canned conversation history.
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -191,6 +228,35 @@ export default function ChatScreen({ navigation, route }) {
   activeGamesRef.current = activeGames;
   const icebreakers = useMemo(() => getIcebreakers(match, currentUser), [match, currentUser]);
   const missionProgress = Object.values(missionState).filter(Boolean).length;
+
+  // ── Hydrate Match Mission state for this conversation ──
+  // The mission state used to reset every time the screen unmounted, so a
+  // user who completed step 1 and came back later saw the intro chip
+  // empty again. Persist per-conversation via interactiveStore so each
+  // thread carries its own progress + dismissed flag.
+  useEffect(() => {
+    if (!conversationId) return;
+    interactiveStore.getMatchMission(conversationId).then((saved) => {
+      if (saved) setMissionState(saved);
+    }).catch(() => {});
+    interactiveStore.getMissionDismissed(conversationId).then((dismissed) => {
+      if (dismissed) setHiddenFeatures((p) => ({ ...p, mission: true }));
+    }).catch(() => {});
+  }, [conversationId]);
+
+  // Wrapper around setMissionState that ALSO persists. Accepts a value or
+  // an updater function (matching React's setter contract). Use this in
+  // place of setMissionState for every flip — direct setMissionState
+  // calls bypass persistence.
+  const setMissionAndPersist = useCallback((updater) => {
+    setMissionState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      if (conversationId) {
+        interactiveStore.setMatchMission(conversationId, next).catch(() => {});
+      }
+      return next;
+    });
+  }, [conversationId]);
 
   const showProgressToast = useCallback((title, subtitle) => {
     setProgressToast({ title, subtitle });
@@ -427,7 +493,7 @@ export default function ChatScreen({ navigation, route }) {
         time: new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
         read: true,
       }]);
-      setMissionState((prev) => ({ ...prev, response: true }));
+      setMissionAndPersist((prev) => ({ ...prev, response: true }));
       // The user is actively on this screen, so anything that lands
       // here is already "read". Flip server-side too so the badge
       // doesn't tick up on their other devices. Fire-and-forget.
@@ -439,13 +505,20 @@ export default function ChatScreen({ navigation, route }) {
     return unsub;
   }, [conversationId, currentUser?.id, scheduleAutoAdvance]);
 
-  // Listen for typing indicators
+  // Listen for typing indicators. The hook's onTypingStart /
+  // onTypingStop take (conversationId, callback) — previously we were
+  // dropping the callback into the conversationId slot, so the peer's
+  // typing dots never appeared. The hook now pre-registers the
+  // broadcast bridge before .subscribe() (Supabase Realtime drops
+  // .on() calls made post-subscribe), and these registration calls
+  // just stash the callback in a per-conv ref.
   useEffect(() => {
-    const unsubStart = onTypingStart(({ conversationId: cid }) => {
-      if (cid === conversationId) setIsTyping(true);
+    if (!conversationId) return undefined;
+    const unsubStart = onTypingStart(conversationId, () => {
+      setIsTyping(true);
     });
-    const unsubStop = onTypingStop(({ conversationId: cid }) => {
-      if (cid === conversationId) setIsTyping(false);
+    const unsubStop = onTypingStop(conversationId, () => {
+      setIsTyping(false);
     });
     return () => { unsubStart(); unsubStop(); };
   }, [conversationId, onTypingStart, onTypingStop]);
@@ -554,7 +627,7 @@ export default function ChatScreen({ navigation, route }) {
           return merged;
         });
       }
-    });
+    }).catch(() => {});
   }, [conversationId]);
 
   // ── Offline resilience: queue game answers + text sends when offline,
@@ -639,7 +712,7 @@ export default function ChatScreen({ navigation, route }) {
     };
 
     setMessages((prev) => [...prev, newMessage]);
-    setMissionState((prev) => ({
+    setMissionAndPersist((prev) => ({
       ...prev,
       intro: true,
       question: prev.question || text.includes('?'),
@@ -666,20 +739,62 @@ export default function ChatScreen({ navigation, route }) {
     persistTextMessage(messageId, target.text);
   }, [messages, persistTextMessage]);
 
-  const handlePhoto = useCallback(() => {
-    // Placeholder: add image message
+  const handlePhoto = useCallback(async () => {
+    // Permission gate. iOS denials are permanent (canAskAgain === false)
+    // — push the user to Settings instead of silently failing.
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (perm.status !== 'granted') {
+      if (perm.canAskAgain === false) {
+        promptToOpenSettings({
+          title: 'Photo access needed',
+          message: 'JuNubin needs photo access to send pictures in chat. Open Settings to enable it.',
+        });
+      }
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    const uri = asset.uri;
+    if (!conversationId) return;
+
+    // Optimistic insert — drop the bubble with status: 'sending' so the
+    // sender sees it instantly. Realtime won't echo it back to us (we
+    // append the saved row ourselves on success), so de-dupe is by id.
+    const optimisticId = `msg-img-${Date.now()}`;
     LayoutAnimation.configureNext(SPRING_ANIM);
-    const msg = {
-      id: `msg-img-${Date.now()}`,
+    const optimisticMsg = {
+      id: optimisticId,
       sender: 'me',
+      isMe: true,
       type: 'image',
-      uri: match.images?.[0],
+      uri,
       time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       read: false,
+      status: 'sending',
     };
-    setMessages((prev) => [...prev, msg]);
+    setMessages((prev) => [...prev, optimisticMsg]);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [match.images]);
+
+    try {
+      const message = await chatService.sendImageMessage(conversationId, uri);
+      setMessages((prev) => prev.map((m) => (
+        m.id === optimisticId
+          ? { ...m, id: message.id, uri: message.url || uri, status: 'sent', createdAt: message.createdAt }
+          : m
+      )));
+    } catch (e) {
+      setMessages((prev) => prev.map((m) => (
+        m.id === optimisticId ? { ...m, status: 'failed' } : m
+      )));
+      Alert.alert('Photo failed', e?.message || 'Could not send your photo.');
+    }
+  }, [conversationId]);
 
   const handleVoiceNote = useCallback(() => {
     if (!hasTier('plus')) {
@@ -778,7 +893,7 @@ export default function ChatScreen({ navigation, route }) {
       read: false,
     };
     setMessages((prev) => [...prev, msg]);
-    setMissionState((prev) => ({ ...prev, intro: true }));
+    setMissionAndPersist((prev) => ({ ...prev, intro: true }));
     setShowStickerTray(false);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
   }, [hasTier, navigation, activeSticker, matchId]);
@@ -1117,7 +1232,7 @@ export default function ChatScreen({ navigation, route }) {
     interactiveStore.getWeeklyChallenges().then((saved) => {
       if (saved?.mini_game) setMiniGamePick('Done');
       if (saved?.voice_intro) setVoiceIntroPlayed(true);
-    });
+    }).catch(() => {});
   }, []);
 
   const renderMessage = useCallback(({ item }) => {
@@ -1179,7 +1294,8 @@ export default function ChatScreen({ navigation, route }) {
     }
 
     // Text message (default)
-    const isFailed = isMe && item.status === 'failed';
+    const isFailed  = isMe && item.status === 'failed';
+    const isSending = isMe && item.status === 'sending';
     return (
       <TouchableOpacity
         style={[styles.messageBubbleWrap, isMe ? styles.myMessage : styles.theirMessage]}
@@ -1209,6 +1325,22 @@ export default function ChatScreen({ navigation, route }) {
                 style={{ marginRight: 4 }}
               />
               <Text style={styles.failedText}>Failed · Tap to retry</Text>
+            </>
+          ) : isSending ? (
+            // Visible "sending" cue while the server hasn't acknowledged
+            // the optimistic message yet. Without this, users typed,
+            // saw the bubble appear, and assumed it landed — only to
+            // hit a Failed state seconds later. The pending tick gives
+            // them an unambiguous "this is in flight, don't retype".
+            <>
+              <Text style={styles.timeText}>Sending…</Text>
+              <Ionicons
+                name="time-outline"
+                size={13}
+                color={colors.gray400}
+                style={{ marginLeft: 4 }}
+                accessibilityLabel="Sending"
+              />
             </>
           ) : (
             <>
@@ -1256,7 +1388,18 @@ export default function ChatScreen({ navigation, route }) {
             <OnlinePulseDot size={12} style={styles.headerOnlineDot} />
           </View>
           <View>
-            <Text style={styles.headerName}>{match.name || 'Chat'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.headerName}>{match.name || 'Chat'}</Text>
+              {(match.verified || match.isVerified) && (
+                <Ionicons
+                  name="checkmark-circle"
+                  size={14}
+                  color={colors.accent}
+                  style={{ marginLeft: 4 }}
+                  accessibilityLabel="Verified profile"
+                />
+              )}
+            </View>
             <Text style={styles.headerStatus}>
               {isTyping ? 'typing...' : 'Online'}
             </Text>
@@ -1313,7 +1456,10 @@ export default function ChatScreen({ navigation, route }) {
             {/* ── Match Mission — progress card ── */}
             {!hiddenFeatures.mission && (
             <View style={styles.missionsCard}>
-              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, mission: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity style={styles.cardDismiss} onPress={() => {
+                setHiddenFeatures(p => ({ ...p, mission: true }));
+                if (conversationId) interactiveStore.setMissionDismissed(conversationId, true).catch(() => {});
+              }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <Ionicons name="close" size={16} color={colors.gray400} />
               </TouchableOpacity>
               <View style={styles.missionsHeader}>
@@ -1347,132 +1493,10 @@ export default function ChatScreen({ navigation, route }) {
             </View>
             )}
 
-            {/* ── Smart Icebreakers — horizontal pills ── */}
-            {!hiddenFeatures.icebreakers && (
-            <View style={styles.sectionWrap}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="chatbubbles" size={15} color={colors.accent} />
-                <Text style={[styles.sectionTitle, { flex: 1 }]}>Icebreakers</Text>
-                <TouchableOpacity onPress={() => setHiddenFeatures(p => ({ ...p, icebreakers: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close" size={16} color={colors.gray400} />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.icebreakersRow}>
-                {icebreakers.map((line, i) => (
-                  <TouchableOpacity
-                    key={line}
-                    style={styles.icebreakerChip}
-                    onPress={() => setInputText(line)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.icebreakerEmoji}>{['💬', '🎯', '🔥'][i] || '💬'}</Text>
-                    <Text style={styles.icebreakerText}>{line}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            )}
-
-            {/* ── Mini Game card ── */}
-            {!hiddenFeatures.quickPick && (
-            <View style={styles.funCard}>
-              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, quickPick: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={16} color={colors.gray400} />
-              </TouchableOpacity>
-              <View style={styles.funHeader}>
-                <View style={[styles.funIconCircle, { backgroundColor: 'rgba(0,151,57,0.1)' }]}>
-                  <Ionicons name="game-controller" size={16} color={colors.accent} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.funTitle}>Quick Pick</Text>
-                  <Text style={styles.funCopy}>{MINI_GAME_PROMPT}</Text>
-                </View>
-              </View>
-              <View style={styles.funChoiceRow}>
-                <TouchableOpacity style={[styles.funChoice, miniGamePick === 'Rooftop dinner' && styles.funChoiceActive]} onPress={() => handleMiniGamePick('Rooftop dinner')}>
-                  <Text style={styles.funChoiceEmoji}>🌃</Text>
-                  <Text style={[styles.funChoiceText, miniGamePick === 'Rooftop dinner' && styles.funChoiceTextActive]}>Rooftop</Text>
-                </TouchableOpacity>
-                <Text style={styles.funOrText}>or</Text>
-                <TouchableOpacity style={[styles.funChoice, miniGamePick === 'Street food run' && styles.funChoiceActive]} onPress={() => handleMiniGamePick('Street food run')}>
-                  <Text style={styles.funChoiceEmoji}>🍜</Text>
-                  <Text style={[styles.funChoiceText, miniGamePick === 'Street food run' && styles.funChoiceTextActive]}>Street Food</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            )}
-
-            {/* ── Voice Vibe + Duo Poll card ── */}
-            {!hiddenFeatures.voiceVibes && (
-            <View style={styles.funCard}>
-              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, voiceVibes: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={16} color={colors.gray400} />
-              </TouchableOpacity>
-              <View style={styles.funHeader}>
-                <View style={[styles.funIconCircle, { backgroundColor: 'rgba(131,58,180,0.1)' }]}>
-                  <Ionicons name="mic" size={16} color={colors.royal} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.funTitle}>Voice & Vibes</Text>
-                  <Text style={styles.funCopy}>Listen to their intro, or spark a vote</Text>
-                </View>
-              </View>
-              <View style={styles.funActionRow}>
-                <TouchableOpacity style={[styles.funActionPill, { backgroundColor: colors.royal }]} onPress={handlePlayVoiceIntro} activeOpacity={0.8}>
-                  <Ionicons name={voiceIntroPlayed ? 'checkmark' : 'play'} size={14} color="#FFF" />
-                  <Text style={styles.funActionText}>{voiceIntroPlayed ? 'Played' : 'Play Intro'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.funActionPill, { backgroundColor: colors.accent }]} onPress={handleSpinWheel} activeOpacity={0.8}>
-                  <Ionicons name="sparkles" size={14} color="#FFF" />
-                  <Text style={styles.funActionText}>Spin Wheel</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.funDivider} />
-              <Text style={styles.funPollLabel}>Duo Poll</Text>
-              <Text style={styles.funCopy}>{POLL_PROMPT}</Text>
-              <View style={styles.funChoiceRow}>
-                <TouchableOpacity style={[styles.funChoice, duoPollVote === 'Beach' && styles.funChoiceActive]} onPress={() => handleDuoVote('Beach')}>
-                  <Text style={styles.funChoiceEmoji}>🏖️</Text>
-                  <Text style={[styles.funChoiceText, duoPollVote === 'Beach' && styles.funChoiceTextActive]}>Beach</Text>
-                </TouchableOpacity>
-                <Text style={styles.funOrText}>or</Text>
-                <TouchableOpacity style={[styles.funChoice, duoPollVote === 'Road Trip' && styles.funChoiceActive]} onPress={() => handleDuoVote('Road Trip')}>
-                  <Text style={styles.funChoiceEmoji}>🚗</Text>
-                  <Text style={[styles.funChoiceText, duoPollVote === 'Road Trip' && styles.funChoiceTextActive]}>Road Trip</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            )}
-
-            {/* ── Co-watch / Co-listen card ── */}
-            {!hiddenFeatures.coWatch && (
-            <View style={[styles.funCard, styles.funCardLast]}>
-              <TouchableOpacity style={styles.cardDismiss} onPress={() => setHiddenFeatures(p => ({ ...p, coWatch: true }))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={16} color={colors.gray400} />
-              </TouchableOpacity>
-              <View style={styles.funHeader}>
-                <View style={[styles.funIconCircle, { backgroundColor: 'rgba(0,149,246,0.1)' }]}>
-                  <Ionicons name="headset" size={16} color={colors.info} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.funTitle}>Co-watch / Co-listen</Text>
-                  <Text style={styles.funCopy}>Watch or listen to something together in sync</Text>
-                </View>
-              </View>
-              <View style={styles.funActionRow}>
-                <TouchableOpacity
-                  style={[styles.funActionPill, { backgroundColor: syncState === 'live' ? colors.success : colors.info }]}
-                  onPress={handleStartSync}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name={syncState === 'live' ? 'radio' : 'play-circle'} size={14} color="#FFF" />
-                  <Text style={styles.funActionText}>
-                    {syncState === 'idle' ? 'Start Sync' : syncState === 'syncing' ? 'Syncing...' : 'Live Now'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            )}
+            {/* Icebreakers / Mini Game / Voice & Vibes / Co-watch cards
+                were removed for v1 — Match Mission alone is the
+                conversation starter. State + handlers for those cards
+                still exist below; they're inert with no UI hooked up. */}
           </View>
         }
       />

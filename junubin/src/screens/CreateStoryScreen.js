@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { Video } from 'expo-av';
 import { useTheme, Typography, FontFamily, Gradients } from '../theme';
 import * as storyService from '../api/services/storyService';
 import { promptToOpenSettings } from '../utils/permissionAlert';
@@ -51,7 +52,8 @@ export default function CreateStoryScreen({ navigation }) {
   const [text, setText] = useState('');
   const [bg, setBg] = useState(TEXT_BACKGROUNDS[0]);
   const [fontPreset, setFontPreset] = useState(FONT_PRESETS[0]);
-  const [photoUri, setPhotoUri] = useState(null);
+  const [mediaUri, setMediaUri] = useState(null);
+  const [mediaKind, setMediaKind] = useState('image'); // 'image' | 'video'
   const [posting, setPosting] = useState(false);
 
   // Animated mode-toggle indicator — slides between Text/Photo positions
@@ -81,7 +83,7 @@ export default function CreateStoryScreen({ navigation }) {
       return;
     }
     const opts = {
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
       allowsEditing: true,
       aspect: [9, 16],
       quality: 0.85,
@@ -90,23 +92,31 @@ export default function CreateStoryScreen({ navigation }) {
       ? await ImagePicker.launchCameraAsync(opts)
       : await ImagePicker.launchImageLibraryAsync(opts);
     if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      // expo-image-picker exposes `type: 'image' | 'video'` per asset.
+      // Fall back to mimeType sniffing if the field is missing (older SDKs).
+      const isVideo = asset?.type === 'video'
+        || (typeof asset?.mimeType === 'string' && asset.mimeType.startsWith('video'));
+      setMediaUri(asset.uri);
+      setMediaKind(isVideo ? 'video' : 'image');
     }
   };
 
-  const canPost = mode === 'text' ? text.trim().length > 0 : !!photoUri;
+  const canPost = mode === 'text' ? text.trim().length > 0 : !!mediaUri;
 
   const handlePost = async () => {
     if (!canPost || posting) return;
     setPosting(true);
     try {
-      // Persist via storyService — uploads media (photo) and writes the
-      // Story row with a 24h expiry. The viewer will pick it up on next
-      // listActiveStoryGroups() call.
+      // Persist via storyService — uploads media (photo/video) and writes
+      // the Story row with a 24h expiry. The viewer will pick it up on
+      // the next listActiveStoryGroups() call.
+      const isVideoMedia = mode === 'photo' && mediaKind === 'video';
       const created = await storyService.createStory({
         mode,
         text: mode === 'text' ? text.trim() : null,
-        photoUri: mode === 'photo' ? photoUri : null,
+        photoUri: mode === 'photo' && !isVideoMedia ? mediaUri : null,
+        videoUri: isVideoMedia ? mediaUri : null,
         // Persist the gradient's first color so existing readers that
         // expect a single bgColor string still render correctly. The
         // viewer can pull both stops from `bg` once it's gradient-aware.
@@ -311,9 +321,20 @@ export default function CreateStoryScreen({ navigation }) {
         ) : (
           <View style={styles.canvas}>
             <View style={styles.canvasFrame}>
-              {photoUri ? (
+              {mediaUri ? (
                 <View style={styles.photoLoaded}>
-                  <Image source={{ uri: photoUri }} style={styles.photoFill} resizeMode="cover" />
+                  {mediaKind === 'video' ? (
+                    <Video
+                      source={{ uri: mediaUri }}
+                      useNativeControls={false}
+                      isLooping
+                      shouldPlay
+                      resizeMode="cover"
+                      style={styles.photoFill}
+                    />
+                  ) : (
+                    <Image source={{ uri: mediaUri }} style={styles.photoFill} resizeMode="cover" />
+                  )}
                   <TouchableOpacity
                     style={styles.photoChangeBtn}
                     onPress={() => requestAndPick('library')}
@@ -324,7 +345,7 @@ export default function CreateStoryScreen({ navigation }) {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.photoRemoveBtn}
-                    onPress={() => setPhotoUri(null)}
+                    onPress={() => { setMediaUri(null); setMediaKind('image'); }}
                     activeOpacity={0.85}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
@@ -351,8 +372,8 @@ export default function CreateStoryScreen({ navigation }) {
               )}
             </View>
 
-            {/* Source actions — camera + library, only when no photo yet */}
-            {!photoUri && (
+            {/* Source actions — camera + library, only when no media yet */}
+            {!mediaUri && (
               <View style={styles.sourceRow}>
                 <TouchableOpacity
                   style={styles.sourceBtn}

@@ -1,13 +1,31 @@
 // AnaJunubin — Chat Audio/Voice Note Bubble
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
+
+const WAVEFORM_BARS = 20;
 
 export default function ChatAudioBubble({ uri, duration = 0, isMe, time, colors }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const soundRef = useRef(null);
+
+  // Stable per-bubble waveform heights. Without memoization, every
+  // progress tick re-randomizes the bars and the waveform visibly
+  // jitters during playback. Keyed by `uri` so swapping bubbles still
+  // produces a fresh pattern.
+  const barHeights = useMemo(
+    () => Array.from({ length: WAVEFORM_BARS }, (_, i) => 6 + Math.sin(i * 0.8) * 8 + Math.random() * 4),
+    [uri],
+  );
+
+  // Unload the Sound if the bubble unmounts mid-play (scroll/nav away)
+  // so we don't leak native audio resources.
+  useEffect(() => () => {
+    soundRef.current?.unloadAsync().catch(() => {});
+    soundRef.current = null;
+  }, []);
 
   const formatDuration = (sec) => {
     const m = Math.floor(sec / 60);
@@ -61,9 +79,8 @@ export default function ChatAudioBubble({ uri, duration = 0, isMe, time, colors 
         </TouchableOpacity>
 
         <View style={styles.waveform}>
-          {Array.from({ length: 20 }).map((_, i) => {
-            const h = 6 + Math.sin(i * 0.8) * 8 + Math.random() * 4;
-            const filled = i / 20 <= progress;
+          {barHeights.map((h, i) => {
+            const filled = i / WAVEFORM_BARS <= progress;
             return (
               <View
                 key={i}

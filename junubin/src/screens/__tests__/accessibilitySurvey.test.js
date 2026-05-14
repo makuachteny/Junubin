@@ -22,7 +22,6 @@ jest.mock('../../accessibility', () => ({
 
 jest.mock('../../auth', () => ({
   useAuth: () => ({
-    setDevBypass: jest.fn(),
     isAuthenticated: false,
     ready: true,
   }),
@@ -56,12 +55,14 @@ describe('AccessibilitySurveyScreen', () => {
     jest.useRealTimers();
   });
 
-  it('saves answers and routes to profile setup', async () => {
-    const navigation = { replace: jest.fn() };
+  it('saves answers and resets to Main when no returnTo is given', async () => {
+    // AccessibilitySurvey is the terminal step of onboarding — its default
+    // exit goes back to the app shell, not to ProfileSetup. Resetting the
+    // nav stack means Back from Home can't pop the user back here.
+    const navigation = { replace: jest.fn(), reset: jest.fn(), goBack: jest.fn() };
     const { getByTestId, getAllByRole } = render(<AccessibilitySurveyScreen navigation={navigation} />);
 
     const toggles = getAllByRole('switch');
-    // Touch required toggles (first two) to satisfy mandatory questions
     fireEvent(toggles[0], 'valueChange', false);
     fireEvent(toggles[1], 'valueChange', false);
 
@@ -71,11 +72,14 @@ describe('AccessibilitySurveyScreen', () => {
 
     expect(mockSaveSurveyResponses).toHaveBeenCalled();
 
-    // Navigation is delayed by the loading transition
     act(() => {
       jest.advanceTimersByTime(2000);
     });
 
-    expect(navigation.replace).toHaveBeenCalledWith('ProfileSetup');
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [{ name: 'Main' }],
+    });
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 });

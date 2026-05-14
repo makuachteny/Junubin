@@ -104,6 +104,23 @@ export function useDailyCall({ roomUrl, token, role = 'host', enabled = true }) 
     }
   }, []);
 
+  // Route audio between earpiece / speakerphone / wired headset. Daily's
+  // RN SDK exposes `setAudioDevice('speakerphone' | 'wired' | 'earpiece'
+  // | 'bluetooth')` — wrap it so screens can flip it from a button.
+  const setAudioDevice = useCallback(async (deviceType) => {
+    const call = callRef.current;
+    if (!call || !deviceType) return;
+    try {
+      if (typeof call.setAudioDevice === 'function') {
+        await call.setAudioDevice(deviceType);
+      } else if (typeof call.setSpeakerphoneOn === 'function') {
+        await call.setSpeakerphoneOn(deviceType === 'speakerphone');
+      }
+    } catch {
+      // Some platforms / older SDK versions no-op silently.
+    }
+  }, []);
+
   // Convenience derived values for the UI.
   const local = Object.values(participants).find((p) => p.local);
   const remotes = Object.values(participants).filter((p) => !p.local);
@@ -121,5 +138,6 @@ export function useDailyCall({ roomUrl, token, role = 'host', enabled = true }) 
     toggleVideo,
     flipCamera,
     leave,
+    setAudioDevice,
   };
 }

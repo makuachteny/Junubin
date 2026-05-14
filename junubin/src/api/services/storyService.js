@@ -48,31 +48,61 @@ async function uploadStoryImage(imageUri, userId) {
 }
 
 /**
+ * Upload a local video URI to the `stories` storage bucket and return
+ * { url, path }. Mirrors uploadStoryImage but writes with a video MIME
+ * type so downstream playback (expo-av Video) gets the right hint.
+ */
+async function uploadStoryVideo(videoUri, userId) {
+  if (!videoUri || !userId) return null;
+  if (videoUri.startsWith('http')) {
+    return { url: videoUri, path: null };
+  }
+  const ext = (videoUri.split('.').pop() || 'mp4').replace(/[?#].*/, '');
+  const path = `${userId}/${Date.now()}.${ext}`;
+  const fileResponse = await fetch(videoUri);
+  const fileBlob = await fileResponse.blob();
+  const { error } = await supabase.storage
+    .from('stories')
+    .upload(path, fileBlob, { contentType: 'video/mp4', upsert: false });
+  if (error) throw error;
+  const { data: pub } = supabase.storage.from('stories').getPublicUrl(path);
+  return { url: pub.publicUrl, path };
+}
+
+/**
  * Create a new story. Returns the inserted Story row in the shape the
  * StoriesViewScreen consumes (single-story group).
  *
  * `mode` is the legacy CreateStoryScreen vocabulary ('text' | 'photo').
- * Internally maps to mediaType 'text' / 'image'.
+ * Internally maps to mediaType 'text' / 'image' / 'video' — the latter
+ * triggered when `videoUri` is provided (takes precedence over photoUri).
  */
-export async function createStory({ mode, text, photoUri, bgColor }) {
+export async function createStory({ mode, text, photoUri, videoUri, bgColor }) {
   const me = await resolveAppUser();
   if (!me) throw new Error('Not authenticated');
 
-  const isPhoto = mode === 'photo';
-  if (!isPhoto && !text?.trim()) throw new Error('text required for text stories');
-  if (isPhoto && !photoUri) throw new Error('photoUri required for photo stories');
+  const isMedia = mode === 'photo';
+  const isVideo = isMedia && !!videoUri;
+  const isPhoto = isMedia && !isVideo;
+  if (!isMedia && !text?.trim()) throw new Error('text required for text stories');
+  if (isMedia && !videoUri && !photoUri) throw new Error('photoUri or videoUri required for media stories');
 
-  const uploaded = isPhoto ? await uploadStoryImage(photoUri, me.id) : null;
+  let uploaded = null;
+  if (isVideo) {
+    uploaded = await uploadStoryVideo(videoUri, me.id);
+  } else if (isPhoto) {
+    uploaded = await uploadStoryImage(photoUri, me.id);
+  }
 
   const id = makeId();
   const row = {
     id,
     userId: me.id,
-    mediaType: isPhoto ? 'image' : 'text',
+    mediaType: isVideo ? 'video' : (isPhoto ? 'image' : 'text'),
     mediaUrl: uploaded?.url || null,
     mediaPath: uploaded?.path || null,
-    content: isPhoto ? null : text.trim(),
-    bgColor: !isPhoto ? (bgColor || null) : null,
+    content: isMedia ? null : text.trim(),
+    bgColor: !isMedia ? (bgColor || null) : null,
   };
 
   const { data, error } = await supabase

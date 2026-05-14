@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useTheme, Typography, FontFamily } from '../theme';
-import { POST_THEMES } from '../data/mockProfiles';
+import { POST_THEMES } from '../data/postThemes';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { GraffitiLocation } from '../components/icons';

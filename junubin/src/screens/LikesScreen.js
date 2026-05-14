@@ -16,12 +16,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow, Layout } from '../theme';
 import { SpraySplatter } from '../components/GraffitiAccents';
 import Button from '../components/Button';
-import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
 import EmptyState from '../components/EmptyState';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import SkeletonShimmer from '../components/SkeletonShimmer';
-import { mockLikes } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import FilterBar from '../components/FilterBar';
 import { useSubscription } from '../payments';
@@ -258,17 +256,20 @@ export default function LikesScreen({ navigation }) {
 
   const fetchLikes = useCallback(() => {
     if (!session) {
-      setLikes(mockLikes);
+      // Unauthenticated → empty likes. The screen's empty-state UI
+      // covers the "no likes yet" message — no mock fallback.
+      setLikes([]);
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
-    likesService.getReceivedLikes().then((apiLikes) => {
-      setLikes(apiLikes.length > 0 ? apiLikes : mockLikes);
-    }).catch((err) => {
-      if (__DEV__) console.warn('Likes fetch failed:', err);
-      setLikes(mockLikes);
-    }).finally(() => setIsLoading(false));
+    likesService.getReceivedLikes()
+      .then((apiLikes) => setLikes(apiLikes))
+      .catch((err) => {
+        if (__DEV__) console.warn('Likes fetch failed:', err);
+        setLikes([]);
+      })
+      .finally(() => setIsLoading(false));
   }, [session]);
 
   useEffect(() => {
@@ -279,16 +280,15 @@ export default function LikesScreen({ navigation }) {
     setRefreshing(true);
     if (!session) {
       setTimeout(() => {
-        setLikes(mockLikes);
+        setLikes([]);
         setRefreshing(false);
       }, 800);
       return;
     }
-    likesService.getReceivedLikes().then((apiLikes) => {
-      setLikes(apiLikes.length > 0 ? apiLikes : mockLikes);
-    }).catch(() => {
-      setLikes(mockLikes);
-    }).finally(() => setRefreshing(false));
+    likesService.getReceivedLikes()
+      .then((apiLikes) => setLikes(apiLikes))
+      .catch(() => setLikes([]))
+      .finally(() => setRefreshing(false));
   }, [session]);
 
   useEffect(() => {
@@ -530,9 +530,6 @@ export default function LikesScreen({ navigation }) {
             colors={colors}
           />
         )}
-
-        {/* Ad Banner */}
-        <AdBanner style={{ marginBottom: 12 }} />
 
         {/* Empty state */}
         {filteredLikes.length === 0 && !isLoading && (

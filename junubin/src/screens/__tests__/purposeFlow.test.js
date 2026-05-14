@@ -145,24 +145,26 @@ describe('Purpose / Intention flow', () => {
     jest.useRealTimers();
   });
 
-  it('renders first step (name) on ProfileSetup', () => {
+  it('renders the purpose step first on ProfileSetup', () => {
+    // Purpose moved to step 1 so we never waste a user's time on
+    // generic questions before they tell us which mode they want.
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
     const { getByText } = render(<ProfileSetupScreen navigation={nav} route={route} />);
-    expect(getByText("What's your first name?")).toBeTruthy();
+    expect(getByText('What brings you here?')).toBeTruthy();
   });
 
   it('purpose step shows Dating and Socialize options', () => {
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
-    const { getByText, queryByTestId } = render(
+    const { getByText, getByTestId } = render(
       <ProfileSetupScreen navigation={nav} route={route} />
     );
-    // The purpose step exists in the step list — we verify
-    // the options data is defined (visible when user reaches that step)
-    expect(getByText("What's your first name?")).toBeTruthy();
-    // The purpose toggle options should be rendered when reaching that step
-    // For now we verify the component renders without error
+    expect(getByText('What brings you here?')).toBeTruthy();
+    // Both purpose option cards are rendered immediately — the user
+    // has to pick one before any other step appears.
+    expect(getByTestId('purpose-dating')).toBeTruthy();
+    expect(getByTestId('purpose-socialize')).toBeTruthy();
   });
 
   it('dating-only steps are hidden before purpose is chosen', () => {
@@ -219,7 +221,8 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(await findByText("What's your first name?")).toBeTruthy();
+    // First step is now the purpose card, not the name field.
+    expect(await findByText('What brings you here?')).toBeTruthy();
   });
 
   it('unauthenticated user sees Onboarding', async () => {

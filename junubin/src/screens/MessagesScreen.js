@@ -19,7 +19,6 @@ import { GraffitiChat } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily, Layout } from '../theme';
-import { mockMatches, mockLikes } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
@@ -31,9 +30,7 @@ import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import StoriesRow from '../components/StoriesRow';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
-import AdBanner from '../components/AdBanner';
 import ProfilePromptBanner from '../components/ProfilePromptBanner';
-import { mockStories } from '../data/mockStories';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAccessibilityPreferences } from '../accessibility';
 
@@ -57,7 +54,16 @@ export default function MessagesScreen({ navigation, route }) {
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
-  const [mode, setMode] = useState('Social');
+  // Mode is read from the authoritative source — `useCurrentUser`
+  // resolves it from Profile.appMode → accountPurpose → AsyncStorage
+  // → 'Social' default. Reading it directly here keeps the inbox
+  // labels in sync whenever Settings flips the toggle, with no
+  // remount required (the old AsyncStorage-only read would lag a
+  // navigation cycle behind).
+  const mode = currentUser?.preferences?.mode || 'Social';
+  // Lowercase form for Match/Swipe row comparisons; the DB stores
+  // 'dating' / 'social', not the capitalized client-side labels.
+  const modeKey = mode === 'Social' ? 'social' : 'dating';
   const isPlus = hasTier('plus');
   const loadingTimeoutRef = useRef(null);
   const [seenConnections, setSeenConnections] = useState(new Set());
@@ -73,21 +79,17 @@ export default function MessagesScreen({ navigation, route }) {
     }
   }, [route?.params?.createdStory, navigation]);
 
-  // Hydrate persisted prefs (mode + seen-connections) in a single round-trip.
+  // Hydrate seen-connections from AsyncStorage. Mode is no longer read
+  // here — `currentUser.preferences.mode` is the source of truth and is
+  // resolved upstream by useCurrentUser (00025 / appMode column).
   useEffect(() => {
-    AsyncStorage.multiGet(['@junubin_seen_connections', '@junubin_mode']).then((entries) => {
-      for (const [key, value] of entries) {
-        if (!value) continue;
-        if (key === '@junubin_mode' && (value === 'Dating' || value === 'Social')) {
-          setMode(value);
-        } else if (key === '@junubin_seen_connections') {
-          try {
-            const ids = JSON.parse(value);
-            if (Array.isArray(ids)) setSeenConnections(new Set(ids));
-          } catch {
-            // ignore corrupt cache
-          }
-        }
+    AsyncStorage.getItem('@junubin_seen_connections').then((value) => {
+      if (!value) return;
+      try {
+        const ids = JSON.parse(value);
+        if (Array.isArray(ids)) setSeenConnections(new Set(ids));
+      } catch {
+        // ignore corrupt cache
       }
     }).catch(() => {});
   }, []);
@@ -103,32 +105,26 @@ export default function MessagesScreen({ navigation, route }) {
   const fetchMatches = useCallback(() => {
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     loadingTimeoutRef.current = setTimeout(() => {
-      // Failsafe: don't keep skeletons spinning too long
-      setMatches((prev) => (prev.length ? prev : mockMatches));
-      setLikes((prev) => (prev.length ? prev : mockLikes));
+      // Failsafe: stop the skeletons after 600ms even if the network
+      // hasn't replied. The empty-state UI renders below when both
+      // arrays are empty — no seeded demo users in any build.
       setIsLoading(false);
     }, 600);
 
     if (!session) {
-      // Fall back to mock data when not authenticated
-      setMatches(mockMatches);
-      setLikes(mockLikes);
+      // Unauthenticated: render the empty inbox. No mock fallback.
+      setMatches([]);
+      setLikes([]);
       setIsLoading(false);
       return Promise.resolve();
     }
     return Promise.all([
-      matchesService.getMatches().then((apiMatches) => {
-        if (apiMatches.length > 0) setMatches(apiMatches);
-        else setMatches(mockMatches); // fallback
-      }),
-      likesService.getReceivedLikes().then((apiLikes) => {
-        if (apiLikes.length > 0) setLikes(apiLikes);
-        else setLikes(mockLikes); // fallback
-      }),
+      matchesService.getMatches().then((apiMatches) => setMatches(apiMatches)),
+      likesService.getReceivedLikes().then((apiLikes) => setLikes(apiLikes)),
     ]).catch((err) => {
       if (__DEV__) console.warn('Messages fetch failed:', err);
-      setMatches(mockMatches);
-      setLikes(mockLikes);
+      setMatches([]);
+      setLikes([]);
     }).finally(() => {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       setIsLoading(false);
@@ -178,10 +174,11 @@ export default function MessagesScreen({ navigation, route }) {
 
   // Try to open the tapped person's active story, if they have one.
   // Resolves real story groups via storyService (so a story posted by
-  // someone you matched with on the server actually plays here), and
-  // falls back to a name-based mockStories lookup for the demo deck.
-  // Returns true when a story was opened so the caller can short-circuit
-  // its default tap handler.
+  // someone you matched with on the server actually plays here).
+  // Returns true when a story was opened so the caller can
+  // short-circuit its default tap handler. Returns false (silently)
+  // when there's no active story for the user — there is no longer
+  // any mock-stories fallback, so the row just isn't taken.
   const handleOpenStoryIfAvailable = useCallback(async (person) => {
     const name = person?.name?.trim().toLowerCase();
     const userId = person?.userId || person?.id;
@@ -202,17 +199,9 @@ export default function MessagesScreen({ navigation, route }) {
         return true;
       }
     } catch {
-      // Fall through to mock lookup.
+      // listActiveStoryGroups failed — just don't open a story.
     }
-    if (!name) return false;
-    const mockIndex = mockStories.findIndex((s) => s.userName?.trim().toLowerCase() === name);
-    if (mockIndex < 0) return false;
-    navigation.navigate('StoriesView', {
-      story: mockStories[mockIndex],
-      storyIndex: mockIndex,
-      storyList: mockStories,
-    });
-    return true;
+    return false;
   }, [navigation]);
 
   const handleLikePress = (like) => {
@@ -237,7 +226,16 @@ export default function MessagesScreen({ navigation, route }) {
     });
   };
 
-  // Build combined conversation list with category + search filtering
+  // Build combined conversation list with category + search filtering,
+  // then sort so the current mode's items float to the top while the
+  // other mode stays below (rather than disappearing — the user can
+  // still see they have other-mode conversations without flipping the
+  // toggle). Within each bucket, sort by recency.
+  //
+  // A conversation's `mode` field comes from the DB (Match.mode /
+  // Swipe.mode, set when the swipe was recorded). Legacy rows that
+  // pre-date the 00025 migration default to 'dating' at the service
+  // layer, so an unmigrated install still produces a stable order.
   const conversationData = useMemo(() => {
     const q = (filtersLocked ? '' : searchQuery).toLowerCase().trim();
     const likeItems = likes.map((like) => ({ ...like, type: 'like' }));
@@ -247,8 +245,19 @@ export default function MessagesScreen({ navigation, route }) {
     if (effectiveCategory === 'Matches') all = matchItems;
     else if (effectiveCategory === 'Likes') all = likeItems;
     if (q) all = all.filter((item) => item.name?.toLowerCase().includes(q));
-    return all;
-  }, [likes, matches, searchQuery, activeCategory, filtersLocked]);
+
+    const sortKey = (item) => {
+      // Likes use `likedAt`, matches use `updatedAt` (last message) →
+      // fall back through both so the comparator is stable for either.
+      return new Date(item.updatedAt || item.likedAt || 0).getTime();
+    };
+    return all.slice().sort((a, b) => {
+      const aMatchesMode = (a.mode || 'dating') === modeKey;
+      const bMatchesMode = (b.mode || 'dating') === modeKey;
+      if (aMatchesMode !== bMatchesMode) return aMatchesMode ? -1 : 1;
+      return sortKey(b) - sortKey(a);
+    });
+  }, [likes, matches, searchQuery, activeCategory, filtersLocked, modeKey]);
 
   useEffect(() => {
     if (!filtersLocked) return;
@@ -391,12 +400,27 @@ export default function MessagesScreen({ navigation, route }) {
                 </View>
               )}
             </View>
-            <Text style={[styles.msgPreview, isUnread && styles.msgUnread]} numberOfLines={1}>
-              {item.lastMessage}
+            <Text
+              style={[
+                styles.msgPreview,
+                isUnread && styles.msgUnread,
+                // Italicize the placeholder so it's visually distinct
+                // from a real last-message preview. Without this, a
+                // brand-new match would look indistinguishable from a
+                // match where the other person said the literal words
+                // "Say hi" — which is the exact confusion users hit
+                // with the old hardcoded mock previews.
+                !item.lastMessage && styles.msgPreviewPlaceholder,
+              ]}
+              numberOfLines={1}
+            >
+              {item.lastMessage || 'Say hi 👋'}
             </Text>
           </View>
           <View style={styles.rowRight}>
-            <Text style={styles.msgTime}>{item.timestamp}</Text>
+            {item.timestamp ? (
+              <Text style={styles.msgTime}>{item.timestamp}</Text>
+            ) : null}
             {unreadCount > 0 && <View style={styles.unreadCountDot}><Text style={styles.unreadCountText}>{badgeText}</Text></View>}
           </View>
         </TouchableOpacity>
@@ -456,7 +480,6 @@ export default function MessagesScreen({ navigation, route }) {
           colors={colors}
         />
       )}
-      <AdBanner />
       {!hasTier('junub') && likesCount > 0 && (
         <TouchableOpacity
           style={styles.upsellCard}
@@ -1095,6 +1118,12 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     ...Typography.caption,
     color: prefs?.highContrast ? colors.gray700 : colors.gray600,
     marginTop: 2,
+  },
+  // Used when there's no last-message preview yet (brand-new match).
+  // Italic + muted so it reads as a CTA rather than a real message.
+  msgPreviewPlaceholder: {
+    fontStyle: 'italic',
+    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
   },
   likePreviewPrimary: {
     ...Typography.caption,

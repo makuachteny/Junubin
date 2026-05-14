@@ -75,7 +75,7 @@ export default function FollowListScreen({ navigation, route }) {
       setFollowing(fg);
       setFriends(fr);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
   }, [userId]);
 
   const currentList = activeTab === 'Followers' ? followers : activeTab === 'Following' ? following : friends;

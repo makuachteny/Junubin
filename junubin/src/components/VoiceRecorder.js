@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { FontFamily, useTheme } from '../theme';
 import { hapticLight, hapticMedium } from '../utils/haptics';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 
 const MAX_DURATION_SEC = 120; // hard ceiling so a runaway recorder doesn't eat storage
 
@@ -71,7 +72,17 @@ export default function VoiceRecorder({ visible, onCancel, onComplete }) {
       setError(null);
       const perm = await Audio.requestPermissionsAsync();
       if (!perm.granted) {
-        setError('Microphone access is needed to record voice notes.');
+        // If the OS has marked this as permanently denied (canAskAgain
+        // === false), the user will never see the system prompt again —
+        // bounce them to Settings instead of just showing an inline hint.
+        if (perm.canAskAgain === false) {
+          promptToOpenSettings({
+            title: 'Microphone access needed',
+            message: 'JuNubin needs microphone access to record voice notes. Enable it in Settings.',
+          });
+        } else {
+          setError('Microphone access is needed to record voice notes.');
+        }
         return;
       }
       await Audio.setAudioModeAsync({
@@ -107,6 +118,12 @@ export default function VoiceRecorder({ visible, onCancel, onComplete }) {
     if (!r) return;
     try {
       await r.stopAndUnloadAsync();
+      // iOS: flip recording mode off so subsequent playback (voice notes,
+      // story audio) routes through the speaker, not the earpiece.
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      }).catch(() => {});
       const uri = r.getURI();
       const status = await r.createNewLoadedSoundAsync().catch(() => null);
       const durationMs = status?.status?.durationMillis;
@@ -126,6 +143,10 @@ export default function VoiceRecorder({ visible, onCancel, onComplete }) {
     recordingRef.current = null;
     if (r) {
       try { await r.stopAndUnloadAsync(); } catch {}
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      }).catch(() => {});
     }
     onCancel?.();
   };
@@ -141,6 +162,10 @@ export default function VoiceRecorder({ visible, onCancel, onComplete }) {
       recordingRef.current = null;
       if (r) {
         try { r.stopAndUnloadAsync(); } catch {}
+        Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+        }).catch(() => {});
       }
       setSeconds(0);
       setError(null);

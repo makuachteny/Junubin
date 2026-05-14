@@ -294,11 +294,11 @@ export default function PreferencesScreen({ navigation, route }) {
         setMode(stored);
         slideAnim.setValue(stored === 'Social' ? 1 : 0);
       }
-    });
-    interactiveStore.getFriendLayer().then((enabled) => setFriendLayerEnabled(!!enabled));
+    }).catch(() => {});
+    interactiveStore.getFriendLayer().then((enabled) => setFriendLayerEnabled(!!enabled)).catch(() => {});
     interactiveStore.getSeasonMode().then((saved) => {
       if (saved) setSeasonMode(saved);
-    });
+    }).catch(() => {});
   }, [slideAnim]);
 
   const handleModeToggle = useCallback((newMode) => {
@@ -312,7 +312,16 @@ export default function PreferencesScreen({ navigation, route }) {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setMode(newMode);
     AsyncStorage.setItem('@junubin_mode', newMode);
-  }, [slideAnim]);
+    // Persist to Profile.appMode (cross-device source of truth) and
+    // refresh AuthContext so the rest of the app (MessagesScreen sort,
+    // HomeScreen deck) reacts to the change without a remount. The
+    // refreshUser hook here is wired through useCurrentUser, which
+    // re-reads the User row via AuthContext.
+    profileService
+      .updateProfile({ appMode: newMode === 'Social' ? 'social' : 'dating' })
+      .then(() => { try { refreshUser?.(); } catch {} })
+      .catch(() => {});
+  }, [slideAnim, refreshUser]);
 
   // Listen for returned selection from PreferenceSelectScreen
   useEffect(() => {

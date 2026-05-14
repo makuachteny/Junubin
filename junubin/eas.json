@@ -23,7 +23,10 @@
       "autoIncrement": true,
       "channel": "production",
       "env": {
-        "APP_VARIANT": "production"
+        "APP_VARIANT": "production",
+        "EAS_PROJECT_ID": "1cc13a52-317c-470e-addb-ef68ae3bd0e4",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://uvtyiytbgkasemabtznc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_olf_AVo7BtbNDGDS4MmVbQ_FOHwyld-"
       }
     }
   },
@@ -33,7 +36,7 @@
         "appleId": "itsmakuach@gmail.com",
         "ascAppId": "6766345463",
         "appleTeamId": "7CW78SZQF9",
-        "ascApiKeyPath": "/Users/makuachtenygatluak/.appstoreconnect/AuthKey_NSBB4VSS9R.p8",
+        "ascApiKeyPath": "./.secrets/AuthKey_NSBB4VSS9R.p8",
         "ascApiKeyId": "NSBB4VSS9R",
         "ascApiKeyIssuerId": "45681e55-f9bd-4d83-8933-de3f93bc4266"
       },

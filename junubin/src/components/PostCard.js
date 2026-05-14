@@ -10,7 +10,7 @@ import { imageSource } from '../utils/imageSource';
 import { useFollow } from '../hooks/useFollow';
 import { useCurrentUser } from '../hooks';
 import { normalizeHttpUrl } from '../utils/links';
-import { POST_THEMES, POST_THEME_CYCLE } from '../data/mockProfiles';
+import { POST_THEMES, POST_THEME_CYCLE } from '../data/postThemes';
 import { toggleLike, toggleRepost } from '../api/services/postService';
 
 

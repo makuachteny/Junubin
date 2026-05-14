@@ -75,11 +75,15 @@ serve(async (req) => {
   // previous version silently allowed any caller through when the
   // secret was empty, which would let an attacker pump forged
   // notifications at the verify-with-Flutterwave step.
-  if (!FLW_WEBHOOK_SECRET) {
+  // Reject empty / whitespace-only secrets, not just unset. A blank
+  // env var would otherwise pass the falsy check and `timingSafeEqual`
+  // would then be comparing the incoming verif-hash against "" —
+  // accept any caller that sets `verif-hash: ""`.
+  if (!FLW_WEBHOOK_SECRET || !FLW_WEBHOOK_SECRET.trim()) {
     console.error("FLUTTERWAVE_WEBHOOK_SECRET is not configured");
     return errorResponse("Webhook secret not configured", 500);
   }
-  if (!FLW_SECRET) {
+  if (!FLW_SECRET || !FLW_SECRET.trim()) {
     console.error("FLUTTERWAVE_SECRET_KEY is not configured");
     return errorResponse("Server not configured", 500);
   }

@@ -1,5 +1,6 @@
 import { supabase } from '../../config/supabase';
 import { cacheGet, cacheSet } from '../../utils/offlineCache';
+import { enqueueAction } from '../../utils/offlineQueue';
 
 const OFFLINE_MESSAGES_TTL = 600_000; // 10 min
 
@@ -50,6 +51,18 @@ export async function getMessages(conversationId) {
       } catch {
         base.uri = m.body;
         base.duration = 0;
+      }
+    }
+    // Image messages store the storage URL as a JSON-encoded body too —
+    // mirrors the audio path so ChatImageBubble can read `uri` directly
+    // off the message.
+    if (base.type === 'image') {
+      try {
+        const meta = JSON.parse(m.body || '{}');
+        base.uri = meta.url;
+        base.text = '';
+      } catch {
+        base.uri = m.body;
       }
     }
     return base;
@@ -104,52 +117,151 @@ export async function sendMessage(conversationId, body, type = 'text') {
 export async function sendAudioMessage(conversationId, fileUri, durationSec) {
   if (!conversationId || !fileUri) throw new Error('Missing conversation or file');
 
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) throw new Error('Not authenticated');
+  try {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new Error('Not authenticated');
 
-  const { data: appUser } = await supabase
-    .from('User')
-    .select('id')
-    .eq('auth_id', authUser.id)
-    .single();
-  if (!appUser) throw new Error('User not found');
+    const { data: appUser } = await supabase
+      .from('User')
+      .select('id')
+      .eq('auth_id', authUser.id)
+      .single();
+    if (!appUser) throw new Error('User not found');
 
-  // Slurp the local file URI into a Blob the JS client can stream up.
-  const fileResponse = await fetch(fileUri);
-  const fileBlob = await fileResponse.blob();
+    // Slurp the local file URI into a Blob the JS client can stream up.
+    const fileResponse = await fetch(fileUri);
+    const fileBlob = await fileResponse.blob();
 
-  const filename = `${appUser.id}-${Date.now()}.m4a`;
-  const path = `${conversationId}/${filename}`;
+    const filename = `${appUser.id}-${Date.now()}.m4a`;
+    const path = `${conversationId}/${filename}`;
 
-  const { error: upErr } = await supabase.storage
-    .from('voice-notes')
-    .upload(path, fileBlob, {
-      contentType: 'audio/m4a',
-      upsert: false,
-    });
-  if (upErr) throw upErr;
+    const { error: upErr } = await supabase.storage
+      .from('voice-notes')
+      .upload(path, fileBlob, {
+        contentType: 'audio/mp4',
+        upsert: false,
+      });
+    if (upErr) throw upErr;
 
-  // Public URL is fine for v1 — the path includes the conversation ID
-  // which is itself unguessable. Switch to signed URLs later if we need
-  // tighter access control.
-  const { data: pub } = supabase.storage.from('voice-notes').getPublicUrl(path);
-  const url = pub.publicUrl;
+    // Public URL is fine for v1 — the path includes the conversation ID
+    // which is itself unguessable. Switch to signed URLs later if we need
+    // tighter access control.
+    const { data: pub } = supabase.storage.from('voice-notes').getPublicUrl(path);
+    const url = pub.publicUrl;
 
-  const body = JSON.stringify({ url, duration: Math.max(1, Math.round(durationSec || 0)) });
+    const body = JSON.stringify({ url, duration: Math.max(1, Math.round(durationSec || 0)) });
 
-  const { data: message, error } = await supabase
-    .from('Message')
-    .insert({
+    const { data: message, error } = await supabase
+      .from('Message')
+      .insert({
+        conversationId,
+        senderId: appUser.id,
+        body,
+        type: 'audio',
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return message;
+  } catch (err) {
+    // Persist the local URI so a future retry consumer can pick it up.
+    // Without this, a failed upload silently drops the recording. We
+    // still rethrow so the caller's UI (alert/toast) fires unchanged.
+    await enqueueAction({
+      kind: 'voiceNote',
       conversationId,
-      senderId: appUser.id,
-      body,
-      type: 'audio',
-    })
-    .select('*')
-    .single();
+      uri: fileUri,
+      durationMs: Math.max(0, Math.round((durationSec || 0) * 1000)),
+      enqueuedAt: Date.now(),
+    }).catch(() => {});
+    throw err;
+  }
+}
 
-  if (error) throw error;
-  return message;
+/**
+ * Upload a picked image and create an image Message in one shot.
+ * Body shape: `{"url": "<storage path>"}` (JSON stringified). The chat
+ * bubble (ChatImageBubble) parses `uri` from the message — getMessages
+ * unwraps the JSON body for `type: 'image'` the same way it does audio.
+ *
+ * Storage layout: `posts/<senderId>/chat/<conversationId>/<ts>.jpg` —
+ * reuses the existing `posts` bucket. The first folder MUST equal the
+ * uploader's User.id so the `Posts img owner write` RLS policy
+ * (00012_posts_safety_unmatch.sql) accepts the INSERT — putting
+ * `chat/` first caused every chat image upload to 403. Switch to a
+ * dedicated `chat-images` bucket once the RLS for it lands.
+ */
+export async function sendImageMessage(conversationId, fileUri) {
+  if (!conversationId || !fileUri) throw new Error('Missing conversation or file');
+
+  try {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new Error('Not authenticated');
+
+    const { data: appUser } = await supabase
+      .from('User')
+      .select('id')
+      .eq('auth_id', authUser.id)
+      .single();
+    if (!appUser) throw new Error('User not found');
+
+    // Detect file extension + content type from the URI. Fall back to
+    // jpeg — ImagePicker on iOS hands us .jpg for the camera roll, on
+    // Android sometimes .heic which we still ship as image/jpeg after
+    // expo-image-picker's internal conversion.
+    const cleanPath = fileUri.split('?')[0].split('#')[0];
+    const extRaw = (cleanPath.split('.').pop() || 'jpg').toLowerCase();
+    const ext = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(extRaw) ? extRaw : 'jpg';
+    const contentType = ext === 'png' ? 'image/png'
+      : ext === 'webp' ? 'image/webp'
+      : 'image/jpeg';
+
+    const fileResponse = await fetch(fileUri);
+    const fileBlob = await fileResponse.blob();
+
+    // RLS on the `posts` bucket requires the first path segment to be
+    // the uploader's User.id. Namespace chat images under the user
+    // first, then organize by conversation. See the storage layout
+    // note in this function's JSDoc above.
+    const filename = `${Date.now()}.${ext}`;
+    const path = `${appUser.id}/chat/${conversationId}/${filename}`;
+
+    const { error: upErr } = await supabase.storage
+      .from('posts')
+      .upload(path, fileBlob, {
+        contentType,
+        upsert: false,
+      });
+    if (upErr) throw upErr;
+
+    const { data: pub } = supabase.storage.from('posts').getPublicUrl(path);
+    const url = pub.publicUrl;
+
+    const body = JSON.stringify({ url });
+
+    const { data: message, error } = await supabase
+      .from('Message')
+      .insert({
+        conversationId,
+        senderId: appUser.id,
+        body,
+        type: 'image',
+      })
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    return { ...message, url };
+  } catch (err) {
+    await enqueueAction({
+      kind: 'chatImage',
+      conversationId,
+      uri: fileUri,
+      enqueuedAt: Date.now(),
+    }).catch(() => {});
+    throw err;
+  }
 }
 
 /**

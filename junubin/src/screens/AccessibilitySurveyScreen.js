@@ -45,7 +45,7 @@ export default function AccessibilitySurveyScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { saveSurveyResponses } = useAccessibilityPreferences();
-  const { setDevBypass, refreshUser } = useAuth();
+  const { refreshUser } = useAuth();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [answers, setAnswers] = useState({
     highContrast: true,
@@ -77,21 +77,25 @@ export default function AccessibilitySurveyScreen({ navigation, route }) {
       ])
     );
     pulse.start();
-    // Navigate after delay
+    // Navigate after delay. Default destination is Main (the app
+    // shell) — not ProfileSetup, since this screen is the *terminal*
+    // step of onboarding. Falling back to ProfileSetup created a loop
+    // for any user who reached here without an explicit `returnTo`:
+    // ProfileSetup → Main → SurveyNudgeModal → AccessibilitySurvey →
+    // (no returnTo) → ProfileSetup. Resetting the nav stack rather
+    // than replacing means Back from Home can't peel us back here.
     const timer = setTimeout(() => {
       const returnTo = route?.params?.returnTo;
-      if (returnTo === 'devBypass') {
-        setDevBypass(true);
-      } else if (returnTo === 'back') {
+      if (returnTo === 'back') {
         navigation.goBack();
-      } else if (returnTo) {
-        navigation.replace(returnTo, route?.params?.returnParams);
+      } else if (returnTo === 'Main' || !returnTo) {
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
       } else {
-        navigation.replace('ProfileSetup');
+        navigation.replace(returnTo, route?.params?.returnParams);
       }
     }, 800);
     return () => { clearTimeout(timer); pulse.stop(); };
-  }, [loading, fadeAnim, pulseAnim, navigation, setDevBypass, route?.params?.returnTo, route?.params?.returnParams]);
+  }, [loading, fadeAnim, pulseAnim, navigation, route?.params?.returnTo, route?.params?.returnParams]);
 
   const setAnswer = (key, value) => {
     setAnswers((prev) => ({ ...prev, [key]: value }));
@@ -166,7 +170,7 @@ export default function AccessibilitySurveyScreen({ navigation, route }) {
       );
       return;
     }
-    // The loading-overlay useEffect (above) handles devBypass + navigation
+    // The loading-overlay useEffect (above) handles navigation
     // after the spinner animation completes — don't double-fire here.
   };
 

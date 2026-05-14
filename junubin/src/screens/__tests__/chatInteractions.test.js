@@ -157,34 +157,7 @@ describe('Chat interactive actions', () => {
     jest.useRealTimers();
   });
 
-  it('mini game selection updates the input text', () => {
-    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
-    const { getByText, getByPlaceholderText } = render(
-      <ChatScreen navigation={navigation} route={route} />
-    );
-
-    fireEvent.press(getByText('Rooftop'));
-
-    const input = getByPlaceholderText('Type a message...');
-    expect(input.props.value).toContain('Mini-game pick: Rooftop dinner');
-  });
-
-  it('co-watch sync moves into syncing state on click', () => {
-    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
-    const { getByText, queryByText } = render(
-      <ChatScreen navigation={navigation} route={route} />
-    );
-
-    fireEvent.press(getByText('Start Sync'));
-    expect(getByText('Syncing...')).toBeTruthy();
-
-    act(() => {
-      jest.advanceTimersByTime(200);
-    });
-    expect(queryByText('Syncing...')).toBeTruthy();
-  });
+  // Mini Game (Quick Pick) and Co-watch / Co-listen UI removed in v1 strip; tests deleted.
 
   it('mic action opens voice call flow for eligible tiers', () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };

@@ -14,7 +14,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, Typography, getShadow } from '../theme';
-import { mockEvents, EVENT_CITIES, EVENT_CATEGORIES } from '../data/mockEvents';
+import { EVENT_CITIES, EVENT_CATEGORIES } from '../data/eventCatalogue';
+
+// Event rows now come exclusively from the server via `getEvents()`
+// below. The mock-events seed list was removed along with the rest of
+// the __dev__ bundle — a fresh install shows the empty-state until
+// real Event rows exist in the DB.
 import { interactiveStore } from '../utils/interactiveStore';
 import { getEvents, enrichEvents } from '../utils/eventStore';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
@@ -65,10 +70,10 @@ export default function EventsScreen({ navigation }) {
   useEffect(() => {
     interactiveStore.getEventRooms().then((saved) => {
       if (saved && typeof saved === 'object') setJoinedRooms(saved);
-    });
+    }).catch(() => {});
     const timer = setTimeout(async () => {
       const created = await getEvents();
-      const merged = [...created, ...mockEvents];
+      const merged = created;
       const enriched = await enrichEvents(merged);
       setEvents(enriched);
       setIsLoading(false);
@@ -82,11 +87,13 @@ export default function EventsScreen({ navigation }) {
   useFocusEffect(useCallback(() => {
     let cancelled = false;
     (async () => {
-      const created = await getEvents();
-      if (cancelled) return;
-      const merged = [...created, ...mockEvents];
-      const enriched = await enrichEvents(merged);
-      if (!cancelled) setEvents(enriched);
+      try {
+        const created = await getEvents();
+        if (cancelled) return;
+        const merged = created;
+        const enriched = await enrichEvents(merged);
+        if (!cancelled) setEvents(enriched);
+      } catch {}
     })();
     return () => { cancelled = true; };
   }, []));
@@ -95,11 +102,11 @@ export default function EventsScreen({ navigation }) {
     setRefreshing(true);
     setTimeout(() => {
       getEvents().then(async (created) => {
-        const merged = [...created, ...mockEvents];
+        const merged = created;
         const enriched = await enrichEvents(merged);
         setEvents(enriched);
         setRefreshing(false);
-      });
+      }).catch(() => {});
     }, 300);
   }, []);
 

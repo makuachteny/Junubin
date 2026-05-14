@@ -92,7 +92,7 @@ export default function EventDetailScreen({ navigation, route }) {
         setAttendees(await getAttendees(event.id));
         setStats(await getEventStats(event.id));
         Alert.alert('Cancelled', 'You\'ve cancelled your ticket.');
-      });
+      }).catch(() => {});
       return;
     }
     if (ticketsRemaining <= 0) {
@@ -121,6 +121,8 @@ export default function EventDetailScreen({ navigation, route }) {
                     { text: 'OK', style: 'cancel' },
                   ],
                 );
+              }).catch(() => {
+                Alert.alert('Ticket purchase issue', 'Your coins were charged but we couldn\'t confirm your ticket. Check your tickets or contact support.');
               });
             } else {
               setShowCoinSheet(true);

@@ -4,6 +4,7 @@ import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated, 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Video } from 'expo-av';
 import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import { interactiveStore } from '../utils/interactiveStore';
@@ -79,7 +80,7 @@ export default function StoriesViewScreen({ navigation, route }) {
   useEffect(() => {
     interactiveStore.getStoryThreads().then((all) => {
       setThread(all?.[threadKey] || []);
-    });
+    }).catch(() => {});
   }, [threadKey]);
 
   // Animate dot slide to current index
@@ -125,16 +126,21 @@ export default function StoriesViewScreen({ navigation, route }) {
   // Auto-advance timer. Resets when `story` changes — so each story in
   // each group gets its own fresh duration. When the timer fires, goNext
   // walks: next story in group → next group → if at the very end, close.
+  //
+  // Video stories opt out of the fixed-duration timer — they advance on
+  // playback completion via onPlaybackStatusUpdate below. The progress
+  // bar still animates for visual feedback, but does not drive goNext.
   useEffect(() => {
     if (!story) return;
     progressAnim.setValue(0);
+    const isVideoStory = story.type === 'video';
     const anim = Animated.timing(progressAnim, {
       toValue: 1,
       duration: prefs?.reducedMotion ? Math.min(story.duration || STORY_DURATION, 3500) : (story.duration || STORY_DURATION),
       useNativeDriver: false,
     });
     anim.start(({ finished }) => {
-      if (finished) goNext();
+      if (finished && !isVideoStory) goNext();
     });
     return () => anim.stop();
   }, [story, goNext, progressAnim, prefs]);
@@ -155,7 +161,7 @@ export default function StoriesViewScreen({ navigation, route }) {
     interactiveStore.getStoryThreads().then((all) => {
       const merged = { ...(all || {}), [threadKey]: next };
       interactiveStore.setStoryThreads(merged);
-    });
+    }).catch(() => {});
   }, [hasTier, navigation, thread, threadKey]);
 
   const handlePostReply = useCallback(() => {
@@ -172,6 +178,19 @@ export default function StoriesViewScreen({ navigation, route }) {
       {/* Story content */}
       {story.type === 'image' ? (
         <Image source={imageSource(story.uri)} style={styles.fullImage} resizeMode="cover" />
+      ) : story.type === 'video' ? (
+        <Video
+          key={story.id}
+          source={{ uri: story.uri }}
+          shouldPlay
+          isLooping={false}
+          resizeMode="cover"
+          useNativeControls={false}
+          onPlaybackStatusUpdate={(status) => {
+            if (status?.isLoaded && status.didJustFinish) goNext();
+          }}
+          style={styles.fullImage}
+        />
       ) : (
         <View style={[styles.textBg, { backgroundColor: story.bgColor || '#0047AB' }]}>
           <Text style={styles.storyText}>{story.text}</Text>

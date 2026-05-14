@@ -7,8 +7,7 @@ import { useAuth } from './AuthContext';
  * Returns a function that gates an action behind real authentication.
  *
  * Use for actions that require a real Supabase session (send chat, follow,
- * comment in a live, swipe persistence, etc.). Devs in `devBypass` mode are
- * still treated as unauthenticated for these gated actions.
+ * comment in a live, swipe persistence, etc.).
  *
  * Usage:
  *   const requireAuth = useRequireAuth();

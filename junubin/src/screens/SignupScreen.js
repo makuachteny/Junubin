@@ -49,7 +49,7 @@ const SignupScreen = ({ navigation, route }) => {
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
   const [emailActive, setEmailActive] = useState(false);
   const insets = useSafeAreaInsets();
-  const { startOtp, loginWithOtp, setDevBypass } = useAuth();
+  const { startOtp, loginWithOtp } = useAuth();
   const { prefs } = useAccessibilityPreferences();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
@@ -370,16 +370,7 @@ const SignupScreen = ({ navigation, route }) => {
 
               <LogoMark size={28} light />
 
-              {/* Skip is a dev-only bypass — hide it in production builds.
-                  Same flag the AuthContext uses to enable dev login. */}
-              {process.env.EXPO_PUBLIC_DEV_BYPASS_AUTH === 'true' ? (
-                <TouchableOpacity
-                  onPress={() => setDevBypass(true)}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                >
-                  <Text style={styles.skipText}>Skip</Text>
-                </TouchableOpacity>
-              ) : <View style={{ width: 36 }} />}
+              <View style={{ width: 36 }} />
             </View>
 
             {/* Anchored content — sits low like the Onboarding pages */}

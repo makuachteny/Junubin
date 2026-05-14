@@ -1,7 +1,6 @@
 import { supabase } from '../../config/supabase';
 import { normalizeProfile } from './profileService';
 import { cacheGet, cacheSet } from '../../utils/offlineCache';
-import { TIER_RANK } from '../../payments/products';
 
 const profileCache = new Map();
 const PROFILE_CACHE_TTL = 60_000;
@@ -54,9 +53,11 @@ export async function getProfiles(filters = {}) {
   }
 }
 
-// `extra` carries optional payload — currently only `whisper` (a short
-// text the swiper sends along with a right-swipe so the recipient sees
-// it on their Likes screen). Backend accepts arbitrary extra fields.
+// `extra` carries optional payload — `whisper` (a short text the
+// swiper sends along with a right-swipe so the recipient sees it on
+// their Likes screen) and `mode` (the app mode the swiper was in when
+// they tapped, so Match rows record provenance and MessagesScreen can
+// sort by current mode). Backend accepts arbitrary extra fields.
 export async function recordSwipe(toUserId, type, extra = null) {
   const { data, error } = await supabase.functions.invoke('swipe', {
     body: { toUserId, type, ...(extra || {}) },
@@ -84,41 +85,41 @@ export async function getDailyLikeStatus() {
     return likeStatusCache.data;
   }
 
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) throw new Error('Not authenticated');
+  // Server-side RPC (00029_audit_blockers.sql) returns the authoritative
+  // {tier, used, limit, remaining, unlimited}. Doing the tier + count
+  // join on the server means a patched client can't claim unlimited
+  // status to hide the rate-limit badge — the swipe Edge Function
+  // already enforces the cap, but the UI now reflects the same truth.
+  //
+  // Fallback path kicks in only if the RPC hasn't been deployed yet
+  // (the migration is on the operator's todo). We treat the response
+  // shape `{ error: 'not_authenticated' }` as a hard auth error.
+  const { data, error } = await supabase.rpc('get_daily_like_status');
+  if (error) {
+    if (error.message?.toLowerCase().includes('not_authenticated')) {
+      throw new Error('Not authenticated');
+    }
+    throw error;
+  }
 
-  const { data: appUser } = await supabase
-    .from('User')
-    .select('id, subscriptionTier, promoTier, promoEndsAt')
-    .eq('auth_id', authUser.id)
-    .single();
+  const used = Number(data?.used) || 0;
+  const unlimited = data?.unlimited === true;
+  const result = {
+    used,
+    limit: unlimited ? Infinity : Number(data?.limit ?? 25),
+    remaining: unlimited ? Infinity : Math.max(0, Number(data?.remaining ?? 0)),
+    tier: data?.tier || 'free',
+  };
 
-  if (!appUser) throw new Error('User not found');
-
-  const baseTier = appUser.subscriptionTier || 'free';
-  const promoActive = appUser.promoTier && appUser.promoEndsAt && new Date(appUser.promoEndsAt).getTime() > Date.now();
-  const tier = promoActive && TIER_RANK[appUser.promoTier] > TIER_RANK[baseTier] ? appUser.promoTier : baseTier;
-  const unlimited = tier !== 'free';
-
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-
-  const { count } = await supabase
-    .from('Swipe')
-    .select('id', { count: 'exact', head: true })
-    .eq('fromUserId', appUser.id)
-    .in('type', ['like', 'super_like'])
-    .gte('createdAt', startOfDay.toISOString());
-
-  const used = count || 0;
-  const limit = unlimited ? Infinity : 25;
-  const remaining = unlimited ? Infinity : Math.max(0, 25 - used);
-
-  const result = { used, limit, remaining };
-
-  // Store in cache
   likeStatusCache.data = result;
   likeStatusCache.timestamp = Date.now();
-
   return result;
+}
+
+// Invalidate the like-status cache. Call after a successful subscription
+// purchase / promo grant so the next read reflects the new tier
+// immediately instead of waiting on the 30s TTL.
+export function invalidateLikeStatusCache() {
+  likeStatusCache.data = null;
+  likeStatusCache.timestamp = 0;
 }

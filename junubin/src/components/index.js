@@ -31,8 +31,6 @@ export { default as ProfileCompletenessCard } from './ProfileCompletenessCard';
 export { default as ProfilePromptBanner } from './ProfilePromptBanner';
 export { default as StoriesRow } from './StoriesRow';
 export { default as SpotlightCard } from './SpotlightCard';
-export { default as AdBanner } from './AdBanner';
-export { default as InterstitialAd } from './InterstitialAd';
 export { default as LogoMark } from './LogoMark';
 export { default as GamePickerSheet } from './GamePickerSheet';
 export { default as GameBubble } from './GameBubble';

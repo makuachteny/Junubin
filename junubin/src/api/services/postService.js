@@ -139,7 +139,7 @@ export async function createPost({
       .from('Post')
       .update({ moderationStatus: 'approved' })
       .eq('id', data.id)
-      .then(() => {});
+      .then(() => {}, () => {});
   }
 
   return normalizePost(data, appUser);

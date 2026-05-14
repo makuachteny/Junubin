@@ -19,13 +19,50 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const QUEUE_KEY = '@junubin_offline_queue';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — dating actions stale fast
 
+// Build a stable identity key for an action so we can dedupe on
+// enqueue + on replay. Each `kind` has its own natural key:
+//
+//   - swipe       → ('swipe', fromUserId?, toUserId, type)
+//   - voiceNote   → ('voiceNote', conversationId, uri)
+//   - chatImage   → ('chatImage', conversationId, uri)
+//   - text        → ('text', conversationId, tempId)
+//
+// Anything that doesn't match a known shape gets a fallback identity
+// based on the JSON of the action; same shape = same key.
+function actionIdentity(a) {
+  if (!a || typeof a !== 'object') return JSON.stringify(a);
+  switch (a.kind) {
+    case 'swipe':     return `swipe:${a.toUserId || ''}:${a.type || ''}`;
+    case 'voiceNote': return `voiceNote:${a.conversationId || ''}:${a.uri || ''}`;
+    case 'chatImage': return `chatImage:${a.conversationId || ''}:${a.uri || ''}`;
+    case 'text':      return `text:${a.conversationId || ''}:${a.tempId || a.body || ''}`;
+    default:          return `${a.kind || 'unknown'}:${JSON.stringify(a)}`;
+  }
+}
+
 export async function enqueueAction(action) {
   try {
     const raw = await AsyncStorage.getItem(QUEUE_KEY);
     const queue = raw ? JSON.parse(raw) : [];
-    queue.push({ ...action, queuedAt: Date.now() });
+    // Dedupe on enqueue: a repeated retry of the same swipe / voice
+    // note shouldn't create three copies in the queue. Without this,
+    // a flaky network that triggers three handler-throws produced
+    // three identical replays on reconnect.
+    const id = actionIdentity(action);
+    const existing = queue.findIndex((q) => actionIdentity(q) === id);
+    const entry = { ...action, queuedAt: Date.now() };
+    if (existing >= 0) {
+      queue[existing] = entry; // refresh the timestamp so MAX_AGE_MS resets
+    } else {
+      queue.push(entry);
+    }
     await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-  } catch {}
+  } catch (err) {
+    // Log parse / storage errors so they surface in crash reports
+    // instead of vanishing — losing a queued action silently was
+    // exactly the kind of failure that was invisible before.
+    if (__DEV__) console.warn('[offlineQueue]', err?.message || err);
+  }
 }
 
 export async function processQueue(handler, opts = {}) {
@@ -38,7 +75,15 @@ export async function processQueue(handler, opts = {}) {
 
     const cutoff = Date.now() - maxAgeMs;
     const failed = [];
+    const seenIds = new Set();
     for (const action of queue) {
+      // Drop duplicates on replay too. A queue could carry duplicates
+      // if it was written by a pre-dedup build of the app and only
+      // drained today — defense in depth.
+      const id = actionIdentity(action);
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
       // 1. Stale → drop, don't retry. Replaying a 25h-old swipe is
       //    worse than losing it.
       if (action.queuedAt && action.queuedAt < cutoff) continue;
@@ -65,7 +110,12 @@ export async function processQueue(handler, opts = {}) {
     } else {
       await AsyncStorage.removeItem(QUEUE_KEY);
     }
-  } catch {}
+  } catch (err) {
+    // Log parse / storage errors so they surface in crash reports
+    // instead of vanishing — losing a queued action silently was
+    // exactly the kind of failure that was invisible before.
+    if (__DEV__) console.warn('[offlineQueue]', err?.message || err);
+  }
 }
 
 export async function getQueueLength() {

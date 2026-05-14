@@ -13,7 +13,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, Typography } from '../theme';
-import { mockComments } from '../data/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { GraffitiSend } from '../components/icons';
@@ -22,14 +21,14 @@ import EmptyState from '../components/EmptyState';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import * as commentService from '../api/services/commentService';
 
-// Real posts have IDs from `crypto.randomUUID()` (UUID v4) or the
-// legacy `p_*` fallback in postService. Mock posts seeded by
-// mockProfiles.js use simple strings like `post1`, `post2`, … — those
-// have no row in the DB, so commentService calls would either return
-// [] or fail the FK check on insert. Detect them by *not* matching
-// either real-id shape.
+// Real Post.id values come from `crypto.randomUUID()` (UUID v4) or the
+// legacy `p_*` prefix the older postService fallback used. An id in
+// any other shape means the post hasn't been persisted yet (local
+// optimistic insert before the server INSERT lands) — calling
+// commentService on it would either return [] or fail the FK check.
+// Treat those as "skip the network round trip".
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const isMockPostId = (id) => {
+const isLocalOnlyPostId = (id) => {
   if (!id) return true;
   const s = String(id);
   return !UUID_RE.test(s) && !s.startsWith('p_');
@@ -114,13 +113,12 @@ export default function PostDetailScreen({ navigation, route }) {
 
   const post = route.params?.post;
   const postId = post?.id;
-  // For real posts, comments come from PostComment table via commentService.
-  // For mock posts (CommunityScreen demo seed), fall back to mockComments
-  // so the dev experience still has something to render.
-  const initialComments = postId && isMockPostId(postId) ? (mockComments[postId] || []) : [];
+  // Comments come from PostComment table via commentService for real
+  // posts. The previous mockComments fallback for demo-seeded posts
+  // is gone along with the rest of the __dev__ bundle.
   const [liked, setLiked] = useState(false);
 
-  const [comments, setComments] = useState(initialComments);
+  const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [commentLikes, setCommentLikes] = useState({});
   // Reply target carries both user (display) + parent comment id (threading).
@@ -135,7 +133,7 @@ export default function PostDetailScreen({ navigation, route }) {
 
   // Load comments from the server for real posts. Mock posts skip this.
   useEffect(() => {
-    if (!postId || isMockPostId(postId)) return;
+    if (!postId || isLocalOnlyPostId(postId)) return;
     let cancelled = false;
     commentService.listComments(postId)
       .then((rows) => { if (!cancelled) setComments(rows); })
@@ -160,7 +158,7 @@ export default function PostDetailScreen({ navigation, route }) {
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    if (!postId || isMockPostId(postId)) {
+    if (!postId || isLocalOnlyPostId(postId)) {
       setTimeout(() => setRefreshing(false), 300);
       return;
     }
@@ -193,7 +191,7 @@ export default function PostDetailScreen({ navigation, route }) {
     setReplyTo(null);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 200);
 
-    if (!postId || isMockPostId(postId)) return; // demo post — keep local-only
+    if (!postId || isLocalOnlyPostId(postId)) return; // demo post — keep local-only
     try {
       const real = await commentService.addComment({ postId, content: text, parentId });
       setComments((prev) => prev.map((c) => (c.id === tempId ? real : c)));

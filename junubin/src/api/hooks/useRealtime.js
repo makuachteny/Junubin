@@ -10,7 +10,16 @@ export function useRealtime(userId) {
   const messageCallbackRef = useRef(null);
   const matchSubscriptionRef = useRef(null);
   const typingTimerRef = useRef(null);
-  const typingHandlersRef = useRef(new Set());
+  // Per-conversation callback registries for broadcast events. Keyed
+  // by conversationId so multiple open conversations don't trample
+  // each other. The internal channel handlers (registered BEFORE
+  // .subscribe() in joinConversation) read from these refs at fire
+  // time — Supabase Realtime silently drops `.on()` calls made after
+  // a channel has already subscribed, so we must register the bridge
+  // up front and let consumers swap their callbacks via these refs.
+  const typingStartCbsRef = useRef({}); // { [conversationId]: fn }
+  const typingStopCbsRef = useRef({});
+  const readReceiptCbsRef = useRef({});
 
   // Clean up all subscriptions on unmount
   useEffect(() => {
@@ -29,7 +38,15 @@ export function useRealtime(userId) {
   }, []);
 
   /**
-   * Subscribe to new messages in a conversation via postgres_changes.
+   * Subscribe to new messages in a conversation via postgres_changes,
+   * AND wire up all broadcast event handlers (typing_start,
+   * typing_stop, read_receipt) BEFORE .subscribe(). Supabase Realtime
+   * requires every `.on(...)` to be registered prior to subscription
+   * or the listener never fires — that's why typing indicators
+   * silently stopped working. The handlers dispatch to per-conv
+   * callback refs (see typingStartCbsRef etc.), so consumers can
+   * register/replace their callbacks at any time without touching
+   * the channel itself.
    */
   const joinConversation = useCallback((conversationId) => {
     if (channelsRef.current[conversationId]) return;
@@ -48,10 +65,27 @@ export function useRealtime(userId) {
           messageCallbackRef.current?.(payload.new);
         }
       )
+      .on('broadcast', { event: 'typing_start' }, ({ payload }) => {
+        if (!payload) return;
+        // Ignore our own broadcasts — the peer indicator shouldn't
+        // fire from this user's own keystrokes.
+        if (payload.userId && payload.userId === userId) return;
+        typingStartCbsRef.current[conversationId]?.({ conversationId, ...payload });
+      })
+      .on('broadcast', { event: 'typing_stop' }, ({ payload }) => {
+        if (!payload) return;
+        if (payload.userId && payload.userId === userId) return;
+        typingStopCbsRef.current[conversationId]?.({ conversationId, ...payload });
+      })
+      .on('broadcast', { event: 'read_receipt' }, ({ payload }) => {
+        if (!payload) return;
+        if (payload.userId && payload.userId === userId) return;
+        readReceiptCbsRef.current[conversationId]?.({ conversationId, ...payload });
+      })
       .subscribe();
 
     channelsRef.current[conversationId] = channel;
-  }, []);
+  }, [userId]);
 
   const leaveConversation = useCallback((conversationId) => {
     const channel = channelsRef.current[conversationId];
@@ -124,7 +158,12 @@ export function useRealtime(userId) {
   }, [userId]);
 
   /**
-   * Typing indicators via Supabase Realtime Broadcast.
+   * Typing indicators via Supabase Realtime Broadcast. Emits two
+   * distinct events (`typing_start` / `typing_stop`) — the matching
+   * `.on('broadcast', { event: ... })` listeners are pre-registered
+   * in `joinConversation` so they actually fire on the receiving end.
+   * Outgoing `.send()` does NOT require pre-subscription registration,
+   * so emit-side stays simple.
    */
   const emitTypingStart = useCallback((conversationId) => {
     // Debounce: skip if timer is still active
@@ -134,8 +173,8 @@ export function useRealtime(userId) {
     if (channel) {
       channel.send({
         type: 'broadcast',
-        event: 'typing',
-        payload: { userId, typing: true },
+        event: 'typing_start',
+        payload: { userId, conversationId },
       });
     }
 
@@ -149,51 +188,38 @@ export function useRealtime(userId) {
     if (channel) {
       channel.send({
         type: 'broadcast',
-        event: 'typing',
-        payload: { userId, typing: false },
+        event: 'typing_stop',
+        payload: { userId, conversationId },
       });
     }
   }, [userId]);
 
+  /**
+   * Register a callback for typing-start broadcasts on a given
+   * conversation. Stores the callback in a ref — the actual broadcast
+   * listener was attached up front in joinConversation (must be
+   * before .subscribe() per Supabase Realtime). Returns an
+   * unsubscribe that clears the slot.
+   */
   const onTypingStart = useCallback((conversationId, callback) => {
-    const channel = channelsRef.current[conversationId];
-    if (!channel) return () => {};
-
-    const key = `typing-start:${conversationId}`;
-    if (typingHandlersRef.current.has(key)) return () => {};
-    typingHandlersRef.current.add(key);
-
-    const handler = (payload) => {
-      if (payload.payload?.typing === true && payload.payload?.userId !== userId) {
-        callback(payload.payload);
+    if (!conversationId) return () => {};
+    typingStartCbsRef.current[conversationId] = callback;
+    return () => {
+      if (typingStartCbsRef.current[conversationId] === callback) {
+        delete typingStartCbsRef.current[conversationId];
       }
     };
-
-    channel.on('broadcast', { event: 'typing' }, handler);
-    return () => {
-      typingHandlersRef.current.delete(key);
-    };
-  }, [userId]);
+  }, []);
 
   const onTypingStop = useCallback((conversationId, callback) => {
-    const channel = channelsRef.current[conversationId];
-    if (!channel) return () => {};
-
-    const key = `typing-stop:${conversationId}`;
-    if (typingHandlersRef.current.has(key)) return () => {};
-    typingHandlersRef.current.add(key);
-
-    const handler = (payload) => {
-      if (payload.payload?.typing === false && payload.payload?.userId !== userId) {
-        callback(payload.payload);
+    if (!conversationId) return () => {};
+    typingStopCbsRef.current[conversationId] = callback;
+    return () => {
+      if (typingStopCbsRef.current[conversationId] === callback) {
+        delete typingStopCbsRef.current[conversationId];
       }
     };
-
-    channel.on('broadcast', { event: 'typing' }, handler);
-    return () => {
-      typingHandlersRef.current.delete(key);
-    };
-  }, [userId]);
+  }, []);
 
   /**
    * Read receipts via Broadcast.
@@ -203,11 +229,21 @@ export function useRealtime(userId) {
     if (channel) {
       channel.send({
         type: 'broadcast',
-        event: 'read',
-        payload: { userId },
+        event: 'read_receipt',
+        payload: { userId, conversationId },
       });
     }
   }, [userId]);
+
+  const onReadReceipt = useCallback((conversationId, callback) => {
+    if (!conversationId) return () => {};
+    readReceiptCbsRef.current[conversationId] = callback;
+    return () => {
+      if (readReceiptCbsRef.current[conversationId] === callback) {
+        delete readReceiptCbsRef.current[conversationId];
+      }
+    };
+  }, []);
 
   return {
     joinConversation,
@@ -219,5 +255,6 @@ export function useRealtime(userId) {
     onTypingStart,
     onTypingStop,
     emitReadReceipt,
+    onReadReceipt,
   };
 }
