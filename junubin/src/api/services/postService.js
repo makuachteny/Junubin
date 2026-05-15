@@ -6,6 +6,7 @@
 // and stays fresh via a Realtime postgres-changes subscription.
 
 import { supabase } from '../../config/supabase';
+import { formatTimestamp } from '../../utils/formatTime';
 
 const PAGE_SIZE = 30;
 
@@ -363,7 +364,12 @@ function normalizePost(raw, author = {}) {
       verified: !!author?.isVerified,
       location: raw.location || author?.city || '',
     },
-    timestamp: 'Just now',
+    // Computed from createdAt so freshly-fetched posts render with the
+    // right relative time (Instagram-style: "now" → "Xm" → "Xh" →
+    // "Xd" → "Mar 15"). The list isn't subscribed to a 1s tick, so
+    // counters drift slightly until the next refetch / realtime
+    // update — fine for posts where seconds-precision doesn't matter.
+    timestamp: formatTimestamp(raw.createdAt),
     content: raw.content || '',
     image: mediaType === 'image' ? (raw.imageUrl || null) : null,
     video: mediaType === 'video' ? (raw.imageUrl || null) : null,

@@ -12,7 +12,6 @@ import {
   Modal,
   Pressable,
   Alert,
-  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,7 +32,7 @@ import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import { applyCommunityFilters } from '../utils/communityFilters';
 
-const FIXED_TABS = ['Feed', 'Media'];
+const FIXED_TABS = ['Feed'];
 
 const COMMUNITY_FILTERS = [
   { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
@@ -91,7 +90,6 @@ export default function CommunityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { currentUser } = useCurrentUser();
-  const { width: screenW } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState('Feed');
   const visibleTabs = FIXED_TABS;
   const [activeFilters, setActiveFilters] = useState([]);
@@ -293,42 +291,6 @@ export default function CommunityScreen({ navigation, route }) {
     return filterByQuery(base, (post) => [post.content, post.user?.name, post.user?.location]);
   }, [posts, activeFilters, filterByQuery, filterCtx]);
 
-  // Media tab: every post in the filtered list that carries an image
-  // or video. Posts where the upload is still being processed (image
-  // === null) are skipped so the grid never shows blank tiles. Order
-  // mirrors the Feed (newest first), so a freshly-posted photo
-  // surfaces at the top of both tabs.
-  const mediaPosts = useMemo(
-    () => filteredPosts.filter((p) => p?.image || p?.video),
-    [filteredPosts],
-  );
-
-  // Two-column grid sized to the screen width minus the outer padding
-  // and the column gap. useWindowDimensions reacts to rotations on iPad
-  // / split-view, so tiles re-square themselves without a remount.
-  const MEDIA_PADDING = 12;
-  const MEDIA_GAP = 6;
-  const mediaTileSize = Math.floor((screenW - MEDIA_PADDING * 2 - MEDIA_GAP) / 2);
-
-  const renderMediaTile = useCallback(({ item }) => {
-    const isVideo = !!item.video;
-    const uri = item.image || item.video;
-    return (
-      <TouchableOpacity
-        style={[styles.mediaTile, { width: mediaTileSize, height: mediaTileSize }]}
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('PostDetail', { post: item })}
-      >
-        <Image source={imageSource(uri)} style={styles.mediaImage} resizeMode="cover" />
-        {isVideo && (
-          <View style={styles.mediaPlayBadge} pointerEvents="none">
-            <Ionicons name="play" size={14} color="#FFFFFF" />
-          </View>
-        )}
-      </TouchableOpacity>
-    );
-  }, [mediaTileSize, navigation, styles.mediaImage, styles.mediaPlayBadge, styles.mediaTile]);
-
   const renderActiveMeta = () => (
     activeFilters.length > 0 ? (
       <View style={styles.activeFilterMeta}>
@@ -381,7 +343,7 @@ export default function CommunityScreen({ navigation, route }) {
       >
         {visibleTabs.map((tab) => {
           const isTabActive = activeTab === tab;
-          const TAB_ICONS = { Feed: 'newspaper-outline', Media: 'images-outline' };
+          const TAB_ICONS = { Feed: 'newspaper-outline' };
           return (
             <TouchableOpacity
               key={tab}
@@ -613,33 +575,6 @@ export default function CommunityScreen({ navigation, route }) {
               }
             />
           )
-        ) : activeTab === 'Media' ? (
-          <FlatList
-            data={mediaPosts}
-            keyExtractor={keyExtractor}
-            renderItem={renderMediaTile}
-            numColumns={2}
-            columnWrapperStyle={styles.mediaRow}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.mediaGrid}
-            initialNumToRender={8}
-            maxToRenderPerBatch={12}
-            windowSize={6}
-            removeClippedSubviews
-            refreshControl={
-              <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-            }
-            ListHeaderComponent={feedHeader}
-            ListEmptyComponent={
-              <EmptyState
-                icon="images-outline"
-                title="No photos or videos yet"
-                subtitle="Be the first to share a moment with the community."
-                actionLabel="Create Post"
-                onAction={() => navigation.navigate('CreatePost')}
-              />
-            }
-          />
         ) : null}
       </Animated.View>
 
@@ -777,37 +712,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   feedList: {
     paddingBottom: 80,
     paddingTop: 4,
-  },
-
-  // ─── Media grid ───
-  mediaGrid: {
-    paddingTop: 4,
-    paddingBottom: 80,
-  },
-  mediaRow: {
-    paddingHorizontal: 12,
-    gap: 6,
-    marginBottom: 6,
-  },
-  mediaTile: {
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: isDark ? colors.gray800 : colors.gray200,
-  },
-  mediaImage: {
-    width: '100%',
-    height: '100%',
-  },
-  mediaPlayBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   // ─── Groups ───
