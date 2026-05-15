@@ -35,9 +35,13 @@ import { applyCommunityFilters } from '../utils/communityFilters';
 const FIXED_TABS = ['Feed'];
 
 const COMMUNITY_FILTERS = [
+  // Order matters — the first INLINE_FILTER_COUNT entries render as
+  // pills directly to the right of the 'Feed' tab. Nearby leads the
+  // row because location-relevant browsing is the highest-frequency
+  // filter (the deck-style Distance filter pattern carries over here).
+  { id: 'nearby', label: 'Nearby', icon: 'location', graffitiIcon: 'location' },
   { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
   { id: 'trending', label: 'Trending', icon: 'trending-up', graffitiIcon: 'flame' },
-  { id: 'nearby', label: 'Nearby', icon: 'location', graffitiIcon: 'location' },
   { id: 'new', label: 'New', icon: 'time' },
   { id: 'friends', label: 'Friends', icon: 'people', graffitiIcon: 'community' },
   { id: 'popular', label: 'Popular', icon: 'flame', graffitiIcon: 'star' },

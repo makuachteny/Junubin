@@ -50,3 +50,6 @@ google-service-account.json
 
 # Claude Code
 .claude/
+
+# Supabase CLI local cache
+supabase/.temp/
