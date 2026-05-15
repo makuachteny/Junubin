@@ -1,6 +1,6 @@
 // AnaJunubin — Stories Viewer (full-screen, progress bars, tap nav)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated, TextInput, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated, TextInput, Alert, useWindowDimensions, PanResponder } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -32,6 +32,12 @@ export default function StoriesViewScreen({ navigation, route }) {
   const [thread, setThread] = useState([]);
   const [threadInput, setThreadInput] = useState('');
   const [sentReaction, setSentReaction] = useState(null);
+  // Instagram parity: press-and-hold anywhere pauses progress, lift to
+  // resume. Tracked via a counter ref so overlapping touches don't
+  // ratchet pause state into a stuck "paused" once both fingers lift.
+  const [isPaused, setIsPaused] = useState(false);
+  // Vertical drag distance for the swipe-down-to-dismiss gesture.
+  const dragY = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const dotSlideAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(1)).current;
@@ -107,7 +113,11 @@ export default function StoriesViewScreen({ navigation, route }) {
       setCurrentIndex(0);
       return;
     }
-    navigation.goBack();
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Main');
+    }
   }, [currentIndex, stories.length, currentGroupIndex, groups.length, navigation]);
 
   const goPrev = useCallback(() => {
@@ -130,20 +140,34 @@ export default function StoriesViewScreen({ navigation, route }) {
   // Video stories opt out of the fixed-duration timer — they advance on
   // playback completion via onPlaybackStatusUpdate below. The progress
   // bar still animates for visual feedback, but does not drive goNext.
+  //
+  // While `isPaused` is true the timer stops in place (Instagram parity:
+  // press-and-hold pauses; release resumes from where we paused).
   useEffect(() => {
-    if (!story) return;
-    progressAnim.setValue(0);
+    if (!story || isPaused) return;
     const isVideoStory = story.type === 'video';
+    const fullDuration = prefs?.reducedMotion
+      ? Math.min(story.duration || STORY_DURATION, 3500)
+      : (story.duration || STORY_DURATION);
+    // Resume from current progress so press-pause-release picks up
+    // mid-story instead of restarting.
+    const remaining = (1 - (progressAnim._value || 0)) * fullDuration;
     const anim = Animated.timing(progressAnim, {
       toValue: 1,
-      duration: prefs?.reducedMotion ? Math.min(story.duration || STORY_DURATION, 3500) : (story.duration || STORY_DURATION),
+      duration: Math.max(remaining, 50),
       useNativeDriver: false,
     });
     anim.start(({ finished }) => {
       if (finished && !isVideoStory) goNext();
     });
     return () => anim.stop();
-  }, [story, goNext, progressAnim, prefs]);
+  }, [story, goNext, progressAnim, prefs, isPaused]);
+
+  // Reset the progress bar each time the story (id) actually changes —
+  // separate from the pause effect above so pausing doesn't restart it.
+  useEffect(() => {
+    progressAnim.setValue(0);
+  }, [story?.id, progressAnim]);
 
   const postReply = useCallback((rawValue) => {
     if (!hasTier('junub')) {
@@ -168,13 +192,70 @@ export default function StoriesViewScreen({ navigation, route }) {
     postReply(threadInput);
   }, [postReply, threadInput]);
 
+  // Safe close — `navigation.goBack()` throws "GO_BACK was not handled"
+  // when this screen is the only thing in the stack (e.g. opened via a
+  // deep link). Fall back to navigate('Main') so we never strand the
+  // user on an unmounted modal.
+  const safeClose = useCallback(() => {
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate('Main');
+    }
+  }, [navigation]);
+
+  // If the screen mounts without any usable story (empty list, stale
+  // mock with missing items), bail out via effect — calling goBack()
+  // during render dispatched a navigator setState mid-render, which is
+  // exactly the "Cannot update a component while rendering a different
+  // component" warning the user was seeing.
+  useEffect(() => {
+    if (!story) safeClose();
+  }, [story, safeClose]);
+
+  // Swipe-down to dismiss (Instagram parity). Vertical drags only —
+  // small horizontal moves bubble up to the tap zones so left/right
+  // taps still navigate. While the user is dragging, the auto-advance
+  // pauses; release past the threshold dismisses, otherwise we spring
+  // the screen back.
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderGrant: () => setIsPaused(true),
+      onPanResponderMove: (_e, g) => {
+        if (g.dy > 0) dragY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > 120 || g.vy > 0.8) {
+          Animated.timing(dragY, { toValue: H, duration: 180, useNativeDriver: true })
+            .start(() => safeClose());
+        } else {
+          Animated.spring(dragY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 8 })
+            .start();
+          setIsPaused(false);
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 8 }).start();
+        setIsPaused(false);
+      },
+    }),
+  ).current;
+
   if (!story) {
-    navigation.goBack();
-    return null;
+    // Render nothing during the brief gap before safeClose lands. No
+    // setState calls happen here, so no render-time warning.
+    return <View style={styles.container} />;
   }
 
   return (
-    <View style={styles.container}>
+    <Animated.View
+      style={[
+        styles.container,
+        { transform: [{ translateY: dragY }] },
+      ]}
+      {...panResponder.panHandlers}
+    >
       {/* Story content */}
       {story.type === 'image' ? (
         <Image source={imageSource(story.uri)} style={styles.fullImage} resizeMode="cover" />
@@ -236,7 +317,7 @@ export default function StoriesViewScreen({ navigation, route }) {
         <Image source={imageSource(storyGroup?.avatar)} style={styles.avatar} />
         <Text style={styles.userName}>{storyGroup?.userName}</Text>
         <TouchableOpacity
-          onPress={() => navigation.goBack()}
+          onPress={safeClose}
           style={styles.closeBtn}
           accessibilityRole="button"
           accessibilityLabel="Close story"
@@ -246,10 +327,26 @@ export default function StoriesViewScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
-      {/* Tap zones */}
+      {/* Tap zones — tap left = previous, tap right = next, hold either
+          side to pause progress (Instagram parity). delayLongPress is
+          set short so a sustained press feels responsive. */}
       <View style={styles.tapZones}>
-        <TouchableOpacity style={styles.tapLeft} onPress={goPrev} activeOpacity={1} />
-        <TouchableOpacity style={styles.tapRight} onPress={goNext} activeOpacity={1} />
+        <TouchableOpacity
+          style={styles.tapLeft}
+          onPress={goPrev}
+          onPressIn={() => setIsPaused(true)}
+          onPressOut={() => setIsPaused(false)}
+          activeOpacity={1}
+          delayLongPress={150}
+        />
+        <TouchableOpacity
+          style={styles.tapRight}
+          onPress={goNext}
+          onPressIn={() => setIsPaused(true)}
+          onPressOut={() => setIsPaused(false)}
+          activeOpacity={1}
+          delayLongPress={150}
+        />
       </View>
 
       <LinearGradient
@@ -322,7 +419,7 @@ export default function StoriesViewScreen({ navigation, route }) {
           ))}
         </View>
       )}
-    </View>
+    </Animated.View>
   );
 }
 

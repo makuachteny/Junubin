@@ -35,12 +35,16 @@ import { applyCommunityFilters } from '../utils/communityFilters';
 const FIXED_TABS = ['Feed'];
 
 const COMMUNITY_FILTERS = [
-  // Order matters — the first INLINE_FILTER_COUNT entries render as
-  // pills directly to the right of the 'Feed' tab. Nearby leads the
-  // row because location-relevant browsing is the highest-frequency
-  // filter (the deck-style Distance filter pattern carries over here).
+  // Every content filter renders inline in the horizontal chip row so
+  // the catalogue is discoverable at a glance. Order leads with the
+  // highest-frequency filters (Nearby, Trending, New) and trails with
+  // the more specific ones (This week, Questions, Links). 'Fun' is a
+  // special navigation pill — it routes to InteractivityHub instead
+  // of toggling a predicate — and lives at the END so its accent
+  // styling reads as a distinct trailing action, not part of the
+  // filter set. The customize-modal icon renders after the map, sitting
+  // at the far right edge of the row.
   { id: 'nearby', label: 'Nearby', icon: 'location', graffitiIcon: 'location' },
-  { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
   { id: 'trending', label: 'Trending', icon: 'trending-up', graffitiIcon: 'flame' },
   { id: 'new', label: 'New', icon: 'time' },
   { id: 'friends', label: 'Friends', icon: 'people', graffitiIcon: 'community' },
@@ -50,8 +54,12 @@ const COMMUNITY_FILTERS = [
   { id: 'verified', label: 'Verified', icon: 'shield-checkmark' },
   { id: 'thisWeek', label: 'This week', icon: 'calendar' },
   { id: 'questions', label: 'Questions', icon: 'help-circle' },
+  { id: 'links', label: 'Links', icon: 'link' },
+  { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
 ];
-const INLINE_FILTER_COUNT = 2;
+// All filters render inline now — the modal still exists for the same
+// full list (mirror toggles + clear-all) but no chip is hidden behind it.
+const INLINE_FILTER_COUNT = COMMUNITY_FILTERS.length;
 
 // Hoisted to module scope so the lookup isn't rebuilt on every render
 // of every filter pill (was previously inlined inside two .map calls).
@@ -502,7 +510,11 @@ export default function CommunityScreen({ navigation, route }) {
 
             <Text style={styles.modalSectionLabel}>Filters</Text>
             <View style={styles.modalPillRow}>
-              {COMMUNITY_FILTERS.slice(INLINE_FILTER_COUNT).map((filter) => {
+              {/* All filters are inline in the chip row, but the sheet
+                  still surfaces the full set in a tidy non-scrolling
+                  grid so users can see active state at a glance. 'Fun'
+                  is excluded — it's a navigation pill, not a toggle. */}
+              {COMMUNITY_FILTERS.filter((f) => f.id !== 'fun').map((filter) => {
                 const isActive = activeFilters.includes(filter.id);
                 const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
                 return (
@@ -526,6 +538,15 @@ export default function CommunityScreen({ navigation, route }) {
                 );
               })}
             </View>
+            {activeFilters.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setActiveFilters([])}
+                style={{ alignSelf: 'flex-start', marginTop: 8 }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.modalFilterText, { color: colors.accent }]}>Clear all</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowMoreFilters(false)} activeOpacity={0.8}>
               <Text style={styles.modalDoneText}>Done</Text>
             </TouchableOpacity>

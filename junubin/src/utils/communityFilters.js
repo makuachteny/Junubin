@@ -89,6 +89,11 @@ export const matchesCommunityFilter = (item, filterId, ctx = {}) => {
       const stripped = text.replace(/[\s\p{Extended_Pictographic}]+$/u, '');
       return stripped.endsWith('?');
     }
+    case 'links':
+      // Posts that carry a signup CTA — typically community
+      // announcements, meetups, fundraisers. Useful as a "what's
+      // actionable right now" filter.
+      return !!item?.signupLink;
     default:
       return true;
   }
