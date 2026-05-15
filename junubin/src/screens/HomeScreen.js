@@ -1119,23 +1119,27 @@ const HomeScreen = ({ navigation, route }) => {
               <Ionicons name="swap-horizontal" size={15} color={colors.black} />
             </TouchableOpacity>
 
-            {/* Deck ↔ Map toggle. Same visual language as the mode
-                toggle so the two read as a pair. Tapping flips between
-                the swipe deck and the Snap-Map-style location view
-                (PeopleMap). State is local because we don't want the
-                map view to persist across cold starts — the deck is
-                the canonical Connect surface. */}
+            {/* Map toggle — single icon that flips state. Tap to enter
+                the Snap-Map view, tap again to return to the swipe
+                deck. Active state is communicated by the icon color
+                turning accent (red), not a separate filled pill — so
+                the header doesn't compete with the deck/map content
+                for visual weight. State is local because the deck is
+                the canonical Connect surface and the map is a side
+                trip that shouldn't persist across cold starts. */}
             <TouchableOpacity
               onPress={() => setViewMode((v) => (v === 'deck' ? 'map' : 'deck'))}
-              activeOpacity={0.8}
-              style={[styles.modeToggle, viewMode === 'map' && styles.modeToggleActive]}
+              activeOpacity={0.7}
+              style={styles.mapToggle}
               accessibilityRole="button"
+              accessibilityState={{ selected: viewMode === 'map' }}
               accessibilityLabel={viewMode === 'deck' ? 'Switch to map view' : 'Switch to swipe deck'}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             >
               <Ionicons
-                name={viewMode === 'deck' ? 'map-outline' : 'albums-outline'}
-                size={15}
-                color={viewMode === 'map' ? colors.cardBg : colors.black}
+                name={viewMode === 'map' ? 'map' : 'map-outline'}
+                size={20}
+                color={viewMode === 'map' ? colors.accent : colors.black}
               />
             </TouchableOpacity>
           </View>
@@ -1344,10 +1348,16 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
-  // Same chip when the view-toggle is in map mode, with the accent
-  // fill so the user can see at a glance "I'm on the map".
-  modeToggleActive: {
-    backgroundColor: colors.accent,
+  // Map toggle — icon-only, no chip background. Sits in the header
+  // alongside the mode swap. Accent color signals the map is on; outline
+  // icon + neutral color signals the deck is on. Larger tap target than
+  // the mode pill since it's a top-level navigation action.
+  mapToggle: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 4,
   },
   headerRight: {
     flexDirection: 'row',
