@@ -989,6 +989,10 @@ const HomeScreen = ({ navigation, route }) => {
         {viewMode === 'map' ? (
           <PeopleMap
             mode={mode}
+            // Sit the privacy banner + chip row below the HomeScreen
+            // header (mode label + map toggle + avatar) so they don't
+            // overlap the status bar or the title.
+            topInset={insets.top + Layout.headerHeight + 8}
             onPersonPress={(person) => navigation?.navigate?.('ProfileDetail', {
               profile: { ...person, images: person.photos || [] },
             })}
@@ -1166,34 +1170,40 @@ const HomeScreen = ({ navigation, route }) => {
           </View>
         </Animated.View>
 
-        {/* ─── FILTER BAR — below top bar, collapses on swipe ─── */}
-        <Animated.View
-          style={[
-            styles.filterBarWrap,
-            {
-              top: insets.top + Layout.headerHeight + 2,
-              opacity: topMotion,
-              transform: [
-                {
-                  translateY: topMotion.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }),
-                },
-              ],
-            },
-          ]}
-          pointerEvents="box-none"
-        >
-          <FilterBar
-            onFilterPress={handleFilterPress}
-            onSettingsPress={handleSettingsPress}
-            activeFilters={activeFilters}
-            filterSelections={filterSelections}
-            onFilterSelect={handleFilterSelect}
-            filters={mode === 'Social' ? SOCIAL_FILTERS : undefined}
-            options={mode === 'Social' ? SOCIAL_FILTER_OPTIONS : undefined}
-            lockedFilters={lockedFilterLabels}
-            onDisabledPress={showFiltersUpgrade}
-          />
-        </Animated.View>
+        {/* ─── FILTER BAR — below top bar, collapses on swipe.
+            Hidden on the map view: PeopleMap renders its own chip row
+            (Nearby / 25mi / 50mi / Anywhere / Active now) which is a
+            different filtering paradigm. Stacking both would put four
+            rows of chrome above the map. */}
+        {viewMode !== 'map' && (
+          <Animated.View
+            style={[
+              styles.filterBarWrap,
+              {
+                top: insets.top + Layout.headerHeight + 2,
+                opacity: topMotion,
+                transform: [
+                  {
+                    translateY: topMotion.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }),
+                  },
+                ],
+              },
+            ]}
+            pointerEvents="box-none"
+          >
+            <FilterBar
+              onFilterPress={handleFilterPress}
+              onSettingsPress={handleSettingsPress}
+              activeFilters={activeFilters}
+              filterSelections={filterSelections}
+              onFilterSelect={handleFilterSelect}
+              filters={mode === 'Social' ? SOCIAL_FILTERS : undefined}
+              options={mode === 'Social' ? SOCIAL_FILTER_OPTIONS : undefined}
+              lockedFilters={lockedFilterLabels}
+              onDisabledPress={showFiltersUpgrade}
+            />
+          </Animated.View>
+        )}
       </View>
 
       {/* ─── LIKE COUNTER — subtle indicator near bottom ─── */}

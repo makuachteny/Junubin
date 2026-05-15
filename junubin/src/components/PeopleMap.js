@@ -152,7 +152,7 @@ const peopleForMode = (mode, center) => {
     .filter(Boolean);
 };
 
-export default function PeopleMap({ mode = 'Dating', onPersonPress }) {
+export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 12 }) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const mapRef = useRef(null);
@@ -262,7 +262,7 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress }) {
   // even when a marker is selected. Pulled into a sub-render so the
   // fallback view can reuse it.
   const renderFilters = () => (
-    <View style={styles.filterBar} pointerEvents="box-none">
+    <View style={[styles.filterBar, { top: topInset + 44 }]} pointerEvents="box-none">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -316,7 +316,7 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress }) {
             The map needs a native build. Open this view in TestFlight or a custom dev client.
           </Text>
         </View>
-        <View style={styles.banner}>
+        <View style={[styles.banner, { top: topInset }]}>
           <Ionicons name="shield-checkmark" size={14} color="#FFF" />
           <Text style={styles.bannerText} numberOfLines={2}>
             You&apos;re hidden by default. Turn on &quot;Appear on map&quot; in Settings to share.
@@ -388,7 +388,7 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress }) {
 
       {/* Result count pill — confirms the filter is doing something
           and gives an immediate sense of "is anyone near me?". */}
-      <View style={styles.countPill}>
+      <View style={[styles.countPill, { top: topInset + 92 }]}>
         <Text style={styles.countPillText}>
           {visiblePeople.length} {visiblePeople.length === 1 ? 'person' : 'people'}
         </Text>
@@ -463,7 +463,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   banner: {
     position: 'absolute',
-    top: 12, left: 16, right: 16,
+    left: 16, right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -480,7 +480,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   filterBar: {
     position: 'absolute',
-    top: 56, left: 0, right: 0,
+    left: 0, right: 0,
   },
   filterRow: {
     paddingHorizontal: 16,
@@ -520,7 +520,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   countPill: {
     position: 'absolute',
-    top: 100, alignSelf: 'center',
+    alignSelf: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 999,
