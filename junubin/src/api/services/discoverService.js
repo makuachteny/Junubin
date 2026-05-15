@@ -123,3 +123,34 @@ export function invalidateLikeStatusCache() {
   likeStatusCache.data = null;
   likeStatusCache.timestamp = 0;
 }
+
+// Forward-compat stub used by PeopleMap. When a real `discover-nearby`
+// edge function lands (joins on Profile.shareLocation = true, applies
+// haversine cap on Profile.lat / Profile.lng), this becomes the call
+// site. Until then it returns an empty list so the UI falls through
+// to demo roster rendering — never throws, never blocks the map.
+//
+// Contract once implemented:
+//   { center: { latitude, longitude }, radiusKm, mode, activeOnly }
+//   → { users: [ { id, name, age, photos, coords: {latitude,longitude},
+//                  activity, verified, ethnicity, mode } ] }
+export async function getNearbyUsers({ center, radiusKm, mode, activeOnly } = {}) {
+  if (!center || !Number.isFinite(center.latitude) || !Number.isFinite(center.longitude)) {
+    return { users: [] };
+  }
+  try {
+    const params = new URLSearchParams();
+    params.set('lat', String(center.latitude));
+    params.set('lng', String(center.longitude));
+    if (radiusKm) params.set('radiusKm', String(radiusKm));
+    if (mode) params.set('mode', String(mode).toLowerCase());
+    if (activeOnly) params.set('activeOnly', '1');
+    const { data, error } = await supabase.functions.invoke(`discover-nearby?${params.toString()}`);
+    if (error) throw error;
+    return { users: Array.isArray(data?.users) ? data.users : [] };
+  } catch {
+    // The edge function isn't deployed yet; swallow and return [].
+    // PeopleMap's demo roster fallback covers the empty case.
+    return { users: [] };
+  }
+}

@@ -2,20 +2,32 @@
 //
 // Owns the lifecycle of a single Daily call object, surfaces the local
 // participant, the remote participants, and the join/leave/toggle
-// helpers screens need to render a call. CallScreen and LiveView/GoLive
-// share this hook so the underlying WebRTC plumbing is identical.
+// helpers screens need to render a call.
 //
 // `roomUrl` is minted server-side by the `daily-create-room` Edge
 // Function (which holds the project's Daily API key). The client never
 // sees the API key — only the per-room URL + a short-lived token.
 //
 // Two roles:
-//   `host`     full audio + video publish (default for callers / live
-//              broadcasters)
-//   `listener` join muted, audio + video off (default for live viewers)
+//   `host`     full audio + video publish (default for callers)
+//   `listener` join muted, audio + video off
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import Daily from '@daily-co/react-native-daily-js';
+
+// Daily's RN SDK ships a native module. Loading it under Expo Go (or any
+// client missing the linked native code) throws at import time and
+// crashes the bundle. Wrapping in try/require lets the app render a
+// graceful "live unavailable" surface instead. Production builds via
+// EAS include the native module so the require succeeds normally.
+let Daily = null;
+try {
+  // eslint-disable-next-line global-require
+  Daily = require('@daily-co/react-native-daily-js').default;
+} catch {
+  // Native module unavailable — useDailyCall returns an inert object.
+}
+
+export const isDailyAvailable = () => Daily !== null;
 
 export function useDailyCall({ roomUrl, token, role = 'host', enabled = true }) {
   const callRef = useRef(null);
@@ -27,6 +39,14 @@ export function useDailyCall({ roomUrl, token, role = 'host', enabled = true }) 
 
   useEffect(() => {
     if (!enabled || !roomUrl) return undefined;
+    if (!Daily) {
+      // Native module missing (Expo Go) — surface a clear error so
+      // screens can render a fallback rather than appear hung in
+      // 'joining' forever.
+      setError('Live video requires a native build. Open in TestFlight to join.');
+      setJoinState('error');
+      return undefined;
+    }
 
     const call = Daily.createCallObject({
       audioSource: role === 'host',

@@ -384,7 +384,6 @@ BEGIN
   -- can't always see (cron-deferred audit rows, etc.) here.
   IF me_id IS NOT NULL THEN
     DELETE FROM "Post"             WHERE "userId" = me_id;
-    DELETE FROM "LiveJoinRequest"  WHERE "hostId" = me_id OR "viewerId" = me_id;
   END IF;
 
   -- Finally drop the auth row — cascades the User row and everything FK'd.

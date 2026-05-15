@@ -276,55 +276,6 @@ serve(async (req) => {
         break;
       }
 
-      case "account.updated": {
-        // Stripe Connect Express account state change — fired during
-        // onboarding (capability transitions) and any time Stripe
-        // re-evaluates the account (KYC outcome, restricted, etc.).
-        // We mirror chargesEnabled / payoutsEnabled into the User row
-        // so the cash-out UI can decide whether the creator is ready
-        // for transfers without a Stripe round-trip.
-        const account = event.data.object;
-        if (!account?.id) break;
-
-        // Prefer metadata we set at account creation; fall back to a
-        // lookup by stripeConnectAccountId so accounts created before
-        // the metadata convention still resolve.
-        const userIdMeta = account.metadata?.junubin_user_id;
-        let userMatch: { id: string } | null = null;
-
-        if (userIdMeta) {
-          const { data } = await supabase
-            .from("User")
-            .select("id")
-            .eq("id", userIdMeta)
-            .maybeSingle();
-          if (data) userMatch = data;
-        }
-        if (!userMatch) {
-          const { data } = await supabase
-            .from("User")
-            .select("id")
-            .eq("stripeConnectAccountId", account.id)
-            .maybeSingle();
-          if (data) userMatch = data;
-        }
-
-        if (!userMatch) {
-          console.warn("account.updated: no User row for connect account", account.id);
-          break;
-        }
-
-        const { error: updErr } = await supabase
-          .from("User")
-          .update({
-            stripeConnectChargesEnabled: !!account.charges_enabled,
-            stripeConnectPayoutsEnabled: !!account.payouts_enabled,
-          })
-          .eq("id", userMatch.id);
-        if (updErr) console.error("Failed to update Connect flags:", updErr);
-        break;
-      }
-
       case "invoice.payment_failed": {
         const invoice = event.data.object;
         const lookup = await lookupAuthUserId(supabase, invoice.customer, invoice.subscription_details?.metadata?.junubin_user_id);

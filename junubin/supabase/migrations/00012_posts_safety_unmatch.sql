@@ -1,18 +1,15 @@
 -- 00012 — Posts + supporting bits.
 --
--- Bundles four deployment fixes:
+-- Bundles three deployment fixes:
 --
 --   1. `Post` table — Community feed posts. Up to now the feed was 100%
 --      mock because there was no schema; CreatePostScreen handed the
 --      object back to CommunityScreen via navigation params, which got
 --      lost on remount.
---   2. `LiveJoinRequest` table — request-to-join signaling for live
---      streams. Replaces the 2-second setTimeout that auto-accepted
---      every viewer.
---   3. Unmatch helper — RPC that deletes the Match + Conversation +
+--   2. Unmatch helper — RPC that deletes the Match + Conversation +
 --      members in one transaction so unmatch genuinely unmatches both
 --      sides. Triggered from ChatScreen.
---   4. Spotlight bonus column on Profile — `spotlightedUntil` (TIMESTAMPTZ)
+--   3. Spotlight bonus column on Profile — `spotlightedUntil` (TIMESTAMPTZ)
 --      so the discover function can boost users who paid for spotlight.
 
 -- ── 1. Post ──────────────────────────────────────────────────────────
@@ -69,52 +66,7 @@ CREATE POLICY "Author can delete own post"
     )
   );
 
--- ── 2. LiveJoinRequest — host approves/denies viewers wanting to join ──
-CREATE TABLE IF NOT EXISTS "LiveJoinRequest" (
-  "id"           TEXT PRIMARY KEY,
-  "hostId"       TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-  "viewerId"     TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE,
-  "status"       TEXT NOT NULL DEFAULT 'pending'
-    CHECK ("status" IN ('pending', 'accepted', 'declined', 'expired')),
-  "createdAt"    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  "respondedAt"  TIMESTAMPTZ,
-  CONSTRAINT "LiveJoinRequest_uniq" UNIQUE ("hostId", "viewerId")
-);
-
-CREATE INDEX IF NOT EXISTS "LiveJoinRequest_host_idx"
-  ON "LiveJoinRequest" ("hostId", "createdAt" DESC);
-
-ALTER TABLE "LiveJoinRequest" ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Host or viewer can read"
-  ON "LiveJoinRequest" FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM "User" u
-      WHERE u.auth_id = auth.uid()
-        AND u.id IN ("LiveJoinRequest"."hostId", "LiveJoinRequest"."viewerId")
-    )
-  );
-
-CREATE POLICY "Viewer can request"
-  ON "LiveJoinRequest" FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM "User" u
-      WHERE u.auth_id = auth.uid() AND u.id = "LiveJoinRequest"."viewerId"
-    )
-  );
-
-CREATE POLICY "Host can respond"
-  ON "LiveJoinRequest" FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM "User" u
-      WHERE u.auth_id = auth.uid() AND u.id = "LiveJoinRequest"."hostId"
-    )
-  );
-
--- ── 3. Unmatch RPC ──────────────────────────────────────────────────
+-- ── 2. Unmatch RPC ──────────────────────────────────────────────────
 -- Cascade delete: removes the Match row, conversation, members,
 -- messages. Either match participant can call. SECURITY DEFINER so
 -- it can DELETE across the related tables without each one needing a
@@ -169,7 +121,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.unmatch_user(TEXT) TO authenticated;
 
--- ── 4. Spotlight column on Profile ──────────────────────────────────
+-- ── 3. Spotlight column on Profile ──────────────────────────────────
 ALTER TABLE "Profile"
   ADD COLUMN IF NOT EXISTS "spotlightedUntil" TIMESTAMPTZ;
 

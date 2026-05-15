@@ -20,6 +20,14 @@ import { checkActionAllowed, REASON_COPY } from '../utils/eligibility';
 import { useAuth } from '../auth';
 import SurveyNudgeModal from '../components/SurveyNudgeModal';
 
+// Session-scoped dismissal memory. Keyed by `resumeAt` so the nudge
+// only fires once per missing-step per app session: dismiss it for
+// "photos" and you won't see it again until you actually add the
+// photos (or until the next cold start). Module scope is intentional —
+// every screen sharing this hook reads the same set, otherwise the
+// nudge would refire on each screen change.
+const dismissedSteps = new Set();
+
 export function useEligibility() {
   const navigation = useNavigation();
   const { user, signOut } = useAuth();
@@ -27,22 +35,22 @@ export function useEligibility() {
   const lastVerdictRef = useRef(null);
 
   const closeNudge = useCallback(() => {
-    setNudgeState((s) => ({ ...s, visible: false }));
+    setNudgeState((s) => {
+      if (s.resumeAt) dismissedSteps.add(s.resumeAt);
+      return { ...s, visible: false };
+    });
   }, []);
 
-  const continueToSurvey = useCallback(() => {
+  const continueToProfile = useCallback(() => {
     const { resumeAt, from } = nudgeState;
     setNudgeState((s) => ({ ...s, visible: false }));
-    // Two-stage funnel: ProfileSetup covers basics (name/dob/photos/
-    // intentions); AccessibilitySurvey owns the dating-compatibility
-    // questionnaire that flips `surveyCompletedAt`. The eligibility
-    // helper returns the canonical step id; we just route the right
-    // screen for it. Web, iOS, Android all funnel through here.
-    if (resumeAt === 'survey') {
-      navigation.navigate('AccessibilitySurvey', { source: from });
-    } else {
-      navigation.navigate('ProfileSetup', { resumeAt, source: from });
-    }
+    // Always route to ProfileSetup — it covers every essential field
+    // (basics, photos, prompts, interests, dating qualifiers) and
+    // stamps `surveyCompletedAt` on completion, satisfying the
+    // eligibility gate without a separate Survey detour. The
+    // dedicated AccessibilitySurveyScreen is still reachable from
+    // Settings for users who want to revise just the survey answers.
+    navigation.navigate('ProfileSetup', { resumeAt, source: from });
   }, [navigation, nudgeState]);
 
   /**
@@ -61,7 +69,14 @@ export function useEligibility() {
 
     switch (verdict.reason) {
       case 'survey_required':
-        setNudgeState({ visible: true, from: action, resumeAt: verdict.resumeAt });
+        // Only surface the nudge the first time the user encounters
+        // this specific missing step in the current session. Repeated
+        // taps after they dismiss silently no-op so the popup isn't a
+        // pop-up-on-every-tap nag. The action itself is still blocked
+        // server-side, so suppression is purely a UX concession.
+        if (!dismissedSteps.has(verdict.resumeAt)) {
+          setNudgeState({ visible: true, from: action, resumeAt: verdict.resumeAt });
+        }
         break;
       case 'banned':
         Alert.alert(REASON_COPY.banned.title, REASON_COPY.banned.body, [
@@ -89,7 +104,7 @@ export function useEligibility() {
       visible={nudgeState.visible}
       from={nudgeState.from}
       onCancel={closeNudge}
-      onContinue={continueToSurvey}
+      onContinue={continueToProfile}
     />
   );
 

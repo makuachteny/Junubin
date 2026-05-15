@@ -150,12 +150,6 @@ export default function ProfileScreen({ navigation }) {
           <QuickAction icon="create-outline" label="Edit profile" onPress={handleEdit} colors={colors} />
           <QuickAction icon="shield-checkmark-outline" label="Verify" onPress={handleVerify} colors={colors} />
           <QuickAction
-            icon="ticket-outline"
-            label="My tickets"
-            onPress={() => navigation.navigate('MyTickets')}
-            colors={colors}
-          />
-          <QuickAction
             icon="gift-outline"
             label="Invite"
             onPress={() => navigation.navigate('Referral')}

@@ -128,11 +128,31 @@ const STEP_ORDER = [
   { id: 'displayName', test: (p, u) => !!u?.displayName },
   { id: 'dob',         test: (p, u) => !!u?.dateOfBirth },
   { id: 'gender',      test: (p, u) => !!u?.gender },
-  { id: 'photos',      test: (p, u) => (u?.photos?.length || 0) >= 2 },
+  // Photos: ProfileSetup tightened to ≥ 3 photos to ship. Keep the
+  // gate in lock-step or users finish setup but the eligibility check
+  // immediately bounces them right back here. Previous value (≥ 2)
+  // let users through ProfileSetup while still flagging photos
+  // incomplete — a quiet inconsistency that surfaced as the survey
+  // popup never going away.
+  { id: 'photos',      test: (p, u) => (u?.photos?.length || 0) >= 3 },
   // Dating qualifiers (only required if mode includes dating)
   { id: 'interestedIn',     test: (p) => !!p?.lookingForGender,    onlyDating: true },
   { id: 'datingIntentions', test: (p) => !!p?.datingIntentions,    onlyDating: true },
-  { id: 'bio',              test: (p) => (p?.bio?.length || 0) >= 30 },
+  // Prompt answer — what ProfileSetup ACTUALLY collects on the
+  // "Answer a profile prompt" step. The old `bio` test gated on
+  // `Profile.bio`, but ProfileSetup never writes that column (only
+  // EditProfile does). Result: bio?.length >= 30 was always false,
+  // so the survey-nudge popup kept firing on every dating action no
+  // matter how complete the user's setup was. Bio remains an
+  // optional "level-up" item via profileCompleteness.js — it's a
+  // soft score, not a gate.
+  { id: 'prompts', test: (p) => (p?.promptAnswer?.length || 0) >= 10 },
+  // Interests — ProfileSetup requires ≥ 3 selections to advance past
+  // the interests step. Mirror that gate here so a user whose
+  // profile somehow lost the interests column (legacy data, mid-edit
+  // crash) gets routed back to the interests step rather than slipping
+  // through the eligibility check.
+  { id: 'interests', test: (p) => Array.isArray(p?.interests) && p.interests.length >= 3 },
   // Survey block — accessibility/compatibility questions
   { id: 'survey', test: (p) => !!p?.surveyCompletedAt, onlyDating: true },
 ];

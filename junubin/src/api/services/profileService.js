@@ -39,6 +39,10 @@ export async function updateProfile(updates) {
     // Cross-device toggles — server is the source of truth so they
     // sync from phone to web to tablet.
     'incognito', 'appMode',
+    // Snap-Map opt-in (00032). Default FALSE; client flips this from
+    // Settings → Appear on map. The map component reads it via the
+    // discover/profile fetch path.
+    'shareLocation',
   ];
 
   for (const [key, value] of Object.entries(updates)) {

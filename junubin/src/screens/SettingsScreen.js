@@ -85,6 +85,11 @@ export default function SettingsScreen({ navigation }) {
   const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, canUseIncognito, restorePurchases, isSubscribed, reset, spotlights, superLikes } = useSubscription();
   const [incognito, setIncognitoState] = useState(false);
   const [distanceUnit, setDistanceUnitState] = useState('mi');
+  // Snap-Map opt-in. Source of truth is `Profile.shareLocation` from
+  // the 00032 migration; we hydrate from currentUser and write back
+  // via profileService.updateProfile (which has shareLocation on its
+  // allow-list).
+  const [shareLocation, setShareLocationState] = useState(false);
 
   // Hydrate persisted toggles on mount. Incognito's source of truth is
   // `Profile.incognito` (so it syncs across devices); AsyncStorage is a
@@ -114,6 +119,13 @@ export default function SettingsScreen({ navigation }) {
     AsyncStorage.setItem(INCOGNITO_KEY, serverFlag ? 'true' : 'false').catch(() => {});
   }, [currentUser?.profile?.incognito]);
 
+  // shareLocation is server-only (no AsyncStorage cache) — the map
+  // surface is only meaningful when authenticated, so the brief flash
+  // of `false` before the server fetch lands is acceptable.
+  useEffect(() => {
+    setShareLocationState(!!currentUser?.profile?.shareLocation);
+  }, [currentUser?.profile?.shareLocation]);
+
   // Persist on change. Write to the DB first so other devices can see
   // it; the local cache is best-effort. If the DB write fails (offline),
   // we revert the toggle so the user isn't lied to about a setting that
@@ -135,6 +147,19 @@ export default function SettingsScreen({ navigation }) {
     setDistanceUnitState(value);
     AsyncStorage.setItem(DISTANCE_UNIT_KEY, value).catch(() => {});
   }, [distanceUnit]);
+
+  // Same revert-on-failure pattern as Incognito. Toggling shareLocation
+  // on/off writes to Profile.shareLocation; the map's "who's visible"
+  // query reads from that column.
+  const setShareLocation = useCallback(async (next) => {
+    setShareLocationState(next);
+    try {
+      await profileService.updateProfile({ shareLocation: next });
+    } catch (e) {
+      setShareLocationState(!next);
+      Alert.alert('Could not update', e?.message || 'Try again when you have a connection.');
+    }
+  }, []);
   const lookingFor = currentUser.preferences?.lookingFor || 'Women';
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
@@ -434,6 +459,21 @@ export default function SettingsScreen({ navigation }) {
             <Switch
               value={showMe}
               onValueChange={handleShowMeToggle}
+              trackColor={{ false: colors.gray300, true: colors.black }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
+
+          <View style={styles.switchRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuLabel}>Appear on map</Text>
+              <Text style={styles.switchDesc}>
+                Show me on the Connect map (location rounded to ~110m). Off by default.
+              </Text>
+            </View>
+            <Switch
+              value={shareLocation}
+              onValueChange={setShareLocation}
               trackColor={{ false: colors.gray300, true: colors.black }}
               thumbColor="#FFFFFF"
             />

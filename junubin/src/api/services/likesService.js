@@ -40,10 +40,35 @@ export async function getReceivedLikes() {
 
   const swipedIds = new Set((mySwipes || []).map((s) => s.toUserId));
 
+  const likerIds = (swipes || [])
+    .map((s) => s.fromUser?.id)
+    .filter((id) => id && !swipedIds.has(id));
+
+  // Pull the latest whisper from each liker so the LikesScreen can
+  // render the "Whispered X ago" badge and the Whispers filter chip
+  // works for real likes (it already worked for demo data because the
+  // mockLikes have `hasWhisper` baked in). One round-trip, in() filter
+  // — cheap even for hundreds of likes.
+  const whisperByLiker = new Map();
+  if (likerIds.length > 0) {
+    const { data: whispers } = await supabase
+      .from('Whisper')
+      .select('fromUserId, body, createdAt')
+      .eq('toUserId', userId)
+      .in('fromUserId', likerIds)
+      .order('createdAt', { ascending: false });
+    for (const w of whispers || []) {
+      if (!whisperByLiker.has(w.fromUserId)) {
+        whisperByLiker.set(w.fromUserId, { body: w.body, createdAt: w.createdAt });
+      }
+    }
+  }
+
   const result = (swipes || [])
     .filter((s) => !swipedIds.has(s.fromUser?.id))
     .map((s) => {
       const profile = normalizeProfile(s.fromUser);
+      const whisper = whisperByLiker.get(s.fromUser?.id) || null;
       return {
         ...profile,
         likeId: s.id,
@@ -52,6 +77,8 @@ export async function getReceivedLikes() {
         // Mode the liker was in when they swiped. Used to bucket
         // received likes alongside their matches in MessagesScreen.
         mode: s.mode || 'dating',
+        hasWhisper: !!whisper,
+        whisperText: whisper?.body || null,
       };
     });
 

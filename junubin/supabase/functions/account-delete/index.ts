@@ -16,7 +16,7 @@
  *   4. Call hard_delete_me() RPC — drops the auth.users row, which
  *      cascades to the User row and downstream (Photo, Profile, Match,
  *      Conversation, Message, Swipe, Follow, Block, Report, Whisper,
- *      GameSession, LiveJoinRequest, Post, Story, etc).
+ *      GameSession, Post, Story, etc).
  *   5. Return ok — client signs out locally.
  *
  * Why a separate function instead of just RLS-on-delete? Storage

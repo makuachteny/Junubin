@@ -37,6 +37,7 @@ import * as profileService from '../api/services/profileService';
 import { hapticHeavy } from '../utils/haptics';
 import { enqueueAction, processQueue } from '../utils/offlineQueue';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
+import PeopleMap from '../components/PeopleMap';
 import {
   promptForPushPermission,
   getNotificationPermissionStatus,
@@ -319,6 +320,11 @@ const HomeScreen = ({ navigation, route }) => {
   // via the effect below once `useCurrentUser` resolves the API profile.
   const defaultMode = currentUser?.preferences?.mode === 'Dating' ? 'Dating' : 'Social';
   const [mode, setMode] = useState(defaultMode);
+  // 'deck' = the swipe-card stack (default Connect view).
+  // 'map'  = PeopleMap overlay. State is local, not persisted —
+  // every cold start brings the user back to the deck since the
+  // deck is the canonical surface and the map is a side trip.
+  const [viewMode, setViewMode] = useState('deck');
   // Track whether the user has manually toggled mode this session. If they
   // have, we stop overwriting their choice when `currentUser.preferences.mode`
   // updates async — they pulled the lever, respect it.
@@ -980,7 +986,14 @@ const HomeScreen = ({ navigation, route }) => {
 
       {/* ─── DATING AREA ─── */}
       <View style={styles.datingArea}>
-        {isLoadingProfiles ? (
+        {viewMode === 'map' ? (
+          <PeopleMap
+            mode={mode}
+            onPersonPress={(person) => navigation?.navigate?.('ProfileDetail', {
+              profile: { ...person, images: person.photos || [] },
+            })}
+          />
+        ) : isLoadingProfiles ? (
           <View style={styles.cardArea}>
             <View style={styles.cardLayer}>
               <CardSkeleton />
@@ -1104,6 +1117,26 @@ const HomeScreen = ({ navigation, route }) => {
               style={styles.modeToggle}
             >
               <Ionicons name="swap-horizontal" size={15} color={colors.black} />
+            </TouchableOpacity>
+
+            {/* Deck ↔ Map toggle. Same visual language as the mode
+                toggle so the two read as a pair. Tapping flips between
+                the swipe deck and the Snap-Map-style location view
+                (PeopleMap). State is local because we don't want the
+                map view to persist across cold starts — the deck is
+                the canonical Connect surface. */}
+            <TouchableOpacity
+              onPress={() => setViewMode((v) => (v === 'deck' ? 'map' : 'deck'))}
+              activeOpacity={0.8}
+              style={[styles.modeToggle, viewMode === 'map' && styles.modeToggleActive]}
+              accessibilityRole="button"
+              accessibilityLabel={viewMode === 'deck' ? 'Switch to map view' : 'Switch to swipe deck'}
+            >
+              <Ionicons
+                name={viewMode === 'deck' ? 'map-outline' : 'albums-outline'}
+                size={15}
+                color={viewMode === 'map' ? colors.cardBg : colors.black}
+              />
             </TouchableOpacity>
           </View>
 
@@ -1310,6 +1343,11 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  // Same chip when the view-toggle is in map mode, with the accent
+  // fill so the user can see at a glance "I'm on the map".
+  modeToggleActive: {
+    backgroundColor: colors.accent,
   },
   headerRight: {
     flexDirection: 'row',

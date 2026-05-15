@@ -467,17 +467,6 @@ export default function MessagesScreen({ navigation, route }) {
       onStoryPress={(story, storyIndex, storyList) =>
         navigation.navigate('StoriesView', { story, storyIndex, storyList })
       }
-      onViewLive={(liveData) => {
-        // LiveViewScreen reads route.params.liveData (single) or
-        // route.params.allLives (carousel) — passing the bare object
-        // would land on neither and the FlatList would render empty.
-        // We also normalize the shape: mockLiveStreams uses `id` for
-        // the room id and `userId` for the host, but LiveStreamPage
-        // expects `item.id` to be the host User.id (it powers gift
-        // recording, join requests, and the realtime channel key).
-        const item = { ...liveData, id: liveData?.userId || liveData?.id };
-        navigation.navigate('LiveView', { liveData: item });
-      }}
     />
   ), [colors, storiesRefreshKey, navigation]);
 
@@ -732,20 +721,6 @@ export default function MessagesScreen({ navigation, route }) {
               <View style={styles.sheetTextWrap}>
                 <Text style={styles.sheetRowTitle}>Add Story</Text>
                 <Text style={styles.sheetRowSub}>Share a moment with your followers</Text>
-              </View>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.sheetRow}
-              onPress={() => {
-                setShowCreateSheet(false);
-                navigation.navigate('GoLive');
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="radio-outline" size={20} color="#CE1126" />
-              <View style={styles.sheetTextWrap}>
-                <Text style={styles.sheetRowTitle}>Go Live</Text>
-                <Text style={styles.sheetRowSub}>Start a live session now</Text>
               </View>
             </TouchableOpacity>
           </View>

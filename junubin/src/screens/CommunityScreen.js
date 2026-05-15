@@ -9,16 +9,15 @@ import {
   Image,
   TextInput,
   Animated,
-  Dimensions,
   Modal,
   Pressable,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, Layout } from '../theme';
-import { LinearGradient } from 'expo-linear-gradient';
 import { GraffitiCommunity, GraffitiSparkles, GraffitiFlame, GraffitiLocation, GraffitiStar } from '../components/icons';
 import PostCard from '../components/PostCard';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
@@ -26,17 +25,15 @@ import EmptyState from '../components/EmptyState';
 import Toast from '../components/Toast';
 import SkeletonShimmer from '../components/SkeletonShimmer';
 import { mockPosts } from '../data/__dev__/mockProfiles';
+import { imageSource } from '../utils/imageSource';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as postService from '../api/services/postService';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../auth';
-import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { applyCommunityFilters } from '../utils/communityFilters';
 
-const FIXED_TABS = ['Feed', 'Live'];
-
-const { width: SCREEN_W } = Dimensions.get('window');
+const FIXED_TABS = ['Feed', 'Media'];
 
 const COMMUNITY_FILTERS = [
   { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
@@ -94,6 +91,7 @@ export default function CommunityScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { currentUser } = useCurrentUser();
+  const { width: screenW } = useWindowDimensions();
   const [activeTab, setActiveTab] = useState('Feed');
   const visibleTabs = FIXED_TABS;
   const [activeFilters, setActiveFilters] = useState([]);
@@ -295,6 +293,42 @@ export default function CommunityScreen({ navigation, route }) {
     return filterByQuery(base, (post) => [post.content, post.user?.name, post.user?.location]);
   }, [posts, activeFilters, filterByQuery, filterCtx]);
 
+  // Media tab: every post in the filtered list that carries an image
+  // or video. Posts where the upload is still being processed (image
+  // === null) are skipped so the grid never shows blank tiles. Order
+  // mirrors the Feed (newest first), so a freshly-posted photo
+  // surfaces at the top of both tabs.
+  const mediaPosts = useMemo(
+    () => filteredPosts.filter((p) => p?.image || p?.video),
+    [filteredPosts],
+  );
+
+  // Two-column grid sized to the screen width minus the outer padding
+  // and the column gap. useWindowDimensions reacts to rotations on iPad
+  // / split-view, so tiles re-square themselves without a remount.
+  const MEDIA_PADDING = 12;
+  const MEDIA_GAP = 6;
+  const mediaTileSize = Math.floor((screenW - MEDIA_PADDING * 2 - MEDIA_GAP) / 2);
+
+  const renderMediaTile = useCallback(({ item }) => {
+    const isVideo = !!item.video;
+    const uri = item.image || item.video;
+    return (
+      <TouchableOpacity
+        style={[styles.mediaTile, { width: mediaTileSize, height: mediaTileSize }]}
+        activeOpacity={0.85}
+        onPress={() => navigation.navigate('PostDetail', { post: item })}
+      >
+        <Image source={imageSource(uri)} style={styles.mediaImage} resizeMode="cover" />
+        {isVideo && (
+          <View style={styles.mediaPlayBadge} pointerEvents="none">
+            <Ionicons name="play" size={14} color="#FFFFFF" />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  }, [mediaTileSize, navigation, styles.mediaImage, styles.mediaPlayBadge, styles.mediaTile]);
+
   const renderActiveMeta = () => (
     activeFilters.length > 0 ? (
       <View style={styles.activeFilterMeta}>
@@ -347,7 +381,7 @@ export default function CommunityScreen({ navigation, route }) {
       >
         {visibleTabs.map((tab) => {
           const isTabActive = activeTab === tab;
-          const TAB_ICONS = { Feed: 'newspaper-outline', Live: 'radio-outline' };
+          const TAB_ICONS = { Feed: 'newspaper-outline', Media: 'images-outline' };
           return (
             <TouchableOpacity
               key={tab}
@@ -423,36 +457,10 @@ export default function CommunityScreen({ navigation, route }) {
     </Animated.View>
   );
 
-  // Shared header for both Feed and Live tabs. Ensures the tabs row,
-  // filter chips, active-filter meta, and Events CTA stay anchored in
-  // place when toggling between the two tabs.
   const feedHeader = (
     <View>
       {tabsAndFilters}
       {renderActiveMeta()}
-      {/* Hidden in v1 — Events stack not yet server-backed. Re-enable when
-          eventStore.js is migrated off AsyncStorage to Supabase. */}
-      {false && (
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Events')}
-          activeOpacity={0.85}
-          style={[styles.eventsCtaCard, {
-            backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
-            borderColor: isDark ? 'rgba(255,255,255,0.10)' : colors.gray200,
-          }]}
-          accessibilityRole="button"
-          accessibilityLabel="See community events"
-        >
-          <View style={[styles.eventsCtaIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray100 }]}>
-            <Ionicons name="calendar-outline" size={18} color={colors.black} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.eventsCtaTitle, { color: colors.black }]}>Community Events</Text>
-            <Text style={[styles.eventsCtaSub, { color: colors.gray500 }]}>Tap to see what's happening</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.gray500} />
-        </TouchableOpacity>
-      )}
     </View>
   );
 
@@ -555,10 +563,6 @@ export default function CommunityScreen({ navigation, route }) {
       </Modal>
 
       {/* ─── Content ─── */}
-      {/* The tab row, filter chips, active-filter meta, and Events CTA
-          are rendered as a single header for BOTH Feed and Live so
-          swapping tabs only changes the list area below — the chrome
-          stays put instead of flopping in and out. */}
       <Animated.View
         style={[
           styles.content,
@@ -568,12 +572,7 @@ export default function CommunityScreen({ navigation, route }) {
           },
         ]}
       >
-        {activeTab === 'Live' ? (
-          <LiveTab
-            navigation={navigation}
-            headerComponent={feedHeader}
-          />
-        ) : activeTab === 'Feed' ? (
+        {activeTab === 'Feed' ? (
           isLoading ? (
             <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
               {Array.from({ length: 3 }).map((_, i) => (
@@ -614,26 +613,35 @@ export default function CommunityScreen({ navigation, route }) {
               }
             />
           )
+        ) : activeTab === 'Media' ? (
+          <FlatList
+            data={mediaPosts}
+            keyExtractor={keyExtractor}
+            renderItem={renderMediaTile}
+            numColumns={2}
+            columnWrapperStyle={styles.mediaRow}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.mediaGrid}
+            initialNumToRender={8}
+            maxToRenderPerBatch={12}
+            windowSize={6}
+            removeClippedSubviews
+            refreshControl={
+              <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+            }
+            ListHeaderComponent={feedHeader}
+            ListEmptyComponent={
+              <EmptyState
+                icon="images-outline"
+                title="No photos or videos yet"
+                subtitle="Be the first to share a moment with the community."
+                actionLabel="Create Post"
+                onAction={() => navigation.navigate('CreatePost')}
+              />
+            }
+          />
         ) : null}
       </Animated.View>
-
-      {/* ─── FAB — Live tab only ─── */}
-      {activeTab === 'Live' && (
-        <TouchableOpacity
-          style={styles.fab}
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate('GoLive')}
-        >
-          <LinearGradient
-            colors={['#000000', '#CE1126', '#009739']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.fabGradient}
-          >
-            <Ionicons name="radio" size={22} color="#FFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-      )}
 
       <Toast
         visible={postedToast}
@@ -644,186 +652,6 @@ export default function CommunityScreen({ navigation, route }) {
   );
 }
 
-// ── Mock live streams ──
-const MOCK_LIVES = [
-  { id: 'l1', name: 'Achol', age: 23, image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=600', viewers: 142, caption: 'Live from Juba!', verified: true, category: 'Hangout' },
-  { id: 'l2', name: 'Nyirou', age: 26, image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600', viewers: 65, caption: 'Fashion talk', verified: false, category: 'Style' },
-  { id: 'l3', name: 'Ateny', age: 24, image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=600', viewers: 28, caption: 'Cooking kisra live!', verified: true, category: 'Cooking' },
-  { id: 'l4', name: 'Deng', age: 25, image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=600', viewers: 310, caption: 'Music session', verified: true, category: 'Music' },
-  { id: 'l5', name: 'Garang', age: 28, image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600', viewers: 89, caption: 'Minneapolis vibes', verified: false, category: 'Hangout' },
-  { id: 'l6', name: 'Akuch', age: 22, image: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=600', viewers: 204, caption: 'Q&A night', verified: true, category: 'Chat' },
-];
-
-// Live grid stays as a 2-column layout. Horizontal inset matches the
-// Feed (PostCard's marginHorizontal: 12) so the leftmost/rightmost
-// edges of cards line up across both tabs — toggling between Feed and
-// Live no longer produces a visible horizontal shift.
-const LIVE_GRID_PADDING = 12;
-const LIVE_COLUMN_GAP = 10;
-const LIVE_CARD_W = (SCREEN_W - LIVE_GRID_PADDING * 2 - LIVE_COLUMN_GAP) / 2;
-const LIVE_CARD_H = LIVE_CARD_W * 1.4;
-
-function formatCount(n) {
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
-  return String(n);
-}
-
-function LiveTab({ navigation, headerComponent }) {
-  const renderLiveCard = useCallback(({ item, index }) => {
-    return (
-      <TouchableOpacity
-        style={liveStyles.card}
-        activeOpacity={0.85}
-        onPress={() => navigation.navigate('LiveView', { allLives: MOCK_LIVES, initialIndex: index })}
-      >
-        <Image source={{ uri: item.image }} style={liveStyles.cardImage} resizeMode="cover" />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.7)']}
-          locations={[0.4, 1]}
-          style={liveStyles.cardGradient}
-          pointerEvents="none"
-        />
-
-        {/* LIVE badge + viewers */}
-        <View style={liveStyles.liveBadge}>
-          <View style={liveStyles.liveDot} />
-          <Text style={liveStyles.liveText}>LIVE</Text>
-        </View>
-
-        <View style={liveStyles.viewerBadge}>
-          <Ionicons name="eye" size={9} color="#FFFFFF" />
-          <Text style={liveStyles.viewerText}>{formatCount(item.viewers)}</Text>
-        </View>
-
-        {/* Bottom info */}
-        <View style={liveStyles.cardInfo}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Text style={liveStyles.cardName}>{item.name}, {item.age}</Text>
-            {item.verified && <Ionicons name="checkmark-circle" size={12} color="#4DA6FF" />}
-          </View>
-          <Text style={liveStyles.cardCaption} numberOfLines={1}>{item.caption}</Text>
-        </View>
-
-      </TouchableOpacity>
-    );
-  }, [navigation]);
-
-  return (
-    <FlatList
-      data={MOCK_LIVES}
-      keyExtractor={(item) => item.id}
-      renderItem={renderLiveCard}
-      numColumns={2}
-      columnWrapperStyle={liveStyles.row}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={liveStyles.grid}
-      ListHeaderComponent={headerComponent}
-      initialNumToRender={6}
-      maxToRenderPerBatch={8}
-      windowSize={5}
-      removeClippedSubviews
-    />
-  );
-}
-
-const liveStyles = StyleSheet.create({
-  // No horizontal padding on the contentContainerStyle — that would
-  // also inset the ListHeaderComponent (the shared tabs/filter row),
-  // causing a visible shift when you toggle Feed → Live. Instead, the
-  // row wrapper carries the horizontal inset, so only the card grid
-  // is padded; the header lines up with the Feed.
-  grid: {
-    paddingTop: 4,
-    paddingBottom: 80,
-  },
-  row: {
-    paddingHorizontal: LIVE_GRID_PADDING,
-    gap: LIVE_COLUMN_GAP,
-    marginBottom: LIVE_COLUMN_GAP,
-  },
-  card: {
-    width: LIVE_CARD_W,
-    height: LIVE_CARD_H,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#111',
-  },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  cardGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '60%',
-  },
-  liveBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(206,17,38,0.9)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  liveDot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#FFFFFF',
-  },
-  liveText: {
-    fontSize: 8,
-    fontWeight: '900',
-    fontFamily: 'DMSans-ExtraBold',
-    color: '#FFFFFF',
-    letterSpacing: 0.8,
-  },
-  viewerBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  viewerText: {
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: 'DMSans-Bold',
-    color: '#FFFFFF',
-  },
-  cardInfo: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 10,
-    paddingBottom: 10,
-  },
-  cardName: {
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: 'DMSans-Bold',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  cardCaption: {
-    fontSize: 11,
-    fontFamily: 'DMSans-Regular',
-    color: 'rgba(255,255,255,0.7)',
-  },
-});
 
 const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
@@ -949,6 +777,37 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   feedList: {
     paddingBottom: 80,
     paddingTop: 4,
+  },
+
+  // ─── Media grid ───
+  mediaGrid: {
+    paddingTop: 4,
+    paddingBottom: 80,
+  },
+  mediaRow: {
+    paddingHorizontal: 12,
+    gap: 6,
+    marginBottom: 6,
+  },
+  mediaTile: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: isDark ? colors.gray800 : colors.gray200,
+  },
+  mediaImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaPlayBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // ─── Groups ───
@@ -1094,36 +953,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // ─── Events CTA ───
-  eventsCtaCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-    marginHorizontal: 12,
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  eventsCtaIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  eventsCtaTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    letterSpacing: -0.1,
-  },
-  eventsCtaSub: {
-    ...Typography.caption,
-    marginTop: 1,
-  },
-
   // ─── Combined Bar (Tabs + Filters) ───
   combinedBar: {
     flexDirection: 'row',
@@ -1258,26 +1087,4 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontFamily: FontFamily.bold,
   },
 
-  // ─── FAB ───
-  fab: {
-    position: 'absolute',
-    bottom: 90,
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 6,
-    zIndex: 20,
-  },
-  fabGradient: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
 });

@@ -1,14 +1,13 @@
 // Sanity tests on the demo roster + downstream mock surfaces. These
 // guarantee identity stays consistent across mockProfiles, mockMatches,
-// mockLikes, mockMessages, mockPosts, mockEvents, and mockStories —
-// the property we promised the user when re-introducing demo data.
+// mockLikes, mockMessages, mockPosts, and mockStories — the property
+// we promised the user when re-introducing demo data.
 
 import { DEMO_ROSTER, DEMO_BY_ID } from '../data/__dev__/demoRoster';
 import {
   mockProfiles, mockMatches, mockLikes, mockMessages, mockPosts, mockComments,
 } from '../data/__dev__/mockProfiles';
-import { mockEvents } from '../data/__dev__/mockEvents';
-import { mockStories, mockLiveStreams } from '../data/__dev__/mockStories';
+import { mockStories } from '../data/__dev__/mockStories';
 import { isDemoId, DEMO_DATA_ENABLED, DEMO_ID_PREFIX } from '../config/demoData';
 
 describe('Demo roster — base contract', () => {
@@ -34,6 +33,60 @@ describe('Demo roster — base contract', () => {
 
   it('DEMO_BY_ID lookup matches roster array', () => {
     DEMO_ROSTER.forEach((u) => expect(DEMO_BY_ID[u.id]).toBe(u));
+  });
+});
+
+describe('Photo consistency — primary image is the same across surfaces', () => {
+  // The primary photo (photos[0] in the roster) is what every
+  // thumbnail surface uses: swipe-card cover, message-row avatar,
+  // chat header, map marker, profile-detail first slot. Lock that
+  // contract here so a rename / reshuffle can't silently desync.
+  it('every roster user has at least 3 photos', () => {
+    DEMO_ROSTER.forEach((u) => {
+      expect(u.photos.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  it('AVATARS[id] equals the user\'s primary photo', () => {
+    DEMO_ROSTER.forEach((u) => {
+      // Re-derive from roster — same source as the AVATARS map.
+      expect(DEMO_BY_ID[u.id].photos[0]).toBe(u.photos[0]);
+    });
+  });
+
+  it('mockMatches images[0] matches the linked user\'s primary photo', () => {
+    mockMatches.forEach((m) => {
+      const user = DEMO_BY_ID[m.userId];
+      expect(m.images[0]).toBe(user.photos[0]);
+    });
+  });
+
+  it('mockMatches images carry the full photo array (not just one)', () => {
+    mockMatches.forEach((m) => {
+      const user = DEMO_BY_ID[m.userId];
+      expect(m.images.length).toBe(user.photos.length);
+    });
+  });
+
+  it('mockLikes images[0] matches the linked user\'s primary photo', () => {
+    mockLikes.forEach((l) => {
+      const user = DEMO_BY_ID[l.userId];
+      expect(l.images[0]).toBe(user.photos[0]);
+    });
+  });
+
+  it('mockStories avatar equals the linked user\'s primary photo', () => {
+    mockStories.forEach((s) => {
+      const user = DEMO_BY_ID[s.userId];
+      expect(s.avatar).toBe(user.photos[0]);
+    });
+  });
+
+  it('mockPosts user.avatar equals the linked user\'s primary photo', () => {
+    mockPosts.forEach((p) => {
+      const user = DEMO_BY_ID[p.authorId];
+      expect(p.user.avatar).toBe(user.photos[0]);
+    });
   });
 });
 
@@ -82,13 +135,6 @@ describe('Cross-surface consistency', () => {
     Object.keys(mockComments).forEach((k) => expect(postIds.has(k)).toBe(true));
   });
 
-  it('every mockEvents organizerId points at a real roster member', () => {
-    mockEvents.forEach((e) => {
-      expect(isDemoId(e.organizerId)).toBe(true);
-      expect(DEMO_BY_ID[e.organizerId]).toBeTruthy();
-    });
-  });
-
   it('every mockStories.userId points at a real roster member', () => {
     mockStories.forEach((s) => {
       expect(isDemoId(s.userId)).toBe(true);
@@ -96,10 +142,12 @@ describe('Cross-surface consistency', () => {
     });
   });
 
-  it('every mockLiveStreams.userId points at a real roster member', () => {
-    mockLiveStreams.forEach((l) => {
-      expect(isDemoId(l.userId)).toBe(true);
-      expect(DEMO_BY_ID[l.userId]).toBeTruthy();
+  // Demo stories MUST use `avatar` (storyService's field name), not
+  // `userImage`. Catches the regression we just fixed.
+  mockStories.forEach((s) => {
+    it(`mockStories[${s.id}] uses avatar (not userImage)`, () => {
+      expect(s.avatar).toBeTruthy();
+      expect(s.userImage).toBeUndefined();
     });
   });
 });

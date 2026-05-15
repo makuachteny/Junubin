@@ -1,5 +1,5 @@
-// AnaJunubin — Stories Row (horizontal avatar circles with LIVE badges)
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+// AnaJunubin — Stories Row (horizontal avatar circles)
+import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -7,10 +7,10 @@ import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import * as storyService from '../api/services/storyService';
 import { supabase } from '../config/supabase';
-import { mockStories, mockLiveStreams } from '../data/__dev__/mockStories';
+import { mockStories } from '../data/__dev__/mockStories';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 
-export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, colors, refreshKey }) {
+export default function StoriesRow({ onStoryPress, onCreatePress, colors, refreshKey }) {
   // Seed with demo stories when the flag is on so the row isn't empty
   // on first launch. Real stories appear at the top of the row as
   // they're posted via the realtime subscription below.
@@ -45,8 +45,7 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
 
   // Subscribe to Story INSERTs so new posts surface live in the row.
   // The subscription debounces on a short window so a flurry of
-  // simultaneous inserts (rare but possible during a community event)
-  // doesn't trigger N back-to-back refetches.
+  // simultaneous inserts doesn't trigger N back-to-back refetches.
   useEffect(() => {
     const debounceRef = { current: null };
     const channel = supabase
@@ -68,18 +67,6 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
     };
   }, []);
 
-  // Sort: live users first. `useMemo` so this isn't recomputed on
-  // every parent re-render (the row re-renders whenever the parent
-  // tab/filter state changes — sorting the same array each time is
-  // wasted work).
-  const sortedStories = useMemo(() => {
-    return [...stories].sort((a, b) => {
-      if (a.isLive && !b.isLive) return -1;
-      if (!a.isLive && b.isLive) return 1;
-      return 0;
-    });
-  }, [stories]);
-
   return (
     <ScrollView
       horizontal
@@ -96,20 +83,12 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
         <Text style={[styles.name, { color: colors.black }]} numberOfLines={1}>Create</Text>
       </TouchableOpacity>
 
-      {/* Story cards — live users get a special ring + badge */}
-      {sortedStories.map((story, index) => {
-        const isLive = story.isLive;
+      {/* Story cards */}
+      {stories.map((story, index) => {
         const isViewed = story.viewed === true;
-        // Live metadata: real stories carry it on the Story row;
-        // demo stories look it up in the seed table.
-        const liveData = isLive
-          ? (story.live || mockLiveStreams.find((l) => l.userId === story.userId) || null)
-          : null;
 
         // Unviewed stories get the theme accent ring (solid).
         // Viewed stories fade to a neutral gray.
-        // Live users get the same accent — the recording dot is the
-        // signal that distinguishes them, not a different ring color.
         const ringColors = isViewed
           ? ['#D4D4D8', '#D4D4D8']
           : [colors.accent, colors.accent];
@@ -118,13 +97,7 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
           <TouchableOpacity
             key={story.id}
             style={styles.storyItem}
-            onPress={() => {
-              if (isLive && onViewLive && liveData) {
-                onViewLive(liveData);
-              } else {
-                onStoryPress?.(story, index, sortedStories);
-              }
-            }}
+            onPress={() => onStoryPress?.(story, index, stories)}
             activeOpacity={0.7}
           >
             <View style={styles.avatarOuter}>
@@ -138,11 +111,6 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
                   <Image source={imageSource(story.avatar)} style={styles.avatar} />
                 </View>
               </LinearGradient>
-              {isLive && (
-                <View pointerEvents="none" style={styles.liveDotWrap}>
-                  <View style={styles.liveDot} />
-                </View>
-              )}
             </View>
             <Text
               style={[styles.name, { color: colors.black }]}
@@ -190,7 +158,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Outer wrapper carries position context for the LIVE badge
   avatarOuter: {
     width: 64,
     height: 64,
@@ -215,21 +182,6 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 28,
-  },
-  // LIVE indicator — a single recording dot at the bottom-right of the
-  // avatar. No pill, no text. Read alongside the theme-accent story ring.
-  liveDotWrap: {
-    position: 'absolute',
-    right: 2,
-    bottom: 2,
-  },
-  liveDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#FF2A3C',
-    borderWidth: 2.5,
-    borderColor: '#FFFFFF',
   },
   name: {
     fontSize: 12,

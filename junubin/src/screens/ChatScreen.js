@@ -30,7 +30,6 @@ import * as callService from '../api/services/callService';
 import * as chatService from '../api/services/chatService';
 import * as matchesService from '../api/services/matchesService';
 import * as safetyService from '../api/services/safetyService';
-import * as liveGiftsService from '../api/services/liveGiftsService';
 import { useEligibility } from '../hooks';
 import { supabase } from '../config/supabase';
 import { useRealtime } from '../api/hooks/useRealtime';
@@ -1158,24 +1157,6 @@ export default function ChatScreen({ navigation, route }) {
     }
     setShowGiftPicker(false);
     setGiftAnimation(gift);
-
-    // Persist server-side so the recipient's running total survives
-    // the chat session. The peer is the host of this gift (same id
-    // resolution used elsewhere in the screen for unmatch / report).
-    // Fire-and-forget — local UI shouldn't wait on the round-trip.
-    const peerId = match.userId || match.id;
-    const giftType = gift.id || gift.type || gift.name || 'unknown';
-    const coinAmount = Number(gift.coins) || 0;
-    if (peerId && coinAmount > 0) {
-      liveGiftsService
-        .recordLiveGift({
-          hostUserId: peerId,
-          giftType,
-          coinAmount,
-          context: 'chat',
-        })
-        .catch(() => {});
-    }
 
     LayoutAnimation.configureNext(SPRING_ANIM);
     const msg = {

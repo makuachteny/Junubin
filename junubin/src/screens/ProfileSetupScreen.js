@@ -105,6 +105,12 @@ const PURPOSE_OPTIONS = [
 // Map eligibility step ids → ProfileSetup step keys. Used when the
 // SurveyNudgeModal opens this screen with `resumeAt` set: we seek to
 // the matching step in STEPS rather than starting from the top.
+// Map eligibility step id → ProfileSetup step key. Kept in lockstep
+// with STEP_ORDER in src/utils/eligibility.js. `prompts` is the new
+// id for the prompt-answer gate that replaced the broken `bio` gate;
+// `bio` is preserved here as a defensive alias in case any older
+// resumeAt value (in flight via push notification, deep link, or
+// stored AsyncStorage) still references it.
 const RESUME_KEY_BY_ELIGIBILITY_ID = {
   purpose:          'purpose',
   displayName:      'name',
@@ -113,7 +119,9 @@ const RESUME_KEY_BY_ELIGIBILITY_ID = {
   photos:           'photos',
   interestedIn:     'datePref',
   datingIntentions: 'intention',
+  prompts:          'prompts',
   bio:              'prompts',
+  interests:        'interests',
 };
 
 const ProfileSetupScreen = ({ navigation, route }) => {

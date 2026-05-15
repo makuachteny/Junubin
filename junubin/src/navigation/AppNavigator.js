@@ -70,18 +70,11 @@ const PhotoVerificationScreen = lazify(() => import('../screens/PhotoVerificatio
 const ReferralScreen = lazify(() => import('../screens/ReferralScreen'));
 const StoriesViewScreen = lazify(() => import('../screens/StoriesViewScreen'));
 const CreateStoryScreen = lazify(() => import('../screens/CreateStoryScreen'));
-const EventsScreen = lazify(() => import('../screens/EventsScreen'));
-const EventDetailScreen = lazify(() => import('../screens/EventDetailScreen'));
-const CreateEventScreen = lazify(() => import('../screens/CreateEventScreen'));
 const CreateGroupScreen = lazify(() => import('../screens/CreateGroupScreen'));
 const InteractivityHubScreen = lazify(() => import('../screens/InteractivityHubScreen'));
 const GameSettingsScreen = lazify(() => import('../screens/GameSettingsScreen'));
-const GoLiveScreen = lazify(() => import('../screens/GoLiveScreen'));
-const LiveViewScreen = lazify(() => import('../screens/LiveViewScreen'));
 const FollowListScreen = lazify(() => import('../screens/FollowListScreen'));
 const FindFriendsScreen = lazify(() => import('../screens/FindFriendsScreen'));
-const TicketScreen = lazify(() => import('../screens/TicketScreen'));
-const MyTicketsScreen = lazify(() => import('../screens/MyTicketsScreen'));
 const WebViewScreen = lazify(() => import('../screens/WebViewScreen'));
 
 const Tab = createBottomTabNavigator();
@@ -252,18 +245,11 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="Referral" component={ReferralScreen} />
       <MainStack.Screen name="StoriesView" component={StoriesViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
       <MainStack.Screen name="CreateStory" component={CreateStoryScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="Events" component={EventsScreen} />
-      <MainStack.Screen name="EventDetail" component={EventDetailScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
-      <MainStack.Screen name="CreateEvent" component={CreateEventScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="CreateGroup" component={CreateGroupScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="InteractivityHub" component={InteractivityHubScreen} />
       <MainStack.Screen name="GameSettings" component={GameSettingsScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="GoLive" component={GoLiveScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
-      <MainStack.Screen name="LiveView" component={LiveViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
       <MainStack.Screen name="FollowList" component={FollowListScreen} />
       <MainStack.Screen name="FindFriends" component={FindFriendsScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="Ticket" component={TicketScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
-      <MainStack.Screen name="MyTickets" component={MyTicketsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="WebView" component={WebViewScreen} options={{ presentation: 'modal' }} />
     </MainStack.Navigator>
   );

@@ -3,9 +3,9 @@
 // React Navigation's `linking` config auto-routes incoming URLs to a
 // matching screen — but if the user is on the auth stack (Onboarding /
 // Signup / ProfileSetup) when a push notification arrives, the target
-// route (Chat / LiveView / EventDetail) doesn't exist in that stack
-// and navigation fails silently. The user authenticates, lands on the
-// home tab, and the link is gone.
+// route (e.g. Chat) doesn't exist in that stack and navigation fails
+// silently. The user authenticates, lands on the home tab, and the
+// link is gone.
 //
 // This module is the safety net: when an auth-required URL arrives,
 // we stash it in AsyncStorage. After auth resolves, AppNavigator's

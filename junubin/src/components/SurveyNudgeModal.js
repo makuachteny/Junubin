@@ -50,16 +50,12 @@ export default function SurveyNudgeModal({
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.iconWrap}>
-            <Ionicons name="sparkles" size={28} color="#FCCD12" />
+            <Ionicons name="sparkles" size={20} color="#FCCD12" />
           </View>
 
           <Text style={styles.title}>Tell us a little more</Text>
 
           <Text style={styles.body}>{message}</Text>
-
-          <Text style={styles.note}>
-            You can still follow people and say hi without finishing this.
-          </Text>
 
           <TouchableOpacity
             style={styles.primaryBtn}
@@ -97,69 +93,62 @@ function makeStyles(colors, isDark) {
     },
     card: {
       width: '100%',
-      maxWidth: 380,
+      maxWidth: 300,
       backgroundColor: colors.cardBg,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.cardBorder,
-      borderRadius: 20,
-      padding: 22,
+      borderRadius: 16,
+      padding: 16,
       alignItems: 'stretch',
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: isDark ? 0.6 : 0.2,
-      shadowRadius: 24,
-      elevation: 12,
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: isDark ? 0.5 : 0.18,
+      shadowRadius: 18,
+      elevation: 10,
     },
     iconWrap: {
       alignSelf: 'center',
-      width: 56, height: 56,
-      borderRadius: 28,
+      width: 36, height: 36,
+      borderRadius: 18,
       backgroundColor: isDark ? 'rgba(252,205,18,0.16)' : 'rgba(252,205,18,0.18)',
       alignItems: 'center', justifyContent: 'center',
-      marginBottom: 14,
+      marginBottom: 8,
     },
     title: {
-      fontSize: 20,
+      fontSize: 16,
       fontFamily: FontFamily.bold,
       color: colors.primary,
       textAlign: 'center',
-      marginBottom: 8,
+      marginBottom: 6,
     },
     body: {
-      fontSize: 15,
-      lineHeight: 22,
-      color: colors.primary,
-      opacity: 0.9,
-      textAlign: 'center',
-      marginBottom: 12,
-    },
-    note: {
       fontSize: 13,
       lineHeight: 18,
-      color: colors.gray500,
+      color: colors.primary,
+      opacity: 0.85,
       textAlign: 'center',
-      marginBottom: 20,
+      marginBottom: 14,
     },
     primaryBtn: {
       backgroundColor: '#FCCD12',
-      borderRadius: 14,
-      paddingVertical: 14,
+      borderRadius: 10,
+      paddingVertical: 10,
       alignItems: 'center',
-      marginBottom: 8,
+      marginBottom: 4,
     },
     primaryBtnText: {
       color: '#000',
-      fontSize: 15,
+      fontSize: 13,
       fontFamily: FontFamily.semibold,
     },
     secondaryBtn: {
-      paddingVertical: 12,
+      paddingVertical: 8,
       alignItems: 'center',
     },
     secondaryBtnText: {
       color: colors.primary,
       opacity: 0.7,
-      fontSize: 14,
+      fontSize: 12,
       fontFamily: FontFamily.medium,
     },
   });

@@ -220,14 +220,6 @@ export default function CreateStoryScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.liveShortcut}
-          onPress={() => { navigation.goBack(); navigation.navigate('GoLive'); }}
-          activeOpacity={0.85}
-        >
-          <View style={styles.liveShortcutDot} />
-          <Text style={styles.liveShortcutText}>Go live</Text>
-        </TouchableOpacity>
       </View>
 
       <KeyboardAvoidingView
@@ -497,31 +489,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   modeLabelActive: {
     color: '#FFFFFF',
   },
-  liveShortcut: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#CE1126',
-  },
-  liveShortcutDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#CE1126',
-  },
-  liveShortcutText: {
-    fontSize: 12,
-    fontFamily: FontFamily.bold,
-    fontWeight: '700',
-    color: '#CE1126',
-    letterSpacing: 0.4,
-  },
-
   // ─── Canvas (shared between text & photo modes) ───
   canvas: {
     flex: 1,

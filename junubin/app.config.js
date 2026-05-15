@@ -37,7 +37,7 @@ export default {
     // variants advertise their own schemes so a single device can host all
     // three builds without push notifications routing to the wrong app.
     scheme: IS_DEV ? 'junubin-dev' : IS_PREVIEW ? 'junubin-preview' : 'junubin',
-    version: '1.0.1',
+    version: '1.0.2',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'automatic',
@@ -60,7 +60,7 @@ export default {
         // Required permission strings — App Review rejects builds that prompt
         // for a permission without an explanation here.
         NSCameraUsageDescription: 'JuNubin needs camera access to take profile photos, verify your identity, and post stories.',
-        NSMicrophoneUsageDescription: 'JuNubin needs microphone access to send voice notes, place voice/video calls, and go live.',
+        NSMicrophoneUsageDescription: 'JuNubin needs microphone access to send voice notes and place voice/video calls.',
         NSPhotoLibraryUsageDescription: 'JuNubin needs photo library access to upload profile photos and share images in chat and stories.',
         NSPhotoLibraryAddUsageDescription: 'JuNubin saves images you create (e.g. event posters or shared memes) to your photo library only when you tap save.',
         NSLocationWhenInUseUsageDescription: 'JuNubin uses your location to show people nearby and let you tag posts with where they were taken. Location is only collected while you are using the app.',
