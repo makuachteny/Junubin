@@ -23,6 +23,8 @@ import {
   ScrollView,
   Animated,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -165,6 +167,11 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
   // Anywhere / off so a fresh open shows the maximum roster.
   const [distanceFilter, setDistanceFilter] = useState('any');
   const [activeOnly, setActiveOnly] = useState(false);
+  // Customize sheet — secondary filters tucked behind a "More" icon so
+  // the chip row stays scannable. 'any' = no filter applied.
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [genderFilter, setGenderFilter] = useState('any');  // 'any' | 'man' | 'woman'
 
   // Pull the caller's current location once. If they decline the
   // permission, fall back to a centroid of the visible people so the
@@ -230,10 +237,18 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
     const cfg = DISTANCE_FILTERS.find((d) => d.id === distanceFilter) || DISTANCE_FILTERS[3];
     return allPeople.filter((p) => {
       if (activeOnly && p.activity !== 'active') return false;
+      if (verifiedOnly && !p.verified) return false;
+      if (genderFilter !== 'any') {
+        const g = String(p.gender || '').toLowerCase();
+        if (genderFilter === 'man' && g !== 'man') return false;
+        if (genderFilter === 'woman' && g !== 'woman') return false;
+      }
       if (cfg.maxKm == null || !center) return true;
       return distanceKm(center, p.coords) <= cfg.maxKm;
     });
-  }, [allPeople, distanceFilter, activeOnly, center]);
+  }, [allPeople, distanceFilter, activeOnly, verifiedOnly, genderFilter, center]);
+
+  const moreFiltersActive = verifiedOnly || genderFilter !== 'any';
 
   const openPreview = useCallback((person) => {
     setSelected(person);
@@ -262,7 +277,7 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
   // even when a marker is selected. Pulled into a sub-render so the
   // fallback view can reuse it.
   const renderFilters = () => (
-    <View style={[styles.filterBar, { top: topInset + 44 }]} pointerEvents="box-none">
+    <View style={[styles.filterBar, { top: topInset }]} pointerEvents="box-none">
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -298,8 +313,97 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
           <View style={[styles.activeDot, activeOnly && styles.activeDotOn]} />
           <Text style={[styles.chipText, activeOnly && styles.chipTextActive]}>Active now</Text>
         </TouchableOpacity>
+
+        {/* Customize sheet trigger — secondary filters (verified, gender)
+            live behind here so the visible chip row stays scannable.
+            Accent dot appears when one of the hidden filters is on. */}
+        <TouchableOpacity
+          style={styles.moreBtn}
+          onPress={() => setShowMoreFilters(true)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Customize filters"
+        >
+          <Ionicons name="options-outline" size={16} color={colors.black} />
+          {moreFiltersActive && <View style={styles.moreDot} />}
+        </TouchableOpacity>
       </ScrollView>
     </View>
+  );
+
+  const renderMoreFiltersSheet = () => (
+    <Modal
+      visible={showMoreFilters}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowMoreFilters(false)}
+    >
+      <Pressable style={styles.sheetOverlay} onPress={() => setShowMoreFilters(false)}>
+        <View style={styles.sheet} onStartShouldSetResponder={() => true}>
+          <View style={styles.sheetGrabber} />
+          <Text style={styles.sheetTitle}>Customize</Text>
+
+          <Text style={styles.sheetSection}>Show me</Text>
+          <View style={styles.sheetPillRow}>
+            {[
+              { id: 'any',   label: 'Everyone' },
+              { id: 'man',   label: 'Men' },
+              { id: 'woman', label: 'Women' },
+            ].map((opt) => {
+              const active = genderFilter === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.sheetPill, active && styles.sheetPillActive]}
+                  onPress={() => setGenderFilter(opt.id)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Text style={[styles.sheetPillText, active && styles.sheetPillTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sheetSection}>Trust</Text>
+          <TouchableOpacity
+            style={[styles.sheetRow, verifiedOnly && styles.sheetRowActive]}
+            onPress={() => setVerifiedOnly((v) => !v)}
+            activeOpacity={0.85}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: verifiedOnly }}
+          >
+            <Ionicons
+              name="shield-checkmark"
+              size={18}
+              color={verifiedOnly ? colors.accent : colors.gray500}
+            />
+            <Text style={styles.sheetRowText}>Verified profiles only</Text>
+            <View style={[styles.toggleDot, verifiedOnly && styles.toggleDotOn]} />
+          </TouchableOpacity>
+
+          <View style={styles.sheetActions}>
+            <TouchableOpacity
+              style={styles.sheetClearBtn}
+              onPress={() => { setVerifiedOnly(false); setGenderFilter('any'); }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.sheetClearText}>Clear</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sheetDoneBtn}
+              onPress={() => setShowMoreFilters(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.sheetDoneText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Pressable>
+    </Modal>
   );
 
   // ── Fallback when react-native-maps native module is missing
@@ -316,13 +420,14 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
             The map needs a native build. Open this view in TestFlight or a custom dev client.
           </Text>
         </View>
-        <View style={[styles.banner, { top: topInset }]}>
+        <View style={[styles.banner, { top: topInset + 48 }]}>
           <Ionicons name="shield-checkmark" size={14} color="#FFF" />
           <Text style={styles.bannerText} numberOfLines={2}>
             You&apos;re hidden by default. Turn on &quot;Appear on map&quot; in Settings to share.
           </Text>
         </View>
         {renderFilters()}
+        {renderMoreFiltersSheet()}
       </View>
     );
   }
@@ -385,6 +490,7 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
       </View>
 
       {renderFilters()}
+      {renderMoreFiltersSheet()}
 
       {/* Result count pill — confirms the filter is doing something
           and gives an immediate sense of "is anyone near me?". */}
@@ -517,6 +623,151 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   activeDotOn: {
     backgroundColor: '#22C55E',
+  },
+  moreBtn: {
+    width: 36,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  moreDot: {
+    position: 'absolute',
+    top: 4,
+    right: 6,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+
+  // ─── Customize sheet ───
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.cardBg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 22,
+    paddingTop: 10,
+    paddingBottom: 32,
+  },
+  sheetGrabber: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.gray300,
+    marginBottom: 12,
+  },
+  sheetTitle: {
+    ...Typography.h3,
+    color: colors.black,
+    marginBottom: 6,
+  },
+  sheetSection: {
+    fontSize: 13,
+    fontFamily: FontFamily.semibold,
+    color: colors.gray500,
+    marginTop: 14,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  sheetPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  sheetPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  sheetPillActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  sheetPillText: {
+    fontSize: 13,
+    fontFamily: FontFamily.semibold,
+    color: colors.black,
+  },
+  sheetPillTextActive: {
+    color: '#FFFFFF',
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceMuted,
+  },
+  sheetRowActive: {
+    backgroundColor: isDark ? 'rgba(206,17,38,0.12)' : 'rgba(206,17,38,0.08)',
+  },
+  sheetRowText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: FontFamily.semibold,
+    color: colors.black,
+  },
+  toggleDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: colors.gray400,
+    backgroundColor: 'transparent',
+  },
+  toggleDotOn: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 20,
+  },
+  sheetClearBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceMuted,
+    alignItems: 'center',
+  },
+  sheetClearText: {
+    fontSize: 14,
+    fontFamily: FontFamily.semibold,
+    color: colors.gray700 || colors.black,
+  },
+  sheetDoneBtn: {
+    flex: 2,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: colors.accent,
+    alignItems: 'center',
+  },
+  sheetDoneText: {
+    fontSize: 14,
+    fontFamily: FontFamily.bold,
+    color: '#FFFFFF',
   },
   countPill: {
     position: 'absolute',
