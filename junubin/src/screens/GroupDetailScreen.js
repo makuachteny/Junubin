@@ -15,6 +15,8 @@ import PostCard from '../components/PostCard';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import { GraffitiCommunity } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
+import { mockPosts } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 
 const MOCK_MEMBERS = [
   { id: 'm1', name: 'Achol', role: 'Admin' },
@@ -63,11 +65,16 @@ export default function GroupDetailScreen({ navigation, route }) {
     refreshTimerRef.current = setTimeout(() => setRefreshing(false), 800);
   }, []);
 
-  // Groups feed is empty until real group-scoped Post rows land via
-  // a server-side groupPosts API. The previous mock-seeded preview
-  // was removed along with the rest of the __dev__ bundle — the
-  // screen's empty state covers the no-posts case.
-  const groupPosts = [];
+  // Group feed shows the first 3 demo posts when DEMO_DATA_ENABLED
+  // is true — gives every group a representative preview before
+  // real group-scoped posts ship in a later release.
+  const groupPosts = DEMO_DATA_ENABLED
+    ? mockPosts.slice(0, 3).map((p, i) => ({
+        ...p,
+        id: `${group.id || 'group'}-post-${i}`,
+        user: { ...p.user, location: group.name },
+      }))
+    : [];
 
   const handleJoin = () => {
     if (joined) {

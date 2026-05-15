@@ -16,6 +16,8 @@ import { useTheme, Typography, FontFamily } from '../theme';
 import UnderlineTabs from '../components/UnderlineTabs';
 import { GraffitiFlame } from '../components/icons';
 import { GAME_CATALOG } from '../data/games';
+import { mockMatches } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
@@ -72,11 +74,12 @@ export default function InteractivityHubScreen({ navigation }) {
 
   useEffect(() => {
     let mounted = true;
+    const demoConnections = DEMO_DATA_ENABLED
+      ? mockMatches.map((m) => ({ id: m.userId || m.id, name: m.name, images: m.images }))
+      : [];
 
     if (!session) {
-      // Unauthenticated → empty connections list. The screen renders
-      // its real empty state. No mock seed.
-      setConnections([]);
+      setConnections(demoConnections);
       return () => { mounted = false; };
     }
 
@@ -89,10 +92,10 @@ export default function InteractivityHubScreen({ navigation }) {
           images: m.images,
         })));
       } else {
-        setConnections([]);
+        setConnections(demoConnections);
       }
     }).catch(() => {
-      if (mounted) setConnections([]);
+      if (mounted) setConnections(demoConnections);
     });
 
     return () => { mounted = false; };

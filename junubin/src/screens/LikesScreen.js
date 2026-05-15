@@ -25,6 +25,8 @@ import FilterBar from '../components/FilterBar';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
+import { mockLikes } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as likesService from '../api/services/likesService';
 import { TRIBES } from '../data/tribes';
 
@@ -254,23 +256,23 @@ export default function LikesScreen({ navigation }) {
   const cardAnimsRef = useRef([]);
   const hasAnimatedCardsRef = useRef(false);
 
+  const demo = DEMO_DATA_ENABLED ? mockLikes : [];
+
   const fetchLikes = useCallback(() => {
     if (!session) {
-      // Unauthenticated → empty likes. The screen's empty-state UI
-      // covers the "no likes yet" message — no mock fallback.
-      setLikes([]);
+      setLikes(demo);
       setIsLoading(false);
       return;
     }
     setIsLoading(true);
     likesService.getReceivedLikes()
-      .then((apiLikes) => setLikes(apiLikes))
+      .then((apiLikes) => setLikes(apiLikes.length > 0 ? apiLikes : demo))
       .catch((err) => {
         if (__DEV__) console.warn('Likes fetch failed:', err);
-        setLikes([]);
+        setLikes(demo);
       })
       .finally(() => setIsLoading(false));
-  }, [session]);
+  }, [session, demo]);
 
   useEffect(() => {
     fetchLikes();
@@ -280,16 +282,16 @@ export default function LikesScreen({ navigation }) {
     setRefreshing(true);
     if (!session) {
       setTimeout(() => {
-        setLikes([]);
+        setLikes(demo);
         setRefreshing(false);
       }, 800);
       return;
     }
     likesService.getReceivedLikes()
-      .then((apiLikes) => setLikes(apiLikes))
-      .catch(() => setLikes([]))
+      .then((apiLikes) => setLikes(apiLikes.length > 0 ? apiLikes : demo))
+      .catch(() => setLikes(demo))
       .finally(() => setRefreshing(false));
-  }, [session]);
+  }, [session, demo]);
 
   useEffect(() => {
     Animated.timing(contentAnim, {

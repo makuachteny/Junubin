@@ -34,6 +34,8 @@ import * as liveGiftsService from '../api/services/liveGiftsService';
 import { useEligibility } from '../hooks';
 import { supabase } from '../config/supabase';
 import { useRealtime } from '../api/hooks/useRealtime';
+import { mockMessages as demoMockMessages } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 import OnlinePulseDot from '../components/OnlinePulseDot';
 import ChatImageBubble from '../components/ChatImageBubble';
 import ChatAudioBubble from '../components/ChatAudioBubble';
@@ -156,9 +158,27 @@ export default function ChatScreen({ navigation, route }) {
   // alongside the (sometimes incomplete) match object.
   const conversationId = route.params?.conversationId || match.conversationId;
 
+  // Detect a demo conversation. Demo matches carry stable ids like
+  // `demo_match_001` and reference a `userId` like `demo_001`; demo
+  // user direct chats use the roster id directly. Either pattern is
+  // a "this conversation lives client-side only" signal.
+  //
+  // For demo chats we:
+  //   • initialise from mockMessages[userId] instead of getMessages()
+  //   • skip the realtime subscription (no Conversation row to listen on)
+  //   • intercept persistTextMessage so sends just append locally
+  //     rather than hitting chatService and 404ing
+  const demoUserId = match.userId || match.id;
+  const isDemoChat = typeof demoUserId === 'string'
+    && (demoUserId.startsWith('demo_') || (matchId && String(matchId).startsWith('demo_')));
+
   useEffect(() => {
     if (resolvedMatch?.id) return;
     if (!conversationId) return;
+    // Don't ping matchesService for a demo conversation — there's no
+    // real row to find. The initial route.params.match is the
+    // authoritative source for demo headers.
+    if (isDemoChat) return;
     let cancelled = false;
     matchesService.getMatches()
       .then((list) => {
@@ -168,7 +188,7 @@ export default function ChatScreen({ navigation, route }) {
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [conversationId, resolvedMatch?.id]);
+  }, [conversationId, resolvedMatch?.id, isDemoChat]);
   // "You matched" banner is shown only when we arrive directly from the match
   // celebration overlay (`fromMatch: true`). It dismisses on first scroll,
   // first message sent, or explicit close.
@@ -189,10 +209,15 @@ export default function ChatScreen({ navigation, route }) {
     return false;
   }, [canConnect, match.name]);
 
-  // Start empty in every case — API or realtime fills in. We no longer seed
-  // mockMessages here; a brand-new match should show the Match Mission
-  // empty-state, not a canned conversation history.
-  const [messages, setMessages] = useState([]);
+  // For real matches: start empty; getMessages + realtime fill in.
+  // For demo matches: pre-fill from mockMessages keyed by the roster
+  // userId so the tester sees the canned history we authored for that
+  // demo user. Real matches still get the empty Match Mission state.
+  const [messages, setMessages] = useState(() => {
+    if (!isDemoChat || !DEMO_DATA_ENABLED) return [];
+    const seed = (demoUserId && demoMockMessages?.[demoUserId]) || [];
+    return seed.map((m) => ({ ...m, id: `seed-${m.id}` }));
+  });
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -307,6 +332,10 @@ export default function ChatScreen({ navigation, route }) {
   // Load message history from API — reconstruct game sessions from saved messages
   useEffect(() => {
     if (!session || !conversationId) return;
+    // Demo chats are pre-seeded from mockMessages in the useState
+    // initializer above. No server round trip — there's no row to
+    // fetch.
+    if (isDemoChat) return;
     chatService.getMessages(conversationId).then((apiMsgs) => {
       if (apiMsgs.length > 0) {
         const gameSessions = new Map();
@@ -436,6 +465,10 @@ export default function ChatScreen({ navigation, route }) {
   // Listen for real-time messages
   useEffect(() => {
     if (!conversationId) return;
+    // No realtime channel for demo chats — there's no Conversation
+    // row, so onMessage would silently subscribe to nothing. Skipping
+    // also frees up the realtime worker for actual conversations.
+    if (isDemoChat) return undefined;
     const unsub = onMessage(conversationId, (msg) => {
       if (!msg) return;
       if (sentIdsRef.current.has(msg.id)) return;
@@ -503,7 +536,7 @@ export default function ChatScreen({ navigation, route }) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     });
     return unsub;
-  }, [conversationId, currentUser?.id, scheduleAutoAdvance]);
+  }, [conversationId, currentUser?.id, scheduleAutoAdvance, isDemoChat]);
 
   // Listen for typing indicators. The hook's onTypingStart /
   // onTypingStop take (conversationId, callback) — previously we were
@@ -663,7 +696,21 @@ export default function ChatScreen({ navigation, route }) {
   // verbatim. On success the optimistic row gets its tempId swapped
   // for the server-issued id; on failure the row is flipped to
   // status:'failed' and queued for the auto-retry-on-reconnect drain.
+  //
+  // Demo conversation short-circuit: there's no Conversation row to
+  // POST to, so we just flip the optimistic row to status:'sent' so
+  // the bubble stops saying "Sending…". Demo users don't respond —
+  // testers see their own message in the thread with a single
+  // checkmark and can keep typing. This is the trade-off: a demo
+  // chat behaves end-to-end *from the tester's perspective* but
+  // doesn't simulate the other side typing back.
   const persistTextMessage = useCallback(async (tempId, text) => {
+    if (isDemoChat) {
+      setMessages((prev) => prev.map((m) => (
+        m.id === tempId ? { ...m, status: 'sent', read: false } : m
+      )));
+      return;
+    }
     if (!conversationId) return;
     try {
       const result = await chatService.sendMessage(conversationId, text);
@@ -682,7 +729,7 @@ export default function ChatScreen({ navigation, route }) {
       // from the existing offlineQueue useEffect below.
       enqueueAction({ type: 'text_message', conversationId, body: text, tempId });
     }
-  }, [conversationId]);
+  }, [conversationId, isDemoChat]);
 
   const handleSend = useCallback(() => {
     if (!inputText.trim()) return;

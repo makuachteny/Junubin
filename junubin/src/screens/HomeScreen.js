@@ -25,6 +25,8 @@ import HeartBurstOverlay from '../components/HeartBurstOverlay';
 import CardSkeleton from '../components/CardSkeleton';
 import Button from '../components/Button';
 // SpotlightCard removed — spotlights now appear inline in the swipe deck
+import { mockProfiles } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 import { POPULAR_TRIBE_KEYS } from '../data/tribes';
 import { imageSource } from '../utils/imageSource';
 import { useSubscription, hasUnlimitedLikes, canUseWhispers, ALL_FEATURES_FREE, SHOW_PAYMENTS_UI } from '../payments';
@@ -46,12 +48,57 @@ import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightSchedule
 // providers, big onboarding redesign).
 const FIRST_MATCH_NOTIFY_PROMPT_KEY = '@junubin/first_match_notify_prompt_v1';
 
-// Swipe-deck fallback when the discover API hasn't replied yet. Now
-// returns an empty array in every environment — the mock-profiles
-// seed list was removed along with the rest of the __dev__ bundle.
-// CardSkeleton covers the loading window; the empty-state card
-// (line ~901) covers "out of profiles" / network-down.
-const getFallbackDeck = () => [];
+const MIN_DECK_CARDS = 10;
+const shuffleArray = (arr) => {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
+// Build the demo deck for the given mode. Same filter rule the
+// server-side discover function uses (`Both` profiles surface in
+// either mode). Pads to MIN_DECK_CARDS by cloning entries so a fresh
+// install doesn't run out of cards after three swipes.
+const buildDeck = (mode = 'Dating') => {
+  const base = mockProfiles.filter((p) => {
+    if (!p || !p.id || !p.name || !p.photos?.length) return false;
+    if (mode === 'Dating') return p.mode === 'Dating' || p.mode === 'Both';
+    if (mode === 'Social') return p.mode === 'Social' || p.mode === 'Both';
+    return true;
+  }).map((p) => ({ ...p, images: p.photos }));
+  if (base.length === 0) return [];
+  const deck = base.length >= MIN_DECK_CARDS ? [...base] : (() => {
+    const filled = [...base];
+    let i = 0;
+    while (filled.length < MIN_DECK_CARDS) {
+      const source = base[i % base.length];
+      filled.push({ ...source, id: `${source.id}-clone-${i}` });
+      i += 1;
+    }
+    return filled;
+  })();
+  const shuffled = shuffleArray(deck);
+  // Inject spotlight profiles every 5 cards.
+  const withSpotlights = [];
+  for (let i = 0; i < shuffled.length; i++) {
+    withSpotlights.push(shuffled[i]);
+    if ((i + 1) % 5 === 0 && i + 1 < shuffled.length) {
+      const src = base[Math.floor(Math.random() * base.length)];
+      withSpotlights.push({ ...src, images: src.photos, id: `spotlight-${src.id}-${i}`, spotlight: true });
+    }
+  }
+  return withSpotlights;
+};
+
+// Swipe-deck fallback while the discover API replies or returns []. In
+// demo mode (TestFlight + local dev), seed with the demo roster so
+// the deck isn't empty before real users come online. Once enough
+// real users sign up, flip DEMO_DATA_ENABLED off in src/config/demoData.js.
+const getFallbackDeck = (mode = 'Dating') =>
+  DEMO_DATA_ENABLED ? buildDeck(mode) : [];
 
 // Social-mode filter options (replace dating-specific ones)
 const SOCIAL_FILTERS = [

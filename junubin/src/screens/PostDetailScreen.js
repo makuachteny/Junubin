@@ -20,6 +20,8 @@ import PostCard from '../components/PostCard';
 import EmptyState from '../components/EmptyState';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import * as commentService from '../api/services/commentService';
+import { mockComments } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 
 // Real Post.id values come from `crypto.randomUUID()` (UUID v4) or the
 // legacy `p_*` prefix the older postService fallback used. An id in
@@ -114,11 +116,15 @@ export default function PostDetailScreen({ navigation, route }) {
   const post = route.params?.post;
   const postId = post?.id;
   // Comments come from PostComment table via commentService for real
-  // posts. The previous mockComments fallback for demo-seeded posts
-  // is gone along with the rest of the __dev__ bundle.
+  // posts. Demo posts (id starts with `demo_post_`) fall back to the
+  // seeded mockComments map keyed off the post id.
+  const isDemoPost = typeof postId === 'string' && postId.startsWith('demo_post_');
+  const initialComments = (DEMO_DATA_ENABLED && isDemoPost)
+    ? (mockComments[postId] || [])
+    : [];
   const [liked, setLiked] = useState(false);
 
-  const [comments, setComments] = useState([]);
+  const [comments, setComments] = useState(initialComments);
   const [commentText, setCommentText] = useState('');
   const [commentLikes, setCommentLikes] = useState({});
   // Reply target carries both user (display) + parent comment id (threading).

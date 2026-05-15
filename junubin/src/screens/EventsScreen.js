@@ -15,11 +15,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, Typography, getShadow } from '../theme';
 import { EVENT_CITIES, EVENT_CATEGORIES } from '../data/eventCatalogue';
+import { mockEvents } from '../data/__dev__/mockEvents';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 
-// Event rows now come exclusively from the server via `getEvents()`
-// below. The mock-events seed list was removed along with the rest of
-// the __dev__ bundle — a fresh install shows the empty-state until
-// real Event rows exist in the DB.
+// Demo events shipped under DEMO_DATA_ENABLED — real Event rows
+// always trail behind once they exist.
+const demoEvents = DEMO_DATA_ENABLED ? mockEvents : [];
 import { interactiveStore } from '../utils/interactiveStore';
 import { getEvents, enrichEvents } from '../utils/eventStore';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
@@ -73,7 +74,7 @@ export default function EventsScreen({ navigation }) {
     }).catch(() => {});
     const timer = setTimeout(async () => {
       const created = await getEvents();
-      const merged = created;
+      const merged = created.length > 0 ? [...created, ...demoEvents] : demoEvents;
       const enriched = await enrichEvents(merged);
       setEvents(enriched);
       setIsLoading(false);
@@ -90,7 +91,7 @@ export default function EventsScreen({ navigation }) {
       try {
         const created = await getEvents();
         if (cancelled) return;
-        const merged = created;
+        const merged = created.length > 0 ? [...created, ...demoEvents] : demoEvents;
         const enriched = await enrichEvents(merged);
         if (!cancelled) setEvents(enriched);
       } catch {}
@@ -102,7 +103,7 @@ export default function EventsScreen({ navigation }) {
     setRefreshing(true);
     setTimeout(() => {
       getEvents().then(async (created) => {
-        const merged = created;
+        const merged = created.length > 0 ? [...created, ...demoEvents] : demoEvents;
         const enriched = await enrichEvents(merged);
         setEvents(enriched);
         setRefreshing(false);

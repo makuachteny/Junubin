@@ -23,6 +23,9 @@ import { imageSource } from '../utils/imageSource';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
+import { mockMatches, mockLikes } from '../data/__dev__/mockProfiles';
+import { mockStories } from '../data/__dev__/mockStories';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as matchesService from '../api/services/matchesService';
 import * as likesService from '../api/services/likesService';
 import * as storyService from '../api/services/storyService';
@@ -102,34 +105,44 @@ export default function MessagesScreen({ navigation, route }) {
     ]);
   }, [navigation]);
 
+  // Demo-mode fallback. When DEMO_DATA_ENABLED is true (TestFlight
+  // launch period), the inbox is seeded with mockMatches/mockLikes
+  // so testers have something to interact with before real users
+  // sign up. Flip the flag off in src/config/demoData.js before App
+  // Review submission — they don't like fake-looking populations.
+  const demoMatches = DEMO_DATA_ENABLED ? mockMatches : [];
+  const demoLikes   = DEMO_DATA_ENABLED ? mockLikes   : [];
+
   const fetchMatches = useCallback(() => {
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     loadingTimeoutRef.current = setTimeout(() => {
-      // Failsafe: stop the skeletons after 600ms even if the network
-      // hasn't replied. The empty-state UI renders below when both
-      // arrays are empty — no seeded demo users in any build.
+      setMatches((prev) => (prev.length ? prev : demoMatches));
+      setLikes((prev) => (prev.length ? prev : demoLikes));
       setIsLoading(false);
     }, 600);
 
     if (!session) {
-      // Unauthenticated: render the empty inbox. No mock fallback.
-      setMatches([]);
-      setLikes([]);
+      setMatches(demoMatches);
+      setLikes(demoLikes);
       setIsLoading(false);
       return Promise.resolve();
     }
     return Promise.all([
-      matchesService.getMatches().then((apiMatches) => setMatches(apiMatches)),
-      likesService.getReceivedLikes().then((apiLikes) => setLikes(apiLikes)),
+      matchesService.getMatches().then((apiMatches) => {
+        setMatches(apiMatches.length > 0 ? apiMatches : demoMatches);
+      }),
+      likesService.getReceivedLikes().then((apiLikes) => {
+        setLikes(apiLikes.length > 0 ? apiLikes : demoLikes);
+      }),
     ]).catch((err) => {
       if (__DEV__) console.warn('Messages fetch failed:', err);
-      setMatches([]);
-      setLikes([]);
+      setMatches(demoMatches);
+      setLikes(demoLikes);
     }).finally(() => {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       setIsLoading(false);
     });
-  }, [session]);
+  }, [session, demoMatches, demoLikes]);
 
   useEffect(() => { fetchMatches(); }, [fetchMatches]);
 

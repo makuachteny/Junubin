@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../auth';
 import * as profileService from '../api/services/profileService';
+import { currentUser as demoCurrentUser } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 
 const MODE_KEY = '@junubin_mode';
 
@@ -118,7 +120,14 @@ export function useCurrentUser() {
     }
   }, [authRefresh]);
 
-  const currentUser = useMemo(() => profile || EMPTY_CURRENT_USER, [profile]);
+  // When unauthenticated and demo mode is on, return the demo
+  // current-user fixture so screens have a non-null `currentUser`
+  // shape and can render avatars / preferences. With demo off, fall
+  // back to the frozen empty placeholder.
+  const currentUser = useMemo(
+    () => profile || (DEMO_DATA_ENABLED ? demoCurrentUser : EMPTY_CURRENT_USER),
+    [profile],
+  );
   const isAuthenticated = !!session;
 
   return { currentUser, refreshUser, isAuthenticated, loading };

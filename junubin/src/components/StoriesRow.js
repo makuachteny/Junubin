@@ -7,12 +7,14 @@ import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import * as storyService from '../api/services/storyService';
 import { supabase } from '../config/supabase';
+import { mockStories, mockLiveStreams } from '../data/__dev__/mockStories';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 
 export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, colors, refreshKey }) {
-  // Empty initial state. The Create chip always renders; the row
-  // populates from storyService once it lands. Brand-new installs
-  // see just the Create chip, which is the correct empty state.
-  const [stories, setStories] = useState([]);
+  // Seed with demo stories when the flag is on so the row isn't empty
+  // on first launch. Real stories appear at the top of the row as
+  // they're posted via the realtime subscription below.
+  const [stories, setStories] = useState(() => (DEMO_DATA_ENABLED ? mockStories : []));
   // Internal bump triggered by realtime Story INSERTs.
   const [realtimeBump, setRealtimeBump] = useState(0);
 
@@ -26,7 +28,16 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
     storyService.listActiveStoryGroups()
       .then((live) => {
         if (cancelled) return;
-        setStories(live || []);
+        // Real stories first; demo stories trail behind so they
+        // disappear naturally once enough friends post.
+        const liveList = live || [];
+        if (liveList.length > 0) {
+          setStories(DEMO_DATA_ENABLED ? [...liveList, ...mockStories] : liveList);
+        } else if (DEMO_DATA_ENABLED) {
+          setStories(mockStories);
+        } else {
+          setStories([]);
+        }
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -89,10 +100,11 @@ export default function StoriesRow({ onStoryPress, onCreatePress, onViewLive, co
       {sortedStories.map((story, index) => {
         const isLive = story.isLive;
         const isViewed = story.viewed === true;
-        // Real live-stream metadata travels on the Story row itself
-        // when a host kicks off a broadcast. The deleted mock
-        // mockLiveStreams catalogue is no longer the source.
-        const liveData = isLive ? story.live || null : null;
+        // Live metadata: real stories carry it on the Story row;
+        // demo stories look it up in the seed table.
+        const liveData = isLive
+          ? (story.live || mockLiveStreams.find((l) => l.userId === story.userId) || null)
+          : null;
 
         // Unviewed stories get the theme accent ring (solid).
         // Viewed stories fade to a neutral gray.

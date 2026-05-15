@@ -25,6 +25,8 @@ import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import EmptyState from '../components/EmptyState';
 import Toast from '../components/Toast';
 import SkeletonShimmer from '../components/SkeletonShimmer';
+import { mockPosts } from '../data/__dev__/mockProfiles';
+import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as postService from '../api/services/postService';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../auth';
@@ -163,21 +165,27 @@ export default function CommunityScreen({ navigation, route }) {
   // already liked / reposted so PostCard renders the correct chip
   // state on first paint (rather than every chip showing un-liked then
   // updating on tap).
+  const demoPosts = DEMO_DATA_ENABLED ? mockPosts : [];
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const live = await postService.listPosts();
         if (cancelled) return;
-        setPosts(await hydrateInteractionState(live));
+        // Show real posts first; demo posts trail behind so a real
+        // post always floats to the top of the feed. Demo posts
+        // disappear automatically once enough real posts exist.
+        const combined = live.length > 0 ? [...live, ...demoPosts] : demoPosts;
+        setPosts(await hydrateInteractionState(combined));
       } catch {
-        if (!cancelled) setPosts([]);
+        if (!cancelled) setPosts(demoPosts);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [demoPosts]);
 
   const [postedToast, setPostedToast] = useState(false);
 
@@ -194,13 +202,14 @@ export default function CommunityScreen({ navigation, route }) {
     setRefreshing(true);
     try {
       const live = await postService.listPosts();
-      setPosts(await hydrateInteractionState(live));
+      const combined = live.length > 0 ? [...live, ...demoPosts] : demoPosts;
+      setPosts(await hydrateInteractionState(combined));
     } catch {
-      setPosts([]);
+      setPosts(demoPosts);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [demoPosts]);
 
   // Live updates from other devices.
   //
