@@ -35,20 +35,21 @@ import { applyCommunityFilters } from '../utils/communityFilters';
 const FIXED_TABS = ['Feed'];
 
 const COMMUNITY_FILTERS = [
-  // Every content filter renders inline in the horizontal chip row so
-  // the catalogue is discoverable at a glance. Order leads with the
-  // highest-frequency filters (Nearby, Trending, New) and trails with
-  // the more specific ones (This week, Questions, Links). 'Fun' is a
-  // special navigation pill — it routes to InteractivityHub instead
-  // of toggling a predicate — and lives at the END so its accent
-  // styling reads as a distinct trailing action, not part of the
-  // filter set. The customize-modal icon renders after the map, sitting
-  // at the far right edge of the row.
+  // Layout contract:
+  //   index 0..INLINE_FILTER_COUNT-1 → render as pills directly in
+  //     the chip row (the "core" filters everyone uses).
+  //   the rest (Photos, Videos, Verified, ...) → live inside the
+  //     'Customize' bottom sheet so the chip row doesn't sprawl.
+  //   'fun' → rendered explicitly at the trailing edge of the inline
+  //     row, regardless of array position. It's a navigation pill,
+  //     not a predicate, and its accent styling needs to sit
+  //     separate from the toggleable filters.
   { id: 'nearby', label: 'Nearby', icon: 'location', graffitiIcon: 'location' },
   { id: 'trending', label: 'Trending', icon: 'trending-up', graffitiIcon: 'flame' },
   { id: 'new', label: 'New', icon: 'time' },
   { id: 'friends', label: 'Friends', icon: 'people', graffitiIcon: 'community' },
   { id: 'popular', label: 'Popular', icon: 'flame', graffitiIcon: 'star' },
+  // ── inline cut ─────────────────────────────────────────────────────
   { id: 'photos', label: 'Photos', icon: 'image' },
   { id: 'videos', label: 'Videos', icon: 'videocam' },
   { id: 'verified', label: 'Verified', icon: 'shield-checkmark' },
@@ -57,9 +58,12 @@ const COMMUNITY_FILTERS = [
   { id: 'links', label: 'Links', icon: 'link' },
   { id: 'fun', label: 'Fun', icon: 'sparkles', accent: true, graffitiIcon: 'sparkles' },
 ];
-// All filters render inline now — the modal still exists for the same
-// full list (mirror toggles + clear-all) but no chip is hidden behind it.
-const INLINE_FILTER_COUNT = COMMUNITY_FILTERS.length;
+const INLINE_FILTER_COUNT = 5;
+const FUN_FILTER = COMMUNITY_FILTERS.find((f) => f.id === 'fun');
+// Everything between the inline cut and 'fun' lives in the customize sheet.
+const MORE_FILTERS = COMMUNITY_FILTERS.filter(
+  (f, i) => i >= INLINE_FILTER_COUNT && f.id !== 'fun',
+);
 
 // Hoisted to module scope so the lookup isn't rebuilt on every render
 // of every filter pill (was previously inlined inside two .map calls).
@@ -383,7 +387,13 @@ export default function CommunityScreen({ navigation, route }) {
 
         <View style={styles.barDivider} />
 
-        {COMMUNITY_FILTERS.slice(0, INLINE_FILTER_COUNT).map((filter) => {
+        {[
+          ...COMMUNITY_FILTERS.slice(0, INLINE_FILTER_COUNT),
+          // Fun pinned at the trailing edge of the inline row, just
+          // before the customize icon — its accent styling reads as a
+          // distinct navigation action.
+          ...(FUN_FILTER ? [FUN_FILTER] : []),
+        ].map((filter) => {
           const isActive = filter.accent || activeFilters.includes(filter.id);
           const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
           return (
@@ -508,13 +518,13 @@ export default function CommunityScreen({ navigation, route }) {
             <View style={styles.modalGrabber} />
             <Text style={styles.modalTitle}>Customize</Text>
 
-            <Text style={styles.modalSectionLabel}>Filters</Text>
+            <Text style={styles.modalSectionLabel}>More filters</Text>
             <View style={styles.modalPillRow}>
-              {/* All filters are inline in the chip row, but the sheet
-                  still surfaces the full set in a tidy non-scrolling
-                  grid so users can see active state at a glance. 'Fun'
-                  is excluded — it's a navigation pill, not a toggle. */}
-              {COMMUNITY_FILTERS.filter((f) => f.id !== 'fun').map((filter) => {
+              {/* Secondary filters hidden behind the customize icon —
+                  Photos, Videos, Verified, This week, Questions, Links.
+                  Toggle any combination; the chip-row stays focused on
+                  the high-frequency core (Nearby / Trending / etc.). */}
+              {MORE_FILTERS.map((filter) => {
                 const isActive = activeFilters.includes(filter.id);
                 const GraffitiComp = filter.graffitiIcon ? GRAFFITI_MAP[filter.graffitiIcon] : null;
                 return (
