@@ -15,7 +15,7 @@
 
 import { Alert } from 'react-native';
 
-export const PAYMENTS_ENABLED = false;
+export const PAYMENTS_ENABLED = true;
 
 // UI-level gate. While this is false, every payment-related surface is
 // hidden — the Elite tier sheet, the Boost spotlight purchase screen,
@@ -28,7 +28,7 @@ export const PAYMENTS_ENABLED = false;
 //   PAYMENTS_ENABLED  — controls whether *transactions* succeed
 //   SHOW_PAYMENTS_UI  — controls whether *buttons* appear at all
 // Flip both true together when monetization launches.
-export const SHOW_PAYMENTS_UI = false;
+export const SHOW_PAYMENTS_UI = true;
 
 /**
  * Shows the "Coming soon" alert and returns a sentinel that purchase

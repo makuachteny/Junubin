@@ -19,7 +19,7 @@
 
 import { TIER_RANK } from './products';
 
-export const ALL_FEATURES_FREE = true;
+export const ALL_FEATURES_FREE = false;
 
 export function hasTierAccess(currentTier, requiredTier) {
   if (ALL_FEATURES_FREE) return true;
@@ -65,5 +65,8 @@ export function canUseDiasporaConnect(tier) {
 
 export function isSubscribed(tier) {
   if (ALL_FEATURES_FREE) return true;
-  return tier !== 'free';
+  // Explicit allowlist — `tier !== 'free'` is too loose, it returns
+  // true for unauthenticated users (undefined) and for any unknown
+  // string. Subscription state must be one of the defined paid tiers.
+  return tier === 'plus' || tier === 'junub';
 }

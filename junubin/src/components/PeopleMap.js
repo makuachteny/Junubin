@@ -25,6 +25,7 @@ import {
   ActivityIndicator,
   Modal,
   Pressable,
+  useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -157,9 +158,15 @@ const peopleForMode = (mode, center) => {
 export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 12 }) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const { width: screenW } = useWindowDimensions();
   const mapRef = useRef(null);
   const previewAnim = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(null);
+  // Screen-space pixel anchor of the tapped marker. Captured once when
+  // openPreview fires (via MapView.pointForCoordinate) so the preview
+  // card can render directly above the pin. The card is dismissed on
+  // region change so we don't need to re-project as the user pans.
+  const [previewAnchor, setPreviewAnchor] = useState(null);
   const [region, setRegion] = useState(null);
   const [locating, setLocating] = useState(true);
   const [locationError, setLocationError] = useState(null);
@@ -250,8 +257,26 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
 
   const moreFiltersActive = verifiedOnly || genderFilter !== 'any';
 
-  const openPreview = useCallback((person) => {
+  const openPreview = useCallback(async (person) => {
     setSelected(person);
+    // Translate the tapped person's lat/lng into screen pixels so the
+    // preview card can render directly above the marker. If the map
+    // ref isn't ready or the projection fails (Android edge case),
+    // fall back to a centered bottom-sheet style anchor below.
+    if (mapRef.current && person?.coords) {
+      try {
+        const pt = await mapRef.current.pointForCoordinate(person.coords);
+        if (pt && Number.isFinite(pt.x) && Number.isFinite(pt.y)) {
+          setPreviewAnchor({ x: pt.x, y: pt.y });
+        } else {
+          setPreviewAnchor(null);
+        }
+      } catch {
+        setPreviewAnchor(null);
+      }
+    } else {
+      setPreviewAnchor(null);
+    }
     Animated.spring(previewAnim, {
       toValue: 1, useNativeDriver: true, tension: 80, friction: 9,
     }).start();
@@ -260,7 +285,10 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
   const closePreview = useCallback(() => {
     Animated.timing(previewAnim, {
       toValue: 0, duration: 180, useNativeDriver: true,
-    }).start(() => setSelected(null));
+    }).start(() => {
+      setSelected(null);
+      setPreviewAnchor(null);
+    });
   }, [previewAnim]);
 
   const handleViewProfile = useCallback(() => {
@@ -461,6 +489,10 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
         toolbarEnabled={false}
         rotateEnabled={false}
         pitchEnabled={false}
+        // Closing the preview when the user pans / zooms saves us from
+        // re-projecting on every frame — the pixel anchor goes stale
+        // the moment the region shifts. User can re-tap to re-open.
+        onRegionChange={() => { if (selected) closePreview(); }}
       >
         {visiblePeople.map((p) => (
           <Marker
@@ -511,46 +543,94 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
         </View>
       ) : null}
 
-      {/* Tap-on-marker preview. Stays mounted so the spring animation
-          on close still has a node to operate on. */}
-      {selected ? (
-        <Animated.View
-          style={[
-            styles.previewWrap,
-            {
-              opacity: previewAnim,
-              transform: [{
-                translateY: previewAnim.interpolate({ inputRange: [0, 1], outputRange: [80, 0] }),
-              }],
-            },
-          ]}
-        >
-          <View style={styles.previewCard}>
-            <Image source={imageSource(selected.photos?.[0])} style={styles.previewAvatar} />
-            <View style={{ flex: 1 }}>
-              <View style={styles.previewNameRow}>
-                <Text style={styles.previewName} numberOfLines={1}>
-                  {selected.name}, {selected.age}
+      {/* Tap-on-marker preview. Small card anchored just above the
+          tapped pin — name + distance + verify check, with a CTA
+          to open the full profile. Falls back to a centered bottom
+          sheet when pointForCoordinate fails (rare Android case). */}
+      {selected ? (() => {
+        // Anchor math: card sits above the pin with a small tail.
+        // The pin renders 44px tall, top-centered on the marker
+        // coordinate, so the card needs ~28px clearance to leave room
+        // for the avatar ring + the tail. Clamp left so the card
+        // never escapes the screen edge.
+        const CARD_W = 220;
+        const MARKER_HALF = 22;
+        const TAIL = 12;
+        const SIDE_PADDING = 10;
+        const anchored = !!previewAnchor;
+        const left = anchored
+          ? Math.max(SIDE_PADDING, Math.min(previewAnchor.x - CARD_W / 2, screenW - CARD_W - SIDE_PADDING))
+          : null;
+        return (
+          <Animated.View
+            pointerEvents="box-none"
+            style={[
+              anchored
+                ? [
+                    styles.previewAnchored,
+                    {
+                      left,
+                      // y - card height - marker half - tail margin.
+                      // The card height is dynamic; using a measured
+                      // `previewBox` would be cleaner, but a fixed 96
+                      // matches the compact layout below within a few
+                      // px and avoids a measurement round trip.
+                      top: previewAnchor.y - 96 - MARKER_HALF - TAIL,
+                      width: CARD_W,
+                    },
+                  ]
+                : styles.previewWrap,
+              {
+                opacity: previewAnim,
+                transform: [{
+                  translateY: previewAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: anchored ? [12, 0] : [80, 0],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <View style={styles.previewCard}>
+              <Image source={imageSource(selected.photos?.[0])} style={styles.previewAvatar} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <View style={styles.previewNameRow}>
+                  <Text style={styles.previewName} numberOfLines={1}>
+                    {selected.name}, {selected.age}
+                  </Text>
+                  {selected.verified ? (
+                    <Ionicons name="checkmark-circle" size={12} color={colors.accent} style={{ marginLeft: 3 }} />
+                  ) : null}
+                </View>
+                <Text style={styles.previewMeta} numberOfLines={1}>
+                  {center && selected.coords
+                    ? `${(distanceKm(center, selected.coords) / KM_PER_MILE).toFixed(1)} mi · ${selected.ethnicity || ''}`
+                    : (selected.city || selected.ethnicity || '')}
                 </Text>
-                {selected.verified ? (
-                  <Ionicons name="checkmark-circle" size={14} color={colors.accent} style={{ marginLeft: 4 }} />
-                ) : null}
               </View>
-              <Text style={styles.previewMeta} numberOfLines={1}>
-                {center && selected.coords
-                  ? `${(distanceKm(center, selected.coords) / KM_PER_MILE).toFixed(1)} mi · ${selected.ethnicity || ''}`
-                  : (selected.city || selected.ethnicity || '')}
-              </Text>
+              <TouchableOpacity style={styles.previewClose} onPress={closePreview} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={14} color={colors.gray500} />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.previewClose} onPress={closePreview} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={18} color={colors.gray500} />
+            <TouchableOpacity style={styles.previewCta} onPress={handleViewProfile} activeOpacity={0.85}>
+              <Text style={styles.previewCtaText}>View profile</Text>
             </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.previewCta} onPress={handleViewProfile} activeOpacity={0.85}>
-            <Text style={styles.previewCtaText}>View profile</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      ) : null}
+            {anchored && (
+              // Downward tail — a rotated square pulled half its height
+              // out of the bottom of the card, centered over the pin.
+              <View
+                pointerEvents="none"
+                style={[
+                  styles.previewTail,
+                  // Re-center the tail on the marker since the card
+                  // itself may have been clamped against the screen edge.
+                  { left: Math.max(8, Math.min(previewAnchor.x - left - 6, CARD_W - 20)) },
+                ]}
+              />
+            )}
+          </Animated.View>
+        );
+      })() : null}
     </View>
   );
 }
@@ -816,45 +896,66 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   errorPillText: {
     color: '#FFF', fontSize: 12, fontFamily: FontFamily.medium,
   },
+  // Fallback: bottom-sheet style anchor used when pointForCoordinate
+  // didn't return a valid pixel. Still compact.
   previewWrap: {
     position: 'absolute',
     bottom: 80, left: 16, right: 16,
-    gap: 8,
+    gap: 6,
+  },
+  // Anchored above a specific marker via openPreview. Width is set
+  // inline (CARD_W = 220), position too.
+  previewAnchored: {
+    position: 'absolute',
+    gap: 6,
   },
   previewCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.cardBg,
-    borderRadius: 16,
-    padding: 12, gap: 12,
-    shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 12,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+    shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
   previewAvatar: {
-    width: 48, height: 48, borderRadius: 24,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: colors.gray300,
   },
   previewNameRow: {
     flexDirection: 'row', alignItems: 'center',
   },
   previewName: {
-    fontSize: 15, fontFamily: FontFamily.semibold, color: colors.black,
+    fontSize: 13, fontFamily: FontFamily.semibold, color: colors.black,
+    flexShrink: 1,
   },
   previewMeta: {
-    fontSize: 12, fontFamily: FontFamily.medium, color: colors.gray500, marginTop: 2,
+    fontSize: 11, fontFamily: FontFamily.medium, color: colors.gray500, marginTop: 1,
   },
   previewClose: {
-    padding: 4,
+    padding: 2,
   },
   previewCta: {
     backgroundColor: colors.accent,
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
     alignItems: 'center',
   },
   previewCtaText: {
-    color: '#FFF', fontSize: 14, fontFamily: FontFamily.semibold,
+    color: '#FFF', fontSize: 12, fontFamily: FontFamily.semibold,
+  },
+  previewTail: {
+    position: 'absolute',
+    // Sit half-buried at the bottom edge of the CTA so the diamond
+    // reads as a downward arrow pointing at the marker.
+    bottom: -5,
+    width: 12, height: 12,
+    backgroundColor: colors.accent,
+    transform: [{ rotate: '45deg' }],
+    borderRadius: 2,
   },
   fallbackInner: {
     flex: 1,

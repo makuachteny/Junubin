@@ -12,39 +12,61 @@ import {
 } from '../entitlements';
 
 describe('entitlements', () => {
-  // The v1 launch ships with ALL_FEATURES_FREE = true: every premium
-  // entitlement is unlocked for every user regardless of subscription
-  // tier. The tests below reflect that. When payments go live and the
-  // flag flips back to false, restore the per-tier expectations from
-  // the git history (commit `1abf3d7` has the original assertions).
-  it('ALL_FEATURES_FREE flag is on for v1 launch', () => {
-    expect(ALL_FEATURES_FREE).toBe(true);
+  // Paid features are on as of build 18. ALL_FEATURES_FREE is now off
+  // and every entitlement check enforces the tier hierarchy:
+  //   free  →  plus (JuNubin+)  →  junub (premium)
+  it('ALL_FEATURES_FREE flag is off — payments are live', () => {
+    expect(ALL_FEATURES_FREE).toBe(false);
   });
 
-  describe('hasTierAccess (free-for-all)', () => {
-    it('returns true for any tier combination while the flag is on', () => {
-      expect(hasTierAccess('free', 'plus')).toBe(true);
-      expect(hasTierAccess('free', 'junub')).toBe(true);
+  describe('hasTierAccess', () => {
+    it('lets equal or higher tiers through, blocks lower', () => {
+      expect(hasTierAccess('free', 'plus')).toBe(false);
+      expect(hasTierAccess('free', 'junub')).toBe(false);
       expect(hasTierAccess('plus', 'plus')).toBe(true);
+      expect(hasTierAccess('plus', 'junub')).toBe(false);
+      expect(hasTierAccess('junub', 'plus')).toBe(true);
       expect(hasTierAccess('junub', 'junub')).toBe(true);
+    });
+
+    it('treats unknown tiers as free', () => {
+      expect(hasTierAccess(undefined, 'plus')).toBe(false);
+      expect(hasTierAccess(null, 'plus')).toBe(false);
+      expect(hasTierAccess('mystery', 'plus')).toBe(false);
     });
   });
 
-  describe('feature checks (free-for-all)', () => {
+  describe('plus-tier features', () => {
     it.each([
-      ['canSeeWhoLikesYou', canSeeWhoLikesYou],
       ['hasUnlimitedLikes', hasUnlimitedLikes],
-      ['canUseAdvancedFilters', canUseAdvancedFilters],
-      ['canUseIncognito', canUseIncognito],
       ['hasUnlimitedRewinds', hasUnlimitedRewinds],
       ['canUseWhispers', canUseWhispers],
-      ['canUseDiasporaConnect', canUseDiasporaConnect],
-      ['isSubscribed', isSubscribed],
-    ])('%s returns true regardless of tier', (_name, fn) => {
-      expect(fn('free')).toBe(true);
+      ['canUseAdvancedFilters', canUseAdvancedFilters],
+    ])('%s requires plus or higher', (_name, fn) => {
+      expect(fn('free')).toBe(false);
       expect(fn('plus')).toBe(true);
       expect(fn('junub')).toBe(true);
-      expect(fn(undefined)).toBe(true);
+    });
+  });
+
+  describe('junub-tier features', () => {
+    it.each([
+      ['canSeeWhoLikesYou', canSeeWhoLikesYou],
+      ['canUseIncognito', canUseIncognito],
+      ['canUseDiasporaConnect', canUseDiasporaConnect],
+    ])('%s requires junub', (_name, fn) => {
+      expect(fn('free')).toBe(false);
+      expect(fn('plus')).toBe(false);
+      expect(fn('junub')).toBe(true);
+    });
+  });
+
+  describe('isSubscribed', () => {
+    it('is true for any paid tier, false for free / undefined', () => {
+      expect(isSubscribed('free')).toBe(false);
+      expect(isSubscribed(undefined)).toBe(false);
+      expect(isSubscribed('plus')).toBe(true);
+      expect(isSubscribed('junub')).toBe(true);
     });
   });
 });

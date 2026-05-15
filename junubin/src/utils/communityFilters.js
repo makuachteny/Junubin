@@ -66,6 +66,29 @@ export const matchesCommunityFilter = (item, filterId, ctx = {}) => {
       if (followingIds && authorId && followingIds.has(authorId)) return true;
       return item?.user?.isFriend === true || item?.fromFriend === true;
     }
+    case 'verified':
+      // Author is a verified user. Reads both shapes since mockPosts use
+      // `user.verified` and the normalized post payload uses
+      // `user.verified` set from `author.isVerified`.
+      return item?.user?.verified === true || item?.user?.isVerified === true;
+    case 'photos':
+      // Posts with an image attached. `image` is set in normalizePost
+      // when mediaType === 'image'; mocks use the same field name.
+      return !!item?.image;
+    case 'videos':
+      return !!item?.video;
+    case 'thisWeek':
+      return ageOfItemHours(item) <= 24 * 7;
+    case 'questions': {
+      // Posts that ask the community something. Trim then check the
+      // last meaningful character so trailing emoji / whitespace don't
+      // hide a genuine question.
+      const text = typeof item?.content === 'string' ? item.content.trim() : '';
+      if (!text) return false;
+      // Strip trailing emoji / non-letter runes so "What's up? 🎉" still counts.
+      const stripped = text.replace(/[\s\p{Extended_Pictographic}]+$/u, '');
+      return stripped.endsWith('?');
+    }
     default:
       return true;
   }

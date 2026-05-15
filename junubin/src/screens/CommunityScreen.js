@@ -41,6 +41,11 @@ const COMMUNITY_FILTERS = [
   { id: 'new', label: 'New', icon: 'time' },
   { id: 'friends', label: 'Friends', icon: 'people', graffitiIcon: 'community' },
   { id: 'popular', label: 'Popular', icon: 'flame', graffitiIcon: 'star' },
+  { id: 'photos', label: 'Photos', icon: 'image' },
+  { id: 'videos', label: 'Videos', icon: 'videocam' },
+  { id: 'verified', label: 'Verified', icon: 'shield-checkmark' },
+  { id: 'thisWeek', label: 'This week', icon: 'calendar' },
+  { id: 'questions', label: 'Questions', icon: 'help-circle' },
 ];
 const INLINE_FILTER_COUNT = 2;
 
