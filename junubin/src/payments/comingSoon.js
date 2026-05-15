@@ -15,7 +15,7 @@
 
 import { Alert } from 'react-native';
 
-export const PAYMENTS_ENABLED = true;
+export const PAYMENTS_ENABLED = false;
 
 // UI-level gate. While this is false, every payment-related surface is
 // hidden — the Elite tier sheet, the Boost spotlight purchase screen,

@@ -12,61 +12,40 @@ import {
 } from '../entitlements';
 
 describe('entitlements', () => {
-  // Paid features are on as of build 18. ALL_FEATURES_FREE is now off
-  // and every entitlement check enforces the tier hierarchy:
-  //   free  →  plus (JuNubin+)  →  junub (premium)
-  it('ALL_FEATURES_FREE flag is off — payments are live', () => {
-    expect(ALL_FEATURES_FREE).toBe(false);
+  // Hybrid mode for build 19: ALL_FEATURES_FREE = true so every
+  // entitlement check unlocks, BUT SHOW_PAYMENTS_UI = true so the
+  // paywall surfaces render. Apple sees the buttons; users get the
+  // features without a real purchase round-trip. Flip ALL_FEATURES_FREE
+  // back to false the moment RevenueCat keys are wired and a sandbox
+  // transaction has been verified end-to-end.
+  it('ALL_FEATURES_FREE flag is on (paid UI shown, gates bypassed)', () => {
+    expect(ALL_FEATURES_FREE).toBe(true);
   });
 
-  describe('hasTierAccess', () => {
-    it('lets equal or higher tiers through, blocks lower', () => {
-      expect(hasTierAccess('free', 'plus')).toBe(false);
-      expect(hasTierAccess('free', 'junub')).toBe(false);
+  describe('hasTierAccess (free-for-all)', () => {
+    it('returns true for any tier combination while the flag is on', () => {
+      expect(hasTierAccess('free', 'plus')).toBe(true);
+      expect(hasTierAccess('free', 'junub')).toBe(true);
       expect(hasTierAccess('plus', 'plus')).toBe(true);
-      expect(hasTierAccess('plus', 'junub')).toBe(false);
-      expect(hasTierAccess('junub', 'plus')).toBe(true);
       expect(hasTierAccess('junub', 'junub')).toBe(true);
     });
-
-    it('treats unknown tiers as free', () => {
-      expect(hasTierAccess(undefined, 'plus')).toBe(false);
-      expect(hasTierAccess(null, 'plus')).toBe(false);
-      expect(hasTierAccess('mystery', 'plus')).toBe(false);
-    });
   });
 
-  describe('plus-tier features', () => {
-    it.each([
-      ['hasUnlimitedLikes', hasUnlimitedLikes],
-      ['hasUnlimitedRewinds', hasUnlimitedRewinds],
-      ['canUseWhispers', canUseWhispers],
-      ['canUseAdvancedFilters', canUseAdvancedFilters],
-    ])('%s requires plus or higher', (_name, fn) => {
-      expect(fn('free')).toBe(false);
-      expect(fn('plus')).toBe(true);
-      expect(fn('junub')).toBe(true);
-    });
-  });
-
-  describe('junub-tier features', () => {
+  describe('feature checks (free-for-all)', () => {
     it.each([
       ['canSeeWhoLikesYou', canSeeWhoLikesYou],
+      ['hasUnlimitedLikes', hasUnlimitedLikes],
+      ['canUseAdvancedFilters', canUseAdvancedFilters],
       ['canUseIncognito', canUseIncognito],
+      ['hasUnlimitedRewinds', hasUnlimitedRewinds],
+      ['canUseWhispers', canUseWhispers],
       ['canUseDiasporaConnect', canUseDiasporaConnect],
-    ])('%s requires junub', (_name, fn) => {
-      expect(fn('free')).toBe(false);
-      expect(fn('plus')).toBe(false);
+      ['isSubscribed', isSubscribed],
+    ])('%s returns true regardless of tier', (_name, fn) => {
+      expect(fn('free')).toBe(true);
+      expect(fn('plus')).toBe(true);
       expect(fn('junub')).toBe(true);
-    });
-  });
-
-  describe('isSubscribed', () => {
-    it('is true for any paid tier, false for free / undefined', () => {
-      expect(isSubscribed('free')).toBe(false);
-      expect(isSubscribed(undefined)).toBe(false);
-      expect(isSubscribed('plus')).toBe(true);
-      expect(isSubscribed('junub')).toBe(true);
+      expect(fn(undefined)).toBe(true);
     });
   });
 });

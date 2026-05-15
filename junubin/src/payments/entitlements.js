@@ -19,7 +19,7 @@
 
 import { TIER_RANK } from './products';
 
-export const ALL_FEATURES_FREE = false;
+export const ALL_FEATURES_FREE = true;
 
 export function hasTierAccess(currentTier, requiredTier) {
   if (ALL_FEATURES_FREE) return true;
