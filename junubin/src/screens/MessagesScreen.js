@@ -45,7 +45,6 @@ export default function MessagesScreen({ navigation, route }) {
   const [likes, setLikes] = useState([]);
   const styles = useMemo(() => getStyles(colors, isDark, prefs), [colors, isDark, prefs]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [notificationsMuted, setNotificationsMuted] = useState(false);
   const { hasTier } = useSubscription();
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
@@ -546,21 +545,6 @@ export default function MessagesScreen({ navigation, route }) {
             );
           })}
         </View>
-        <TouchableOpacity
-          style={[styles.notifToggle, notificationsMuted && styles.notifToggleMuted]}
-          onPress={() => setNotificationsMuted((m) => !m)}
-          activeOpacity={0.75}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: !notificationsMuted }}
-          accessibilityLabel={notificationsMuted ? 'Notifications off — tap to turn on' : 'Notifications on — tap to mute'}
-        >
-          <Ionicons
-            name={notificationsMuted ? 'notifications-off-outline' : 'notifications-outline'}
-            size={18}
-            color={notificationsMuted ? colors.gray400 : colors.black}
-          />
-        </TouchableOpacity>
       </View>
 
       <View style={styles.searchWrap}>
@@ -594,7 +578,7 @@ export default function MessagesScreen({ navigation, route }) {
         </TouchableOpacity>
       )}
     </View>
-  ), [CATEGORIES, activeCategory, filtersLocked, searchQuery, colors, showFiltersLocked, notificationsMuted]);
+  ), [CATEGORIES, activeCategory, filtersLocked, searchQuery, colors, showFiltersLocked]);
 
   // Unified data for the FlatList. Keeping a fixed prefix (stories,
   // filters, banners) means stickyHeaderIndices=[1] always points at
@@ -640,17 +624,10 @@ export default function MessagesScreen({ navigation, route }) {
       >
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerRight}>
-          {/* Bell sits to the LEFT of the avatar, same affordance as
-              CommunityScreen so the header reads consistently across
-              tabs. In-app Notifications screen lands in v1.1 — for now
-              this surfaces the "coming soon" copy. */}
+          {/* Bell sits to the LEFT of the avatar — opens the in-app
+              Notifications screen (already wired in AppNavigator). */}
           <TouchableOpacity
-            onPress={() =>
-              Alert.alert(
-                'Coming soon',
-                'In-app notifications are landing in v1.1. For now, push notifications cover matches, likes, and messages.'
-              )
-            }
+            onPress={() => navigation.navigate('Notifications')}
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
@@ -880,21 +857,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     gap: 8,
-  },
-  // Notification mute toggle — sits on the right edge of the filter row
-  notifToggle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
-  },
-  notifToggleMuted: {
-    backgroundColor: 'transparent',
-    borderColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
   },
   categoryChip: {
     flexDirection: 'row',
