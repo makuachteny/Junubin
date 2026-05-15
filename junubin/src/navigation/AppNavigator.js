@@ -52,6 +52,7 @@ function lazify(importFn) {
 
 const ProfileScreen = lazify(() => import('../screens/ProfileScreen'));
 const ProfileDetailScreen = lazify(() => import('../screens/ProfileDetailScreen'));
+const ProfileViewScreen = lazify(() => import('../screens/ProfileViewScreen'));
 const SettingsScreen = lazify(() => import('../screens/SettingsScreen'));
 const PreferencesScreen = lazify(() => import('../screens/PreferencesScreen'));
 const BoostScreen = lazify(() => import('../screens/BoostScreen'));
@@ -227,6 +228,7 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
       <MainStack.Screen name="Profile" component={ProfileScreen} />
       <MainStack.Screen name="ProfileDetail" component={ProfileDetailScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
+      <MainStack.Screen name="ProfileView" component={ProfileViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
       <MainStack.Screen name="Settings" component={SettingsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Preferences" component={PreferencesScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Boost" component={BoostScreen} options={{ presentation: 'modal' }} />

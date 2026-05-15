@@ -993,8 +993,15 @@ const HomeScreen = ({ navigation, route }) => {
             // header (mode label + map toggle + avatar) so they don't
             // overlap the status bar or the title.
             topInset={insets.top + Layout.headerHeight + 8}
-            onPersonPress={(person) => navigation?.navigate?.('ProfileDetail', {
+            // Route through ProfileView (card-first) instead of straight
+            // to ProfileDetail — gives the tapped marker the same
+            // single-card preview surface used by the swipe deck, and
+            // the card opens the deep view on tap. Pass the current
+            // HomeScreen mode through so the action bar matches the
+            // viewer's context (Dating actions vs Social actions).
+            onPersonPress={(person) => navigation?.navigate?.('ProfileView', {
               profile: { ...person, images: person.photos || [] },
+              mode: mode === 'Social' ? 'social' : 'dating',
             })}
           />
         ) : isLoadingProfiles ? (
