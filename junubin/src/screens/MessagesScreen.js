@@ -640,6 +640,24 @@ export default function MessagesScreen({ navigation, route }) {
       >
         <Text style={styles.headerTitle}>Messages</Text>
         <View style={styles.headerRight}>
+          {/* Bell sits to the LEFT of the avatar, same affordance as
+              CommunityScreen so the header reads consistently across
+              tabs. In-app Notifications screen lands in v1.1 — for now
+              this surfaces the "coming soon" copy. */}
+          <TouchableOpacity
+            onPress={() =>
+              Alert.alert(
+                'Coming soon',
+                'In-app notifications are landing in v1.1. For now, push notifications cover matches, likes, and messages.'
+              )
+            }
+            activeOpacity={0.75}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+          >
+            <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
             <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
           </TouchableOpacity>
