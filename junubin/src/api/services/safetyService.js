@@ -55,6 +55,20 @@ export async function unblockUser(blockedId) {
  */
 export async function reportUser({ reportedId, reason, details = null }) {
   const reporterId = await currentAppUserId();
+  // De-dupe client-side: if this reporter already filed a report
+  // against this user, skip the insert. The Report table has no DB
+  // unique constraint (audit flagged it — server fix is a migration),
+  // so without this check a spammer could file unlimited duplicates
+  // and bloat the review queue. The returned row id matches the
+  // existing report so callers that branch on `data?.id` still work.
+  const { data: existing } = await supabase
+    .from('Report')
+    .select('id')
+    .eq('reporterId', reporterId)
+    .eq('reportedId', reportedId)
+    .maybeSingle();
+  if (existing?.id) return existing;
+
   const { data, error } = await supabase
     .from('Report')
     .insert({ reporterId, reportedId, reason, details })

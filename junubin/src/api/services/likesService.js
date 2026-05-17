@@ -17,10 +17,16 @@ export async function getReceivedLikes() {
   if (!appUser) throw new Error('User not found');
   const userId = appUser.id;
 
+  // Pull the whisper text directly off the Swipe row. The
+  // `Swipe.whisper` column was added in 00010 and is what the swipe
+  // Edge Function actually writes; the legacy `Whisper` table from
+  // 00005 is never populated by the current backend, so an earlier
+  // version of this service that joined it always returned no
+  // whispers (real likes never lit up the Whispers filter / badge).
   const { data: swipes, error } = await supabase
     .from('Swipe')
     .select(`
-      id, type, mode, createdAt,
+      id, type, mode, whisper, createdAt,
       fromUser:User!fromUserId(
         id, displayName, dateOfBirth, isVerified, city, gender,
         photos:Photo(*),
@@ -40,43 +46,11 @@ export async function getReceivedLikes() {
 
   const swipedIds = new Set((mySwipes || []).map((s) => s.toUserId));
 
-  const likerIds = (swipes || [])
-    .map((s) => s.fromUser?.id)
-    .filter((id) => id && !swipedIds.has(id));
-
-  // Pull the latest whisper from each liker so the LikesScreen can
-  // render the "Whispered X ago" badge and the Whispers filter chip
-  // works for real likes (it already worked for demo data because the
-  // mockLikes have `hasWhisper` baked in). One round-trip, in() filter
-  // — cheap even for hundreds of likes.
-  const whisperByLiker = new Map();
-  if (likerIds.length > 0) {
-    const { data: whispers, error: whisperError } = await supabase
-      .from('Whisper')
-      .select('fromUserId, body, createdAt')
-      .eq('toUserId', userId)
-      .in('fromUserId', likerIds)
-      .order('createdAt', { ascending: false });
-    // Don't fail the whole getReceivedLikes call if the whisper join
-    // errors — likes are still useful without the whisper badge — but
-    // surface it in dev so a real RLS / schema regression isn't
-    // hidden behind the silent fallback.
-    if (whisperError) {
-      if (__DEV__) console.warn('[likesService] Whisper join failed:', whisperError.message || whisperError);
-    } else {
-      for (const w of whispers || []) {
-        if (!whisperByLiker.has(w.fromUserId)) {
-          whisperByLiker.set(w.fromUserId, { body: w.body, createdAt: w.createdAt });
-        }
-      }
-    }
-  }
-
   const result = (swipes || [])
     .filter((s) => !swipedIds.has(s.fromUser?.id))
     .map((s) => {
       const profile = normalizeProfile(s.fromUser);
-      const whisper = whisperByLiker.get(s.fromUser?.id) || null;
+      const whisperText = (typeof s.whisper === 'string' && s.whisper.trim()) || null;
       return {
         ...profile,
         likeId: s.id,
@@ -85,8 +59,8 @@ export async function getReceivedLikes() {
         // Mode the liker was in when they swiped. Used to bucket
         // received likes alongside their matches in MessagesScreen.
         mode: s.mode || 'dating',
-        hasWhisper: !!whisper,
-        whisperText: whisper?.body || null,
+        hasWhisper: !!whisperText,
+        whisperText,
       };
     });
 
