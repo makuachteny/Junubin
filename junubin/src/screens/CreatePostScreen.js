@@ -186,6 +186,14 @@ export default function CreatePostScreen({ navigation, route }) {
   };
 
   const handleNext = () => {
+    // In repost-with-thoughts mode there's no second-screen preview
+    // worth showing — the embedded original is already visible in the
+    // compose card, and themes/media/signup are hidden. Submit straight
+    // to the server so it feels like LinkedIn's "Post" button.
+    if (isRepostMode) {
+      handlePost();
+      return;
+    }
     if (!canPost) {
       Alert.alert('Empty Post', 'Add text, photo, or an event link before continuing.');
       return;
@@ -289,13 +297,17 @@ export default function CreatePostScreen({ navigation, route }) {
           <Text style={styles.headerTitle}>New Post</Text>
         </View>
         <TouchableOpacity
-          style={[styles.nextBtn, !canPost && styles.nextBtnDisabled]}
+          style={[styles.nextBtn, (!canPost || posting) && styles.nextBtnDisabled]}
           onPress={handleNext}
-          disabled={!canPost}
+          disabled={!canPost || posting}
           activeOpacity={0.8}
         >
-          <Text style={[styles.nextBtnText, !canPost && styles.nextBtnTextDisabled]}>Next</Text>
-          <Ionicons name="arrow-forward" size={16} color={canPost ? '#FFFFFF' : colors.gray400} />
+          <Text style={[styles.nextBtnText, (!canPost || posting) && styles.nextBtnTextDisabled]}>
+            {isRepostMode ? (posting ? 'Posting…' : 'Post') : 'Next'}
+          </Text>
+          {!isRepostMode && (
+            <Ionicons name="arrow-forward" size={16} color={canPost ? '#FFFFFF' : colors.gray400} />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -418,6 +430,15 @@ export default function CreatePostScreen({ navigation, route }) {
           </View>
         )}
 
+        {/* Theme selector / Add-to-Post / Event link are HIDDEN in
+            repost-with-thoughts mode. LinkedIn semantics: the
+            reshare is just your text + the embed; no new media,
+            no theme, no signup CTA gets attached to a repost.
+            All the conditional blocks below collapse to nothing
+            when isRepostMode is true. */}
+
+        {!isRepostMode && (
+          <>
         {/* ─── Theme selector ─── */}
         <Text style={styles.sectionTitle}>Card Theme</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.themeRow}>
@@ -535,6 +556,8 @@ export default function CreatePostScreen({ navigation, route }) {
             />
             {signupError ? <Text style={styles.errorText}>{signupError}</Text> : null}
           </View>
+        )}
+          </>
         )}
 
         <View style={{ height: 60 }} />

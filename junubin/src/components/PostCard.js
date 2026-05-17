@@ -288,6 +288,21 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
   }, [post.id]);
 
   const openRepostSheet = useCallback(() => {
+    // Reposts touch real DB rows: PostRepost.postId is a FK back to
+    // Post.id, and a quote-post's Post.quotedPostId is too. Demo /
+    // mock cards (ids like `demo_post_001`) have no DB row, so both
+    // paths would 23503 (FK violation). Short-circuit with a friendly
+    // explainer instead.
+    const idStr = String(post?.id || '');
+    const isRealPost = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idStr)
+      || idStr.startsWith('p_');
+    if (!isRealPost) {
+      Alert.alert(
+        'Sample post',
+        "Repost works on real community posts. This one's part of the demo set — try reposting a post that someone in the community shared.",
+      );
+      return;
+    }
     Alert.alert(
       'Repost',
       'Choose how you want to share this post.',
