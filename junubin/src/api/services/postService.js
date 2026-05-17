@@ -203,6 +203,36 @@ export async function listPosts({ cursor } = {}) {
 }
 
 /**
+ * Update the text body of a post you authored. Text-only by design —
+ * media swaps would invalidate the moderation check, and the
+ * signupLink/title belong to the original publishing intent. The
+ * Post UPDATE RLS in 00012 already gates this to the author.
+ *
+ * Returns the freshly-normalized post so the caller can patch its
+ * in-memory copy without waiting on the realtime UPDATE echo.
+ */
+export async function updatePostContent(postId, nextContent) {
+  const trimmed = (nextContent ?? '').trim();
+  // Empty edits would wipe the caption silently; force callers to
+  // delete the post instead if that's what they want.
+  if (!trimmed) throw new Error('Post text cannot be empty');
+  const { data, error } = await supabase
+    .from('Post')
+    .update({ content: trimmed, updatedAt: new Date().toISOString() })
+    .eq('id', postId)
+    .select(`
+      id, userId, content, imageUrl, mediaType, aspectRatio,
+      location, tags, cardTheme, signupLink, signupTitle,
+      likeCount, commentCount, repostCount, createdAt, moderationStatus,
+      author:User!userId(id, displayName, isVerified, city, photos:Photo(url))
+    `)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Post not found');
+  return normalizePost(data, data.author);
+}
+
+/**
  * Delete one of your own posts. Storage cleanup runs best-effort
  * after the row is gone — we don't fail the call on storage error.
  */

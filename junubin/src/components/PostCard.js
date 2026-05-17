@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, Dimensions, Pressable } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, Dimensions, Pressable, Modal, TextInput, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
@@ -11,7 +11,7 @@ import { useFollow } from '../hooks/useFollow';
 import { useCurrentUser } from '../hooks';
 import { normalizeHttpUrl } from '../utils/links';
 import { POST_THEMES, POST_THEME_CYCLE } from '../data/postThemes';
-import { toggleLike, toggleRepost } from '../api/services/postService';
+import { toggleLike, toggleRepost, deletePost, updatePostContent } from '../api/services/postService';
 
 
 const { width: W } = Dimensions.get('window');
@@ -116,6 +116,85 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
 
   const goDetail = () => nav.navigate('PostDetail', { post });
   const handleCardPress = onPress || goDetail;
+
+  // Author-only edit state. Modal lets the author rewrite the text
+  // body of their post (text-only by design — media + signupLink stay
+  // pinned to the original publish so we don't have to re-run
+  // moderation). Save is gated on a non-empty trim because empty
+  // edits would silently wipe the caption; delete is the right path
+  // for "remove this post".
+  const [editOpen, setEditOpen] = useState(false);
+  const [editText, setEditText] = useState(post.content || '');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEdit = useCallback(() => {
+    setEditText(post.content || '');
+    setEditOpen(true);
+  }, [post.content]);
+
+  const saveEdit = useCallback(async () => {
+    const trimmed = editText.trim();
+    if (!trimmed) {
+      Alert.alert('Empty text', 'Add some text or delete the post instead.');
+      return;
+    }
+    if (trimmed === (post.content || '').trim()) {
+      setEditOpen(false);
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      await updatePostContent(post.id, trimmed);
+      setEditOpen(false);
+      // The Community realtime UPDATE subscription patches the in-memory
+      // post within the same tick, so we don't need to bubble the new
+      // content up through props here.
+    } catch (e) {
+      Alert.alert("Couldn't save", e?.message || 'Try again in a moment.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [editText, post.content, post.id]);
+
+  const handleDelete = useCallback(() => {
+    Alert.alert(
+      'Delete post?',
+      'This will remove the post and all its likes, comments, and reposts.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePost(post.id);
+              // Realtime DELETE subscription in CommunityScreen removes
+              // the card; no local state to clear here.
+            } catch (e) {
+              Alert.alert("Couldn't delete", e?.message || 'Try again in a moment.');
+            }
+          },
+        },
+      ],
+    );
+  }, [post.id]);
+
+  const handleShare = useCallback(async () => {
+    const name = post.user?.name || 'Someone';
+    const snippet = (post.content || '').trim();
+    const message = snippet
+      ? `${name} on JuNubin: "${snippet.slice(0, 140)}${snippet.length > 140 ? '…' : ''}"`
+      : `${name} posted on JuNubin`;
+    // Native iOS / Android share sheet. Falls back to body-only on
+    // platforms where `url` isn't honored. We don't have universal
+    // links wired yet so the share is text-only — replace with a
+    // junubin.app/post/:id URL once deep linking lands.
+    try {
+      await Share.share({ message }, { dialogTitle: 'Share post' });
+    } catch (e) {
+      if (__DEV__) console.warn('Share failed:', e?.message || e);
+    }
+  }, [post.user?.name, post.content]);
   const stop = (e) => e?.stopPropagation?.();
 
   const handleRepost = useCallback(() => {
@@ -217,19 +296,32 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
           testID="post-more-action"
           onPress={(e) => {
             stop(e);
-            const followAction = isOwnPost
-              ? null
-              : isFriend
+            // Menu shape depends on authorship. The author sees Edit /
+            // Delete (per the v1 policy: author may delete or edit text
+            // only — no media swap); everyone else sees Follow/Unfollow
+            // + Report. Share is offered in both cases — it's a
+            // generic affordance that costs nothing and helps reach.
+            const shareAction = { text: 'Share', onPress: handleShare };
+            if (isOwnPost) {
+              Alert.alert(post.user.name, null, [
+                { text: 'Edit text', onPress: openEdit },
+                shareAction,
+                { text: 'Delete post', style: 'destructive', onPress: handleDelete },
+                { text: 'Cancel', style: 'cancel' },
+              ]);
+              return;
+            }
+            const followAction = isFriend
               ? { text: 'Unfollow Friend', style: 'destructive', onPress: () => { if (!followLoading) toggleFollow(); } }
               : isFollowing
               ? { text: 'Unfollow', style: 'destructive', onPress: () => { if (!followLoading) toggleFollow(); } }
               : { text: `Follow ${post.user?.name || ''}`.trim(), onPress: () => { if (!followLoading) toggleFollow(); } };
-            const buttons = [
-              ...(followAction ? [followAction] : []),
+            Alert.alert(post.user.name, null, [
+              followAction,
+              shareAction,
               { text: 'Report', style: 'destructive' },
               { text: 'Cancel', style: 'cancel' },
-            ];
-            Alert.alert(post.user.name, null, buttons);
+            ]);
           }}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={$.moreBtn}
@@ -455,6 +547,64 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
           {formatCount(repostCount)} {repostCount === 1 ? 'repost' : 'reposts'}
         </Text>
       )}
+
+      {/* ── Edit text modal — author-only ──────────────────────────── */}
+      <Modal
+        visible={editOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !savingEdit && setEditOpen(false)}
+      >
+        <Pressable
+          style={$.editOverlay}
+          onPress={() => !savingEdit && setEditOpen(false)}
+        >
+          <Pressable
+            style={[$.editSheet, { backgroundColor: colors.cardBg }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[$.editTitle, { color: txt }]}>Edit post</Text>
+            <Text style={[$.editHint, { color: sub }]}>
+              You can change the text only. Photos and links stay the same.
+            </Text>
+            <TextInput
+              style={[$.editInput, {
+                color: txt,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+              }]}
+              value={editText}
+              onChangeText={setEditText}
+              multiline
+              maxLength={1000}
+              placeholder="What's on your mind?"
+              placeholderTextColor={sub}
+              autoFocus
+              editable={!savingEdit}
+            />
+            <View style={$.editActions}>
+              <TouchableOpacity
+                onPress={() => setEditOpen(false)}
+                disabled={savingEdit}
+                style={[$.editBtn, $.editBtnGhost]}
+                activeOpacity={0.7}
+              >
+                <Text style={[$.editBtnText, { color: txt }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={saveEdit}
+                disabled={savingEdit}
+                style={[$.editBtn, $.editBtnPrimary, { backgroundColor: colors.accent, opacity: savingEdit ? 0.6 : 1 }]}
+                activeOpacity={0.85}
+              >
+                <Text style={[$.editBtnText, { color: '#FFFFFF', fontFamily: FontFamily.bold }]}>
+                  {savingEdit ? 'Saving…' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Pressable>
   );
 };
@@ -656,5 +806,60 @@ const $ = StyleSheet.create({
     paddingBottom: 10,
     fontSize: 12,
     fontFamily: FontFamily.regular,
+  },
+
+  // ─── Edit modal ───────────────────────────────────────────────────
+  editOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  editSheet: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 16,
+    padding: 18,
+  },
+  editTitle: {
+    fontSize: 17,
+    fontFamily: FontFamily.bold,
+    marginBottom: 4,
+  },
+  editHint: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    marginBottom: 12,
+  },
+  editInput: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    fontSize: 15,
+    fontFamily: FontFamily.regular,
+    textAlignVertical: 'top',
+  },
+  editActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 14,
+  },
+  editBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  editBtnGhost: {
+    backgroundColor: 'transparent',
+  },
+  editBtnPrimary: {},
+  editBtnText: {
+    fontSize: 14,
+    fontFamily: FontFamily.semibold,
   },
 });
