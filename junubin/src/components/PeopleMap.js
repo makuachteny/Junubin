@@ -33,6 +33,7 @@ import { useTheme, FontFamily, Typography } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import { DEMO_ROSTER } from '../data/__dev__/demoRoster';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
+import * as discoverService from '../api/services/discoverService';
 
 // `react-native-maps` ships a native module. When the JS bundle is
 // loaded by Expo Go (or by any client missing the linked native code —
@@ -229,12 +230,49 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
   // coords.
   const center = region ? { latitude: region.latitude, longitude: region.longitude } : null;
 
-  const allPeople = useMemo(
-    () => peopleForMode(mode, center),
+  // Live opted-in users from the discover-nearby Edge Function.
+  // The list refreshes when center / mode / activeOnly changes —
+  // exact same trigger surface the chip row mutates, so a user
+  // toggling 'Active now' or pulling distance to 'Anywhere' hits
+  // the server. Failures (function not deployed, network) silently
+  // fall back to an empty list and the DEMO_ROSTER pattern takes
+  // over below.
+  const [livePeople, setLivePeople] = useState([]);
+  useEffect(() => {
+    if (!center) return;
+    let cancelled = false;
+    discoverService.getNearbyUsers({
+      center,
+      // Translate the chip filter into a real km cap. 'any' = use the
+      // function's default; the others map to the visible chip labels.
+      radiusKm: distanceFilter === 'nearby' ? 5 * KM_PER_MILE
+        : distanceFilter === '25mi'   ? 25 * KM_PER_MILE
+        : distanceFilter === '50mi'   ? 50 * KM_PER_MILE
+        : undefined,
+      mode: mode === 'Dating' ? 'dating' : 'social',
+      activeOnly,
+    }).then(({ users }) => {
+      if (cancelled) return;
+      setLivePeople(users || []);
+    }).catch(() => {
+      if (!cancelled) setLivePeople([]);
+    });
+    return () => { cancelled = true; };
+  }, [center?.latitude, center?.longitude, distanceFilter, activeOnly, mode]);
+
+  const allPeople = useMemo(() => {
+    // Real users hide the demo roster entirely — same hide-when-real
+    // pattern used by Community and Stories. Demo pins ONLY appear
+    // when discover-nearby returns zero opted-in users near the
+    // caller (early-launch state). The moment one real user opts
+    // into shareLocation within range, the demo disappears.
+    if (livePeople.length > 0) return livePeople;
+    return peopleForMode(mode, center);
+  },
     // center is a fresh object each render so we depend on its
     // primitive parts to avoid useless recomputes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, center?.latitude, center?.longitude],
+    [mode, center?.latitude, center?.longitude, livePeople],
   );
 
   // Apply chip filters. `Nearby` / `25mi` / `50mi` cap by haversine

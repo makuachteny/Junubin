@@ -12,7 +12,7 @@ Things only you (the operator) can do. Each section has the exact command or cli
 
 The repo has four migrations that the latest client expects but they haven't been pushed yet:
 
-```
+```text
 00033_audit_hardening.sql           — RLS: Block check on message INSERT, report dedupe, post visibility
 00034_post_waves.sql                 — PostWave table + Post.waveCount trigger
 00035_post_reaction_pushes.sql      — Push notifications on like/comment/repost/wave
@@ -111,11 +111,13 @@ The `EXPO_PUBLIC_` prefix is required — Expo only inlines env vars that start 
 Once the keys are in and you've verified a sandbox purchase actually completes end-to-end (RevenueCat's sandbox testing docs walk through this), update three constants:
 
 **`src/payments/comingSoon.js`**
+
 ```js
 export const PAYMENTS_ENABLED = true;  // was false
 ```
 
 **`src/payments/entitlements.js`**
+
 ```js
 export const ALL_FEATURES_FREE = false;  // was true
 ```
@@ -126,30 +128,44 @@ Then cut a new build and submit. **Important: Apple App Review tests purchases.*
 
 ---
 
-## 3. Build a real `discover-nearby` Edge Function (optional, but PeopleMap depends on it)
+## 3. Deploy the `discover-nearby` Edge Function
 
-Right now `src/api/services/discoverService.js:137` calls a `discover-nearby` function that doesn't exist; it returns `{ users: [] }` as a graceful fallback. PeopleMap renders demo roster pins instead. Real users will never appear on the map until this ships.
+✅ The function is shipped in `supabase/functions/discover-nearby/index.ts` and the client is wired (PeopleMap auto-hides demo pins the moment real opted-in users come back from the function).
 
-### What it needs to do
+**Deploy:**
 
-1. Authenticate the caller (`getUser()`).
-2. Take `{ center: { latitude, longitude }, radiusKm, mode, activeOnly }` from the body.
-3. Query `User` joined with `Profile` where:
-   - `Profile.shareLocation = true` (privacy opt-in from migration 00032)
-   - `Profile.appMode` matches `mode` (or both modes accept)
+```bash
+supabase functions deploy discover-nearby
+```
+
+That's it — no extra secrets needed; it uses the same `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` env vars Supabase injects automatically into every function.
+
+**What it does:**
+
+1. Auth-gates via JWT (returns 401 if no caller).
+2. Reads `{ center, radiusKm, mode, activeOnly }` from the body.
+3. Queries `User` × `Profile` joined on:
+   - `User.isActive = true`
+   - `Profile.shareLocation = true` (the privacy opt-in from 00032 — the only way to appear on the map)
+   - `Profile.incognito = false`, `Profile.showMe = true`
+   - Mode match against `appMode` (or mapped `accountPurpose`)
    - Not the caller
-   - Not in any `Block` row with the caller
-4. Filter by haversine distance ≤ `radiusKm` (Postgres has `<@>` operator if you install the `cube` + `earthdistance` extensions, OR do it in JS for v1).
-5. Return `{ users: [{ id, name, age, photos, coords: { latitude, longitude }, activity, verified, ethnicity, mode }] }` — same shape `getNearbyUsers` already documents (see `discoverService.js:135-138`).
-6. Snap coordinates to 3 decimals (~110m) on the server before returning. The client-side bucket in PeopleMap is defense-in-depth; the server is the real boundary.
+   - Not in any `Block` row with the caller (symmetric — either direction)
+4. Haversine distance cap in JS (clamped 0.1km–500km, default 50km).
+5. Snaps coordinates to 3 decimals (~110m precision) BEFORE returning so the wire never carries the raw lat/lng.
+6. Sorts by distance ascending and caps at 200 results.
 
-### Scaffold (drop into `supabase/functions/discover-nearby/index.ts`)
+**Verify after deploy:**
 
-I can build this for you on request — it's about 100 lines including the haversine cap, auth check, and block-filter. Just say "build discover-nearby" and I'll write it. Without earthdistance installed I'd do the distance filter in JS, which works fine up to ~1000 candidates.
+```bash
+# Should return 401 (auth required), not 404.
+curl -i https://uvtyiytbgkasemabtznc.supabase.co/functions/v1/discover-nearby
+```
 
-### Until then
+**Tester impact before vs after deploy:**
 
-PeopleMap is functional with demo data. Tester impact: they see Adau, Akuol, etc. scattered around their location instead of real members. Not broken, just preview-mode.
+- Before: PeopleMap shows DEMO_ROSTER pins (Adau, Akuol, etc.) around the caller — preview-mode.
+- After: PeopleMap shows real users who opted into "Appear on map" in Settings, with demo pins falling away the moment one real user is in range.
 
 ---
 

@@ -124,33 +124,35 @@ export function invalidateLikeStatusCache() {
   likeStatusCache.timestamp = 0;
 }
 
-// Forward-compat stub used by PeopleMap. When a real `discover-nearby`
-// edge function lands (joins on Profile.shareLocation = true, applies
-// haversine cap on Profile.lat / Profile.lng), this becomes the call
-// site. Until then it returns an empty list so the UI falls through
-// to demo roster rendering — never throws, never blocks the map.
-//
-// Contract once implemented:
+// Calls the discover-nearby Edge Function (see
+// supabase/functions/discover-nearby/index.ts). Body shape:
 //   { center: { latitude, longitude }, radiusKm, mode, activeOnly }
-//   → { users: [ { id, name, age, photos, coords: {latitude,longitude},
-//                  activity, verified, ethnicity, mode } ] }
+// Response:
+//   { users: [{ id, name, age, photos, coords, activity, verified,
+//              ethnicity, mode, distanceKm }] }
+//
+// The function does its own auth check, applies shareLocation +
+// block + mode filters, and bucket-snaps coordinates server-side.
+// If the function isn't deployed (404) or any network error fires,
+// we swallow and return an empty list — PeopleMap's demo roster
+// fallback covers the empty case, so the map never crashes.
 export async function getNearbyUsers({ center, radiusKm, mode, activeOnly } = {}) {
   if (!center || !Number.isFinite(center.latitude) || !Number.isFinite(center.longitude)) {
     return { users: [] };
   }
   try {
-    const params = new URLSearchParams();
-    params.set('lat', String(center.latitude));
-    params.set('lng', String(center.longitude));
-    if (radiusKm) params.set('radiusKm', String(radiusKm));
-    if (mode) params.set('mode', String(mode).toLowerCase());
-    if (activeOnly) params.set('activeOnly', '1');
-    const { data, error } = await supabase.functions.invoke(`discover-nearby?${params.toString()}`);
+    const { data, error } = await supabase.functions.invoke('discover-nearby', {
+      body: {
+        center: { latitude: center.latitude, longitude: center.longitude },
+        radiusKm: radiusKm || undefined,
+        mode: mode ? String(mode).toLowerCase() : undefined,
+        activeOnly: !!activeOnly,
+      },
+    });
     if (error) throw error;
     return { users: Array.isArray(data?.users) ? data.users : [] };
-  } catch {
-    // The edge function isn't deployed yet; swallow and return [].
-    // PeopleMap's demo roster fallback covers the empty case.
+  } catch (err) {
+    if (__DEV__) console.warn('[discover-nearby] failed, falling back to empty:', err?.message || err);
     return { users: [] };
   }
 }
