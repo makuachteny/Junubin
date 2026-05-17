@@ -4,10 +4,33 @@
 // filters out expired rows at query time. (A pg_cron job can later
 // physically delete expired rows; until then they stay in the table.)
 
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../../config/supabase';
 
 const ACTIVE_WINDOW_HOURS = 24;
 const DEFAULT_DURATION_MS = 5000;
+
+/**
+ * Resize + recompress a local image URI before upload. Mirrors the
+ * helper in profileService.js — kept local so this service stays
+ * self-contained. Videos bypass this entirely; uploadStoryVideo
+ * doesn't call it.
+ */
+async function compressImageIfNeeded(uri) {
+  if (!uri || typeof uri !== 'string') return uri;
+  if (uri.startsWith('http')) return uri;
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1600 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    return result.uri;
+  } catch (e) {
+    if (__DEV__) console.warn('[compress] failed, uploading raw:', e?.message);
+    return uri;
+  }
+}
 
 function makeId() {
   return (typeof crypto !== 'undefined' && crypto.randomUUID)
@@ -35,13 +58,21 @@ async function uploadStoryImage(imageUri, userId) {
   if (imageUri.startsWith('http')) {
     return { url: imageUri, path: null };
   }
-  const ext = (imageUri.split('.').pop() || 'jpg').replace(/[?#].*/, '');
+  // Compress before upload — see compressImageIfNeeded above for why.
+  // After compression the URI is always a fresh JPEG, so we force the
+  // extension/contentType to match.
+  const compressedUri = await compressImageIfNeeded(imageUri);
+  const wasCompressed = compressedUri !== imageUri;
+  const ext = wasCompressed
+    ? 'jpg'
+    : (compressedUri.split('.').pop() || 'jpg').replace(/[?#].*/, '');
   const path = `${userId}/${Date.now()}.${ext}`;
-  const fileResponse = await fetch(imageUri);
+  const fileResponse = await fetch(compressedUri);
   const fileBlob = await fileResponse.blob();
+  const contentType = wasCompressed ? 'image/jpeg' : `image/${ext}`;
   const { error } = await supabase.storage
     .from('stories')
-    .upload(path, fileBlob, { contentType: `image/${ext}`, upsert: false });
+    .upload(path, fileBlob, { contentType, upsert: false });
   if (error) throw error;
   const { data: pub } = supabase.storage.from('stories').getPublicUrl(path);
   return { url: pub.publicUrl, path };

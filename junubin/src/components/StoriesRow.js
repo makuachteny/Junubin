@@ -32,7 +32,11 @@ export default function StoriesRow({ onStoryPress, onCreatePress, colors, refres
         // disappear naturally once enough friends post.
         const liveList = live || [];
         if (liveList.length > 0) {
-          setStories(DEMO_DATA_ENABLED ? [...liveList, ...mockStories] : liveList);
+          // Real stories hide the demo seed — see CommunityScreen for
+          // the same rule. A populated story row should never mix
+          // seed entries with real ones; the moment the server has
+          // any stories we show ONLY those.
+          setStories(liveList);
         } else if (DEMO_DATA_ENABLED) {
           setStories(mockStories);
         } else {

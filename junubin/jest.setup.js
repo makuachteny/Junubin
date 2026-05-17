@@ -102,6 +102,19 @@ jest.mock('react-native-gesture-handler', () => {
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
+// expo-image-manipulator isn't loadable in the jest environment (and
+// the upload paths that call it are all integration-tested at the
+// device level, not in unit tests). Stub manipulateAsync to return the
+// input URI unchanged so compressImageIfNeeded() resolves cleanly. The
+// `{ virtual: true }` flag lets the mock register even when the
+// package isn't installed in node_modules — useful for CI that hasn't
+// run a fresh install since the dep was added.
+jest.mock('expo-image-manipulator', () => ({
+  __esModule: true,
+  manipulateAsync: jest.fn(async (uri) => ({ uri })),
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+}), { virtual: true });
+
 jest.mock('expo-linear-gradient', () => {
   const React = require('react');
   const { View } = require('react-native');

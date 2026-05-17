@@ -1,8 +1,30 @@
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../../config/supabase';
 import { cacheGet, cacheSet } from '../../utils/offlineCache';
 import { enqueueAction } from '../../utils/offlineQueue';
 
 const OFFLINE_MESSAGES_TTL = 600_000; // 10 min
+
+/**
+ * Resize + recompress a local image URI before upload. Mirrors the
+ * helper used by profileService / postService / storyService — chat
+ * images go through the same bucket pressure, so we cap them too.
+ */
+async function compressImageIfNeeded(uri) {
+  if (!uri || typeof uri !== 'string') return uri;
+  if (uri.startsWith('http')) return uri;
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1600 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    return result.uri;
+  } catch (e) {
+    if (__DEV__) console.warn('[compress] failed, uploading raw:', e?.message);
+    return uri;
+  }
+}
 
 export async function getMessages(conversationId) {
   const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -18,7 +40,7 @@ export async function getMessages(conversationId) {
 
   const { data: messages, error } = await supabase
     .from('Message')
-    .select('id, body, type, createdAt, senderId, sender:User!senderId(id, displayName)')
+    .select('id, body, type, createdAt, readAt, senderId, sender:User!senderId(id, displayName)')
     .eq('conversationId', conversationId)
     .order('createdAt', { ascending: true })
     .limit(100);
@@ -26,17 +48,27 @@ export async function getMessages(conversationId) {
   if (error) throw error;
 
   const result = (messages || []).map((m) => {
+    const isMine = m.senderId === appUser?.id;
+    // Read receipt: a message I sent is "read" once the recipient's
+    // markConversationRead RPC has stamped readAt on the row. For
+    // messages I received, the receipt concept doesn't apply — but
+    // we still set read=true so my own scroll position never shows
+    // a "new" badge against something I'm already looking at. The
+    // previous version hardcoded read:true unconditionally, which
+    // silently broke the read-receipt feature (00022) for senders.
+    const read = isMine ? Boolean(m.readAt) : true;
     const base = {
       id: m.id,
-      sender: m.senderId === appUser?.id ? 'me' : (m.sender?.id || m.senderId),
+      sender: isMine ? 'me' : (m.sender?.id || m.senderId),
       senderId: m.senderId,
       senderName: m.sender?.displayName || '',
-      isMe: m.senderId === appUser?.id,
+      isMe: isMine,
       text: m.body,
       type: m.type || 'text',
       time: formatTime(m.createdAt),
       createdAt: m.createdAt,
-      read: true,
+      readAt: m.readAt || null,
+      read,
     };
     // Audio messages store the storage URL + duration as a JSON-encoded
     // body so the existing `Message.body` text column doesn't need a
@@ -90,19 +122,47 @@ export async function sendMessage(conversationId, body, type = 'text') {
     ? body.slice(0, 8000)
     : body.replace(/<[^>]*>?/g, '').replace(/&[a-z]+;/gi, '').slice(0, 4000);
 
-  const { data: message, error } = await supabase
-    .from('Message')
-    .insert({
-      conversationId,
-      senderId: appUser.id,
-      body: sanitized,
-      type,
-    })
-    .select('*')
-    .single();
+  try {
+    const { data: message, error } = await supabase
+      .from('Message')
+      .insert({
+        conversationId,
+        senderId: appUser.id,
+        body: sanitized,
+        type,
+      })
+      .select('*')
+      .single();
 
-  if (error) throw error;
-  return message;
+    if (error) throw error;
+    return message;
+  } catch (err) {
+    // Queue transient failures (network drop, 5xx) so a flaky tunnel
+    // doesn't silently swallow a typed-and-tapped message. The
+    // existing offlineQueue knows the 'text' shape (see
+    // offlineQueue.js:38) so the consumer just needs to replay
+    // sendMessage(conversationId, body, type) on reconnect.
+    // Hard-rejection errors (RLS, validation) get queued too but
+    // dropped on replay precheck — better to leave the disposal to
+    // the consumer than to misclassify here.
+    const status = err?.status || err?.statusCode;
+    const transient = !status
+      || (status >= 500 && status < 600)
+      || /network|fetch|timeout/i.test(err?.message || '');
+    if (transient && type !== 'game') {
+      await enqueueAction({
+        kind: 'text',
+        conversationId,
+        body: sanitized,
+        type,
+        // tempId is stable-per-send so the queue dedupes a retry of
+        // the same enter-tap rather than fanning out to N copies.
+        tempId: `${appUser.id}-${Date.now()}`,
+        enqueuedAt: Date.now(),
+      }).catch(() => {});
+    }
+    throw err;
+  }
 }
 
 /**
@@ -206,18 +266,23 @@ export async function sendImageMessage(conversationId, fileUri) {
       .single();
     if (!appUser) throw new Error('User not found');
 
-    // Detect file extension + content type from the URI. Fall back to
-    // jpeg — ImagePicker on iOS hands us .jpg for the camera roll, on
-    // Android sometimes .heic which we still ship as image/jpeg after
-    // expo-image-picker's internal conversion.
-    const cleanPath = fileUri.split('?')[0].split('#')[0];
+    // Compress before upload. After compression the URI is always a
+    // fresh JPEG, so we skip extension sniffing in that case and pin
+    // the contentType. The pre-compress URI may still be a heic/png
+    // pulled from the camera roll; the existing whitelist handles
+    // anything that slips through (e.g. http re-edit URLs).
+    const compressedUri = await compressImageIfNeeded(fileUri);
+    const wasCompressed = compressedUri !== fileUri;
+    const cleanPath = compressedUri.split('?')[0].split('#')[0];
     const extRaw = (cleanPath.split('.').pop() || 'jpg').toLowerCase();
-    const ext = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(extRaw) ? extRaw : 'jpg';
+    const ext = wasCompressed
+      ? 'jpg'
+      : (['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(extRaw) ? extRaw : 'jpg');
     const contentType = ext === 'png' ? 'image/png'
       : ext === 'webp' ? 'image/webp'
       : 'image/jpeg';
 
-    const fileResponse = await fetch(fileUri);
+    const fileResponse = await fetch(compressedUri);
     const fileBlob = await fileResponse.blob();
 
     // RLS on the `posts` bucket requires the first path segment to be

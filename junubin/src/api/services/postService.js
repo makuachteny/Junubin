@@ -5,8 +5,30 @@
 // persist to the `Post` table; the Community feed pulls from there
 // and stays fresh via a Realtime postgres-changes subscription.
 
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../../config/supabase';
 import { formatTimestamp } from '../../utils/formatTime';
+
+/**
+ * Resize + recompress a local image URI before upload. See the matching
+ * helper in profileService.js for the rationale; duplicated here to
+ * keep each service self-contained and avoid a cross-service import.
+ */
+async function compressImageIfNeeded(uri) {
+  if (!uri || typeof uri !== 'string') return uri;
+  if (uri.startsWith('http')) return uri;
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1600 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    return result.uri;
+  } catch (e) {
+    if (__DEV__) console.warn('[compress] failed, uploading raw:', e?.message);
+    return uri;
+  }
+}
 
 const PAGE_SIZE = 30;
 
@@ -51,11 +73,18 @@ async function uploadMediaIfPresent(uri, userId, mediaType) {
     // Already a remote URL (re-edit or share-from-link case) — pass through.
     return { url: uri, path: null, mediaType: type };
   }
-  const m = uri.split('?')[0].split('#')[0].split('.');
-  const ext = (m[m.length - 1] || (type === 'video' ? 'mp4' : 'jpg')).toLowerCase();
+  // Compress images only; videos go up untouched (recompressing a video
+  // here would be lossy + slow + change the duration). uploadStoryVideo's
+  // sibling helper handles its own video path.
+  const sourceUri = type === 'image' ? await compressImageIfNeeded(uri) : uri;
+  const wasCompressed = sourceUri !== uri;
+  const m = sourceUri.split('?')[0].split('#')[0].split('.');
+  const ext = wasCompressed
+    ? 'jpg'
+    : (m[m.length - 1] || (type === 'video' ? 'mp4' : 'jpg')).toLowerCase();
   const path = `${userId}/${Date.now()}.${ext}`;
   const contentType = MIME_BY_EXT[ext] || (type === 'video' ? 'video/mp4' : `image/${ext}`);
-  const fileResponse = await fetch(uri);
+  const fileResponse = await fetch(sourceUri);
   const fileBlob = await fileResponse.blob();
   const { error } = await supabase.storage
     .from('posts')

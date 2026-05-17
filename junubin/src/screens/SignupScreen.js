@@ -48,6 +48,12 @@ const SignupScreen = ({ navigation, route }) => {
   const [email, setEmail] = useState('');
   const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
   const [emailActive, setEmailActive] = useState(false);
+  // Surface a friendly error before/while Supabase's server-side rate-limit
+  // kicks in — without this, a user typing wrong codes sees nothing happen
+  // and assumes the app is broken. Counter is reset on success or Resend.
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const MAX_OTP_ATTEMPTS = 5;
+  const attemptsExhausted = failedAttempts >= MAX_OTP_ATTEMPTS;
   const insets = useSafeAreaInsets();
   const { startOtp, loginWithOtp } = useAuth();
   const { prefs } = useAccessibilityPreferences();
@@ -166,6 +172,7 @@ const SignupScreen = ({ navigation, route }) => {
           email: email.trim().toLowerCase(),
           code,
         });
+        setFailedAttempts(0); // success — clear the retry guard
         trackEvent(AnalyticsEvents.SIGNUP_COMPLETE, { method: 'email' });
         // Returning user with any profile data → go straight to Main
         const appUser = result?.appUser;
@@ -181,7 +188,20 @@ const SignupScreen = ({ navigation, route }) => {
         // Brand-new user → profile setup
         navigation.replace('ProfileSetup');
       } catch (error) {
-        Alert.alert('Verification failed', formatAuthError(error));
+        const next = failedAttempts + 1;
+        setFailedAttempts(next);
+        if (next >= MAX_OTP_ATTEMPTS) {
+          Alert.alert(
+            'Too many incorrect codes',
+            "We're holding off verification for a few minutes. Tap 'Resend code' to get a fresh one.",
+          );
+        } else {
+          const remaining = MAX_OTP_ATTEMPTS - next;
+          Alert.alert(
+            'Invalid code',
+            `That code didn't match. ${remaining} attempt${remaining === 1 ? '' : 's'} left.`,
+          );
+        }
       }
     }
   };
@@ -194,6 +214,7 @@ const SignupScreen = ({ navigation, route }) => {
         await startOtp({
           email: email.trim().toLowerCase(),
         });
+        setFailedAttempts(0); // fresh code → re-enable verification
         Alert.alert('Code Sent', 'A new verification code has been sent.');
         setVerificationCode(['', '', '', '', '', '']);
         codeRefs.current[0]?.focus();
@@ -237,7 +258,11 @@ const SignupScreen = ({ navigation, route }) => {
               <View style={styles.topBar}>
                 <TouchableOpacity
                   style={styles.backButton}
-                  onPress={() => { setStep('input'); setVerificationCode(['', '', '', '', '', '']); }}
+                  onPress={() => {
+                    setStep('input');
+                    setVerificationCode(['', '', '', '', '', '']);
+                    setFailedAttempts(0);
+                  }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
@@ -264,7 +289,11 @@ const SignupScreen = ({ navigation, route }) => {
                     <TextInput
                       key={index}
                       ref={(ref) => { codeRefs.current[index] = ref; }}
-                      style={[styles.codeInput, digit ? styles.codeInputFilled : null]}
+                      style={[
+                        styles.codeInput,
+                        digit ? styles.codeInputFilled : null,
+                        attemptsExhausted && styles.codeInputDisabled,
+                      ]}
                       value={digit}
                       onChangeText={(text) => handleCodeChange(text.slice(-1), index)}
                       onKeyPress={(e) => handleCodeKeyPress(e, index)}
@@ -273,9 +302,16 @@ const SignupScreen = ({ navigation, route }) => {
                       textAlign="center"
                       autoFocus={index === 0}
                       placeholderTextColor="rgba(255,255,255,0.3)"
+                      editable={!attemptsExhausted}
                     />
                   ))}
                 </View>
+
+                {attemptsExhausted ? (
+                  <Text style={styles.attemptsLockedHint}>
+                    Too many incorrect codes. Tap "Resend code" for a fresh one.
+                  </Text>
+                ) : null}
 
                 <TouchableOpacity
                   onPress={handleResend}
@@ -300,9 +336,9 @@ const SignupScreen = ({ navigation, route }) => {
               {/* Verify CTA — same gradient pill */}
               <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
                 <TouchableOpacity
-                  style={[styles.ctaWrap, !isCodeComplete && styles.ctaWrapDisabled]}
+                  style={[styles.ctaWrap, (!isCodeComplete || attemptsExhausted) && styles.ctaWrapDisabled]}
                   onPress={handleVerify}
-                  disabled={!isCodeComplete}
+                  disabled={!isCodeComplete || attemptsExhausted}
                   activeOpacity={0.9}
                 >
                   <LinearGradient
@@ -829,6 +865,21 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   codeInputFilled: {
     backgroundColor: 'rgba(255,255,255,0.14)',
     borderColor: 'rgba(255,255,255,0.22)',
+  },
+  codeInputDisabled: {
+    opacity: 0.45,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  attemptsLockedHint: {
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+    color: '#F5B741',
+    textAlign: 'center',
+    marginTop: -6,
+    marginBottom: 14,
+    paddingHorizontal: 16,
+    lineHeight: 18,
   },
   resendBtn: {
     flexDirection: 'row',

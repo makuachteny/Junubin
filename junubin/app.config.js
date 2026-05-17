@@ -37,7 +37,7 @@ export default {
     // variants advertise their own schemes so a single device can host all
     // three builds without push notifications routing to the wrong app.
     scheme: IS_DEV ? 'junubin-dev' : IS_PREVIEW ? 'junubin-preview' : 'junubin',
-    version: '1.0.2',
+    version: '1.0.3',
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'automatic',

@@ -38,6 +38,10 @@ export default function StoriesViewScreen({ navigation, route }) {
   const [isPaused, setIsPaused] = useState(false);
   // Vertical drag distance for the swipe-down-to-dismiss gesture.
   const dragY = useRef(new Animated.Value(0)).current;
+  // Real-time video duration captured from the player on first load.
+  // Lets the progress bar match the actual clip length instead of the
+  // hard-coded 5s fallback. Null until the player reports durationMillis.
+  const [videoDurationMs, setVideoDurationMs] = useState(null);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const dotSlideAnim = useRef(new Animated.Value(0)).current;
   const reactionScale = useRef(new Animated.Value(1)).current;
@@ -146,9 +150,18 @@ export default function StoriesViewScreen({ navigation, route }) {
   useEffect(() => {
     if (!story || isPaused) return;
     const isVideoStory = story.type === 'video';
-    const fullDuration = prefs?.reducedMotion
-      ? Math.min(story.duration || STORY_DURATION, 3500)
+    // For video stories we prefer the duration the player reported
+    // (videoDurationMs, captured in onPlaybackStatusUpdate below) so
+    // the progress bar matches the real clip length. Until the
+    // duration arrives we fall back to STORY_DURATION so the bar
+    // animates rather than staying stuck. For images / text the
+    // story-attached duration (or STORY_DURATION) is canonical.
+    const baseDuration = isVideoStory
+      ? (videoDurationMs || story.duration || STORY_DURATION)
       : (story.duration || STORY_DURATION);
+    const fullDuration = prefs?.reducedMotion
+      ? Math.min(baseDuration, 3500)
+      : baseDuration;
     // Resume from current progress so press-pause-release picks up
     // mid-story instead of restarting.
     const remaining = (1 - (progressAnim._value || 0)) * fullDuration;
@@ -179,8 +192,12 @@ export default function StoriesViewScreen({ navigation, route }) {
 
   // Reset the progress bar each time the story (id) actually changes —
   // separate from the pause effect above so pausing doesn't restart it.
+  // Also clear the captured video duration so the next video starts
+  // fresh and the auto-advance falls back to STORY_DURATION until the
+  // new clip reports its real durationMillis.
   useEffect(() => {
     progressAnim.setValue(0);
+    setVideoDurationMs(null);
   }, [story?.id, progressAnim]);
 
   const postReply = useCallback((rawValue) => {
@@ -282,7 +299,19 @@ export default function StoriesViewScreen({ navigation, route }) {
           resizeMode="cover"
           useNativeControls={false}
           onPlaybackStatusUpdate={(status) => {
-            if (status?.isLoaded && status.didJustFinish) goNext();
+            if (!status?.isLoaded) return;
+            // Capture the real duration once the player has it so the
+            // progress bar can sync to the actual clip length instead
+            // of the 5s default. Guarded by a state-equality check so
+            // we don't churn re-renders on every frame's status tick.
+            if (
+              Number.isFinite(status.durationMillis)
+              && status.durationMillis > 0
+              && status.durationMillis !== videoDurationMs
+            ) {
+              setVideoDurationMs(status.durationMillis);
+            }
+            if (status.didJustFinish) goNext();
           }}
           style={styles.fullImage}
         />

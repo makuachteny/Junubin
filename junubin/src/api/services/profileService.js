@@ -1,4 +1,36 @@
+import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../../config/supabase';
+
+/**
+ * Resize + recompress a local image URI before upload. Caps the long
+ * edge at 1600px (expo-image-manipulator preserves aspect ratio when
+ * only `width` is given) and re-encodes as JPEG @ 0.7 quality. This
+ * keeps Supabase Storage costs down and prevents cellular upload
+ * timeouts on phones that hand us 4000px originals straight off the
+ * camera roll.
+ *
+ * Pass-through cases:
+ *   - falsy / non-string URIs
+ *   - already-remote URLs (re-edit flows hand us back the previously
+ *     uploaded HTTPS path)
+ * Failure falls back to the raw URI rather than blocking the upload —
+ * a big upload still beats a broken one.
+ */
+async function compressImageIfNeeded(uri) {
+  if (!uri || typeof uri !== 'string') return uri;
+  if (uri.startsWith('http')) return uri;
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1600 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG },
+    );
+    return result.uri;
+  } catch (e) {
+    if (__DEV__) console.warn('[compress] failed, uploading raw:', e?.message);
+    return uri;
+  }
+}
 
 export async function getMyProfile() {
   const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -112,8 +144,16 @@ export async function uploadPhoto(imageUri) {
 
   if ((count || 0) >= 9) throw new Error('Maximum 9 photos allowed');
 
-  const filename = (imageUri.split('/').pop() || '').toLowerCase();
-  const rawExt = filename.includes('.') ? filename.split('.').pop() : '';
+  // Resize + re-compress before upload. compressImageIfNeeded returns
+  // a JPEG-encoded local URI; we override the extension/contentType
+  // accordingly so the Storage object has the right MIME and the
+  // Photo.url renders correctly. Pass-through for already-remote URIs
+  // (re-edit flow) keeps the original ext below.
+  const compressedUri = await compressImageIfNeeded(imageUri);
+  const wasCompressed = compressedUri !== imageUri;
+
+  const filename = (compressedUri.split('/').pop() || '').toLowerCase();
+  const rawExt = wasCompressed ? 'jpg' : (filename.includes('.') ? filename.split('.').pop() : '');
   const ext = (rawExt || 'jpg').replace(/[^a-z0-9]/g, '') || 'jpg';
   const storagePath = `${appUser.id}/${Date.now()}.${ext}`;
   const contentType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
@@ -125,7 +165,7 @@ export async function uploadPhoto(imageUri) {
   // error. Reading the body as an ArrayBuffer works around this and
   // produces a real binary upload. Don't switch back to blob() without
   // testing on a real device.
-  const response = await fetch(imageUri);
+  const response = await fetch(compressedUri);
   if (!response.ok) throw new Error(`Could not read image file (HTTP ${response.status})`);
   const arrayBuffer = await response.arrayBuffer();
   if (!arrayBuffer || arrayBuffer.byteLength === 0) {

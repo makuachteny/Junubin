@@ -193,10 +193,13 @@ export default function CommunityScreen({ navigation, route }) {
       try {
         const live = await postService.listPosts();
         if (cancelled) return;
-        // Show real posts first; demo posts trail behind so a real
-        // post always floats to the top of the feed. Demo posts
-        // disappear automatically once enough real posts exist.
-        const combined = live.length > 0 ? [...live, ...demoPosts] : demoPosts;
+        // Real posts hide demo posts entirely. Demo seed appears ONLY
+        // on a completely empty server so the new-install experience
+        // isn't a blank canvas; the moment any real content exists,
+        // the feed becomes 100% authentic. (Previously demo always
+        // trailed, which meant a 1-post community still showed mock
+        // entries next to it — looks broken for real users.)
+        const combined = live.length > 0 ? live : demoPosts;
         setPosts(await hydrateInteractionState(combined));
       } catch {
         if (!cancelled) setPosts(demoPosts);
@@ -222,7 +225,7 @@ export default function CommunityScreen({ navigation, route }) {
     setRefreshing(true);
     try {
       const live = await postService.listPosts();
-      const combined = live.length > 0 ? [...live, ...demoPosts] : demoPosts;
+      const combined = live.length > 0 ? live : demoPosts;
       setPosts(await hydrateInteractionState(combined));
     } catch {
       setPosts(demoPosts);
