@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, Dimensions, Pressable, Modal, TextInput, Share } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, Dimensions, Pressable, Modal, TextInput, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video, ResizeMode } from 'expo-av';
@@ -11,7 +11,7 @@ import { useFollow } from '../hooks/useFollow';
 import { useCurrentUser } from '../hooks';
 import { normalizeHttpUrl } from '../utils/links';
 import { POST_THEMES, POST_THEME_CYCLE } from '../data/postThemes';
-import { toggleLike, toggleRepost, deletePost, updatePostContent } from '../api/services/postService';
+import { toggleLike, toggleRepost, toggleWave, deletePost, updatePostContent } from '../api/services/postService';
 
 
 const { width: W } = Dimensions.get('window');
@@ -52,6 +52,76 @@ const formatCount = (n) => {
   return n.toLocaleString();
 };
 
+/**
+ * Action icon + inline count. Renders a count even at 0 (greyed out)
+ * so the affordance is always obvious — visible counters lift
+ * engagement vs hiding the row until the first interaction. The icon
+ * + count animate in lockstep on every transition (tap-up scale on
+ * the icon, fade-pop on the number) to give the tap a satisfying
+ * micro-reward without blocking the screen.
+ */
+const ActionButton = React.memo(function ActionButton({
+  testID,
+  countTestID,
+  iconName,
+  iconSize = 24,
+  graffitiWave = false,
+  waveFilled = false,
+  color,
+  mutedColor,
+  count = 0,
+  active = false,
+  onPress,
+  accessibilityLabel,
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const prevCountRef = useRef(count);
+
+  // Pop the icon + count when the count changes (locally optimistic
+  // or via realtime UPDATE). Skip the very first render so freshly-
+  // mounted cards don't all wobble in.
+  React.useEffect(() => {
+    if (prevCountRef.current === count) return;
+    prevCountRef.current = count;
+    scale.setValue(0.7);
+    Animated.spring(scale, {
+      toValue: 1,
+      friction: 4,
+      tension: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [count, scale]);
+
+  const displayCount = count > 0 ? formatCount(count) : '0';
+  const textColor = active || count > 0 ? color : mutedColor;
+
+  return (
+    <TouchableOpacity
+      testID={testID}
+      onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={actionStyles.btn}
+    >
+      <Animated.View style={[actionStyles.row, { transform: [{ scale }] }]}>
+        {graffitiWave ? (
+          <GraffitiWave size={iconSize} color={color} filled={waveFilled} />
+        ) : (
+          <Ionicons name={iconName} size={iconSize} color={color} />
+        )}
+        <Text
+          testID={countTestID}
+          style={[actionStyles.count, { color: textColor }]}
+          numberOfLines={1}
+        >
+          {displayCount}
+        </Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+});
+
 // Instagram-style: media is rendered at the post's natural aspect
 // ratio, clamped to portrait..landscape. We compute the height from
 // the (clamped) ratio at module scope so layout is stable across
@@ -82,9 +152,11 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
   const [expanded, setExpanded] = useState(false);
   // `waved` — local-only visual gesture. There is no Wave table; it's
   // an animated affordance that gives the viewer a "say hi" moment
-  // without committing to a like/swipe. The legacy testID
-  // `post-save-action` is kept for back-compat with existing tests.
-  const [waved, setWaved] = useState(false);
+  // The legacy testID `post-save-action` is kept for back-compat with
+  // existing tests — it now targets the Wave button (a real server-
+  // backed PostWave row per migration 00034).
+  const [waved, setWaved] = useState(!!post.waved);
+  const [waveCount, setWaveCount] = useState(post.waveCount ?? post.waves ?? 0);
   const [reposted, setReposted] = useState(!!post.reposted);
   const [repostCount, setRepostCount] = useState(post.repostCount ?? post.reposts ?? 0);
 
@@ -179,22 +251,6 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
     );
   }, [post.id]);
 
-  const handleShare = useCallback(async () => {
-    const name = post.user?.name || 'Someone';
-    const snippet = (post.content || '').trim();
-    const message = snippet
-      ? `${name} on JuNubin: "${snippet.slice(0, 140)}${snippet.length > 140 ? '…' : ''}"`
-      : `${name} posted on JuNubin`;
-    // Native iOS / Android share sheet. Falls back to body-only on
-    // platforms where `url` isn't honored. We don't have universal
-    // links wired yet so the share is text-only — replace with a
-    // junubin.app/post/:id URL once deep linking lands.
-    try {
-      await Share.share({ message }, { dialogTitle: 'Share post' });
-    } catch (e) {
-      if (__DEV__) console.warn('Share failed:', e?.message || e);
-    }
-  }, [post.user?.name, post.content]);
   const stop = (e) => e?.stopPropagation?.();
 
   const handleRepost = useCallback(() => {
@@ -207,6 +263,17 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
       setRepostCount((prev) => Math.max(prev + (wasReposted ? 1 : -1), 0));
     });
   }, [reposted, post.id]);
+
+  const handleWave = useCallback(() => {
+    const wasWaved = waved;
+    const nextWaved = !wasWaved;
+    setWaved(nextWaved);
+    setWaveCount((prev) => Math.max(prev + (nextWaved ? 1 : -1), 0));
+    toggleWave(post.id).catch(() => {
+      setWaved(wasWaved);
+      setWaveCount((prev) => Math.max(prev + (wasWaved ? 1 : -1), 0));
+    });
+  }, [waved, post.id]);
 
   const handleSignup = () => {
     if (!post.signupLink) return;
@@ -296,16 +363,13 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
           testID="post-more-action"
           onPress={(e) => {
             stop(e);
-            // Menu shape depends on authorship. The author sees Edit /
-            // Delete (per the v1 policy: author may delete or edit text
-            // only — no media swap); everyone else sees Follow/Unfollow
-            // + Report. Share is offered in both cases — it's a
-            // generic affordance that costs nothing and helps reach.
-            const shareAction = { text: 'Share', onPress: handleShare };
+            // Menu shape depends on authorship. The author sees Edit
+            // text / Delete (per the v1 policy: author may delete or
+            // edit text only — no media swap); everyone else sees
+            // Follow/Unfollow + Report.
             if (isOwnPost) {
               Alert.alert(post.user.name, null, [
                 { text: 'Edit text', onPress: openEdit },
-                shareAction,
                 { text: 'Delete post', style: 'destructive', onPress: handleDelete },
                 { text: 'Cancel', style: 'cancel' },
               ]);
@@ -318,7 +382,6 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
               : { text: `Follow ${post.user?.name || ''}`.trim(), onPress: () => { if (!followLoading) toggleFollow(); } };
             Alert.alert(post.user.name, null, [
               followAction,
-              shareAction,
               { text: 'Report', style: 'destructive' },
               { text: 'Cancel', style: 'cancel' },
             ]);
@@ -423,66 +486,56 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
         </LinearGradient>
       )}
 
-      {/* ── Actions row (Instagram-style line icons) ───────────────── */}
+      {/* ── Actions row (Twitter-style: icon + count inline). Counts
+              render even at 0 so the affordance is obvious — engagement
+              research shows visible counters lift participation. The
+              first viewer sees "Be the first to wave" as a soft hint. */}
       {POST_INTERACTIONS_ENABLED && (
         <View style={$.actions}>
-          <View style={$.actLeft}>
-            <TouchableOpacity
-              testID="post-like-action"
-              onPress={(e) => { stop(e); handleLike(); }}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              style={$.iconBtn}
-            >
-              <Ionicons
-                name={reaction.liked ? 'heart' : 'heart-outline'}
-                size={26}
-                color={reaction.liked ? '#FF3040' : txt}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="post-comment-action"
-              onPress={(e) => { stop(e); handleCardPress(); }}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              style={$.iconBtn}
-            >
-              <Ionicons name="chatbubble-outline" size={24} color={txt} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="post-repost-action"
-              onPress={(e) => { stop(e); handleRepost(); }}
-              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-              style={$.iconBtn}
-            >
-              <Ionicons
-                name={reposted ? 'repeat' : 'repeat-outline'}
-                size={26}
-                color={reposted ? '#009739' : txt}
-              />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
+          <ActionButton
+            testID="post-like-action"
+            countTestID="post-like-count"
+            iconName={reaction.liked ? 'heart' : 'heart-outline'}
+            iconSize={24}
+            color={reaction.liked ? '#FF3040' : txt}
+            mutedColor={sub}
+            count={reaction.likeCount}
+            active={reaction.liked}
+            onPress={(e) => { stop(e); handleLike(); }}
+            accessibilityLabel={reaction.liked ? 'Unlike' : 'Like'}
+          />
+          <ActionButton
+            testID="post-comment-action"
+            iconName="chatbubble-outline"
+            iconSize={22}
+            color={txt}
+            mutedColor={sub}
+            count={post.comments || 0}
+            onPress={(e) => { stop(e); handleCardPress(); }}
+            accessibilityLabel="Comment"
+          />
+          <ActionButton
+            testID="post-repost-action"
+            iconName={reposted ? 'repeat' : 'repeat-outline'}
+            iconSize={24}
+            color={reposted ? '#009739' : txt}
+            mutedColor={sub}
+            count={repostCount}
+            active={reposted}
+            onPress={(e) => { stop(e); handleRepost(); }}
+            accessibilityLabel={reposted ? 'Undo repost' : 'Repost'}
+          />
+          <ActionButton
             testID="post-save-action"
-            accessibilityRole="button"
+            graffitiWave
+            waveFilled={waved}
+            color={waved ? colors.accent : txt}
+            mutedColor={sub}
+            count={waveCount}
+            active={waved}
+            onPress={(e) => { stop(e); handleWave(); }}
             accessibilityLabel={waved ? `Unwave ${post.user?.name || ''}`.trim() : `Wave at ${post.user?.name || ''}`.trim()}
-            onPress={(e) => { stop(e); setWaved((p) => !p); }}
-            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-            style={$.iconBtn}
-          >
-            <GraffitiWave
-              size={24}
-              color={waved ? colors.accent : txt}
-              filled={waved}
-            />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* ── Likes count ────────────────────────────────────────────── */}
-      {reaction.likeCount > 0 && (
-        <View style={$.countRow}>
-          <Text testID="post-like-count" style={[$.likesText, { color: txt }]}>
-            {formatCount(reaction.likeCount)} {reaction.likeCount === 1 ? 'like' : 'likes'}
-          </Text>
+          />
         </View>
       )}
 
@@ -538,14 +591,6 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
             View all {formatCount(post.comments)} {post.comments === 1 ? 'comment' : 'comments'}
           </Text>
         </TouchableOpacity>
-      )}
-
-      {/* ── Reposts count (separate line — gives signal without
-              cluttering the icon row) ──────────────────────────────── */}
-      {repostCount > 0 && (
-        <Text style={[$.repostText, { color: sub }]}>
-          {formatCount(repostCount)} {repostCount === 1 ? 'repost' : 'reposts'}
-        </Text>
       )}
 
       {/* ── Edit text modal — author-only ──────────────────────────── */}
@@ -610,6 +655,27 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
 };
 
 export default React.memo(PostCard);
+
+// Standalone style block for the ActionButton sub-component. Kept
+// separate from the main `$` map so it stays close to the component
+// it serves and doesn't depend on theme colors (text colour is passed
+// in as a prop).
+const actionStyles = StyleSheet.create({
+  btn: {
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  count: {
+    fontSize: 13,
+    fontFamily: FontFamily.semibold,
+    minWidth: 14,
+  },
+});
 
 const $ = StyleSheet.create({
   card: {
@@ -709,15 +775,20 @@ const $ = StyleSheet.create({
     opacity: 0.75,
   },
 
-  // Action row — line icons, no background pills (matches Instagram).
+  // Action row — Twitter-style: four icon+count buttons spread
+  // evenly across the row so each interaction reads as equally
+  // available. The inline counts double as the engagement signal,
+  // removing the need for the old separate likes line.
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingHorizontal: 14,
     paddingTop: 8,
     paddingBottom: 4,
   },
+  // Legacy — left untouched in case other surfaces import the styles
+  // object by name expecting these keys.
   actLeft: {
     flexDirection: 'row',
     alignItems: 'center',

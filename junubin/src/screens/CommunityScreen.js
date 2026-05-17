@@ -93,15 +93,18 @@ async function hydrateInteractionState(posts) {
   const realIds = posts.map((p) => p.id).filter(isRealPostId);
   if (realIds.length === 0) return posts;
   try {
-    const [likedSet, repostedSet] = await Promise.all([
+    const [likedSet, repostedSet, wavedSet] = await Promise.all([
       postService.getLikedPostIds(realIds),
       postService.getRepostedPostIds(realIds),
+      postService.getWavedPostIds(realIds),
     ]);
-    return posts.map((p) =>
-      likedSet.has(p.id) || repostedSet.has(p.id)
-        ? { ...p, liked: likedSet.has(p.id), reposted: repostedSet.has(p.id) }
-        : p,
-    );
+    return posts.map((p) => {
+      const liked = likedSet.has(p.id);
+      const reposted = repostedSet.has(p.id);
+      const waved = wavedSet.has(p.id);
+      if (!liked && !reposted && !waved) return p;
+      return { ...p, liked, reposted, waved };
+    });
   } catch {
     return posts;
   }
@@ -234,7 +237,7 @@ export default function CommunityScreen({ navigation, route }) {
   //            pull the normalized shape (the realtime payload doesn't
   //            include the author join).
   //   UPDATE — an existing post's counters changed (likeCount,
-  //            commentCount, repostCount, moderationStatus). We patch
+  //            commentCount, repostCount, waveCount, moderationStatus). We patch
   //            the in-memory row in place so the like/comment numbers
   //            stay correct without a full refetch.
   //
@@ -269,6 +272,7 @@ export default function CommunityScreen({ navigation, route }) {
               likes:    Number.isFinite(next.likeCount)    ? next.likeCount    : p.likes,
               comments: Number.isFinite(next.commentCount) ? next.commentCount : p.comments,
               reposts:  Number.isFinite(next.repostCount)  ? next.repostCount  : p.reposts,
+              waves:    Number.isFinite(next.waveCount)    ? next.waveCount    : p.waves,
             }
           : p,
         ));

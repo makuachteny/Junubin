@@ -180,7 +180,7 @@ export async function listPosts({ cursor } = {}) {
     .select(`
       id, userId, content, imageUrl, mediaType, aspectRatio,
       location, tags, cardTheme, signupLink, signupTitle,
-      likeCount, commentCount, repostCount, createdAt, moderationStatus,
+      likeCount, commentCount, repostCount, waveCount, createdAt, moderationStatus,
       author:User!userId(id, displayName, isVerified, city, photos:Photo(url))
     `)
     .order('createdAt', { ascending: false })
@@ -223,7 +223,7 @@ export async function updatePostContent(postId, nextContent) {
     .select(`
       id, userId, content, imageUrl, mediaType, aspectRatio,
       location, tags, cardTheme, signupLink, signupTitle,
-      likeCount, commentCount, repostCount, createdAt, moderationStatus,
+      likeCount, commentCount, repostCount, waveCount, createdAt, moderationStatus,
       author:User!userId(id, displayName, isVerified, city, photos:Photo(url))
     `)
     .maybeSingle();
@@ -360,6 +360,53 @@ export async function toggleRepost(postId) {
   return { reposted: true };
 }
 
+/**
+ * Toggle a wave. Same shape as toggleLike / toggleRepost — inserts
+ * or deletes a `PostWave` row; the 00034 trigger keeps Post.waveCount
+ * in sync. Waves are a public "I see you / I support this" gesture;
+ * count is durable across sessions.
+ */
+export async function toggleWave(postId) {
+  const userId = await resolveAppUserId();
+  if (!userId) throw new Error('Not authenticated');
+
+  const { data: existing } = await supabase
+    .from('PostWave')
+    .select('id')
+    .eq('postId', postId)
+    .eq('userId', userId)
+    .maybeSingle();
+
+  if (existing) {
+    const { error } = await supabase
+      .from('PostWave')
+      .delete()
+      .eq('id', existing.id);
+    if (error) throw error;
+    return { waved: false };
+  }
+
+  const { error } = await supabase
+    .from('PostWave')
+    .insert({ id: makeId(), postId, userId });
+  if (error && error.code !== '23505') throw error;
+  return { waved: true };
+}
+
+export async function getWavedPostIds(postIds) {
+  if (!postIds || postIds.length === 0) return new Set();
+  const userId = await resolveAppUserId();
+  if (!userId) return new Set();
+
+  const { data, error } = await supabase
+    .from('PostWave')
+    .select('postId')
+    .eq('userId', userId)
+    .in('postId', postIds);
+  if (error) throw error;
+  return new Set((data || []).map((r) => r.postId));
+}
+
 export async function getRepostedPostIds(postIds) {
   if (!postIds || postIds.length === 0) return new Set();
   const userId = await resolveAppUserId();
@@ -408,6 +455,7 @@ function normalizePost(raw, author = {}) {
     likes: raw.likeCount || 0,
     comments: raw.commentCount || 0,
     reposts: raw.repostCount || 0,
+    waves: raw.waveCount || 0,
     cardTheme: raw.cardTheme || 'default',
     signupLink: raw.signupLink,
     signupTitle: raw.signupTitle,
