@@ -489,10 +489,14 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
         toolbarEnabled={false}
         rotateEnabled={false}
         pitchEnabled={false}
-        // Closing the preview when the user pans / zooms saves us from
-        // re-projecting on every frame — the pixel anchor goes stale
-        // the moment the region shifts. User can re-tap to re-open.
-        onRegionChange={() => { if (selected) closePreview(); }}
+        // Closing the preview only on user-initiated pan (not on the
+        // programmatic animateToRegion call we fire after openPreview)
+        // keeps the card stable while the map is fitting the marker.
+        // onPanDrag fires every time the user moves a finger on the
+        // map; onRegionChange would also fire on the initial layout
+        // and the openPreview-induced zoom, killing the card before
+        // the spring animation finishes.
+        onPanDrag={() => { if (selected) closePreview(); }}
       >
         {visiblePeople.map((p) => (
           <Marker

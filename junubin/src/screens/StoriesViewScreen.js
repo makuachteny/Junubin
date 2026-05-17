@@ -163,6 +163,20 @@ export default function StoriesViewScreen({ navigation, route }) {
     return () => anim.stop();
   }, [story, goNext, progressAnim, prefs, isPaused]);
 
+  // Watchdog for video stories: if the player never reports
+  // `didJustFinish` (network drop, unsupported codec, busted source URI),
+  // a video would otherwise hang the viewer indefinitely — the
+  // progress bar caps at 100% but goNext is never called from the
+  // timer (videos opt out) or the playback callback. Bail after
+  // duration + 8s grace so the user can keep moving through stories.
+  useEffect(() => {
+    if (!story || isPaused) return;
+    if (story.type !== 'video') return;
+    const fullDuration = story.duration || STORY_DURATION;
+    const handle = setTimeout(() => goNext(), fullDuration + 8000);
+    return () => clearTimeout(handle);
+  }, [story, goNext, isPaused]);
+
   // Reset the progress bar each time the story (id) actually changes —
   // separate from the pause effect above so pausing doesn't restart it.
   useEffect(() => {

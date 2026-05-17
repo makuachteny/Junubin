@@ -23,12 +23,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useTheme, FontFamily, Typography } from '../theme';
 import ProfileCard from '../components/ProfileCard';
 import * as discoverService from '../api/services/discoverService';
 import { useCurrentUser, useEligibility } from '../hooks';
 import { useFollow } from '../hooks/useFollow';
+import { isDemoId } from '../config/demoData';
 
 const { height: SH } = Dimensions.get('window');
 const ACTION_BAR_HEIGHT = 96;
@@ -49,7 +49,13 @@ export default function ProfileViewScreen({ navigation, route }) {
   const isDating = viewerMode === 'dating';
 
   const { gate, nudge } = useEligibility();
-  const { isFollowing, toggleFollow, loading: followLoading } = useFollow(profile?.id);
+  // Demo roster ids (demo_*) aren't backed by real User rows — server
+  // RPCs error out on the FK. Pass null so useFollow short-circuits
+  // its fetches and recordSwipe / toggleFollow no-op below.
+  const isDemoProfile = isDemoId(profile?.id);
+  const { isFollowing, toggleFollow, loading: followLoading } = useFollow(
+    isDemoProfile ? null : profile?.id,
+  );
   const [done, setDone] = useState(false);
 
   // Tap-anywhere-on-card → deep profile. ProfileCard fires onExpand
@@ -63,23 +69,26 @@ export default function ProfileViewScreen({ navigation, route }) {
     const action = direction === 'right' ? 'swipe_like' : 'swipe_pass';
     if (action === 'swipe_like' && !gate('swipe_like')) return;
     setDone(true);
-    if (profile?.id) {
+    // Skip the server hit on demo profiles — the swipe Edge Function
+    // FK-validates `toUserId` against the User table and would throw,
+    // silently corrupting the offline-queue retry pipeline.
+    if (profile?.id && !isDemoProfile) {
       discoverService
         .recordSwipe(profile.id, direction === 'right' ? 'like' : 'pass', { mode: viewerMode })
         .catch(() => {});
     }
     navigation.goBack();
-  }, [done, gate, profile?.id, viewerMode, navigation]);
+  }, [done, gate, profile?.id, isDemoProfile, viewerMode, navigation]);
 
   const handleSuperLike = useCallback(() => {
     if (done) return;
     if (!gate('super_like')) return;
     setDone(true);
-    if (profile?.id) {
+    if (profile?.id && !isDemoProfile) {
       discoverService.recordSwipe(profile.id, 'super_like', { mode: viewerMode }).catch(() => {});
     }
     navigation.goBack();
-  }, [done, gate, profile?.id, viewerMode, navigation]);
+  }, [done, gate, profile?.id, isDemoProfile, viewerMode, navigation]);
 
   const handleSayHi = useCallback(() => {
     if (!gate('open_match')) return;
@@ -113,7 +122,7 @@ export default function ProfileViewScreen({ navigation, route }) {
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <View style={styles.container}>
       {/* Close button — fixed top-left, above the card */}
       <View style={[styles.topBar, { top: insets.top + 8 }]} pointerEvents="box-none">
         <TouchableOpacity
@@ -198,7 +207,16 @@ export default function ProfileViewScreen({ navigation, route }) {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.actionBtn, styles.actionFollow, isFollowing && styles.actionFollowOn]}
-              onPress={() => !followLoading && toggleFollow()}
+              onPress={() => {
+                if (followLoading) return;
+                if (isDemoProfile) {
+                  // No real User row for demo entries; show a friendly
+                  // toast instead of pretending the follow landed.
+                  Alert.alert('Demo profile', 'Follow works for real members. This is a sample profile.');
+                  return;
+                }
+                toggleFollow();
+              }}
               activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel={isFollowing ? 'Unfollow' : 'Follow'}
@@ -219,7 +237,7 @@ export default function ProfileViewScreen({ navigation, route }) {
       </View>
 
       {nudge}
-    </GestureHandlerRootView>
+    </View>
   );
 }
 

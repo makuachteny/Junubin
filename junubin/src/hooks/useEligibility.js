@@ -13,7 +13,7 @@
 // back via the gate() return value as null, with the verdict on the ref
 // for callers that want to render their own paywall/coin sheet.
 
-import React, { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Alert } from 'react-native';
 import { checkActionAllowed, REASON_COPY } from '../utils/eligibility';
@@ -26,13 +26,30 @@ import SurveyNudgeModal from '../components/SurveyNudgeModal';
 // photos (or until the next cold start). Module scope is intentional —
 // every screen sharing this hook reads the same set, otherwise the
 // nudge would refire on each screen change.
+//
+// `dismissedForUserId` tracks whose dismissals are stored so we can
+// drop the set when a different user signs in (otherwise account B
+// would inherit account A's "stop nagging me" choices).
 const dismissedSteps = new Set();
+let dismissedForUserId = null;
 
 export function useEligibility() {
   const navigation = useNavigation();
   const { user, signOut } = useAuth();
   const [nudgeState, setNudgeState] = useState({ visible: false, from: 'default', resumeAt: null });
   const lastVerdictRef = useRef(null);
+
+  // Wipe the session-scoped dismissal set when the signed-in user
+  // changes (sign out → sign in as someone else). Without this, a
+  // second account would inherit the first account's "stop nagging"
+  // choices and never see the survey nudge.
+  useEffect(() => {
+    const uid = user?.id ?? null;
+    if (uid !== dismissedForUserId) {
+      dismissedSteps.clear();
+      dismissedForUserId = uid;
+    }
+  }, [user?.id]);
 
   const closeNudge = useCallback(() => {
     setNudgeState((s) => {
