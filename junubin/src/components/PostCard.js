@@ -11,7 +11,7 @@ import { useFollow } from '../hooks/useFollow';
 import { useCurrentUser } from '../hooks';
 import { normalizeHttpUrl } from '../utils/links';
 import { POST_THEMES, POST_THEME_CYCLE } from '../data/postThemes';
-import { toggleLike, toggleRepost, toggleWave, deletePost, updatePostContent, createQuoteRepost } from '../api/services/postService';
+import { toggleLike, toggleRepost, toggleWave, deletePost, updatePostContent } from '../api/services/postService';
 
 
 const { width: W } = Dimensions.get('window');
@@ -253,53 +253,56 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
 
   const stop = (e) => e?.stopPropagation?.();
 
-  // LinkedIn-style repost flow: a tap opens the compose sheet, where
-  // the user can add a comment (or skip and reshare clean). Both
-  // paths create a new Post via createQuoteRepost — which also
-  // writes the silent PostRepost row so the original's count bumps
-  // and the existing 00035 push trigger notifies the author. Undo
-  // (after a repost is committed) calls toggleRepost which just
-  // deletes the PostRepost row — the quote-post stays in the feed
-  // until the user deletes it from their own card menu.
-  const [repostOpen, setRepostOpen] = useState(false);
-  const [repostText, setRepostText] = useState('');
-  const [postingRepost, setPostingRepost] = useState(false);
-
-  const openRepostCompose = useCallback(() => {
-    if (reposted) {
-      // Already reposted — second tap is undo. Roll back the count
-      // and delete the PostRepost row in the background.
-      setReposted(false);
-      setRepostCount((prev) => Math.max(prev - 1, 0));
-      toggleRepost(post.id).catch(() => {
-        setReposted(true);
-        setRepostCount((prev) => prev + 1);
-      });
-      return;
-    }
-    setRepostText('');
-    setRepostOpen(true);
-  }, [reposted, post.id]);
-
-  const submitRepost = useCallback(async () => {
-    if (postingRepost) return;
-    setPostingRepost(true);
-    // Optimistically flip the icon + count so the sheet's submit
-    // feels instant. Roll back on failure.
+  // LinkedIn-style repost flow: tap shows a bottom action sheet
+  // with two options.
+  //   1. "Repost with your thoughts" → routes to the full
+  //      CreatePostScreen with the original post attached as the
+  //      quoted preview. Submit goes through the normal post path,
+  //      writes both the new Post (with quotedPostId) AND the
+  //      silent PostRepost row so the original's count + push fire.
+  //   2. "Repost" → instant silent reshare. We just bump the
+  //      original's PostRepost count via toggleRepost; no new Post
+  //      is created. Match LinkedIn's "Repost" semantics (bring it
+  //      to followers' feeds) — but with the simpler implementation
+  //      of a count-only bump for v1.
+  // If the user already reposted, the menu shows "Undo repost"
+  // instead of "Repost" so they can take it back.
+  const silentRepost = useCallback(() => {
     setReposted(true);
     setRepostCount((prev) => prev + 1);
-    try {
-      await createQuoteRepost({ originalPostId: post.id, comment: repostText });
-      setRepostOpen(false);
-      setRepostText('');
-    } catch (e) {
+    toggleRepost(post.id).catch((err) => {
       setReposted(false);
       setRepostCount((prev) => Math.max(prev - 1, 0));
-      Alert.alert("Couldn't repost", e?.message || 'Try again in a moment.');
-    } finally {
-      setPostingRepost(false);
-    }
-  }, [postingRepost, post.id, repostText]);
+      if (__DEV__) console.warn('repost failed:', err?.message || err);
+    });
+  }, [post.id]);
+
+  const undoRepost = useCallback(() => {
+    setReposted(false);
+    setRepostCount((prev) => Math.max(prev - 1, 0));
+    toggleRepost(post.id).catch((err) => {
+      setReposted(true);
+      setRepostCount((prev) => prev + 1);
+      if (__DEV__) console.warn('undo repost failed:', err?.message || err);
+    });
+  }, [post.id]);
+
+  const openRepostSheet = useCallback(() => {
+    Alert.alert(
+      'Repost',
+      'Choose how you want to share this post.',
+      [
+        {
+          text: 'Repost with your thoughts',
+          onPress: () => nav.navigate('CreatePost', { quotedPost: post }),
+        },
+        reposted
+          ? { text: 'Undo repost', style: 'destructive', onPress: undoRepost }
+          : { text: 'Repost', onPress: silentRepost },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  }, [nav, post, reposted, silentRepost, undoRepost]);
 
   const handleWave = useCallback(() => {
     const wasWaved = waved;
@@ -611,7 +614,7 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
             mutedColor={sub}
             count={repostCount}
             active={reposted}
-            onPress={(e) => { stop(e); openRepostCompose(); }}
+            onPress={(e) => { stop(e); openRepostSheet(); }}
             accessibilityLabel={reposted ? 'Undo repost' : 'Repost'}
           />
           <ActionButton
@@ -740,81 +743,6 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
         </Pressable>
       </Modal>
 
-      {/* ── Repost compose sheet (LinkedIn-style) ──────────────────── */}
-      <Modal
-        visible={repostOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={() => !postingRepost && setRepostOpen(false)}
-      >
-        <Pressable
-          style={$.editOverlay}
-          onPress={() => !postingRepost && setRepostOpen(false)}
-        >
-          <Pressable
-            style={[$.editSheet, { backgroundColor: colors.cardBg }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[$.editTitle, { color: txt }]}>Repost</Text>
-            <Text style={[$.editHint, { color: sub }]}>
-              Add your thoughts (optional), or repost as-is.
-            </Text>
-            <TextInput
-              style={[$.editInput, {
-                color: txt,
-                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
-                minHeight: 80,
-              }]}
-              value={repostText}
-              onChangeText={setRepostText}
-              multiline
-              maxLength={500}
-              placeholder="Say something about this…"
-              placeholderTextColor={sub}
-              autoFocus
-              editable={!postingRepost}
-            />
-            {/* Compact preview of the post being reposted so the user
-                knows exactly what they're about to share. */}
-            <View style={[$.repostPreview, {
-              borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
-            }]}>
-              <View style={$.quotedHeader}>
-                <Image source={imageSource(post.user?.avatar)} style={$.quotedAvatar} />
-                <Text style={[$.quotedName, { color: txt }]} numberOfLines={1}>
-                  {post.user?.name}
-                </Text>
-              </View>
-              {!!post.content && (
-                <Text style={[$.quotedBody, { color: txt }]} numberOfLines={3}>
-                  {post.content}
-                </Text>
-              )}
-            </View>
-            <View style={$.editActions}>
-              <TouchableOpacity
-                onPress={() => setRepostOpen(false)}
-                disabled={postingRepost}
-                style={[$.editBtn, $.editBtnGhost]}
-                activeOpacity={0.7}
-              >
-                <Text style={[$.editBtnText, { color: txt }]}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={submitRepost}
-                disabled={postingRepost}
-                style={[$.editBtn, $.editBtnPrimary, { backgroundColor: colors.accent, opacity: postingRepost ? 0.6 : 1 }]}
-                activeOpacity={0.85}
-              >
-                <Text style={[$.editBtnText, { color: '#FFFFFF', fontFamily: FontFamily.bold }]}>
-                  {postingRepost ? 'Reposting…' : 'Repost'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </Pressable>
   );
 };
@@ -1139,12 +1067,4 @@ const $ = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.05)',
   },
 
-  // ─── Repost compose sheet preview ──────────────────────────────────
-  repostPreview: {
-    marginTop: 12,
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    gap: 6,
-  },
 });

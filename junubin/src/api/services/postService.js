@@ -80,6 +80,10 @@ export async function createPost({
   cardTheme,
   signupLink,
   signupTitle,
+  quotedPostId,    // new: when set, the post embeds another (LinkedIn-style
+                   // reshare with thoughts). We also write a silent
+                   // PostRepost row so the original's repostCount
+                   // bumps and the 00035 push trigger fires.
 }) {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   if (!authUser) throw new Error('Not authenticated');
@@ -110,14 +114,40 @@ export async function createPost({
     cardTheme: cardTheme || 'default',
     signupLink: signupLink || null,
     signupTitle: signupTitle || null,
+    quotedPostId: quotedPostId || null,
   };
 
   const { data, error } = await supabase
     .from('Post')
     .insert(row)
-    .select('*')
+    .select(`
+      id, userId, content, imageUrl, mediaType, aspectRatio,
+      location, tags, cardTheme, signupLink, signupTitle,
+      likeCount, commentCount, repostCount, waveCount, createdAt, moderationStatus,
+      quotedPostId,
+      quoted:Post!quotedPostId(
+        id, userId, content, imageUrl, mediaType, aspectRatio, createdAt,
+        author:User!userId(id, displayName, isVerified, city, photos:Photo(url))
+      )
+    `)
     .single();
   if (error) throw error;
+
+  // Quote-repost bookkeeping: write the silent PostRepost row so the
+  // original's repostCount trigger fires and the 00035 push notifies
+  // the original author. 23505 (unique violation) means the user
+  // already plain-reposted this — that's fine, the new quote-post
+  // still lives in the feed.
+  if (quotedPostId) {
+    supabase
+      .from('PostRepost')
+      .insert({ id: makeId(), postId: quotedPostId, userId: appUser.id })
+      .then(({ error: repostErr }) => {
+        if (repostErr && repostErr.code !== '23505' && __DEV__) {
+          console.warn('[createPost] quote-repost bookkeeping failed:', repostErr.message);
+        }
+      }, () => {});
+  }
 
   // Image moderation — runs async after the row exists so the post
   // creation doesn't block on a third-party scan. The Edge Function
@@ -133,9 +163,10 @@ export async function createPost({
       })
       .catch(() => {});
   } else {
-    // Text-only post: nothing to moderate visually. Auto-approve so
-    // listPosts surfaces it. Text moderation is a separate concern
-    // (out of scope for the image pipeline).
+    // Text-only post (incl. quote-reposts with no extra media):
+    // nothing to moderate visually. Auto-approve so listPosts
+    // surfaces it. Text moderation is a separate concern (out of
+    // scope for the image pipeline).
     supabase
       .from('Post')
       .update({ moderationStatus: 'approved' })
@@ -143,7 +174,7 @@ export async function createPost({
       .then(() => {}, () => {});
   }
 
-  return normalizePost(data, appUser);
+  return normalizePost(data, appUser, data.quoted);
 }
 
 /**
@@ -363,70 +394,6 @@ export async function toggleRepost(postId) {
     .insert({ id: makeId(), postId, userId });
   if (error && error.code !== '23505') throw error;
   return { reposted: true };
-}
-
-/**
- * Quote-repost: creates a NEW Post that embeds the original (via
- * Post.quotedPostId, added in 00036) and ALSO writes the silent
- * PostRepost row so the original author's repostCount + the existing
- * 00017 trigger fire as if it were a plain repost. Comment is
- * optional — an empty string makes this behave like a "share to my
- * feed" without commentary, but the new Post is still created so
- * the repostor's followers see something in their timeline (vs the
- * plain PostRepost row which is invisible).
- *
- * Returns the new Post row (normalized) so the caller can prepend
- * it to the feed immediately.
- */
-export async function createQuoteRepost({ originalPostId, comment = '' }) {
-  const { data: { user: authUser } } = await supabase.auth.getUser();
-  if (!authUser) throw new Error('Not authenticated');
-
-  const { data: appUser } = await supabase
-    .from('User')
-    .select('id, displayName, photos:Photo(url)')
-    .eq('auth_id', authUser.id)
-    .single();
-  if (!appUser) throw new Error('User not found');
-
-  // 1. New Post row that quotes the original. moderationStatus defaults
-  //    to 'pending' for media posts, but a quote with no new media is
-  //    just text — auto-approve so it surfaces in feeds immediately.
-  const id = makeId();
-  const trimmedComment = (comment || '').trim() || null;
-  const { data: created, error: insertErr } = await supabase
-    .from('Post')
-    .insert({
-      id,
-      userId: appUser.id,
-      content: trimmedComment,
-      quotedPostId: originalPostId,
-      cardTheme: 'default',
-      moderationStatus: 'approved',
-    })
-    .select(`
-      id, userId, content, imageUrl, mediaType, aspectRatio,
-      location, tags, cardTheme, signupLink, signupTitle,
-      likeCount, commentCount, repostCount, waveCount, createdAt, moderationStatus,
-      quotedPostId
-    `)
-    .single();
-  if (insertErr) throw insertErr;
-
-  // 2. Silent PostRepost row so the original's repostCount bumps
-  //    and the existing trigger pushes the original's author. We
-  //    swallow the 23505 unique-constraint error: a user can only
-  //    have one PostRepost row per original, so re-quoting bumps
-  //    nothing but the new Post still lands in the feed.
-  const { error: repostErr } = await supabase
-    .from('PostRepost')
-    .insert({ id: makeId(), postId: originalPostId, userId: appUser.id });
-  if (repostErr && repostErr.code !== '23505') {
-    // The new Post is committed regardless — log but don't unwind.
-    if (__DEV__) console.warn('[createQuoteRepost] repost-row insert failed:', repostErr.message);
-  }
-
-  return normalizePost(created, appUser);
 }
 
 /**

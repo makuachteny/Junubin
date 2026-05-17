@@ -30,11 +30,17 @@ import { promptToOpenSettings } from '../utils/permissionAlert';
 
 const themeKeys = Object.keys(POST_THEMES);
 
-export default function CreatePostScreen({ navigation }) {
+export default function CreatePostScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { currentUser } = useCurrentUser();
+  // When opened via "Repost with your thoughts" the original post
+  // travels in route.params.quotedPost. We render it as an embedded
+  // preview and forward its id on submit so postService writes the
+  // Post.quotedPostId FK + the silent PostRepost row (00036/00035).
+  const quotedPost = route?.params?.quotedPost || null;
+  const isRepostMode = !!quotedPost;
 
   // ── State ──
   const [step, setStep] = useState('compose'); // 'compose' | 'preview'
@@ -66,7 +72,12 @@ export default function CreatePostScreen({ navigation }) {
     content,
     location,
   });
-  const canPost = Boolean(composedContent.trim() || postImage || signupLink.trim());
+  // A quote-repost is always valid on its own — even with no extra
+  // text or media the user is endorsing/relaying the original. So
+  // when isRepostMode is true we skip the "must have something"
+  // check.
+  const canPost = isRepostMode
+    || Boolean(composedContent.trim() || postImage || signupLink.trim());
 
   // ── Build the preview post object ──
   // Safe optional-chaining everywhere — currentUser can be null while the
@@ -158,6 +169,7 @@ export default function CreatePostScreen({ navigation }) {
         cardTheme: selectedTheme,
         signupLink: normalizedSignupLink || null,
         signupTitle: signupTitle.trim() || null,
+        quotedPostId: quotedPost?.id || null,
       });
       // Land back on Community with the freshly-persisted post in params
       // so the feed prepends it instantly without waiting for the next
@@ -298,7 +310,9 @@ export default function CreatePostScreen({ navigation }) {
           <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
           <View style={{ flex: 1 }}>
             <Text style={styles.userName}>{currentUser?.name || 'You'}</Text>
-            <Text style={styles.userSub}>Posting to Community</Text>
+            <Text style={styles.userSub}>
+              {isRepostMode ? `Reposting ${quotedPost?.user?.name || 'a post'}` : 'Posting to Community'}
+            </Text>
           </View>
         </View>
 
@@ -310,7 +324,7 @@ export default function CreatePostScreen({ navigation }) {
               { color: theme.text },
               content.length === 0 && { color: isDarkCard ? 'rgba(255,255,255,0.4)' : colors.gray400 },
             ]}
-            placeholder="What's on your mind?"
+            placeholder={isRepostMode ? 'Share your thoughts…' : "What's on your mind?"}
             placeholderTextColor={isDarkCard ? 'rgba(255,255,255,0.4)' : colors.gray400}
             multiline
             maxLength={500}
@@ -363,6 +377,46 @@ export default function CreatePostScreen({ navigation }) {
             </View>
           ) : null}
         </View>
+
+        {/* ─── Quoted post preview (repost-with-thoughts mode) ─── */}
+        {isRepostMode && (
+          <View style={[styles.quotedPreview, {
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#FFFFFF',
+            borderColor: isDark ? 'rgba(255,255,255,0.10)' : colors.gray200,
+          }]}>
+            <View style={styles.quotedHeader}>
+              <Image
+                source={imageSource(quotedPost.user?.avatar)}
+                style={styles.quotedAvatar}
+              />
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.quotedName} numberOfLines={1}>
+                    {quotedPost.user?.name}
+                  </Text>
+                  {quotedPost.user?.verified && (
+                    <Ionicons name="checkmark-circle" size={12} color="#0A66C2" />
+                  )}
+                </View>
+                {quotedPost.timestamp && (
+                  <Text style={styles.quotedMeta} numberOfLines={1}>{quotedPost.timestamp}</Text>
+                )}
+              </View>
+            </View>
+            {!!quotedPost.content && (
+              <Text style={styles.quotedBody} numberOfLines={4}>
+                {quotedPost.content}
+              </Text>
+            )}
+            {quotedPost.image && (
+              <Image
+                source={imageSource(quotedPost.image)}
+                style={styles.quotedMedia}
+                resizeMode="cover"
+              />
+            )}
+          </View>
+        )}
 
         {/* ─── Theme selector ─── */}
         <Text style={styles.sectionTitle}>Card Theme</Text>
@@ -665,6 +719,50 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 11,
     fontFamily: FontFamily.regular,
     marginTop: 1,
+  },
+
+  // ─── Quoted post preview (reshare with thoughts) ───
+  quotedPreview: {
+    marginTop: 12,
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  quotedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quotedAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.gray300,
+  },
+  quotedName: {
+    fontSize: 14,
+    fontFamily: FontFamily.bold,
+    color: colors.black,
+  },
+  quotedMeta: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    color: colors.gray500,
+    marginTop: 1,
+  },
+  quotedBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FontFamily.regular,
+    color: colors.black,
+  },
+  quotedMedia: {
+    width: '100%',
+    aspectRatio: 1.6,
+    borderRadius: 8,
+    backgroundColor: colors.gray200,
   },
 
   // ─── Sections ───
