@@ -181,7 +181,12 @@ export async function listPosts({ cursor } = {}) {
       id, userId, content, imageUrl, mediaType, aspectRatio,
       location, tags, cardTheme, signupLink, signupTitle,
       likeCount, commentCount, repostCount, waveCount, createdAt, moderationStatus,
-      author:User!userId(id, displayName, isVerified, city, photos:Photo(url))
+      quotedPostId,
+      author:User!userId(id, displayName, isVerified, city, photos:Photo(url)),
+      quoted:Post!quotedPostId(
+        id, userId, content, imageUrl, mediaType, aspectRatio, createdAt,
+        author:User!userId(id, displayName, isVerified, city, photos:Photo(url))
+      )
     `)
     .order('createdAt', { ascending: false })
     .limit(PAGE_SIZE);
@@ -199,7 +204,7 @@ export async function listPosts({ cursor } = {}) {
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data || []).map((row) => normalizePost(row, row.author));
+  return (data || []).map((row) => normalizePost(row, row.author, row.quoted));
 }
 
 /**
@@ -361,6 +366,70 @@ export async function toggleRepost(postId) {
 }
 
 /**
+ * Quote-repost: creates a NEW Post that embeds the original (via
+ * Post.quotedPostId, added in 00036) and ALSO writes the silent
+ * PostRepost row so the original author's repostCount + the existing
+ * 00017 trigger fire as if it were a plain repost. Comment is
+ * optional — an empty string makes this behave like a "share to my
+ * feed" without commentary, but the new Post is still created so
+ * the repostor's followers see something in their timeline (vs the
+ * plain PostRepost row which is invisible).
+ *
+ * Returns the new Post row (normalized) so the caller can prepend
+ * it to the feed immediately.
+ */
+export async function createQuoteRepost({ originalPostId, comment = '' }) {
+  const { data: { user: authUser } } = await supabase.auth.getUser();
+  if (!authUser) throw new Error('Not authenticated');
+
+  const { data: appUser } = await supabase
+    .from('User')
+    .select('id, displayName, photos:Photo(url)')
+    .eq('auth_id', authUser.id)
+    .single();
+  if (!appUser) throw new Error('User not found');
+
+  // 1. New Post row that quotes the original. moderationStatus defaults
+  //    to 'pending' for media posts, but a quote with no new media is
+  //    just text — auto-approve so it surfaces in feeds immediately.
+  const id = makeId();
+  const trimmedComment = (comment || '').trim() || null;
+  const { data: created, error: insertErr } = await supabase
+    .from('Post')
+    .insert({
+      id,
+      userId: appUser.id,
+      content: trimmedComment,
+      quotedPostId: originalPostId,
+      cardTheme: 'default',
+      moderationStatus: 'approved',
+    })
+    .select(`
+      id, userId, content, imageUrl, mediaType, aspectRatio,
+      location, tags, cardTheme, signupLink, signupTitle,
+      likeCount, commentCount, repostCount, waveCount, createdAt, moderationStatus,
+      quotedPostId
+    `)
+    .single();
+  if (insertErr) throw insertErr;
+
+  // 2. Silent PostRepost row so the original's repostCount bumps
+  //    and the existing trigger pushes the original's author. We
+  //    swallow the 23505 unique-constraint error: a user can only
+  //    have one PostRepost row per original, so re-quoting bumps
+  //    nothing but the new Post still lands in the feed.
+  const { error: repostErr } = await supabase
+    .from('PostRepost')
+    .insert({ id: makeId(), postId: originalPostId, userId: appUser.id });
+  if (repostErr && repostErr.code !== '23505') {
+    // The new Post is committed regardless — log but don't unwind.
+    if (__DEV__) console.warn('[createQuoteRepost] repost-row insert failed:', repostErr.message);
+  }
+
+  return normalizePost(created, appUser);
+}
+
+/**
  * Toggle a wave. Same shape as toggleLike / toggleRepost — inserts
  * or deletes a `PostWave` row; the 00034 trigger keeps Post.waveCount
  * in sync. Waves are a public "I see you / I support this" gesture;
@@ -424,14 +493,40 @@ export async function getRepostedPostIds(postIds) {
 /**
  * Reshape a raw `Post` row into the object PostCard expects.
  * Keeps a single transformation point so backend column names can
- * evolve without touching dozens of UI sites.
+ * evolve without touching dozens of UI sites. `quotedRaw` (when
+ * supplied) is the joined original-post row for a quote-repost; we
+ * normalize it shallowly (no further quoted nesting — one level deep
+ * is plenty visually and prevents an unbounded join chain).
  */
-function normalizePost(raw, author = {}) {
+function normalizePost(raw, author = {}, quotedRaw = null) {
   const avatar = author?.photos?.[0]?.url || author?.avatar || null;
   // mediaType is null on legacy posts that pre-date 00018 — fall back
   // to 'image' if there's a URL, since those rows could only ever
   // have held images.
   const mediaType = raw.mediaType || (raw.imageUrl ? 'image' : null);
+
+  let quoted = null;
+  if (quotedRaw && quotedRaw.id) {
+    const qAuthor = quotedRaw.author || {};
+    const qAvatar = qAuthor?.photos?.[0]?.url || null;
+    const qMediaType = quotedRaw.mediaType || (quotedRaw.imageUrl ? 'image' : null);
+    quoted = {
+      id: quotedRaw.id,
+      user: {
+        id: quotedRaw.userId,
+        name: qAuthor?.displayName || 'Junubin',
+        avatar: qAvatar,
+        verified: !!qAuthor?.isVerified,
+      },
+      content: quotedRaw.content || '',
+      image: qMediaType === 'image' ? (quotedRaw.imageUrl || null) : null,
+      video: qMediaType === 'video' ? (quotedRaw.imageUrl || null) : null,
+      mediaType: qMediaType,
+      aspectRatio: quotedRaw.aspectRatio || null,
+      timestamp: formatTimestamp(quotedRaw.createdAt),
+    };
+  }
+
   return {
     id: raw.id,
     user: {
@@ -460,5 +555,7 @@ function normalizePost(raw, author = {}) {
     signupLink: raw.signupLink,
     signupTitle: raw.signupTitle,
     createdAt: raw.createdAt,
+    quotedPostId: raw.quotedPostId || null,
+    quoted,
   };
 }

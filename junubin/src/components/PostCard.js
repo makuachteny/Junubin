@@ -11,7 +11,7 @@ import { useFollow } from '../hooks/useFollow';
 import { useCurrentUser } from '../hooks';
 import { normalizeHttpUrl } from '../utils/links';
 import { POST_THEMES, POST_THEME_CYCLE } from '../data/postThemes';
-import { toggleLike, toggleRepost, toggleWave, deletePost, updatePostContent } from '../api/services/postService';
+import { toggleLike, toggleRepost, toggleWave, deletePost, updatePostContent, createQuoteRepost } from '../api/services/postService';
 
 
 const { width: W } = Dimensions.get('window');
@@ -253,16 +253,53 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
 
   const stop = (e) => e?.stopPropagation?.();
 
-  const handleRepost = useCallback(() => {
-    const wasReposted = reposted;
-    const nextReposted = !wasReposted;
-    setReposted(nextReposted);
-    setRepostCount((prev) => Math.max(prev + (nextReposted ? 1 : -1), 0));
-    toggleRepost(post.id).catch(() => {
-      setReposted(wasReposted);
-      setRepostCount((prev) => Math.max(prev + (wasReposted ? 1 : -1), 0));
-    });
+  // LinkedIn-style repost flow: a tap opens the compose sheet, where
+  // the user can add a comment (or skip and reshare clean). Both
+  // paths create a new Post via createQuoteRepost — which also
+  // writes the silent PostRepost row so the original's count bumps
+  // and the existing 00035 push trigger notifies the author. Undo
+  // (after a repost is committed) calls toggleRepost which just
+  // deletes the PostRepost row — the quote-post stays in the feed
+  // until the user deletes it from their own card menu.
+  const [repostOpen, setRepostOpen] = useState(false);
+  const [repostText, setRepostText] = useState('');
+  const [postingRepost, setPostingRepost] = useState(false);
+
+  const openRepostCompose = useCallback(() => {
+    if (reposted) {
+      // Already reposted — second tap is undo. Roll back the count
+      // and delete the PostRepost row in the background.
+      setReposted(false);
+      setRepostCount((prev) => Math.max(prev - 1, 0));
+      toggleRepost(post.id).catch(() => {
+        setReposted(true);
+        setRepostCount((prev) => prev + 1);
+      });
+      return;
+    }
+    setRepostText('');
+    setRepostOpen(true);
   }, [reposted, post.id]);
+
+  const submitRepost = useCallback(async () => {
+    if (postingRepost) return;
+    setPostingRepost(true);
+    // Optimistically flip the icon + count so the sheet's submit
+    // feels instant. Roll back on failure.
+    setReposted(true);
+    setRepostCount((prev) => prev + 1);
+    try {
+      await createQuoteRepost({ originalPostId: post.id, comment: repostText });
+      setRepostOpen(false);
+      setRepostText('');
+    } catch (e) {
+      setReposted(false);
+      setRepostCount((prev) => Math.max(prev - 1, 0));
+      Alert.alert("Couldn't repost", e?.message || 'Try again in a moment.');
+    } finally {
+      setPostingRepost(false);
+    }
+  }, [postingRepost, post.id, repostText]);
 
   const handleWave = useCallback(() => {
     const wasWaved = waved;
@@ -486,6 +523,58 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
         </LinearGradient>
       )}
 
+      {/* ── Embedded quoted post (LinkedIn-style reshare). Renders
+              the original inline as a smaller card-within-card. Tap
+              opens the original's detail screen. We render only one
+              level deep — if THIS post is itself a quote-repost
+              quoted by someone else, the outer card shows the chain
+              of two; we don't render the quoted's quoted (prevents
+              infinite nesting + keeps the card scannable). */}
+      {post.quoted && (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={(e) => {
+            stop(e);
+            nav.navigate('PostDetail', { post: post.quoted });
+          }}
+          style={[$.quotedCard, {
+            borderColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+          }]}
+        >
+          <View style={$.quotedHeader}>
+            <Image source={imageSource(post.quoted.user?.avatar)} style={$.quotedAvatar} />
+            <View style={{ flex: 1 }}>
+              <View style={$.nameRow}>
+                <Text style={[$.quotedName, { color: txt }]} numberOfLines={1}>
+                  {post.quoted.user?.name}
+                </Text>
+                {post.quoted.user?.verified && (
+                  <Ionicons name="checkmark-circle" size={11} color="#0A66C2" />
+                )}
+                {post.quoted.timestamp && (
+                  <Text style={[$.quotedMeta, { color: sub }]} numberOfLines={1}>
+                    {' · '}{post.quoted.timestamp}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </View>
+          {!!post.quoted.content && (
+            <Text style={[$.quotedBody, { color: txt }]} numberOfLines={4}>
+              {post.quoted.content}
+            </Text>
+          )}
+          {post.quoted.image && (
+            <Image
+              source={imageSource(post.quoted.image)}
+              style={$.quotedMedia}
+              resizeMode="cover"
+            />
+          )}
+        </TouchableOpacity>
+      )}
+
       {/* ── Actions row (Twitter-style: icon + count inline). Counts
               render even at 0 so the affordance is obvious — engagement
               research shows visible counters lift participation. The
@@ -522,7 +611,7 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
             mutedColor={sub}
             count={repostCount}
             active={reposted}
-            onPress={(e) => { stop(e); handleRepost(); }}
+            onPress={(e) => { stop(e); openRepostCompose(); }}
             accessibilityLabel={reposted ? 'Undo repost' : 'Repost'}
           />
           <ActionButton
@@ -644,6 +733,82 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
               >
                 <Text style={[$.editBtnText, { color: '#FFFFFF', fontFamily: FontFamily.bold }]}>
                   {savingEdit ? 'Saving…' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Repost compose sheet (LinkedIn-style) ──────────────────── */}
+      <Modal
+        visible={repostOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !postingRepost && setRepostOpen(false)}
+      >
+        <Pressable
+          style={$.editOverlay}
+          onPress={() => !postingRepost && setRepostOpen(false)}
+        >
+          <Pressable
+            style={[$.editSheet, { backgroundColor: colors.cardBg }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[$.editTitle, { color: txt }]}>Repost</Text>
+            <Text style={[$.editHint, { color: sub }]}>
+              Add your thoughts (optional), or repost as-is.
+            </Text>
+            <TextInput
+              style={[$.editInput, {
+                color: txt,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+                borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+                minHeight: 80,
+              }]}
+              value={repostText}
+              onChangeText={setRepostText}
+              multiline
+              maxLength={500}
+              placeholder="Say something about this…"
+              placeholderTextColor={sub}
+              autoFocus
+              editable={!postingRepost}
+            />
+            {/* Compact preview of the post being reposted so the user
+                knows exactly what they're about to share. */}
+            <View style={[$.repostPreview, {
+              borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)',
+            }]}>
+              <View style={$.quotedHeader}>
+                <Image source={imageSource(post.user?.avatar)} style={$.quotedAvatar} />
+                <Text style={[$.quotedName, { color: txt }]} numberOfLines={1}>
+                  {post.user?.name}
+                </Text>
+              </View>
+              {!!post.content && (
+                <Text style={[$.quotedBody, { color: txt }]} numberOfLines={3}>
+                  {post.content}
+                </Text>
+              )}
+            </View>
+            <View style={$.editActions}>
+              <TouchableOpacity
+                onPress={() => setRepostOpen(false)}
+                disabled={postingRepost}
+                style={[$.editBtn, $.editBtnGhost]}
+                activeOpacity={0.7}
+              >
+                <Text style={[$.editBtnText, { color: txt }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={submitRepost}
+                disabled={postingRepost}
+                style={[$.editBtn, $.editBtnPrimary, { backgroundColor: colors.accent, opacity: postingRepost ? 0.6 : 1 }]}
+                activeOpacity={0.85}
+              >
+                <Text style={[$.editBtnText, { color: '#FFFFFF', fontFamily: FontFamily.bold }]}>
+                  {postingRepost ? 'Reposting…' : 'Repost'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -932,5 +1097,54 @@ const $ = StyleSheet.create({
   editBtnText: {
     fontSize: 14,
     fontFamily: FontFamily.semibold,
+  },
+
+  // ─── Embedded quoted post (LinkedIn-style reshare) ─────────────────
+  quotedCard: {
+    marginHorizontal: CARD_INSET,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 8,
+  },
+  quotedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  quotedAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  quotedName: {
+    fontSize: 13,
+    fontFamily: FontFamily.bold,
+  },
+  quotedMeta: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+  },
+  quotedBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FontFamily.regular,
+  },
+  quotedMedia: {
+    width: '100%',
+    aspectRatio: 1.6,
+    borderRadius: 8,
+    marginTop: 4,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+
+  // ─── Repost compose sheet preview ──────────────────────────────────
+  repostPreview: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
   },
 });
