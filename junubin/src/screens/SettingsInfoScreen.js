@@ -80,7 +80,7 @@ const INFO_PAGES = {
       },
       {
         heading: '6. Subscriptions & Auto-Renewal',
-        body: 'JuNubin+ and Junub subscriptions auto-renew at the end of each billing period unless cancelled at least 24 hours before the period ends. On iOS and Android, manage and cancel via your App Store or Google Play account settings. On the web, manage via the Stripe customer portal linked from Settings. Refunds are handled by the platform that processed your payment (Apple, Google, Stripe, or Flutterwave) under their respective policies.',
+        body: 'JuNubin+ and Junub subscriptions auto-renew at the end of each billing period unless cancelled at least 24 hours before the period ends. On iOS and Android, manage and cancel via your App Store or Google Play account settings. On the web, manage via the Stripe customer portal linked from Settings. Refunds are handled by the platform that processed your payment (Apple, Google, or Stripe) under their respective policies.',
       },
       {
         heading: '7. Virtual Items',
@@ -122,7 +122,7 @@ const INFO_PAGES = {
       },
       {
         heading: '2. Data You Give Us',
-        body: 'When you sign up: phone number or email, name, date of birth, gender, photos, and profile fields you choose to fill (e.g. tribe, religion, intentions, education, height). When you use the app: posts you create, messages you send, swipes/likes, voice/video call records (metadata only — calls themselves are peer-to-peer), and reports you submit. When you pay: billing details handled by Apple, Google, Stripe, or Flutterwave — we never see your full card number.',
+        body: 'When you sign up: phone number or email, name, date of birth, gender, photos, and profile fields you choose to fill (e.g. tribe, religion, intentions, education, height). When you use the app: posts you create, messages you send, swipes/likes, voice/video call records (metadata only — calls themselves are peer-to-peer), and reports you submit. When you pay: billing details handled by Apple, Google, or Stripe — we never see your full card number.',
       },
       {
         heading: '3. Data Collected Automatically',
@@ -134,7 +134,7 @@ const INFO_PAGES = {
       },
       {
         heading: '5. Who We Share Data With',
-        body: 'Service providers acting on our behalf: Supabase (database + storage + auth), RevenueCat (iOS/Android subscriptions), Stripe (web payments), Flutterwave (African mobile money + bank), Expo (push notifications and over-the-air updates), and Apple/Google (push notification delivery). We share only what each provider needs to perform its function. We may also disclose information when required by law, to protect user safety, or in connection with a merger or acquisition (you would be notified).',
+        body: 'Service providers acting on our behalf: Supabase (database + storage + auth), RevenueCat (iOS/Android subscriptions), Stripe (web payments), Expo (push notifications and over-the-air updates), and Apple/Google (push notification delivery). We share only what each provider needs to perform its function. We may also disclose information when required by law, to protect user safety, or in connection with a merger or acquisition (you would be notified).',
       },
       {
         heading: '6. International Transfers',

@@ -1,15 +1,25 @@
-// AnaJunubin — Photo Verification Flow (4-step)
-import React, { useState, useMemo } from 'react';
+// AnaJunubin — Photo Verification Flow (5-step with liveness check)
+//
+// Flow: Instructions → Liveness → Capture → Review → Submitted
+// The Liveness step is the May 2026 audit P2.1 addition — an active
+// head-turn/blink prompt before the selfie is captured. While the
+// EXPO_PUBLIC_LIVENESS_PROVIDER env var is unset, the step runs as a
+// UX-only scaffold (time-based prompts; no AWS Rekognition grading).
+// Once AWS Amplify FaceLivenessDetector is wired in
+// LivenessPromptOverlay, the same step gains real grading.
+import React, { useState, useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily } from '../theme';
 import Button from '../components/Button';
+import LivenessPromptOverlay from '../components/LivenessPromptOverlay';
 import * as ImagePicker from 'expo-image-picker';
 import { promptToOpenSettings } from '../utils/permissionAlert';
 import { supabase } from '../config/supabase';
 
-const STEPS = ['Instructions', 'Capture', 'Review', 'Submitted'];
+const STEPS = ['Instructions', 'Liveness', 'Capture', 'Review', 'Submitted'];
+const LIVENESS_PROVIDER = process.env.EXPO_PUBLIC_LIVENESS_PROVIDER || 'none';
 
 export default function PhotoVerificationScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -18,6 +28,27 @@ export default function PhotoVerificationScreen({ navigation }) {
   const [step, setStep] = useState(0);
   const [photo, setPhoto] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  // Liveness state — null = not yet attempted; { passed, mode } once
+  // the overlay reports back. We carry this through to handleSubmit
+  // so the VerificationRequest row records *how* this user was
+  // verified (selfie-only vs. selfie + liveness).
+  const [livenessResult, setLivenessResult] = useState(null);
+
+  const handleLivenessComplete = useCallback((result) => {
+    setLivenessResult(result);
+    if (result?.passed) {
+      // Liveness passed → proceed to the capture step. If a real AWS
+      // session id is in flight, it stays in livenessResult.metadata
+      // and gets written to VerificationRequest.metadata below.
+      setStep(2);
+    } else {
+      Alert.alert(
+        'Liveness check failed',
+        'We couldn\'t confirm you\'re a live person. Please try again with better lighting.',
+        [{ text: 'Retry', onPress: () => setStep(1) }, { text: 'Cancel', onPress: () => navigation.goBack() }],
+      );
+    }
+  }, [navigation]);
 
   const handleCapture = async () => {
     try {
@@ -38,7 +69,7 @@ export default function PhotoVerificationScreen({ navigation }) {
 
       if (!result.canceled && result.assets?.[0]) {
         setPhoto(result.assets[0].uri);
-        setStep(2);
+        setStep(3); // Review step (was 2 in the pre-liveness flow).
       }
     } catch (err) {
       Alert.alert('Camera Error', 'Could not open the camera. Please try again.');
@@ -81,6 +112,15 @@ export default function PhotoVerificationScreen({ navigation }) {
       // row from the Supabase dashboard. The client NEVER sets
       // isVerified directly — RLS blocks that, and we want a paper
       // trail before the badge appears on the profile.
+      //
+      // `method` matches the 00039 enum: 'selfie' (legacy / time-based
+      // scaffold) vs 'aws-face-liveness' (real Rekognition grading).
+      // Only stamp 'aws-face-liveness' when the overlay returned a
+      // real AWS sessionId — otherwise the row falsely claims the
+      // user was graded by AWS when in fact the time-based fallback
+      // ran. Reviewers rely on `method` to know which path to trust.
+      const gradedByAws =
+        livenessResult?.mode === 'aws-amplify' && !!livenessResult.sessionId;
       const { error: insertErr } = await supabase
         .from('VerificationRequest')
         .insert({
@@ -88,10 +128,12 @@ export default function PhotoVerificationScreen({ navigation }) {
           photoUrl: pub.publicUrl,
           storagePath,
           status: 'pending',
+          method: gradedByAws ? 'aws-face-liveness' : 'selfie',
+          metadata: livenessResult || {},
         });
       if (insertErr) throw insertErr;
 
-      setStep(3);
+      setStep(4);
     } catch (err) {
       Alert.alert(
         'Could not submit',
@@ -124,11 +166,37 @@ export default function PhotoVerificationScreen({ navigation }) {
                 ))}
               </View>
             </View>
-            <Button title="Take Selfie" variant="primary" size="lg" fullWidth onPress={() => setStep(1)} />
+            <Button
+              title="Continue"
+              variant="primary"
+              size="lg"
+              fullWidth
+              onPress={() => {
+                // Skip the liveness step entirely while the provider
+                // env var is unset AND no Amplify SDK is installed —
+                // keeps the flow on the legacy "selfie only" path so
+                // existing testers aren't blocked on the scaffold.
+                // Once you flip EXPO_PUBLIC_LIVENESS_PROVIDER, the
+                // step engages.
+                setStep(LIVENESS_PROVIDER === 'none' ? 2 : 1);
+              }}
+            />
           </View>
         );
 
       case 1:
+        return (
+          <View style={styles.stepContent}>
+            <View style={styles.stepTop}>
+              <LivenessPromptOverlay
+                onComplete={handleLivenessComplete}
+                onCancel={() => navigation.goBack()}
+              />
+            </View>
+          </View>
+        );
+
+      case 2:
         return (
           <View style={styles.stepContent}>
             <View style={styles.stepTop}>
@@ -141,7 +209,7 @@ export default function PhotoVerificationScreen({ navigation }) {
           </View>
         );
 
-      case 2:
+      case 3:
         return (
           <View style={styles.stepContent}>
             <View style={styles.stepTop}>
@@ -150,7 +218,7 @@ export default function PhotoVerificationScreen({ navigation }) {
               <Text style={styles.stepDesc}>Does this photo clearly show your face?</Text>
             </View>
             <View style={styles.reviewActions}>
-              <Button title="Retake" variant="outline" size="md" onPress={() => setStep(1)} disabled={submitting} style={{ flex: 1 }} />
+              <Button title="Retake" variant="outline" size="md" onPress={() => setStep(2)} disabled={submitting} style={{ flex: 1 }} />
               <Button
                 title={submitting ? 'Submitting…' : 'Submit'}
                 variant="primary"
@@ -163,7 +231,7 @@ export default function PhotoVerificationScreen({ navigation }) {
           </View>
         );
 
-      case 3:
+      case 4:
         return (
           <View style={styles.stepContent}>
             <View style={styles.stepTop}>

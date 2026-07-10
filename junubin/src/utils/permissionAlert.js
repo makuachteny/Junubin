@@ -18,9 +18,27 @@
 
 import { Alert, Linking, Platform } from 'react-native';
 
+// In-memory deduper. Two paths often race the same prompt — e.g. the
+// user taps "Take Photo" twice in quick succession while the camera
+// permission check is in flight, surfacing the settings prompt
+// twice. We collapse identical prompts within a short window so the
+// user never sees stacked, duplicate dialogs.
+const _lastPromptAt = new Map(); // key: title → ts
+const DEDUP_WINDOW_MS = 1500;
+
+function shouldShow(title) {
+  const last = _lastPromptAt.get(title) || 0;
+  const now = Date.now();
+  if (now - last < DEDUP_WINDOW_MS) return false;
+  _lastPromptAt.set(title, now);
+  return true;
+}
+
 export function promptToOpenSettings({ title, message } = {}) {
+  const t = title || 'Permission needed';
+  if (!shouldShow(t)) return;
   Alert.alert(
-    title || 'Permission needed',
+    t,
     message || 'You can enable this in Settings.',
     [
       { text: 'Not now', style: 'cancel' },
@@ -43,4 +61,58 @@ export function promptToOpenSettings({ title, message } = {}) {
       },
     ],
   );
+}
+
+/**
+ * Smart permission request — checks current status first and only
+ * prompts when the OS will actually surface a dialog. Avoids the
+ * common "tap → silently denied → confused user" trap.
+ *
+ * `checker` is the SDK's getPermissionsAsync; `requester` is the
+ * matching requestPermissionsAsync. Returns the final status.
+ *
+ * Use:
+ *   const status = await ensurePermission({
+ *     checker: ImagePicker.getMediaLibraryPermissionsAsync,
+ *     requester: ImagePicker.requestMediaLibraryPermissionsAsync,
+ *     deniedTitle: 'Photo access needed',
+ *     deniedMessage: 'Enable photo access in Settings to share photos.',
+ *   });
+ *   if (status !== 'granted') return;
+ */
+export async function ensurePermission({
+  checker,
+  requester,
+  deniedTitle,
+  deniedMessage,
+} = {}) {
+  if (typeof checker !== 'function' || typeof requester !== 'function') {
+    return 'undetermined';
+  }
+
+  // Check first — if already granted, no prompt at all.
+  try {
+    const existing = await checker();
+    if (existing?.status === 'granted') return 'granted';
+
+    // If iOS has permanently denied (canAskAgain === false), don't
+    // call requester — it will silently resolve denied. Jump straight
+    // to the Settings prompt so the user has an actionable next step.
+    if (existing?.canAskAgain === false) {
+      promptToOpenSettings({ title: deniedTitle, message: deniedMessage });
+      return existing.status;
+    }
+
+    // Otherwise request — this will show the OS dialog.
+    const next = await requester();
+    if (next?.status === 'granted') return 'granted';
+
+    promptToOpenSettings({ title: deniedTitle, message: deniedMessage });
+    return next?.status || 'denied';
+  } catch (e) {
+    // Permission API failure (rare) — fall back to a denied prompt
+    // so the user isn't stuck silently.
+    promptToOpenSettings({ title: deniedTitle, message: deniedMessage });
+    return 'denied';
+  }
 }

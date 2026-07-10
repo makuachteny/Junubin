@@ -18,7 +18,7 @@ import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import BrandLogo from '../components/BrandLogo';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
-import { useSubscription, SHOW_PAYMENTS_UI } from '../payments';
+import { useSubscription, SHOW_PAYMENTS_UI, StripeService } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
@@ -29,6 +29,7 @@ import {
   getNotificationPermissionStatus,
 } from '../utils/notifications';
 import { promptToOpenSettings } from '../utils/permissionAlert';
+import { REFERRALS_BACKEND_READY } from '../utils/referralService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const TIER_LABELS = { free: 'Free', plus: 'JuNubin+', junub: 'Junub' };
@@ -244,6 +245,24 @@ export default function SettingsScreen({ navigation }) {
       Alert.alert('Promo Plan', 'Your membership is a time-limited promo. Manage paid subscriptions in the app store.');
       return;
     }
+
+    // Stripe subscribers (web + Android purchases) go to the Stripe
+    // Billing Portal — they can cancel, switch plan, update card, and
+    // download invoices there. IAP subscribers fall through to the
+    // store-account URL because Apple/Google own the cancellation
+    // surface for purchases that went through them.
+    const portal = await StripeService.openBillingPortal({ returnUrl: 'junubin://account' });
+    if (portal.available && portal.url) {
+      try {
+        const supported = await Linking.canOpenURL(portal.url);
+        if (!supported) throw new Error('unsupported');
+        await Linking.openURL(portal.url);
+        return;
+      } catch {
+        // Fall through to store URL.
+      }
+    }
+
     const iosUrl = 'https://apps.apple.com/account/subscriptions';
     const androidUrl = 'https://play.google.com/store/account/subscriptions?package=com.junubin.app';
     const target = Platform.OS === 'ios' ? iosUrl : androidUrl;
@@ -283,7 +302,12 @@ export default function SettingsScreen({ navigation }) {
   }, [navigation]);
 
   const menuItems = useMemo(() => [
-    { label: 'Invite Friends', icon: 'gift-outline', onPress: () => navigation.navigate('Referral') },
+    // Invite Friends hides until REFERRALS_BACKEND_READY flips true —
+    // the reward grants are local-only today and would let a user
+    // generate free Plus weeks / Super Likes / coins client-side.
+    ...(REFERRALS_BACKEND_READY
+      ? [{ label: 'Invite Friends', icon: 'gift-outline', onPress: () => navigation.navigate('Referral') }]
+      : []),
     { label: 'Find Friends', icon: 'people-circle-outline', onPress: () => navigation.navigate('FindFriends') },
     { label: 'Verify Your Photo', icon: 'camera-outline', onPress: () => navigation.navigate('PhotoVerification') },
     // Accessibility prefs are a one-time onboarding step but the
@@ -297,9 +321,11 @@ export default function SettingsScreen({ navigation }) {
     { label: 'Privacy Policy', icon: 'shield-outline', onPress: () => handleInfoPagePress('privacy') },
     { label: 'Community Guidelines', icon: 'people-outline', onPress: () => handleInfoPagePress('guidelines') },
     { label: 'Safety Tips', icon: 'warning-outline', onPress: () => handleInfoPagePress('safety') },
-    // Manage Subscription + Restore Purchases hidden during v1 launch —
-    // see SHOW_PAYMENTS_UI in src/payments/comingSoon.js. Restored
-    // automatically when payments go live.
+    // Manage Subscription + Restore Purchases are gated on
+    // SHOW_PAYMENTS_UI (src/payments/comingSoon.js). With payments
+    // live they render unconditionally; the flag stays as a kill
+    // switch in case we need to hide monetization UI for a future
+    // App Review re-submission.
     ...(SHOW_PAYMENTS_UI
       ? [
           { label: 'Manage Subscription', icon: 'card-outline', onPress: handleManageSubscription },

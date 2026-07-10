@@ -33,6 +33,12 @@ const SWIPE_DISTANCE_THRESHOLD = 100;
 const SWIPE_VELOCITY_THRESHOLD = 500;
 const EXIT_X = screenWidth * 1.5;
 
+// Vertical gap from the top of the pills row to the baseline of the name.
+// Pill row height ≈ 30 (13pt text + 7pt vert padding × 2) + 8 visual gap
+// = 38. Locking this as a constant means the name's y-position is identical
+// across every profile, regardless of whether 0, 1, or 2 pills render.
+const NAME_GAP_ABOVE_PILLS = 38;
+
 const SNAP_BACK_SPRING = {
   damping: 18,
   stiffness: 200,
@@ -51,7 +57,13 @@ const EXIT_SPRING = {
   restSpeedThreshold: 50,
 };
 
-const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, onDoubleTap, style }, ref) => {
+// `infoBottom` lets the caller override how far above the card's
+// bottom edge the name + detail pills sit. The default (96) reserves
+// clearance for HomeScreen's floating action button row, which sits
+// over the card's lower edge. ProfileView (tap-from-map) renders its
+// action bar OUTSIDE the card, so it passes a smaller value (~22) so
+// the info doesn't float mid-photo with a big empty band beneath it.
+const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, onDoubleTap, style, infoBottom = 96 }, ref) => {
   const { colors, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const translateX = useSharedValue(0);
@@ -311,37 +323,56 @@ const ProfileCard = forwardRef(({ profile, onSwipe, onExpand, onSwipeProgress, o
             pointerEvents="none"
           />
 
-          {/* Info overlay — bottom left with frosted pills */}
-          <View style={styles.infoOverlay}>
-            <View style={styles.nameRow}>
-              <Text style={styles.nameText}>
-                {profile.name}, {profile.age} {getFlag(profile.country)}
-              </Text>
-              {profile.verified && (
-                <Ionicons name="checkmark-circle" size={20} color="#FCCD12" />
-              )}
-            </View>
-            <View style={styles.detailsRow}>
-              {profile.distance != null && (
-                <BlurView intensity={40} tint="dark" style={styles.detailPill}>
-                  <Ionicons name="location-sharp" size={13} color="rgba(255,255,255,0.9)" />
-                  <Text style={styles.detailText}>{profile.distance} mi</Text>
-                </BlurView>
-              )}
-              {!!statusText && (
-                <BlurView intensity={40} tint="dark" style={styles.detailPill}>
-                  <Text style={styles.detailText}>{statusText}</Text>
-                </BlurView>
-              )}
-            </View>
-            {profile.currentlyInto?.length > 0 && (
-              <View style={styles.tagRow}>
-                {profile.currentlyInto.slice(0, 3).map((item, idx) => (
-                  <BlurView key={idx} intensity={30} tint="dark" style={styles.tag}>
-                    <Text style={styles.tagText}>{item}</Text>
-                  </BlurView>
-                ))}
+          {/* Info overlay — bottom left, mirroring the Socialize screen
+              mock the team signed off on:
+                "<name>, <age>  <flag>"  +  gold ✓ checkmark
+                [📍 <distance> mi]  [<currentlyInto[0]>]
+              Two pills max, both on one row. The previous version
+              showed three rows (name, distance+statusText, separate
+              tags) which crowded the lower-third of the photo and
+              didn't match the design. Status text (e.g. "Active
+              now") is intentionally dropped here — recency is
+              already conveyed by the OnlinePulseDot indicator on
+              the card edge. */}
+          {/* Name + pills are positioned at independent fixed offsets
+              (not a single bottom-anchored stack) so the name stays
+              at the same y-coord regardless of whether a profile has
+              0, 1, or 2 detail pills. Earlier this was one View
+              anchored at `bottom: infoBottom` — its intrinsic height
+              shrank by ~36px when pills were absent, which made the
+              name visibly jump between profiles during a swipe. */}
+          <View style={[styles.pillsRow, { bottom: infoBottom }]}>
+            {/* Pills use a plain semi-transparent dark fill rather
+                than BlurView. The heavy blur read as a solid dark
+                panel on real devices and didn't match the lighter,
+                cleaner look in the design screenshot. rgba(0,0,0,0.45)
+                is dark enough for white text to pass WCAG contrast
+                on any photo without obscuring the underlying image. */}
+            {profile.distance != null && (
+              <View style={styles.detailPill}>
+                <Ionicons name="location-sharp" size={13} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.detailText} numberOfLines={1}>{profile.distance} mi</Text>
               </View>
+            )}
+            {profile.currentlyInto?.length > 0 ? (
+              <View style={styles.detailPill}>
+                <Text style={styles.detailText} numberOfLines={1}>{profile.currentlyInto[0]}</Text>
+              </View>
+            ) : !!statusText && (
+              // Fall back to status text only when there's no
+              // currentlyInto signal — keeps the pill row useful
+              // for profiles that haven't filled the prompt yet.
+              <View style={styles.detailPill}>
+                <Text style={styles.detailText} numberOfLines={1}>{statusText}</Text>
+              </View>
+            )}
+          </View>
+          <View style={[styles.nameRow, { bottom: infoBottom + NAME_GAP_ABOVE_PILLS }]}>
+            <Text style={styles.nameText} numberOfLines={1}>
+              {profile.name}, {profile.age} {getFlag(profile.country)}
+            </Text>
+            {profile.verified && (
+              <Ionicons name="checkmark-circle" size={20} color="#FCCD12" />
             )}
           </View>
         </View>
@@ -367,6 +398,13 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   imageWrapper: {
     flex: 1,
+    // Match the card's rounding + clip at THIS level too. iOS occasionally
+    // fails to clip absolutely-positioned children (the photo, gradient,
+    // wash overlays) against a borderRadius set only on a grand-parent —
+    // applying it here too guarantees the bitmap follows the card's
+    // rounded edge instead of poking out at the corners.
+    overflow: 'hidden',
+    borderRadius: ms(22),
   },
   imageFallback: {
     ...StyleSheet.absoluteFillObject,
@@ -474,19 +512,20 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     zIndex: 3,
   },
 
-  // Info overlay — sits above buttons with clear spacing
-  infoOverlay: {
+  // Name row and pills row are positioned independently — each as
+  // its own absolutely-positioned block anchored to the card bottom.
+  // Caller-controlled `infoBottom` (default 96) sets the pills row's
+  // bottom; the name row sits at `infoBottom + NAME_GAP_ABOVE_PILLS`
+  // so the name's y-coord is identical across every profile,
+  // regardless of how many pills (0/1/2) actually render.
+  nameRow: {
     position: 'absolute',
     left: 18,
     right: 18,
-    bottom: 96,
-    zIndex: 5,
-  },
-  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 8,
+    zIndex: 5,
   },
   nameText: {
     fontSize: 30,
@@ -494,42 +533,48 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontFamily: FontFamily.black,
     color: '#FFFFFF',
     letterSpacing: -0.3,
+    flexShrink: 1,
   },
-  detailsRow: {
+  pillsRow: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 0,
+    zIndex: 5,
   },
   detailPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    // Slightly roomier padding so the pills match the screenshot
+    // proportions. The BlurView ancestor used to pad the children
+    // tighter; without the blur we need a touch more horizontal
+    // breathing room around the text.
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 20,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    // rgba(0,0,0,0.45) reads as a clean dark-translucent pill on
+    // any photo — light enough not to look like a solid panel,
+    // dark enough for the white text to stay legible.
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   detailText: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.9)',
     fontFamily: FontFamily.medium,
   },
-  tagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
-  },
-  tag: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
+  // tagRow / tag / tagText were the separate "currentlyInto" pill
+  // row that lived below detailsRow before the screenshot-match
+  // pass. Removed when the design collapsed to two inline pills.
+  // Styles kept commented out so a future revert is one diff away.
+  // tagRow / tag / tagText (deprecated)
   tagText: {
+    // Retained so any external caller importing this style name from
+    // a snapshot test doesn't break. Will fold into detailText next
+    // refactor.
     color: 'rgba(255,255,255,0.85)',
     fontSize: 12,
     fontWeight: '600',

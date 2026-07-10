@@ -1,21 +1,19 @@
-// Payments-coming-soon flag.
+// Payments-enabled flag.
 //
-// For the v1 TestFlight launch we ship without live payment processing —
-// the infrastructure (RevenueCat, Stripe, Flutterwave, payouts) is wired
-// and deployed but we don't want users transacting against a path we
-// haven't manually QA'd in a sandbox tester yet. When `PAYMENTS_ENABLED`
-// is false, every purchase / payout attempt surfaces a friendly
-// "Coming soon" alert and resolves to a no-op so the calling screen
-// doesn't enter a half-completed state.
+// Controls whether real money moves. When false, every purchase /
+// payout attempt surfaces a friendly "Coming soon" alert and resolves
+// to a no-op so the calling screen doesn't enter a half-completed
+// state. When true, the corresponding rail (Stripe / App Store IAP)
+// actually charges the user.
 //
-// Flip the flag to true once the App Store / Google Play products are
-// approved AND the Stripe + Flutterwave dashboard webhooks are pointed
-// at the production functions AND we've watched a sandbox transaction
-// land successfully. There's no other code path to update.
+// v1 launch: enabled. Stripe is the primary global rail (web +
+// Android); App Store IAP runs on iOS for Apple-policy compliance.
+// Both are wired through the same SubscriptionContext — see
+// `purchaseWithStripe` and `purchase` (RevenueCat).
 
 import { Alert } from 'react-native';
 
-export const PAYMENTS_ENABLED = false;
+export const PAYMENTS_ENABLED = true;
 
 // UI-level gate. While this is false, every payment-related surface is
 // hidden — the Elite tier sheet, the Boost spotlight purchase screen,
@@ -27,7 +25,12 @@ export const PAYMENTS_ENABLED = false;
 // This is the cosmetic counterpart to PAYMENTS_ENABLED above:
 //   PAYMENTS_ENABLED  — controls whether *transactions* succeed
 //   SHOW_PAYMENTS_UI  — controls whether *buttons* appear at all
-// Flip both true together when monetization launches.
+// Both are true for the monetized v1 launch: payment UI is visible AND
+// transactions move real money. Before submitting, make sure the store
+// IAP products + RevenueCat entitlements + Stripe webhook are all live
+// (see docs/production-readiness-2026-05-27.md) — App Review tests a
+// real purchase, and a Subscribe button with no working product behind
+// it is a rejection.
 export const SHOW_PAYMENTS_UI = true;
 
 /**

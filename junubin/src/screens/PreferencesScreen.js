@@ -33,14 +33,19 @@ import { interactiveStore } from '../utils/interactiveStore';
 import { TRIBES } from '../data/tribes';
 
 // ── Member preferences ──────────────────────────────────────
+// `lockable: true` on rows that are actual *filters* (narrow who the
+// user sees). Free users see a lock icon + the row routes to the
+// upgrade prompt on tap. Rows without `lockable` are core identity /
+// location settings that everyone must be able to edit (locking
+// "I'm interested in" or "My neighborhood" would break basic discovery).
 const MEMBER_PREFS = [
   { key: 'interestedIn', label: "I'm interested in", value: 'Women', icon: 'heart-outline', tint: 'accent' },
   { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline', tint: 'warm' },
-  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm' },
-  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral' },
-  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold' },
-  { key: 'religion', label: 'Religion', value: 'Open to all', icon: 'book-outline', tint: 'gold' },
-  { key: 'relationshipType', label: 'Relationship Type', value: 'Monogamy', icon: 'people-outline', tint: 'accent' },
+  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm', lockable: true },
+  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral', lockable: true },
+  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold', lockable: true },
+  { key: 'religion', label: 'Religion', value: 'Open to all', icon: 'book-outline', tint: 'gold', lockable: true },
+  { key: 'relationshipType', label: 'Relationship Type', value: 'Monogamy', icon: 'people-outline', tint: 'accent', lockable: true },
 ];
 
 // ── Subscriber preferences ──────────────────────────────────
@@ -58,14 +63,16 @@ const SUBSCRIBER_PREFS = [
 ];
 
 // ── Social preferences ──────────────────────────────────────
+// Same lockable rule as MEMBER_PREFS — narrowing filters are gated,
+// "My neighborhood" stays free since it's location setup, not a filter.
 const SOCIAL_PREFS = [
-  { key: 'activityType', label: 'Activity type', value: 'Open to all', icon: 'sparkles-outline', tint: 'accent' },
-  { key: 'hangoutSize', label: 'Group size', value: 'Any size', icon: 'people-outline', tint: 'warm' },
+  { key: 'activityType', label: 'Activity type', value: 'Open to all', icon: 'sparkles-outline', tint: 'accent', lockable: true },
+  { key: 'hangoutSize', label: 'Group size', value: 'Any size', icon: 'people-outline', tint: 'warm', lockable: true },
   { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline', tint: 'warm' },
-  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm' },
-  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral' },
-  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold' },
-  { key: 'vibe', label: 'Vibe', value: 'Open to all', icon: 'musical-notes-outline', tint: 'accent' },
+  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm', lockable: true },
+  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral', lockable: true },
+  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold', lockable: true },
+  { key: 'vibe', label: 'Vibe', value: 'Open to all', icon: 'musical-notes-outline', tint: 'accent', lockable: true },
 ];
 
 // Icon tint colors — all rows now use the same neutral treatment so
@@ -88,6 +95,18 @@ const ICON_TINTS = {
 
 // Check if a value is a "default" / unset value
 const isDefaultValue = (val) => !val || val === 'Open to all' || val === 'Set your location' || val === 'Any size';
+
+// Maps a caller-supplied `returnTo` hint onto the bottom-tab the user
+// should land on when they finish with the filters. Anything not in
+// this map is treated as a direct stack-screen name (see routeAfterDone).
+const RETURN_TAB = {
+  Discover: 'HomeTab',
+  Home: 'HomeTab',
+  Connect: 'HomeTab',
+  Likes: 'LikesTab',
+  Community: 'CommunityTab',
+  Messages: 'MessagesTab',
+};
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -287,19 +306,42 @@ export default function PreferencesScreen({ navigation, route }) {
   const { hasTier } = useSubscription();
   const isSubscriber = hasTier('plus');
 
-  // Read persisted mode on mount
+  // Upgrade prompt fired when a free user taps a lockable filter row.
+  // Same copy as the FilterBar paywall so the experience is consistent
+  // whether they hit a lock from Connect/Likes or from Preferences.
+  const showFiltersUpgrade = useCallback(() => {
+    Alert.alert(
+      'JuNubin+ Filters',
+      'Upgrade to JuNubin+ to use filters and meet exactly the people you\'re looking for.',
+      [
+        { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  }, [navigation]);
+
+  // Mode is the canonical app state — currentUser.preferences.mode is
+  // resolved upstream from Profile.appMode (with the AsyncStorage
+  // @junubin_mode fallback baked in), so we read it directly here rather
+  // than re-reading storage. Seeding + syncing from it means opening
+  // Preferences always reflects the mode set anywhere else, and toggling
+  // it here (handleModeToggle → appMode + refreshUser) flips the rest of
+  // the app via the same source.
   useEffect(() => {
-    AsyncStorage.getItem('@junubin_mode').then((stored) => {
-      if (stored === 'Social' || stored === 'Dating') {
-        setMode(stored);
-        slideAnim.setValue(stored === 'Social' ? 1 : 0);
-      }
-    }).catch(() => {});
+    const apiMode = currentUser?.preferences?.mode;
+    if (apiMode === 'Social' || apiMode === 'Dating') {
+      setMode(apiMode);
+      slideAnim.setValue(apiMode === 'Social' ? 1 : 0);
+    }
+  }, [currentUser?.preferences?.mode, slideAnim]);
+
+  // Read persisted interactive prefs on mount.
+  useEffect(() => {
     interactiveStore.getFriendLayer().then((enabled) => setFriendLayerEnabled(!!enabled)).catch(() => {});
     interactiveStore.getSeasonMode().then((saved) => {
       if (saved) setSeasonMode(saved);
     }).catch(() => {});
-  }, [slideAnim]);
+  }, []);
 
   const handleModeToggle = useCallback((newMode) => {
     const toValue = newMode === 'Social' ? 1 : 0;
@@ -341,7 +383,7 @@ export default function PreferencesScreen({ navigation, route }) {
   }, [route.params?.updatedPref, navigation]);
 
   const { session } = useAuth();
-  const { refreshUser } = useCurrentUser();
+  const { currentUser, refreshUser } = useCurrentUser();
 
   const handleSeasonMode = useCallback((nextMode) => {
     setSeasonMode(nextMode);
@@ -359,6 +401,29 @@ export default function PreferencesScreen({ navigation, route }) {
       return next;
     });
   }, [isSubscriber, navigation]);
+
+  // Where to land when the user finishes with the filters. Honors an
+  // explicit `returnTo` (the screen/tab that opened the filters) so Done
+  // always routes to the correct place — even after drilling into a
+  // PreferenceSelect sub-screen, which threads returnTo back to us. Falls
+  // back to goBack(), then to the Connect tab so we never dead-end.
+  const returnTo = route?.params?.returnTo;
+  const routeAfterDone = useCallback(() => {
+    const tab = RETURN_TAB[returnTo];
+    if (tab) {
+      navigation.navigate('Main', { screen: tab });
+      return;
+    }
+    if (returnTo) {
+      navigation.navigate(returnTo);
+      return;
+    }
+    if (navigation.canGoBack?.()) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('Main', { screen: 'HomeTab' });
+  }, [navigation, returnTo]);
 
   const handleDone = async () => {
     const prefSource = mode === 'Social' ? socialPrefValues : memberPrefValues;
@@ -388,7 +453,7 @@ export default function PreferencesScreen({ navigation, route }) {
       }
     }
 
-    navigation.goBack();
+    routeAfterDone();
   };
 
   const openMemberPref = (pref) => {
@@ -400,6 +465,7 @@ export default function PreferencesScreen({ navigation, route }) {
       options,
       currentValue: memberPrefValues[pref.key] || pref.value,
       prefType: 'member',
+      returnTo,
     });
   };
 
@@ -416,6 +482,7 @@ export default function PreferencesScreen({ navigation, route }) {
       options,
       currentValue: subscriberPrefValues[pref.key] || 'Open to all',
       prefType: 'subscriber',
+      returnTo,
     });
   };
 
@@ -428,6 +495,7 @@ export default function PreferencesScreen({ navigation, route }) {
       options,
       currentValue: socialPrefValues[pref.key] || pref.value,
       prefType: 'social',
+      returnTo,
     });
   };
 
@@ -447,13 +515,17 @@ export default function PreferencesScreen({ navigation, route }) {
     const iconColor = locked ? colors.gray400 : (isDark ? tint.iconDark : tint.iconLight);
     const val = value || 'Open to all';
     const isSet = !isDefaultValue(val);
+    // Locked rows route to the upgrade prompt instead of opening the
+    // selection screen — this guarantees the value can't be edited even
+    // if a future caller forgets to gate the onPress.
+    const effectivePress = locked ? showFiltersUpgrade : onPress;
 
     return (
       <PressablePrefRow
         key={pref.key}
         style={[styles.prefRow, index < total - 1 && styles.prefRowBorder, locked && styles.prefRowLocked]}
-        activeOpacity={locked ? 1 : 0.6}
-        onPress={onPress}
+        activeOpacity={0.6}
+        onPress={effectivePress}
       >
         <View style={styles.prefLeft}>
           <View style={[styles.prefIconWrap, { backgroundColor: locked ? colors.gray200 : iconBg }]}>
@@ -574,68 +646,106 @@ export default function PreferencesScreen({ navigation, route }) {
             </View>
             <View style={styles.card}>
               {SOCIAL_PREFS.map((pref, index) =>
-                renderPrefRow(pref, index, SOCIAL_PREFS.length, socialPrefValues[pref.key] || pref.value, () => openSocialPref(pref))
+                renderPrefRow(
+                  pref, index, SOCIAL_PREFS.length,
+                  socialPrefValues[pref.key] || pref.value,
+                  () => openSocialPref(pref),
+                  !!pref.lockable && !isSubscriber,
+                )
               )}
             </View>
           </>
         ) : (
           <>
-            {/* ── MEMBER PREFERENCES ── */}
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeader}>Member Preferences</Text>
-              <View style={styles.sectionCountPill}>
-                <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
-              </View>
-            </View>
-            <View style={styles.card}>
-              {MEMBER_PREFS.map((pref, index) =>
-                renderPrefRow(pref, index, MEMBER_PREFS.length, memberPrefValues[pref.key] || pref.value, () => openMemberPref(pref))
-              )}
-            </View>
+            {/* ── MEMBER PREFERENCES — core identity/location only ──
+                Everything that's a *filter* (distance/age/ethnicity/
+                religion/relationship type) has moved into the
+                Subscriber section below so the paywall surface is one
+                visible block, not two scattered ones. */}
+            {(() => {
+              const coreMember = MEMBER_PREFS.filter((p) => !p.lockable);
+              return (
+                <>
+                  <View style={styles.sectionHeaderRow}>
+                    <Text style={styles.sectionHeader}>Member Preferences</Text>
+                    <View style={styles.sectionCountPill}>
+                      <Text style={styles.sectionCountText}>
+                        {coreMember.filter((p) => !isDefaultValue(memberPrefValues[p.key] || p.value)).length}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.card}>
+                    {coreMember.map((pref, index) =>
+                      renderPrefRow(
+                        pref, index, coreMember.length,
+                        memberPrefValues[pref.key] || pref.value,
+                        () => openMemberPref(pref),
+                        false,
+                      )
+                    )}
+                  </View>
+                </>
+              );
+            })()}
 
-            {/* ── SUBSCRIBER PREFERENCES ── */}
-            <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
-              <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
-              <View style={[styles.sectionCountPill, styles.sectionCountPillGold]}>
-                <Text style={[styles.sectionCountText, styles.sectionCountTextGold]}>{activeSubscriberCount}</Text>
-              </View>
-              {!isSubscriber && (
-                <View style={styles.lockBadge}>
-                  <Ionicons name="lock-closed" size={10} color="#FFFFFF" />
-                </View>
-              )}
-            </View>
+            {/* ── SUBSCRIBER PREFERENCES — every paywalled filter ── */}
+            {(() => {
+              const lockableMember = MEMBER_PREFS.filter((p) => p.lockable);
+              const combined = [...lockableMember, ...SUBSCRIBER_PREFS];
+              const activeCombined = lockableMember.filter((p) => !isDefaultValue(memberPrefValues[p.key] || p.value)).length
+                + activeSubscriberCount;
+              return (
+                <>
+                  <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+                    <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
+                    <View style={[styles.sectionCountPill, styles.sectionCountPillGold]}>
+                      <Text style={[styles.sectionCountText, styles.sectionCountTextGold]}>{activeCombined}</Text>
+                    </View>
+                    {!isSubscriber && (
+                      <View style={styles.lockBadge}>
+                        <Ionicons name="lock-closed" size={10} color="#FFFFFF" />
+                      </View>
+                    )}
+                  </View>
 
-            {!isSubscriber && (
-              <View style={styles.unlockBanner}>
-                <View style={styles.unlockIconRow}>
-                  <GraffitiSparkles size={20} color={colors.gold} filled />
-                </View>
-                <Text style={styles.unlockTitle}>Unlock Advanced Filters</Text>
-                <Text style={styles.unlockText}>
-                  Fine-tune who you see with height, lifestyle, and more
-                </Text>
-                <Button
-                  title="Upgrade to Plus"
-                  variant="primary"
-                  size="sm"
-                  fullWidth={false}
-                  onPress={() => navigation?.navigate?.('Elite')}
-                  style={{ marginTop: 14, paddingHorizontal: 36, alignSelf: 'center' }}
-                />
-              </View>
-            )}
+                  {!isSubscriber && (
+                    <View style={styles.unlockBanner}>
+                      <View style={styles.unlockIconRow}>
+                        <GraffitiSparkles size={20} color={colors.gold} filled />
+                      </View>
+                      <Text style={styles.unlockTitle}>Unlock Advanced Filters</Text>
+                      <Text style={styles.unlockText}>
+                        Fine-tune who you see by distance, age, ethnicity, height, lifestyle, and more
+                      </Text>
+                      <Button
+                        title="Upgrade to Plus"
+                        variant="primary"
+                        size="sm"
+                        fullWidth={false}
+                        onPress={() => navigation?.navigate?.('Elite')}
+                        style={{ marginTop: 14, paddingHorizontal: 36, alignSelf: 'center' }}
+                      />
+                    </View>
+                  )}
 
-            <View style={styles.card}>
-              {SUBSCRIBER_PREFS.map((pref, index) =>
-                renderPrefRow(
-                  pref, index, SUBSCRIBER_PREFS.length,
-                  subscriberPrefValues[pref.key],
-                  () => openSubscriberPref(pref),
-                  !isSubscriber
-                )
-              )}
-            </View>
+                  <View style={styles.card}>
+                    {combined.map((pref, index) => {
+                      // Lockable MEMBER_PREFS keep their member-side state +
+                      // open handler so their persisted values still flow to
+                      // the right column on save. SUBSCRIBER_PREFS keep theirs.
+                      const isFromMember = !!pref.lockable;
+                      const value = isFromMember
+                        ? (memberPrefValues[pref.key] || pref.value)
+                        : subscriberPrefValues[pref.key];
+                      const onPress = isFromMember
+                        ? () => openMemberPref(pref)
+                        : () => openSubscriberPref(pref);
+                      return renderPrefRow(pref, index, combined.length, value, onPress, !isSubscriber);
+                    })}
+                  </View>
+                </>
+              );
+            })()}
           </>
         )}
 

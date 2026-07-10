@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, act } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -60,6 +60,17 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('../utils/haptics', () => ({
   hapticSelection: jest.fn(),
+}));
+
+// PostCard.handleLike fires toggleLike() and rolls back on rejection.
+// Without this mock the real service runs and its promise settles after
+// the test's synchronous assertions, producing an act(...) warning.
+jest.mock('../api/services/postService', () => ({
+  toggleLike: jest.fn(async () => ({})),
+  toggleRepost: jest.fn(async () => ({})),
+  toggleWave: jest.fn(async () => ({})),
+  deletePost: jest.fn(async () => ({})),
+  updatePostContent: jest.fn(async () => ({})),
 }));
 
 jest.mock('@react-navigation/native', () => {
@@ -124,7 +135,7 @@ describe('Flow smoke tests', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('Signup');
   });
 
-  it('post card opens detail on card press, not on like', () => {
+  it('post card opens detail on card press, not on like', async () => {
     const post = {
       id: 'p1',
       user: { name: 'Asha', avatar: null, location: 'Juba' },
@@ -134,7 +145,9 @@ describe('Flow smoke tests', () => {
       comments: 1,
     };
     const { getByText, getByTestId } = render(<PostCard post={post} />);
-    fireEvent.press(getByTestId('post-like-action'));
+    await act(async () => {
+      fireEvent.press(getByTestId('post-like-action'));
+    });
     expect(mockNavigate).not.toHaveBeenCalled();
     fireEvent.press(getByText('Hello world'));
     expect(mockNavigate).toHaveBeenCalledWith('PostDetail', { post });

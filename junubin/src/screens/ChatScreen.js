@@ -30,6 +30,9 @@ import * as callService from '../api/services/callService';
 import * as chatService from '../api/services/chatService';
 import * as matchesService from '../api/services/matchesService';
 import * as safetyService from '../api/services/safetyService';
+import { detectScamSignal } from '../api/services/safetyServiceExtras';
+import ChatScamBanner from '../components/ChatScamBanner';
+import { trackEvent, AnalyticsEvents } from '../utils/analytics';
 import { useEligibility } from '../hooks';
 import { supabase } from '../config/supabase';
 import { useRealtime } from '../api/hooks/useRealtime';
@@ -194,19 +197,40 @@ export default function ChatScreen({ navigation, route }) {
   const [showMatchBanner, setShowMatchBanner] = useState(!!route.params?.fromMatch);
   const dismissMatchBanner = useCallback(() => setShowMatchBanner(false), []);
 
-  // Relationship gate — fun features (games, calls) require: friend (mutual
-  // follow) OR you follow them OR you have a confirmed match (conversation).
-  const { isFollowing, isFriend } = useFollow(match.id);
-  const canConnect = isFriend || isFollowing || !!conversationId;
+  // Relationship gates for in-chat features.
+  //
+  // Product rules:
+  //   • Voice / video calls are MATCHES ONLY — a Conversation row only
+  //     exists once two people mutually matched, so `isMatched` is the
+  //     gate. Following someone (e.g. to see their stories) lets you say
+  //     hi and try to match, but not call until you actually match.
+  //   • Games are available to matches OR friends (mutual follow).
+  //   • Plain text isn't gated here — who can open the thread (a match,
+  //     a mutual-follow friend, or a premium whisper) controls that.
+  const { isFriend } = useFollow(match.id);
+  const isMatched = !!conversationId;
+  const canConnect = isMatched || isFriend; // games
+  const canCall = isMatched;                // voice/video — matches only
+
   const requireConnection = useCallback((featureName) => {
     if (canConnect) return true;
     Alert.alert(
-      'Connect first',
-      `${featureName} are only available with friends, people you follow, or matches. Follow ${match.name || 'this user'} to unlock.`,
+      'Not connected yet',
+      `${featureName} are available with your matches and friends.`,
       [{ text: 'OK', style: 'cancel' }]
     );
     return false;
-  }, [canConnect, match.name]);
+  }, [canConnect]);
+
+  const requireMatch = useCallback((featureName) => {
+    if (canCall) return true;
+    Alert.alert(
+      'Match to call',
+      `${featureName} are available once you and ${match.name || 'this person'} match. Like them or reply to their story to start a connection.`,
+      [{ text: 'OK', style: 'cancel' }]
+    );
+    return false;
+  }, [canCall, match.name]);
 
   // For real matches: start empty; getMessages + realtime fill in.
   // For demo matches: pre-fill from mockMessages keyed by the roster
@@ -240,6 +264,18 @@ export default function ChatScreen({ navigation, route }) {
   const [showGamePicker, setShowGamePicker] = useState(route.params?.startGame || false);
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [voiceUploading, setVoiceUploading] = useState(false);
+
+  // ── Scam-detection banner state ──────────────────────────────────
+  // verdict: null = not yet fetched / no risk; otherwise the
+  // detect-scam-signal response. We refresh on mount and after every
+  // SCAM_REFRESH_EVERY_N_INCOMING incoming messages so a clean
+  // opening followed by a sudden money-ask still flags. Per-session
+  // dismissal lives in dismissedRef — we don't persist it so the
+  // banner re-evaluates on the next app launch.
+  const [scamVerdict, setScamVerdict] = useState(null);
+  const scamDismissedRef = useRef(false);
+  const incomingCountRef = useRef(0);
+  const SCAM_REFRESH_EVERY_N_INCOMING = 5;
   const [hiddenFeatures, setHiddenFeatures] = useState({});
   const [activeGames, setActiveGames] = useState(new Map());
   const [gameResult, setGameResult] = useState(null);
@@ -267,6 +303,21 @@ export default function ChatScreen({ navigation, route }) {
       if (dismissed) setHiddenFeatures((p) => ({ ...p, mission: true }));
     }).catch(() => {});
   }, [conversationId]);
+
+  // ── Scam-detection: initial fetch on mount ──────────────────────
+  // Pulls the verdict once when the chat opens. Skips demo chats (no
+  // server-side messages to score). The on-incoming-message re-fetch
+  // lives in the realtime handler above and only fires every Nth
+  // incoming message to keep model cost down.
+  useEffect(() => {
+    if (!conversationId || isDemoChat || scamDismissedRef.current) return;
+    let cancelled = false;
+    detectScamSignal(conversationId).then((v) => {
+      if (cancelled) return;
+      if (v) setScamVerdict(v);
+    });
+    return () => { cancelled = true; };
+  }, [conversationId, isDemoChat]);
 
   // Wrapper around setMissionState that ALSO persists. Accepts a value or
   // an updater function (matching React's setter contract). Use this in
@@ -525,6 +576,20 @@ export default function ChatScreen({ navigation, route }) {
         time: new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
         read: true,
       }]);
+
+      // Bump the incoming-message counter for scam-detection
+      // re-evaluation. Skip self-sent messages — those go through
+      // the optimistic send path, not realtime, but defensive in
+      // case that changes.
+      if (msg.senderId && msg.senderId !== currentUser?.id) {
+        incomingCountRef.current += 1;
+        if (incomingCountRef.current >= SCAM_REFRESH_EVERY_N_INCOMING && conversationId && !scamDismissedRef.current) {
+          incomingCountRef.current = 0;
+          detectScamSignal(conversationId).then((v) => {
+            if (v) setScamVerdict(v);
+          });
+        }
+      }
       setMissionAndPersist((prev) => ({ ...prev, response: true }));
       // The user is actively on this screen, so anything that lands
       // here is already "read". Flip server-side too so the badge
@@ -715,6 +780,13 @@ export default function ChatScreen({ navigation, route }) {
       const result = await chatService.sendMessage(conversationId, text);
       if (result?.id) {
         sentIdsRef.current.add(result.id);
+        // Funnel: a real (non-demo) message landed. No body/PII —
+        // just length bucket + conversation id presence so we can
+        // measure first-message-after-match conversion in PostHog.
+        trackEvent(AnalyticsEvents.MESSAGE_SENT, {
+          type: 'text',
+          length_bucket: text.length < 20 ? 'short' : text.length < 100 ? 'medium' : 'long',
+        });
         setMessages((prev) => prev.map((m) => (
           m.id === tempId ? { ...m, id: result.id, read: true, status: 'sent' } : m
         )));
@@ -1087,7 +1159,7 @@ export default function ChatScreen({ navigation, route }) {
   }, [match.name, navigation]);
 
   const handleVideoCall = useCallback(() => {
-    if (!requireConnection('Video calls')) return;
+    if (!requireMatch('Video calls')) return;
     if (!gate('video_call_match')) {
       // gate() shows survey/banned/restricted UI itself. For
       // tier_required it returns false silently — fall through to the
@@ -1103,10 +1175,10 @@ export default function ChatScreen({ navigation, route }) {
       return;
     }
     startCall('video');
-  }, [gate, lastVerdict, hasTier, navigation, requireConnection, startCall]);
+  }, [gate, lastVerdict, hasTier, navigation, requireMatch, startCall]);
 
   const handleVoiceCall = useCallback(() => {
-    if (!requireConnection('Voice calls')) return;
+    if (!requireMatch('Voice calls')) return;
     if (!gate('call_match')) {
       const v = lastVerdict();
       if (v?.reason !== 'tier_required') return;
@@ -1119,7 +1191,7 @@ export default function ChatScreen({ navigation, route }) {
       return;
     }
     startCall('voice');
-  }, [gate, lastVerdict, hasTier, navigation, requireConnection, startCall]);
+  }, [gate, lastVerdict, hasTier, navigation, requireMatch, startCall]);
 
   const handleLongPressMessage = useCallback((item, event) => {
     if (item?.type !== 'text') return;
@@ -1435,17 +1507,62 @@ export default function ChatScreen({ navigation, route }) {
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={handleVoiceCall} style={styles.headerIcon}>
-            <Ionicons name="call" size={18} color={colors.black} />
+          <TouchableOpacity
+            onPress={handleVoiceCall}
+            style={styles.headerIcon}
+            accessibilityRole="button"
+            accessibilityLabel={canCall ? `Voice call ${match.name || ''}`.trim() : 'Voice call — match to unlock'}
+            accessibilityState={{ disabled: !canCall }}
+          >
+            <Ionicons name="call" size={18} color={canCall ? colors.black : colors.gray400} />
+            {!canCall && (
+              <View style={styles.lockBadge}>
+                <Ionicons name="lock-closed" size={8} color="#FFFFFF" />
+              </View>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleVideoCall} style={styles.headerIcon}>
-            <Ionicons name="videocam" size={20} color={colors.black} />
+          <TouchableOpacity
+            onPress={handleVideoCall}
+            style={styles.headerIcon}
+            accessibilityRole="button"
+            accessibilityLabel={canCall ? `Video call ${match.name || ''}`.trim() : 'Video call — match to unlock'}
+            accessibilityState={{ disabled: !canCall }}
+          >
+            <Ionicons name="videocam" size={20} color={canCall ? colors.black : colors.gray400} />
+            {!canCall && (
+              <View style={styles.lockBadge}>
+                <Ionicons name="lock-closed" size={8} color="#FFFFFF" />
+              </View>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleHeaderMenu} style={styles.headerIcon}>
+          <TouchableOpacity
+            onPress={handleHeaderMenu}
+            style={styles.headerIcon}
+            accessibilityRole="button"
+            accessibilityLabel="More options"
+          >
             <Ionicons name="ellipsis-vertical" size={18} color={colors.gray500} />
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Scam-pattern banner. Renders only when the server-side
+          detector returns medium/high risk for this conversation.
+          Dismissal is per-session — survives screen unmount via
+          scamDismissedRef so re-entering the chat in the same app
+          launch doesn't replay the banner. */}
+      <ChatScamBanner
+        verdict={scamVerdict}
+        onDismiss={() => {
+          scamDismissedRef.current = true;
+          setScamVerdict(null);
+        }}
+        onLearnMore={() => {
+          // Route to the safety FAQ. SettingsInfoScreen is the umbrella
+          // help surface; pass a topic so it scrolls to the right section.
+          navigation.navigate('SettingsInfo', { topic: 'romance-scam-patterns' });
+        }}
+      />
 
       {/* Messages */}
       <FlatList
@@ -1780,6 +1897,20 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     backgroundColor: colors.cardBg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  // Small lock badge overlaid on call buttons when the thread isn't a
+  // match yet — calls are matches-only, so the affordance shows locked
+  // rather than looking active and erroring on tap.
+  lockBadge: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.gray500,
     justifyContent: 'center',
     alignItems: 'center',
   },

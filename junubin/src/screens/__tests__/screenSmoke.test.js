@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { render } from '@testing-library/react-native';
+import { render, act } from '@testing-library/react-native';
 
 import OnboardingScreen from '../OnboardingScreen';
 import ChatScreen from '../ChatScreen';
@@ -211,8 +211,12 @@ describe('screen smoke tests', () => {
     });
   });
 
-  afterEach(() => {
-    jest.runOnlyPendingTimers();
+  afterEach(async () => {
+    // Drain pending timers inside act so timer-driven state updates
+    // (e.g. ChatScreen's deferred list scroll) don't warn.
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+    });
     jest.useRealTimers();
   });
 
@@ -222,7 +226,7 @@ describe('screen smoke tests', () => {
     expect(getByText('Get Started')).toBeTruthy();
   });
 
-  it('renders Chat screen', () => {
+  it('renders Chat screen', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = {
       params: {
@@ -236,6 +240,9 @@ describe('screen smoke tests', () => {
     );
     expect(getByText('You matched with Asha!')).toBeTruthy();
     expect(getByPlaceholderText('Type a message...')).toBeTruthy();
+    // ChatScreen kicks off getMessages()/markConversationRead() on mount;
+    // flush those promises inside act so their state updates don't warn.
+    await act(async () => {});
   });
 
   it('renders Settings screen', () => {

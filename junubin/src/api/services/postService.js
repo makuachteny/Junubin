@@ -268,6 +268,46 @@ export async function listPosts({ cursor } = {}) {
 }
 
 /**
+ * Reels feed — video posts only, newest first. Same approval rules as
+ * listPosts (approved OR own). Used by VideoReelsScreen when a user
+ * taps a video in the main feed.
+ */
+export async function listVideoPosts({ cursor } = {}) {
+  let myId = null;
+  try {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (authUser) {
+      const { data: appUser } = await supabase
+        .from('User').select('id').eq('auth_id', authUser.id).maybeSingle();
+      myId = appUser?.id || null;
+    }
+  } catch { /* unauthenticated → public view */ }
+
+  let query = supabase
+    .from('Post')
+    .select(`
+      id, userId, content, imageUrl, mediaType, aspectRatio,
+      location, tags, cardTheme, signupLink, signupTitle,
+      likeCount, commentCount, repostCount, waveCount, createdAt, moderationStatus,
+      author:User!userId(id, displayName, isVerified, city, photos:Photo(url))
+    `)
+    .eq('mediaType', 'video')
+    .order('createdAt', { ascending: false })
+    .limit(PAGE_SIZE);
+
+  if (myId) {
+    query = query.or(`moderationStatus.eq.approved,userId.eq.${myId}`);
+  } else {
+    query = query.eq('moderationStatus', 'approved');
+  }
+  if (cursor) query = query.lt('createdAt', cursor);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map((row) => normalizePost(row, row.author));
+}
+
+/**
  * Update the text body of a post you authored. Text-only by design —
  * media swaps would invalidate the moderation check, and the
  * signupLink/title belong to the original publishing intent. The

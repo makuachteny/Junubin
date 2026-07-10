@@ -5,8 +5,8 @@ export { PAYMENTS_ENABLED, SHOW_PAYMENTS_UI, showPaymentsComingSoon } from './co
 export { default as PaymentService } from './PaymentService';
 export { SubscriptionProvider, useSubscription, useSubscriptionState, useSubscriptionActions } from './SubscriptionContext';
 
-// ── Flutterwave (M-Pesa, MoMo, Airtel, Bank, Card) ──
-export { default as FlutterwaveService, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_ICONS, PAYMENT_METHOD_COLORS, getAvailableMethods } from './FlutterwaveService';
+// ── Stripe (primary global rail — cards, Apple Pay, Google Pay, Link) ──
+export { default as StripeService } from './StripeService';
 
-// ── African Localized Pricing ──
-export { AFRICAN_PRICES, SUPPORTED_CURRENCIES, EVENT_TICKET_TIERS, getLocalizedPrice, formatAfricanPrice, detectCurrency } from './africanPricing';
+// ── Payment method picker constants ──
+export { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, PAYMENT_METHOD_ICONS, PAYMENT_METHOD_COLORS, getAvailableMethods } from './paymentMethods';

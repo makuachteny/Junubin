@@ -249,6 +249,14 @@ export default function LikesScreen({ navigation }) {
   const { canSeeWhoLikesYou, hasTier } = useSubscription();
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
+  // Mode awareness — Social viewers see "waved at you" copy, Dating
+  // viewers see "liked you". Same data, different framing so the screen
+  // never feels misaligned with the mode the user is currently in.
+  // Mirrors MessagesScreen's resolution so the two screens agree.
+  const viewerMode = currentUser?.preferences?.mode === 'Social' ? 'Social' : 'Dating';
+  const isSocialMode = viewerMode === 'Social';
+  const likeVerb = isSocialMode ? 'waved at' : 'liked';
+  const likeVerbPast = isSocialMode ? 'waved at you' : 'liked you';
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilters, setActiveFilters] = useState([]);
   const [filterSelections, setFilterSelections] = useState({});
@@ -339,23 +347,14 @@ export default function LikesScreen({ navigation }) {
 
   useEffect(() => {
     if (!filtersLocked) return;
-    // Strip any locked filters; preserve Age (which is free)
-    const lockedActive = activeFilters.filter((f) => f !== 'Age');
-    if (lockedActive.length > 0) {
-      setActiveFilters((prev) => prev.filter((f) => f === 'Age'));
-    }
-    const lockedSelections = Object.keys(filterSelections).filter((k) => k !== 'Age');
-    if (lockedSelections.length > 0) {
-      setFilterSelections((prev) => {
-        const next = {};
-        if (prev.Age !== undefined) next.Age = prev.Age;
-        return next;
-      });
-    }
+    // All filters paywalled on free tier — wipe any leftover selections
+    // so a downgrade can't leave stale filtered results active.
+    if (activeFilters.length > 0) setActiveFilters([]);
+    if (Object.keys(filterSelections).length > 0) setFilterSelections({});
   }, [filtersLocked, activeFilters, filterSelections]);
 
   const showFiltersLocked = useCallback(() => {
-    Alert.alert('JuNubin+ Filters', 'Upgrade to JuNubin+ to unlock advanced filters. Age stays free.', [
+    Alert.alert('JuNubin+ Filters', 'Upgrade to JuNubin+ to use filters and meet exactly the people you\'re looking for.', [
       { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
       { text: 'Cancel', style: 'cancel' },
     ]);
@@ -363,10 +362,10 @@ export default function LikesScreen({ navigation }) {
 
   const handleFilterPress = useCallback((filterName) => {
     if (filterName === 'More') {
-      navigation?.navigate?.('Preferences');
+      navigation?.navigate?.('Preferences', { returnTo: 'Likes' });
       return;
     }
-    if (filtersLocked && filterName !== 'Age') {
+    if (filtersLocked) {
       showFiltersLocked();
       return;
     }
@@ -378,7 +377,7 @@ export default function LikesScreen({ navigation }) {
   }, [navigation, filtersLocked, showFiltersLocked]);
 
   const handleFilterSelect = useCallback((filterName, value) => {
-    if (filtersLocked && filterName !== 'Age') {
+    if (filtersLocked) {
       showFiltersLocked();
       return;
     }
@@ -407,7 +406,7 @@ export default function LikesScreen({ navigation }) {
           },
         ]}
       >
-        <Text style={styles.headerTitle}>Likes</Text>
+        <Text style={styles.headerTitle}>{isSocialMode ? 'Waves' : 'Likes'}</Text>
         <View style={styles.headerRight}>
           {/* Disabled until the Notification table + service exist (v1.1). */}
           <TouchableOpacity
@@ -419,10 +418,12 @@ export default function LikesScreen({ navigation }) {
             }
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
           >
             <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Your profile">
             <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
           </TouchableOpacity>
         </View>
@@ -450,20 +451,20 @@ export default function LikesScreen({ navigation }) {
         <View style={styles.filterBarWrap}>
           <FilterBar
             onFilterPress={handleFilterPress}
-            onSettingsPress={() => navigation.navigate('Preferences')}
+            onSettingsPress={() => navigation.navigate('Preferences', { returnTo: 'Likes' })}
             activeFilters={activeFilters}
             filterSelections={filterSelections}
             onFilterSelect={handleFilterSelect}
             showSettingsButton={true}
             filters={LIKE_FILTERS}
             options={LIKE_FILTER_OPTIONS}
-            lockedFilters={filtersLocked ? LIKE_FILTERS.filter((f) => f.label !== 'Age').map((f) => f.label) : []}
+            lockedFilters={filtersLocked ? LIKE_FILTERS.map((f) => f.label) : []}
             onDisabledPress={showFiltersLocked}
           />
           {filtersLocked && (
             <TouchableOpacity style={styles.filtersLockedRow} onPress={showFiltersLocked} activeOpacity={0.8}>
               <Ionicons name="lock-closed" size={14} color={colors.gray500} />
-              <Text style={styles.filtersLockedText}>JuNubin+ unlocks all filters · Age stays free</Text>
+              <Text style={styles.filtersLockedText}>JuNubin+ unlocks all filters</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -510,10 +511,12 @@ export default function LikesScreen({ navigation }) {
           {/* Text */}
           <View style={styles.likesSummaryText}>
             <Text style={styles.likesSummaryTitle}>
-              {filteredLikes.length} {filteredLikes.length === 1 ? 'person' : 'people'} {unlocked ? 'liked you' : 'waiting'}
+              {filteredLikes.length} {filteredLikes.length === 1 ? 'person' : 'people'} {unlocked ? likeVerbPast : 'waiting'}
             </Text>
             <Text style={styles.likesSummarySubtitle}>
-              {unlocked ? 'Tap to match instantly' : 'Unlock to see them all'}
+              {unlocked
+                ? (isSocialMode ? 'Tap to connect instantly' : 'Tap to match instantly')
+                : 'Unlock to see them all'}
             </Text>
           </View>
           {/* CTA */}
@@ -527,7 +530,9 @@ export default function LikesScreen({ navigation }) {
         {/* Upsell Banner (free users) */}
         {!hasTier('plus') && (
           <ProfilePromptBanner
-            message="See who liked you first with JuNubin+"
+            message={isSocialMode
+              ? 'See who waved at you first with JuNubin+'
+              : 'See who liked you first with JuNubin+'}
             onPress={() => navigation.navigate('Elite')}
             colors={colors}
           />
@@ -536,9 +541,13 @@ export default function LikesScreen({ navigation }) {
         {/* Empty state */}
         {filteredLikes.length === 0 && !isLoading && (
           <EmptyState
-            icon="heart"
-            title={likes.length === 0 ? 'No likes yet' : 'No results'}
-            subtitle={likes.length === 0 ? 'Keep swiping to get noticed!' : 'Try adjusting your filters.'}
+            icon={isSocialMode ? 'hand-left' : 'heart'}
+            title={likes.length === 0
+              ? (isSocialMode ? 'No waves yet' : 'No likes yet')
+              : 'No results'}
+            subtitle={likes.length === 0
+              ? (isSocialMode ? 'Keep meeting people to get on someone\'s radar!' : 'Keep swiping to get noticed!')
+              : 'Try adjusting your filters.'}
           />
         )}
 

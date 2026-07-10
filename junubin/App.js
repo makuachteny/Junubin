@@ -11,23 +11,33 @@ import 'react-native-get-random-values';
 // ── Sentry crash reporting (wired-but-dormant) ──────────────────────
 // Gated on EXPO_PUBLIC_SENTRY_DSN so this wire-up is a no-op when the
 // DSN is not set in EAS env vars. To activate:
-//   1. `npm i sentry-expo` (and rebuild — it's a native dep)
-//   2. Set EXPO_PUBLIC_SENTRY_DSN in EAS env vars
+//   1. `npm i @sentry/react-native` (config-plugin install rebuilds the native side)
+//      `npx @sentry/wizard@latest -i reactNative`  (optional — auto-wires the plugin)
+//   2. Set EXPO_PUBLIC_SENTRY_DSN in EAS env vars (`eas secret:create`)
 // The require() is intentionally dynamic + try/catch so the bundle
-// doesn't fail when sentry-expo isn't installed yet.
+// doesn't fail when @sentry/react-native isn't installed yet (e.g. on a
+// developer machine that hasn't rebuilt the dev-client). We migrated
+// off `sentry-expo` (deprecated 2023) — @sentry/react-native is the
+// canonical SDK and works with Expo via its config plugin.
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
 if (SENTRY_DSN) {
   try {
     // eslint-disable-next-line global-require, import/no-unresolved
-    const Sentry = require('sentry-expo');
+    const Sentry = require('@sentry/react-native');
     Sentry.init({
       dsn: SENTRY_DSN,
-      enableInExpoDevelopment: false,
       debug: __DEV__,
+      // Conservative tracing budget — bump once we see baseline volume.
       tracesSampleRate: 0.2,
+      // Symbolicate JS frames; the post-install step uploads sourcemaps.
+      enableAutoSessionTracking: true,
+      // Don't ship PII to the dashboard by default — IP / username get
+      // redacted unless a downstream consumer opts in with setUser.
+      sendDefaultPii: false,
+      environment: process.env.APP_VARIANT || 'development',
     });
   } catch (e) {
-    if (__DEV__) console.warn('[Sentry] not initialised — sentry-expo is not installed.', e?.message);
+    if (__DEV__) console.warn('[Sentry] not initialised — @sentry/react-native is not installed.', e?.message);
   }
 }
 

@@ -1,10 +1,44 @@
 // AnaJunubin — Client-side Analytics
-// Tracks key user events for understanding funnel performance.
+//
+// Two delivery paths, gated by env vars so the same code works on a
+// developer machine (no keys → local-buffer only) and in production
+// (one or both keys set → real forwarding):
+//
+//   1. PostHog (POSTHOG_API_KEY + POSTHOG_HOST) — the default
+//      product-analytics target. Funnel reports, cohort analysis,
+//      session replay.
+//   2. AsyncStorage local buffer (always on) — captures the last 100
+//      events so a crash report has the breadcrumb trail attached.
+//
+// PII is sanitized BEFORE either path runs — see PII_KEYS below.
+//
+// Sentry breadcrumbs piggy-back on the same trackEvent call so a
+// production exception in Sentry shows the last few funnel steps the
+// user took before the crash, without us having to instrument those
+// breadcrumbs separately.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ANALYTICS_KEY = '@junubin_analytics_events';
 const MAX_BUFFERED = 100;
+
+const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_API_KEY || '';
+const POSTHOG_HOST = (process.env.EXPO_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com').replace(/\/$/, '');
+
+// Lazy-loaded Sentry SDK so this module can be imported anywhere
+// (including during cold-start before App.js wires Sentry) without
+// crashing if @sentry/react-native isn't installed yet.
+let _sentry = null;
+function getSentry() {
+  if (_sentry) return _sentry;
+  try {
+    // eslint-disable-next-line global-require, import/no-unresolved
+    _sentry = require('@sentry/react-native');
+  } catch {
+    _sentry = null;
+  }
+  return _sentry;
+}
 
 // Keys we refuse to forward to analytics — call sites that pass any of
 // these get them stripped (with a redaction marker so we can tell at
@@ -60,17 +94,88 @@ export async function trackEvent(event, properties = {}) {
       console.log('[Analytics]', event, safe);
     }
 
-    // Buffer events locally
+    // 1. Local buffer (always on) — fastest and resilient to network
+    //    drops. flushEvents() drains it for backend POST if needed.
     const raw = await AsyncStorage.getItem(ANALYTICS_KEY);
     const events = raw ? JSON.parse(raw) : [];
     events.push(entry);
-
-    // Keep only the latest events
     const trimmed = events.length > MAX_BUFFERED ? events.slice(-MAX_BUFFERED) : events;
     await AsyncStorage.setItem(ANALYTICS_KEY, JSON.stringify(trimmed));
+
+    // 2. PostHog — fire-and-forget capture call. Skips if no key is
+    //    set so dev machines don't spam unconfigured endpoints. We
+    //    use the simple /capture/ endpoint rather than the SDK so the
+    //    bundle stays light.
+    if (POSTHOG_KEY && global.__junubin_distinct_id) {
+      fetch(`${POSTHOG_HOST}/capture/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: POSTHOG_KEY,
+          event,
+          distinct_id: global.__junubin_distinct_id,
+          properties: { ...safe, $session_id: global.__junubin_session_id, $lib: 'junubin-rn' },
+          timestamp: entry.timestamp,
+        }),
+      }).catch(() => {});
+    }
+
+    // 3. Sentry breadcrumb — drop into the crash trail so a future
+    //    exception shows what the user did just before. Category
+    //    matches Sentry's recommended convention for product events.
+    const Sentry = getSentry();
+    if (Sentry?.addBreadcrumb) {
+      Sentry.addBreadcrumb({
+        category: 'analytics',
+        message: event,
+        level: 'info',
+        data: safe,
+      });
+    }
   } catch {
     // Silent fail — analytics should never crash the app
   }
+}
+
+/**
+ * Identify the current user to downstream analytics targets. Called
+ * once after sign-in lands. Stable id (User.id) so cohort joins work
+ * across sessions / devices.
+ */
+export function identifyUser(userId, traits = {}) {
+  if (!userId) return;
+  global.__junubin_distinct_id = String(userId);
+  const safeTraits = sanitizeProperties(traits);
+
+  if (POSTHOG_KEY) {
+    fetch(`${POSTHOG_HOST}/capture/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: POSTHOG_KEY,
+        event: '$identify',
+        distinct_id: String(userId),
+        properties: { $set: safeTraits },
+      }),
+    }).catch(() => {});
+  }
+
+  const Sentry = getSentry();
+  if (Sentry?.setUser) {
+    // setUser with just an id keeps PII out of Sentry; traits are
+    // already PII-stripped above so they're safe to attach.
+    Sentry.setUser({ id: String(userId), ...safeTraits });
+  }
+}
+
+/**
+ * Clear identity on sign-out so subsequent events aren't attributed
+ * to the previous account.
+ */
+export function resetIdentity() {
+  global.__junubin_distinct_id = null;
+  const Sentry = getSentry();
+  if (Sentry?.setUser) Sentry.setUser(null);
 }
 
 export async function flushEvents() {

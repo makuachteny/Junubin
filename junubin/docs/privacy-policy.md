@@ -46,9 +46,8 @@ you have over it.
 ### 1.3 Information from third parties
 
 - **Apple / Google** — receipts when you make in-app purchases.
-- **Stripe / Flutterwave / RevenueCat** — minimum payment metadata
-  needed to process subscriptions and creator payouts. We never see
-  full card numbers.
+- **Stripe / RevenueCat** — minimum payment metadata needed to process
+  subscriptions and creator payouts. We never see full card numbers.
 
 ---
 
@@ -77,8 +76,7 @@ authentication, and file storage. Supabase runs on AWS infrastructure
 in the [INSERT REGION, e.g. `us-east-1`] region. Your data may be
 processed in the United States.
 
-Payment data passes through [Stripe](https://stripe.com),
-[Flutterwave](https://flutterwave.com), and/or
+Payment data passes through [Stripe](https://stripe.com) and/or
 [RevenueCat](https://revenuecat.com) depending on the rail you used.
 
 ---

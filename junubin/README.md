@@ -6,9 +6,10 @@ A dating + community app built for the South Sudanese diaspora. React Native (Ex
 
 **Client:** React Native 0.81, Expo SDK 54, React 19, React Navigation 7, Reanimated 4
 
-**Data + auth:** Supabase (Postgres with RLS, Auth via OTP, Storage, Realtime), Supabase Edge Functions (Deno/TypeScript) for `discover`, `swipe`, `stripe-webhook`, `flw-*`, `moderate-image`, `push-send`, `event-ticket-pkpass`
+**Data + auth:** Supabase (Postgres with RLS, Auth via OTP, Storage, Realtime), Supabase Edge Functions (Deno/TypeScript). See `supabase/functions/` for the canonical list. Current functions:
+`account-delete`, `daily-create-room`, `detect-scam-signal` (regex heuristic — no AI), `discover`, `discover-nearby`, `face-liveness` (scaffold), `moderate-image`, `push-send`, `stripe-billing-portal`, `stripe-create-checkout`, `stripe-webhook`, `swipe`, `swipe-undo`, `trending`.
 
-**Payments:** RevenueCat (App Store / Google Play), Stripe (web), Flutterwave (African mobile money / cards)
+**Payments:** RevenueCat (App Store / Google Play), Stripe (web — cards, Apple Pay, Google Pay, Link)
 
 **Real-time media:** Daily.co (voice/video calls + live)
 
@@ -20,28 +21,28 @@ junubin/
 ├── src/
 │   ├── api/
 │   │   ├── hooks/
-│   │   │   ├── useRealtime.js   # Supabase Realtime subscription wrapper
+│   │   │   ├── useRealtime.js       # Supabase Realtime subscription wrapper
 │   │   │   ├── useIncomingCall.js
-│   │   │   ├── useLiveChannel.js
-│   │   │   └── useDailyCall.js
-│   │   └── services/            # profileService, discoverService, chatService,
-│   │                            # postService, commentService, storyService,
-│   │                            # likesService, matchesService, followService,
-│   │                            # callService, liveService, safetyService
-│   ├── auth/AuthContext.js      # Supabase OTP auth, session resume, banned-user gate
-│   ├── components/              # ProfileCard, PostCard, StoriesRow, etc.
-│   ├── config/supabase.js       # Supabase client init
+│   │   │   └── useDailyCall.js      # Daily.co voice/video + live-broadcast rooms
+│   │   └── services/                # authService, callService, chatService,
+│   │                                # commentService, dailyService, discoverService,
+│   │                                # followService, likesService, matchesService,
+│   │                                # postService, profileService, safetyService,
+│   │                                # storyService  (13 services)
+│   ├── auth/AuthContext.js          # Supabase OTP auth, session resume, banned-user gate
+│   ├── components/                  # ProfileCard, PostCard, StoriesRow, LivenessPromptOverlay, etc.
+│   ├── config/supabase.js           # Supabase client init
 │   ├── data/
-│   │   ├── mockProfiles.js      # Seed/fallback content for empty DBs and dev
-│   │   └── mockStories.js
+│   │   ├── countries.js, tribes.js, culturalStickers.js, games.js, gifts.js, postThemes.js
+│   │   └── __dev__/                 # mockProfiles, mockStories — stripped from prod bundle
 │   ├── navigation/AppNavigator.js
-│   ├── payments/                # SubscriptionContext, RevenueCat, Flutterwave
-│   ├── screens/                 # 38 screens (Home, Community, Messages, Chat, etc.)
-│   ├── theme/                   # Palettes, typography, responsive sizing
-│   └── utils/                   # imageSource, formatTime, offlineQueue, haptics
+│   ├── payments/                    # SubscriptionContext, RevenueCat, Stripe, entitlements
+│   ├── screens/                     # 35 screens (Home, Community, Messages, Chat, etc.)
+│   ├── theme/                       # Palettes, typography, responsive sizing
+│   └── utils/                       # imageSource, formatTime, offlineQueue, haptics
 ├── supabase/
-│   ├── migrations/              # 17 SQL migrations (00001 → 00017)
-│   ├── functions/               # Edge Functions (Deno/TypeScript)
+│   ├── migrations/                  # 30+ SQL migrations (00001 → 00039)
+│   ├── functions/                   # Edge Functions (Deno/TypeScript)
 │   └── config.toml
 ├── e2e/                         # Detox specs
 ├── app.config.js                # Expo config (permissions, plugins, EAS)
@@ -100,22 +101,45 @@ For a clean rebuild on a non-production project: `supabase db reset --linked`.
 
 ### 4. Set Edge Function secrets (server-side only)
 
-Stripe + Flutterwave webhooks need secrets that must NOT be in the client:
+The Stripe webhook needs secrets that must NOT be in the client:
 
 ```bash
 supabase secrets set STRIPE_SECRET_KEY=sk_live_...
 supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
-supabase secrets set FLUTTERWAVE_SECRET_KEY=FLWSECK-...
-supabase secrets set FLUTTERWAVE_WEBHOOK_SECRET=...
-supabase secrets set FLUTTERWAVE_REDIRECT_URL=https://yourdomain/payment/callback
 ```
 
 ### 5. Deploy Edge Functions
 
 ```bash
-supabase functions deploy discover swipe swipe-undo \
-  stripe-webhook flw-create-payment flw-check-status flw-webhook \
-  moderate-image push-send event-ticket-pkpass
+supabase functions deploy \
+  account-delete daily-create-room \
+  discover discover-nearby swipe swipe-undo trending \
+  stripe-billing-portal stripe-create-checkout stripe-webhook \
+  moderate-image push-send \
+  detect-scam-signal face-liveness
+```
+
+> JuNubin does not use AI. The old `assist-chat-opener` function is
+> retired (don't deploy it) and `detect-scam-signal` is now a
+> deterministic regex heuristic — no LLM, no `AI_PROVIDER`/API keys.
+
+Additional env vars to set with `supabase secrets set`:
+
+| Variable | Purpose |
+|---|---|
+| `NODE_ENV` | `production` in prod — toggles fail-closed behavior in `moderate-image` |
+| `MODERATION_PROVIDER` | `aws` \| `google` \| `sightengine` — required in production |
+| `JUNUBIN_INTERNAL_SECRET` | Shared secret stamped by pg_net triggers on `push-send` |
+| `SENTRY_DSN` | Edge-side crash reporting (optional but recommended) |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Required for `face-liveness` |
+| `LIVENESS_PASS_THRESHOLD` | 0–100 (default 75) AWS Rekognition Face Liveness pass floor |
+
+Also run, once, against your Supabase Postgres to wire pg_net → push-send:
+
+```sql
+ALTER DATABASE postgres SET "app.edge_url"        = 'https://<project-ref>.supabase.co/functions/v1';
+ALTER DATABASE postgres SET "app.service_key"     = '<service-role-jwt>';
+ALTER DATABASE postgres SET "app.internal_secret" = '<same value as JUNUBIN_INTERNAL_SECRET>';
 ```
 
 ### 6. Start the app
@@ -184,7 +208,7 @@ npm run e2e:test:android
 
 **Subscription tiers:** Free → Plus → Junub. Entitlements checked via pure functions in [src/payments/entitlements.js](src/payments/entitlements.js).
 
-**Payments:** RevenueCat for in-app purchases (App Store / Google Play), Stripe for web checkout, Flutterwave for African mobile money + cards. All providers write to a single `Payment` table keyed on `(provider, providerRef)` for idempotency. Entitlement grants happen only after the webhook re-verifies the transaction directly with the provider's API.
+**Payments:** RevenueCat for in-app purchases (App Store / Google Play) and Stripe for web checkout. Both providers write to a single `Payment` table keyed on `(provider, providerRef)` for idempotency. Entitlement grants happen only after the webhook re-verifies the transaction directly with the provider's API.
 
 **Storage:** Supabase Storage buckets — `photos` (profile photos), `posts` (community feed images), `stories` (24h ephemeral). All public-read with owner-write enforced by path-prefix RLS.
 
@@ -192,7 +216,7 @@ npm run e2e:test:android
 
 - Row-level security on every user-data table
 - Service-role-only writes on `Payment` (clients can only read their own rows)
-- HMAC-SHA256 signature verification on Stripe webhooks; constant-time `verif-hash` comparison on Flutterwave webhooks
+- HMAC-SHA256 signature verification on Stripe webhooks
 - Screenshot guard on sensitive screens
 - Survey + moderation eligibility check enforced both client-side and server-side via the `eligibility_check` RPC
 

@@ -9,43 +9,82 @@ import {
   canUseDiasporaConnect,
   isSubscribed,
   ALL_FEATURES_FREE,
+  DAILY_LIKE_LIMIT_BY_TIER,
+  getDailyLikeLimit,
 } from '../entitlements';
 
-describe('entitlements', () => {
-  // Hybrid mode for build 19: ALL_FEATURES_FREE = true so every
-  // entitlement check unlocks, BUT SHOW_PAYMENTS_UI = true so the
-  // paywall surfaces render. Apple sees the buttons; users get the
-  // features without a real purchase round-trip. Flip ALL_FEATURES_FREE
-  // back to false the moment RevenueCat keys are wired and a sandbox
-  // transaction has been verified end-to-end.
-  it('ALL_FEATURES_FREE flag is on (paid UI shown, gates bypassed)', () => {
-    expect(ALL_FEATURES_FREE).toBe(true);
+describe('entitlements (paid launch posture)', () => {
+  it('ALL_FEATURES_FREE flag is off — paywalls active', () => {
+    expect(ALL_FEATURES_FREE).toBe(false);
   });
 
-  describe('hasTierAccess (free-for-all)', () => {
-    it('returns true for any tier combination while the flag is on', () => {
-      expect(hasTierAccess('free', 'plus')).toBe(true);
-      expect(hasTierAccess('free', 'junub')).toBe(true);
+  describe('hasTierAccess', () => {
+    it('blocks free users from paid tiers', () => {
+      expect(hasTierAccess('free', 'plus')).toBe(false);
+      expect(hasTierAccess('free', 'junub')).toBe(false);
+    });
+
+    it('allows access at or above the required tier', () => {
       expect(hasTierAccess('plus', 'plus')).toBe(true);
+      expect(hasTierAccess('plus', 'free')).toBe(true);
+      expect(hasTierAccess('junub', 'plus')).toBe(true);
       expect(hasTierAccess('junub', 'junub')).toBe(true);
+    });
+
+    it('blocks plus users from junub-only features', () => {
+      expect(hasTierAccess('plus', 'junub')).toBe(false);
     });
   });
 
-  describe('feature checks (free-for-all)', () => {
+  describe('plus-tier feature checks', () => {
     it.each([
-      ['canSeeWhoLikesYou', canSeeWhoLikesYou],
-      ['hasUnlimitedLikes', hasUnlimitedLikes],
       ['canUseAdvancedFilters', canUseAdvancedFilters],
-      ['canUseIncognito', canUseIncognito],
-      ['hasUnlimitedRewinds', hasUnlimitedRewinds],
       ['canUseWhispers', canUseWhispers],
-      ['canUseDiasporaConnect', canUseDiasporaConnect],
-      ['isSubscribed', isSubscribed],
-    ])('%s returns true regardless of tier', (_name, fn) => {
-      expect(fn('free')).toBe(true);
+      ['hasUnlimitedRewinds', hasUnlimitedRewinds],
+    ])('%s requires plus or higher', (_name, fn) => {
+      expect(fn('free')).toBe(false);
       expect(fn('plus')).toBe(true);
       expect(fn('junub')).toBe(true);
-      expect(fn(undefined)).toBe(true);
+    });
+  });
+
+  describe('junub-tier feature checks', () => {
+    it.each([
+      ['canSeeWhoLikesYou', canSeeWhoLikesYou],
+      ['canUseIncognito', canUseIncognito],
+      ['canUseDiasporaConnect', canUseDiasporaConnect],
+    ])('%s requires junub', (_name, fn) => {
+      expect(fn('free')).toBe(false);
+      expect(fn('plus')).toBe(false);
+      expect(fn('junub')).toBe(true);
+    });
+  });
+
+  describe('isSubscribed', () => {
+    it('returns true only for paid tiers', () => {
+      expect(isSubscribed('free')).toBe(false);
+      expect(isSubscribed(undefined)).toBe(false);
+      expect(isSubscribed('plus')).toBe(true);
+      expect(isSubscribed('junub')).toBe(true);
+    });
+  });
+
+  describe('daily like limits', () => {
+    it('matches the expected per-tier ceilings', () => {
+      expect(DAILY_LIKE_LIMIT_BY_TIER.free).toBe(20);
+      expect(DAILY_LIKE_LIMIT_BY_TIER.plus).toBe(50);
+      expect(DAILY_LIKE_LIMIT_BY_TIER.junub).toBeNull();
+    });
+
+    it('hasUnlimitedLikes is true only for tiers with a null ceiling', () => {
+      expect(hasUnlimitedLikes('free')).toBe(false);
+      expect(hasUnlimitedLikes('plus')).toBe(false);
+      expect(hasUnlimitedLikes('junub')).toBe(true);
+    });
+
+    it('getDailyLikeLimit falls back to the free tier for unknown values', () => {
+      expect(getDailyLikeLimit('unknown')).toBe(20);
+      expect(getDailyLikeLimit(undefined)).toBe(20);
     });
   });
 });

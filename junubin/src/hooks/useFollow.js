@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import * as followService from '../api/services/followService';
 import { useAuth, useRequireAuth } from '../auth';
+import { reportError } from '../utils/reportError';
 
 /**
  * Hook to manage follow relationship with a specific user.
@@ -32,8 +33,8 @@ export function useFollow(targetUserId, initialFollowing = null) {
       try {
         const following = await followService.isFollowing(targetUserId);
         if (!cancelled && mountedRef.current) setIsFollowing(following);
-      } catch {
-        // Silently fail — default to not following
+      } catch (err) {
+        reportError('useFollow.isFollowing', err, { targetUserId });
       }
     })();
     return () => { cancelled = true; };
@@ -47,8 +48,8 @@ export function useFollow(targetUserId, initialFollowing = null) {
       try {
         const c = await followService.getFollowCounts(targetUserId);
         if (!cancelled && mountedRef.current) setCounts(c);
-      } catch {
-        // Silently fail
+      } catch (err) {
+        reportError('useFollow.getFollowCounts', err, { targetUserId });
       }
     })();
     return () => { cancelled = true; };
@@ -62,8 +63,8 @@ export function useFollow(targetUserId, initialFollowing = null) {
       try {
         const friends = await followService.areFriends(targetUserId);
         if (!cancelled && mountedRef.current) setIsFriend(friends);
-      } catch {
-        // Silently fail
+      } catch (err) {
+        reportError('useFollow.areFriends', err, { targetUserId });
       }
     })();
     return () => { cancelled = true; };
@@ -90,7 +91,8 @@ export function useFollow(targetUserId, initialFollowing = null) {
       } else {
         await followService.followUser(targetUserId);
       }
-    } catch {
+    } catch (err) {
+      reportError('useFollow.toggle', err, { targetUserId, wasFollowing });
       // Rollback on failure
       if (mountedRef.current) {
         setIsFollowing(wasFollowing);
@@ -128,8 +130,8 @@ export function useMyFollowCounts(userId) {
       try {
         const c = await followService.getFollowCounts(userId);
         if (!cancelled) setCounts(c);
-      } catch {
-        // Silently fail
+      } catch (err) {
+        reportError('useMyFollowCounts', err, { userId });
       }
     })();
     return () => { cancelled = true; };

@@ -1,5 +1,12 @@
 # JuNubin — Production Setup Walkthrough
 
+> ⚠️ **SUPERSEDED — 2026-05-27.**
+> This document only covers migrations through `00036` and is missing
+> the operator steps for `00037`–`00044` (in particular the consumable
+> credit fix in `00044`). Use **[production-readiness-2026-05-27.md](./production-readiness-2026-05-27.md)**
+> as the single source of truth for launch. Sections below are kept for
+> historical context only.
+
 Things only you (the operator) can do. Each section has the exact command or click-path. Estimated time: ~30–45 minutes total once you have the credentials in hand.
 
 > **Order matters:** start with #1 (Supabase migrations + secrets) because the iOS build depends on the schema and Edge Function env vars. Then #2 (RevenueCat) when you're ready to actually charge people. #3 (`discover-nearby`) is a follow-up once you have real users opted into `shareLocation`.
@@ -42,15 +49,25 @@ Go to **Supabase dashboard → Project settings → Edge Functions → Secrets**
 
 | Secret | Used by | Where to get it |
 |---|---|---|
-| `STRIPE_SECRET_KEY` | stripe-create-checkout, stripe-webhook | Stripe dashboard → API keys → secret key. Use the **live** key for production, **test** key for sandbox. |
+| `STRIPE_SECRET_KEY` | stripe-create-checkout, stripe-webhook, stripe-billing-portal | Stripe dashboard → API keys → secret key. Use the **live** key for production, **test** key for sandbox. |
 | `STRIPE_WEBHOOK_SECRET` | stripe-webhook | Stripe dashboard → Webhooks → your endpoint → "Signing secret". |
 | `DAILY_API_KEY` | daily-create-room | Daily.co dashboard → Developers → API keys. |
-| `FLW_SECRET_KEY` | flw-create-payment, flw-check-status | Flutterwave dashboard → Settings → API → Secret Key. |
-| `FLW_ENCRYPTION_KEY` | flw-create-payment | Same Flutterwave settings page. |
+| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` + `AWS_REGION` | face-liveness (when `EXPO_PUBLIC_LIVENESS_PROVIDER=aws-amplify`) | AWS IAM → create a user with the `AmazonRekognitionFullAccess` policy scoped to `*:rekognition:face-liveness:*` actions. Skip these if you're shipping without AWS Liveness (the photo-verify screen still works in stub mode). |
+| `GOOGLE_VISION_API_KEY` | moderate-image (when `MODERATION_PROVIDER=google`) | Google Cloud Console → Vision API → enable + create API key. |
+| `SIGHTENGINE_USER` + `SIGHTENGINE_SECRET` | moderate-image (when `MODERATION_PROVIDER=sightengine`) | sightengine.com → Account → API User + Secret. |
+| `MODERATION_PROVIDER` | moderate-image | `google` \| `sightengine` \| `none`. `none` short-circuits to allow-all — DO NOT ship to production with `none`. |
+| `LIVENESS_PASS_THRESHOLD` | face-liveness | Optional. Defaults to `0.85`. Float between 0–1; lower is more permissive. |
+| `SENTRY_DSN` + `SENTRY_RELEASE` | shared `_shared/sentry.ts` | sentry.io → JuNubin project → Settings → Client Keys (DSN). `SENTRY_RELEASE` is optional and pairs with sourcemap uploads. |
+| `JUNUBIN_INTERNAL_SECRET` | shared utilities for cross-function auth | Generate a random 32-byte hex string (`openssl rand -hex 32`). Used so one function can call another without forging end-user JWTs. |
+| `ENVIRONMENT` | shared | `production` \| `staging` \| `development`. Drives Sentry environment tag + log verbosity. Set to `production` for the live project. |
 | `app.edge_url` | push-send (DB triggers) | Set via SQL: `ALTER DATABASE postgres SET app.edge_url = 'https://uvtyiytbgkasemabtznc.supabase.co/functions/v1';` |
 | `app.service_key` | push-send (DB triggers) | Set via SQL: `ALTER DATABASE postgres SET app.service_key = '<paste service_role key>';` (find it in Project settings → API → service_role key) |
 
 The last two (`app.edge_url`, `app.service_key`) aren't Edge Function secrets — they're DATABASE-level settings the push triggers read via `current_setting()`. Run those two `ALTER DATABASE` statements once in the SQL editor.
+
+**Minimum viable set for v1 launch:** `STRIPE_*` (2), `DAILY_API_KEY`, `MODERATION_PROVIDER=sightengine` + `SIGHTENGINE_*` (or `google` + `GOOGLE_VISION_API_KEY`), `EXPO_PUBLIC_LIVENESS_PROVIDER=none` (skips AWS), `app.edge_url`, `app.service_key`. The rest are opt-in features.
+
+> **No AI:** JuNubin does not use AI/LLMs. The `assist-chat-opener` function was removed and `detect-scam-signal` is a deterministic regex heuristic, so there are no `AI_PROVIDER` / `ANTHROPIC_*` / `OPENAI_*` secrets to set. Delete `supabase/functions/assist-chat-opener` and `supabase/functions/_shared/ai.ts` from the repo and undeploy the old function (`supabase functions delete assist-chat-opener`).
 
 **Heads up on the service_role key:** it bypasses RLS. Treat it like a master password. Don't ever commit it to git.
 
@@ -70,6 +87,21 @@ supabase functions deploy push-send
 supabase functions deploy moderate-image
 supabase functions deploy swipe
 # etc — repeat for each function in supabase/functions/
+```
+
+**Full deploy list:** `account-delete`, `daily-create-room`, `detect-scam-signal`, `discover`, `discover-nearby`, `face-liveness`, `moderate-image`, `push-send`, `stripe-billing-portal`, `stripe-create-checkout`, `stripe-webhook`, `swipe`, `swipe-undo`, `trending`. (`assist-chat-opener` was removed — JuNubin uses no AI.)
+
+Worth confirming after a sync:
+
+- `stripe-billing-portal` — added in the payment-rail audit; powers Settings → Manage Subscription for Stripe subscribers (falls back to App Store / Play Store URLs for IAP subscribers).
+- `detect-scam-signal` — romance-scam safety banner. Deterministic regex heuristic (no AI), no extra secrets needed.
+
+To deploy everything in one shot:
+
+```bash
+for fn in $(ls supabase/functions | grep -v ^_); do
+  supabase functions deploy "$fn"
+done
 ```
 
 ---
@@ -175,7 +207,7 @@ When you're ready to flip the app from preview-mode to real-launch:
 
 - [ ] All migrations 00001–00036 applied to production Supabase (run `supabase db remote list` to verify)
 - [ ] All Edge Functions deployed (`supabase functions list`)
-- [ ] All Edge Function secrets set (Stripe, Daily, Flutterwave keys + `app.service_key`, `app.edge_url`)
+- [ ] All Edge Function secrets set (Stripe, Daily + `app.service_key`, `app.edge_url`)
 - [ ] RevenueCat keys in `eas.json` production env
 - [ ] Sandbox purchase verified end-to-end (RevenueCat → Stripe → Supabase webhook → User row tier update)
 - [ ] `PAYMENTS_ENABLED = true`, `ALL_FEATURES_FREE = false`

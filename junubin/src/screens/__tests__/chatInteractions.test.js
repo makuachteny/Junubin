@@ -159,7 +159,7 @@ describe('Chat interactive actions', () => {
 
   // Mini Game (Quick Pick) and Co-watch / Co-listen UI removed in v1 strip; tests deleted.
 
-  it('mic action opens voice call flow for eligible tiers', () => {
+  it('mic action opens voice call flow for eligible tiers', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const match = { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] };
     const route = { params: { match } };
@@ -167,7 +167,9 @@ describe('Chat interactive actions', () => {
       <ChatScreen navigation={navigation} route={route} />
     );
 
-    fireEvent.press(getByTestId('chat-mic'));
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-mic'));
+    });
 
     // Mic now opens the in-chat voice recorder modal (replacing the
     // old "navigate to Call screen as a placeholder" behaviour). The
@@ -175,7 +177,7 @@ describe('Chat interactive actions', () => {
     expect(navigation.navigate).not.toHaveBeenCalledWith('Call', expect.anything());
   });
 
-  it('sticker action prompts upgrade for non-premium users', () => {
+  it('sticker action prompts upgrade for non-premium users', async () => {
     mockUseSubscription.mockReturnValue({
       hasTier: () => false,
       effectiveTier: 'free',
@@ -201,9 +203,11 @@ describe('Chat interactive actions', () => {
     fireEvent.press(getByTestId('chat-sticker'));
 
     expect(alertSpy).toHaveBeenCalled();
+    // Flush mount-time getMessages()/markConversationRead() promises.
+    await act(async () => {});
   });
 
-  it('long press text message can add emoji reaction', () => {
+  it('long press text message can add emoji reaction', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
     const { getByPlaceholderText, getByTestId, getByText } = render(
@@ -211,10 +215,14 @@ describe('Chat interactive actions', () => {
     );
 
     fireEvent.changeText(getByPlaceholderText('Type a message...'), 'Hello there');
-    fireEvent.press(getByTestId('chat-send'));
+    await act(async () => {
+      fireEvent.press(getByTestId('chat-send'));
+    });
 
     fireEvent(getByText('Hello there'), 'longPress', { nativeEvent: { pageX: 190, pageY: 320 } });
-    fireEvent.press(getByTestId('reaction-heart'));
+    await act(async () => {
+      fireEvent.press(getByTestId('reaction-heart'));
+    });
 
     expect(getByText('❤️')).toBeTruthy();
   });

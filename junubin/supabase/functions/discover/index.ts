@@ -288,22 +288,31 @@ function scoreCandidate(candidate: any, currentUserProfile: any, opts: any = {})
   let score = 0;
   const cp = candidate.profile || {};
 
-  // Shared interests
+  // Shared interests — diminishing-returns cap. A candidate with one
+  // common interest is meaningful; with twelve they likely picked the
+  // most popular ones and the signal is weaker. Cap at +40 (4 matches).
   const myI = Array.isArray(currentUserProfile?.interests) ? currentUserProfile.interests : [];
   const theirI = Array.isArray(cp.interests) ? cp.interests : [];
   if (myI.length > 0 && theirI.length > 0) {
     const mySet = new Set(myI.map((i: string) => i.toLowerCase()));
-    for (const i of theirI) { if (mySet.has(i.toLowerCase())) score += 10; }
+    let interestMatches = 0;
+    for (const i of theirI) { if (mySet.has(i.toLowerCase())) interestMatches++; }
+    score += Math.min(40, interestMatches * 10);
   }
 
   // Matching dating intentions
   if (currentUserProfile?.datingIntentions && cp.datingIntentions &&
       currentUserProfile.datingIntentions.toLowerCase() === cp.datingIntentions.toLowerCase()) score += 20;
 
-  // Recency bonus
+  // Recency bonus — recalibrated. The previous 30/20/10 curve let
+  // "online right now" users dominate the deck and pushed lower-
+  // engagement-but-better-fit profiles down. New curve is gentler so
+  // recency is a tiebreaker, not the lead signal.
   if (candidate.lastActiveAt) {
     const hrs = (Date.now() - new Date(candidate.lastActiveAt).getTime()) / 3600000;
-    if (hrs < 1) score += 30; else if (hrs < 24) score += 20; else if (hrs < 72) score += 10;
+    if (hrs < 1) score += 15;
+    else if (hrs < 24) score += 10;
+    else if (hrs < 72) score += 5;
   }
 
   if (candidate.isVerified) score += 5;
@@ -315,6 +324,16 @@ function scoreCandidate(candidate: any, currentUserProfile: any, opts: any = {})
   score += scoreProfileFreshness(cp);
   score += scoreCurrentlyInto(currentUserProfile, cp);
 
+  // Mutual-interest boost — they already liked / super-liked the
+  // viewer. This is the strongest organic signal we have and it sat
+  // unused in the algorithm. We expose it through opts.likedMeSet
+  // (populated upstream from the Swipe table where toUserId = viewer
+  // AND type IN ('like','super_like')). The candidate gets a large
+  // boost so a mutual like cannot accidentally land off the top
+  // window. Super-likes get an even bigger one.
+  if (opts.likedMeSet?.has?.(candidate.id)) score += 35;
+  if (opts.superLikedMeSet?.has?.(candidate.id)) score += 15;
+
   if (opts.preferenceVector) score += scoreBehavioral(cp, candidate, opts.preferenceVector);
   if (opts.popularityMap) score += scorePopularityElo(opts.popularityMap[candidate.id]);
   if (opts.collaborativeBoosts?.[candidate.id]) score += opts.collaborativeBoosts[candidate.id];
@@ -323,19 +342,65 @@ function scoreCandidate(candidate: any, currentUserProfile: any, opts: any = {})
   return score;
 }
 
+/**
+ * Pop the next candidate respecting a "no more than maxStreak in a row
+ * from the same group" rule. Used by rankCandidates to keep the deck
+ * visually diverse — five Dinka cards in a row looks like the
+ * algorithm only knows one tribe, even if the scoring is correct.
+ */
+function popDiverse(
+  bucket: { candidate: any; score: number }[],
+  recentGroupRing: string[],
+  maxStreak: number,
+  groupOf: (c: any) => string,
+): { candidate: any; score: number } | null {
+  if (bucket.length === 0) return null;
+  // If the last `maxStreak` picks are all the same group, prefer a
+  // different one if possible. Fall through to the top item when no
+  // alternative exists (don't starve the deck).
+  if (recentGroupRing.length >= maxStreak) {
+    const tail = recentGroupRing.slice(-maxStreak);
+    const allSame = tail.every((g) => g === tail[0]);
+    if (allSame) {
+      const altIdx = bucket.findIndex((b) => groupOf(b.candidate) !== tail[0]);
+      if (altIdx > 0) return bucket.splice(altIdx, 1)[0];
+    }
+  }
+  return bucket.shift() || null;
+}
+
 function rankCandidates(candidates: any[], currentUserProfile: any, limit: number, windowSize = 5, opts: any = {}): any[] {
   const scored = candidates.map((c) => ({ candidate: c, score: scoreCandidate(c, currentUserProfile, opts) }));
   scored.sort((a, b) => b.score - a.score);
-  const result: any[] = [];
+
+  // Window-shuffle keeps top scores at top but adds intra-window
+  // randomness so the deck doesn't feel deterministic. Diversity
+  // post-pass ensures no more than 2 same-tribe cards in a row.
+  const shuffled: { candidate: any; score: number }[] = [];
   for (let i = 0; i < scored.length; i += windowSize) {
     const window = scored.slice(i, i + windowSize);
     for (let j = window.length - 1; j > 0; j--) {
       const k = Math.floor(Math.random() * (j + 1));
       [window[j], window[k]] = [window[k], window[j]];
     }
-    result.push(...window);
+    shuffled.push(...window);
   }
-  return result.slice(0, limit).map((item) => item.candidate);
+
+  const result: any[] = [];
+  const recentGroups: string[] = [];
+  const groupOf = (c: any): string => {
+    const eth = (c?.profile?.ethnicity || "").toString().toLowerCase().trim();
+    return eth || "unknown";
+  };
+
+  while (result.length < limit) {
+    const pick = popDiverse(shuffled, recentGroups, 2, groupOf);
+    if (!pick) break;
+    result.push(pick.candidate);
+    recentGroups.push(groupOf(pick.candidate));
+    if (recentGroups.length > 3) recentGroups.shift();
+  }
+  return result;
 }
 
 // ── Main Handler ────────────────────────────────────────────────────────────
@@ -542,10 +607,34 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Mutual-interest detection — pull every Swipe from candidates
+    // back to the viewer. The boost makes profiles that already
+    // liked the viewer surface near the top of the deck so a
+    // reciprocal swipe creates a match quickly.
+    let likedMeSet = new Set<string>();
+    let superLikedMeSet = new Set<string>();
+    {
+      const candIds = pool.map((c: any) => c.id).filter(Boolean);
+      if (candIds.length > 0) {
+        const { data: incomingSwipes } = await supabase
+          .from("Swipe")
+          .select("fromUserId, type")
+          .in("fromUserId", candIds)
+          .eq("toUserId", userId)
+          .in("type", ["like", "super_like"]);
+        for (const s of incomingSwipes || []) {
+          likedMeSet.add(s.fromUserId);
+          if (s.type === "super_like") superLikedMeSet.add(s.fromUserId);
+        }
+      }
+    }
+
     const ranked = rankCandidates(pool, currentUserProfile, limit, 5, {
       preferenceVector,
       popularityMap,
       collaborativeBoosts,
+      likedMeSet,
+      superLikedMeSet,
     });
 
     const nextCursor = hasMore ? pool[pool.length - 1]?.id : null;

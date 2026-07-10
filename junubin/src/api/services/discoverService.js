@@ -104,9 +104,13 @@ export async function getDailyLikeStatus() {
 
   const used = Number(data?.used) || 0;
   const unlimited = data?.unlimited === true;
+  // Default fallback is the free-tier daily ceiling so an unknown
+  // shape from the RPC doesn't grant a free user 25 swipes (the old
+  // limit) on the UI badge — keep this in sync with 00037 SQL +
+  // DAILY_LIKE_LIMIT_BY_TIER in payments/entitlements.js.
   const result = {
     used,
-    limit: unlimited ? Infinity : Number(data?.limit ?? 25),
+    limit: unlimited ? Infinity : Number(data?.limit ?? 20),
     remaining: unlimited ? Infinity : Math.max(0, Number(data?.remaining ?? 0)),
     tier: data?.tier || 'free',
   };

@@ -1,20 +1,21 @@
 /**
  * PaymentMethodSelector
  *
- * Bottom sheet that lets users choose how to pay:
- * App Store, M-Pesa, MTN MoMo, Airtel Money, Bank Transfer, or Card.
+ * Bottom sheet that lets users choose how to pay: Stripe (card or
+ * wallet) or App Store IAP. On iOS we only surface IAP, so the sheet
+ * auto-dispatches without ever rendering; on Android the user picks
+ * between Stripe and Play IAP.
  *
- * Available methods are filtered based on the user's country.
  * Props:
  *   visible - boolean to show/hide
  *   onClose - callback to dismiss
  *   onSelect(method) - callback with selected PAYMENT_METHODS value
- *   countryCode - user's ISO country code
+ *   countryCode - retained for API compatibility (unused)
  *   productLabel - what they're buying (e.g. "JuNubin+ Monthly")
- *   priceLabel - formatted price string (e.g. "KSh 1,500")
+ *   priceLabel - formatted price string (e.g. "$9.99")
  */
 
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -33,7 +34,7 @@ import {
   PAYMENT_METHOD_ICONS,
   PAYMENT_METHOD_COLORS,
   getAvailableMethods,
-} from '../payments/FlutterwaveService';
+} from '../payments/paymentMethods';
 
 export default function PaymentMethodSelector({
   visible,
@@ -51,6 +52,25 @@ export default function PaymentMethodSelector({
     () => getAvailableMethods(countryCode, Platform.OS),
     [countryCode]
   );
+
+  // If only one method is available (e.g. iOS where Apple policy
+  // forces IAP-only for digital goods), bypass the sheet entirely and
+  // dispatch directly so the user doesn't see a single-row picker.
+  const autoSelectedRef = useRef(false);
+  useEffect(() => {
+    if (!visible) {
+      autoSelectedRef.current = false;
+      return;
+    }
+    if (methods.length === 1 && !autoSelectedRef.current) {
+      autoSelectedRef.current = true;
+      const only = methods[0];
+      onSelect?.(only);
+      onClose?.();
+    }
+  }, [visible, methods, onSelect, onClose]);
+
+  if (methods.length <= 1) return null;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -88,26 +108,23 @@ export default function PaymentMethodSelector({
                     <Ionicons name={icon} size={20} color={color} />
                   </View>
                   <View style={styles.methodInfo}>
-                    <Text style={styles.methodLabel}>{label}</Text>
+                    <View style={styles.methodLabelRow}>
+                      <Text style={styles.methodLabel}>{label}</Text>
+                      {method === PAYMENT_METHODS.STRIPE && (
+                        <View style={styles.recommendBadge}>
+                          <Text style={styles.recommendBadgeText}>RECOMMENDED</Text>
+                        </View>
+                      )}
+                    </View>
+                    {method === PAYMENT_METHODS.STRIPE && (
+                      <Text style={styles.methodDesc}>
+                        Visa, Mastercard, Amex, Apple Pay, Google Pay, Link — worldwide
+                      </Text>
+                    )}
                     {isAppStore && (
                       <Text style={styles.methodDesc}>
                         {Platform.OS === 'ios' ? 'Apple Pay, cards via App Store' : 'Google Pay, cards via Play Store'}
                       </Text>
-                    )}
-                    {method === PAYMENT_METHODS.MPESA && (
-                      <Text style={styles.methodDesc}>Safaricom M-Pesa STK push</Text>
-                    )}
-                    {method === PAYMENT_METHODS.MTN_MOMO && (
-                      <Text style={styles.methodDesc}>MTN Mobile Money</Text>
-                    )}
-                    {method === PAYMENT_METHODS.AIRTEL_MONEY && (
-                      <Text style={styles.methodDesc}>Airtel Money mobile wallet</Text>
-                    )}
-                    {method === PAYMENT_METHODS.BANK_TRANSFER && (
-                      <Text style={styles.methodDesc}>Direct bank transfer</Text>
-                    )}
-                    {method === PAYMENT_METHODS.CARD && (
-                      <Text style={styles.methodDesc}>Visa, Mastercard, Amex, Verve — worldwide</Text>
                     )}
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
@@ -120,7 +137,7 @@ export default function PaymentMethodSelector({
           <View style={styles.securityRow}>
             <Ionicons name="shield-checkmark" size={14} color={colors.gray400} />
             <Text style={styles.securityText}>
-              Payments secured by Flutterwave. Your details are encrypted.
+              Payments secured by Stripe, Apple, and Google. Your details are encrypted.
             </Text>
           </View>
         </View>
@@ -188,9 +205,26 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   methodInfo: {
     flex: 1,
   },
+  methodLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   methodLabel: {
     ...Typography.bodySmallMedium,
     color: colors.black,
+  },
+  recommendBadge: {
+    backgroundColor: '#635BFF',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  recommendBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   methodDesc: {
     ...Typography.caption,

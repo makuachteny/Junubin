@@ -8,28 +8,50 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
+import { filterOptions } from '../components/SearchablePicker';
 
+// Lists longer than this get a search box so users aren't forced to
+// scroll through dozens of rows (e.g. the 69-tribe ethnicity list).
+const SEARCH_THRESHOLD = 12;
 
 export default function PreferenceSelectScreen({ navigation, route }) {
-  const { prefKey, title, options = [], currentValue, prefType } = route.params || {};
+  const { prefKey, title, options = [], currentValue, prefType, returnTo } = route.params || {};
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [selected, setSelected] = useState(currentValue);
+  const [query, setQuery] = useState('');
+
+  const showSearch = options.length > SEARCH_THRESHOLD;
+  const visibleOptions = useMemo(
+    () => (showSearch ? filterOptions(options, query) : options),
+    [showSearch, options, query],
+  );
+
+  // Commit instantly on tap and return — single-select shouldn't need a
+  // separate "Done" tap. Done remains as a no-change fallback.
+  // Route back to the Preferences screen with the picked value. We pass
+  // returnTo straight through so Preferences' own Done still knows the
+  // originating screen after this sub-selection round-trip.
+  const commit = (value) => {
+    navigation.navigate('Preferences', {
+      updatedPref: { key: prefKey, value, type: prefType },
+      returnTo,
+    });
+  };
 
   const handleSelect = (value) => {
     setSelected(value);
+    commit(value);
   };
 
   const handleDone = () => {
-    // Navigate back to Preferences with the current selection
-    navigation.navigate('Preferences', {
-      updatedPref: { key: prefKey, value: selected ?? currentValue, type: prefType },
-    });
+    commit(selected ?? currentValue);
   };
 
   return (
@@ -56,6 +78,7 @@ export default function PreferenceSelectScreen({ navigation, route }) {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         bounces={false}
       >
         <View style={styles.contextCard}>
@@ -70,15 +93,39 @@ export default function PreferenceSelectScreen({ navigation, route }) {
 
         <Text style={styles.subtitle}>Choose one option</Text>
 
+        {showSearch && (
+          <View style={styles.searchWrap}>
+            <Ionicons name="search" size={18} color={colors.gray400} style={{ marginRight: 8 }} />
+            <TextInput
+              style={styles.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              placeholder={`Search ${title?.toLowerCase() || 'options'}…`}
+              placeholderTextColor={colors.gray400}
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+            {query.length > 0 && (
+              <TouchableOpacity onPress={() => setQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={18} color={colors.gray400} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         <View style={styles.card}>
-          {options.map((option, index) => {
+          {visibleOptions.length === 0 && (
+            <Text style={styles.emptyText}>No matches for “{query}”.</Text>
+          )}
+          {visibleOptions.map((option, index) => {
             const isSelected = option.value === selected;
             return (
               <TouchableOpacity
                 key={option.value}
                 style={[
                   styles.optionRow,
-                  index < options.length - 1 && styles.optionBorder,
+                  index < visibleOptions.length - 1 && styles.optionBorder,
                   isSelected && styles.optionSelected,
                 ]}
                 activeOpacity={0.6}
@@ -164,6 +211,29 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: colors.gray500,
     marginBottom: 16,
     marginLeft: 4,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: isDark ? colors.cardBorder : colors.gray200,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 14,
+  },
+  searchInput: {
+    ...Typography.body,
+    color: colors.black,
+    flex: 1,
+    padding: 0,
+  },
+  emptyText: {
+    ...Typography.body,
+    color: colors.gray500,
+    textAlign: 'center',
+    paddingVertical: 28,
   },
   contextCard: {
     flexDirection: 'row',

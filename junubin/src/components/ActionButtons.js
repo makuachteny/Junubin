@@ -55,7 +55,11 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, hasRe
         <Ionicons name="arrow-undo" size={18} color={hasRewind ? '#F0A030' : 'rgba(255,255,255,0.35)'} />
       </TouchableOpacity>
 
-      {/* Pass */}
+      {/* Pass — solid white circle, dark thin X. Matches the Socialize
+          mock the team signed off on (and the parallel Dating-mode
+          mock): the X is rendered at 26px / 60% black so it reads
+          cleanly on the white fill at any screen brightness. The
+          previous 40% black was too faint on the OLED preview. */}
       <TouchableOpacity
         style={[styles.btn, styles.passBtn]}
         onPress={() => { hapticLight(); onPass?.(); }}
@@ -63,7 +67,7 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, hasRe
         accessibilityRole="button"
         accessibilityLabel="Pass"
       >
-        <Ionicons name="close" size={26} color="rgba(0,0,0,0.4)" />
+        <Ionicons name="close" size={26} color="rgba(0,0,0,0.6)" />
       </TouchableOpacity>
 
       {/* Super Like */}
@@ -127,6 +131,12 @@ const ActionButtons = ({ onPass, onLike, onSuperLike, onRewind, onMessage, hasRe
   );
 };
 
+// Sizes preserved at the original 42 / 54 / 62 — design review only
+// asked for clearer backgrounds, not bigger buttons. Background
+// colors are the only change: small flank buttons now render a
+// medium-gray fill (was very-transparent black / white that
+// disappeared into either dark or light photos depending on the
+// shot). White and gold/orange center buttons unchanged.
 const getStyles = (colors) => StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -146,12 +156,19 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    // Dark-translucent — lets the photo bleed through so the
+    // button reads as "clear" rather than a solid panel painted
+    // over the card. Color sequence:
+    //   rgba(255,255,255,0.18) — vanished on dark photos
+    //   #888888 (solid)        — read as too white / solid
+    //   rgba(0,0,0,0.4) (now)  — matches the screenshot's clear
+    //                            translucent look on both dark
+    //                            and light photos.
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderWidth: 0,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.22,
     shadowRadius: 8,
     elevation: 3,
   },
@@ -161,7 +178,7 @@ const getStyles = (colors) => StyleSheet.create({
   passBtn: {
     width: 54,
     height: 54,
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.18,
@@ -169,8 +186,8 @@ const getStyles = (colors) => StyleSheet.create({
     elevation: 6,
   },
   superLikeWrap: {
-    width: 60,
-    height: 60,
+    width: 62,
+    height: 62,
     justifyContent: 'center',
     alignItems: 'center',
   },

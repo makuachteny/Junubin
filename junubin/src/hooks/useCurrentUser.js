@@ -66,8 +66,6 @@ const resolveMode = (user, storedMode) => {
  */
 export function useCurrentUser() {
   const { user, session, refreshUser: authRefresh } = useAuth();
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [storedMode, setStoredMode] = useState(null);
 
   // Read the persisted mode once on mount so HomeScreen reflects what
@@ -80,14 +78,20 @@ export function useCurrentUser() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    if (!session || !user) {
-      setProfile(null);
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
+  // Derive the normalized profile SYNCHRONOUSLY from the auth user.
+  //
+  // This used to live in a useState + useEffect, which left `profile`
+  // null for the first render — so `currentUser` fell back to the demo
+  // / empty placeholder on mount. Screens that seed local state from
+  // currentUser at mount (EditProfile's form, sticker + currentlyInto
+  // state) captured that placeholder and never re-hydrated, so the
+  // editor opened showing demo data with every chip unselected even
+  // though the user had filled everything in during the survey.
+  // Computing with useMemo means currentUser is the real profile on the
+  // very first render whenever `user` is already in the auth context —
+  // which it is by the time any post-sign-in screen mounts.
+  const profile = useMemo(() => {
+    if (!session || !user) return null;
     const normalized = profileService.normalizeProfile(user);
     if (normalized) {
       const p = user.profile || {};
@@ -108,9 +112,11 @@ export function useCurrentUser() {
       normalized.superLikes = 0;
       normalized.notes = 0;
     }
-    setProfile(normalized);
-    setLoading(false);
+    return normalized;
   }, [user, session, storedMode]);
+
+  // Authenticated but the User row hasn't landed yet.
+  const loading = !!session && !user;
 
   const refreshUser = useCallback(async () => {
     try {

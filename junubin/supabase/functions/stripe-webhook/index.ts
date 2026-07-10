@@ -9,6 +9,8 @@
  *   checkout.session.completed       — initial purchase (sub or one-time)
  *   customer.subscription.updated    — plan change, renewal
  *   customer.subscription.deleted    — cancellation / expiry
+ *   invoice.payment_succeeded        — record renewal Payment row (entitlement
+ *                                       already set by checkout.session/subscription.updated)
  *   invoice.payment_failed           — mark Payment row as failed; downgrade later
  *   account.updated                  — Stripe Connect onboarding state (00023)
  *
@@ -21,6 +23,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse, errorResponse } from "../_shared/utils.ts";
 import { STRIPE_PRODUCTS, PRICE_ID_TO_JUNUBIN } from "../_shared/stripe-products.ts";
+import { captureException } from "../_shared/sentry.ts";
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") || "";
 const STRIPE_WEBHOOK_SECRET = Deno.env.get("STRIPE_WEBHOOK_SECRET") || "";
@@ -276,6 +279,45 @@ serve(async (req) => {
         break;
       }
 
+      case "invoice.payment_succeeded": {
+        // Renewal charges. The initial checkout writes the first
+        // Payment row via `checkout.session.completed` and grants the
+        // entitlement; subsequent renewals only fire invoice.*. Without
+        // this handler the Payment table becomes a checkout log instead
+        // of a charge log — refund / customer-support flows can't see
+        // renewal receipts. Entitlement is already in place (server
+        // tier on `User` is the source of truth and was set on the
+        // initial purchase) so we just write the Payment row keyed by
+        // invoice id — idempotent via the (provider, providerRef)
+        // unique constraint, so a redeliver is a no-op.
+        const invoice = event.data.object;
+        // billing_reason === 'subscription_create' is the very first
+        // invoice on a sub; that row was already written by the
+        // checkout.session.completed handler, so skip it here to avoid
+        // creating two Payment rows for the same charge.
+        if (invoice.billing_reason === "subscription_create") break;
+        const lookup = await lookupAuthUserId(
+          supabase,
+          invoice.customer,
+          invoice.subscription_details?.metadata?.junubin_user_id,
+        );
+        const productId = invoice.subscription_details?.metadata?.junubin_product_id;
+        if (lookup.userId && productId) {
+          await recordPayment(supabase, {
+            userId: lookup.userId,
+            providerRef: invoice.id,
+            providerCustomerId: invoice.customer,
+            junubinProductId: productId,
+            amountCents: invoice.amount_paid ?? 0,
+            currency: (invoice.currency || "usd").toUpperCase(),
+            status: "succeeded",
+            subscriptionId: invoice.subscription || null,
+            metadata: { reason: "invoice.payment_succeeded", billingReason: invoice.billing_reason },
+          });
+        }
+        break;
+      }
+
       case "invoice.payment_failed": {
         const invoice = event.data.object;
         const lookup = await lookupAuthUserId(supabase, invoice.customer, invoice.subscription_details?.metadata?.junubin_user_id);
@@ -304,6 +346,7 @@ serve(async (req) => {
     return jsonResponse({ received: true });
   } catch (err) {
     console.error("stripe-webhook handler error:", err);
+    await captureException(err, { fn: "stripe-webhook", eventType: (event as any)?.type });
     return errorResponse((err as Error).message || "Handler error", 500);
   }
 });

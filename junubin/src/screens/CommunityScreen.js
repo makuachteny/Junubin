@@ -27,6 +27,7 @@ import { mockPosts } from '../data/__dev__/mockProfiles';
 import { imageSource } from '../utils/imageSource';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as postService from '../api/services/postService';
+import { reportError } from '../utils/reportError';
 import { supabase } from '../config/supabase';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
@@ -92,22 +93,26 @@ const isRealPostId = (id) => {
 async function hydrateInteractionState(posts) {
   const realIds = posts.map((p) => p.id).filter(isRealPostId);
   if (realIds.length === 0) return posts;
-  try {
-    const [likedSet, repostedSet, wavedSet] = await Promise.all([
-      postService.getLikedPostIds(realIds),
-      postService.getRepostedPostIds(realIds),
-      postService.getWavedPostIds(realIds),
-    ]);
-    return posts.map((p) => {
-      const liked = likedSet.has(p.id);
-      const reposted = repostedSet.has(p.id);
-      const waved = wavedSet.has(p.id);
-      if (!liked && !reposted && !waved) return p;
-      return { ...p, liked, reposted, waved };
-    });
-  } catch {
-    return posts;
-  }
+  // allSettled so one failing service (e.g. waves) doesn't wipe the
+  // interaction state from the other two — under Promise.all, a single
+  // rejection meant the user's likes and reposts vanished from the UI
+  // and their next heart-tap looked like a no-op.
+  const [likedRes, repostedRes, wavedRes] = await Promise.allSettled([
+    postService.getLikedPostIds(realIds),
+    postService.getRepostedPostIds(realIds),
+    postService.getWavedPostIds(realIds),
+  ]);
+  const emptySet = new Set();
+  const likedSet = likedRes.status === 'fulfilled' ? likedRes.value : emptySet;
+  const repostedSet = repostedRes.status === 'fulfilled' ? repostedRes.value : emptySet;
+  const wavedSet = wavedRes.status === 'fulfilled' ? wavedRes.value : emptySet;
+  return posts.map((p) => {
+    const liked = likedSet.has(p.id);
+    const reposted = repostedSet.has(p.id);
+    const waved = wavedSet.has(p.id);
+    if (!liked && !reposted && !waved) return p;
+    return { ...p, liked, reposted, waved };
+  });
 }
 
 export default function CommunityScreen({ navigation, route }) {
@@ -201,7 +206,8 @@ export default function CommunityScreen({ navigation, route }) {
         // entries next to it — looks broken for real users.)
         const combined = live.length > 0 ? live : demoPosts;
         setPosts(await hydrateInteractionState(combined));
-      } catch {
+      } catch (err) {
+        reportError('CommunityScreen.listPosts', err);
         if (!cancelled) setPosts(demoPosts);
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -227,7 +233,8 @@ export default function CommunityScreen({ navigation, route }) {
       const live = await postService.listPosts();
       const combined = live.length > 0 ? live : demoPosts;
       setPosts(await hydrateInteractionState(combined));
-    } catch {
+    } catch (err) {
+      reportError('CommunityScreen.refreshPosts', err);
       setPosts(demoPosts);
     } finally {
       setRefreshing(false);
@@ -487,6 +494,8 @@ export default function CommunityScreen({ navigation, route }) {
             }}
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Search community"
           >
             <Ionicons name="search-outline" size={22} color={colors.gray500} />
           </TouchableOpacity>
@@ -509,10 +518,12 @@ export default function CommunityScreen({ navigation, route }) {
             }
             activeOpacity={0.75}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
           >
             <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Your profile">
             <Image source={imageSource(currentUser.images?.[0])} style={styles.avatar} />
           </TouchableOpacity>
         </View>
@@ -758,7 +769,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   feedList: {
     paddingBottom: 80,
-    paddingTop: 4,
+    // Match the gap Connect leaves between its FilterBar and the swipe card
+    // (Layout.filterGap). combinedBar contributes 4pt of bottom padding on
+    // its own; filterGap on top of that produces the same visual breathing
+    // room as Connect's cardArea.paddingTop.
+    paddingTop: Layout.filterGap,
   },
 
   // ─── Groups ───

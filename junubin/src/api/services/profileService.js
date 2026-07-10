@@ -68,6 +68,22 @@ export async function updateProfile(updates) {
     'relationshipType', 'currentlyInto', 'promptQuestion', 'promptAnswer',
     'minPreferredAge', 'maxPreferredAge', 'maxDistanceKm', 'showMe', 'lookingForGender',
     'profileComplete', 'accountPurpose', 'eulaAcceptedAt', 'eulaVersion',
+    // ── surveyCompletedAt — load-bearing for the eligibility gate ──
+    // This was previously omitted from PROFILE_KEYS, which silently
+    // dropped the field on every ProfileSetup save. Result: the
+    // "Tell us a little more" popup kept firing forever — the
+    // eligibility check reads `profile?.surveyCompletedAt`, and
+    // since the column never received the value, every subsequent
+    // dating action re-fired the survey nudge even though the user
+    // had filled in everything. Audit fix: add the key here so the
+    // ProfileSetup save actually persists the completion timestamp,
+    // and the popup retires as soon as the user finishes the flow.
+    'surveyCompletedAt',
+    // Voice prompts (00041). voicePromptUrl + voicePromptDurationSec
+    // + voicePromptQuestion + voicePromptUpdatedAt are written
+    // together by the VoicePromptRecorder upload flow. Capped at 30s
+    // on the client and 35s at the column level.
+    'voicePromptUrl', 'voicePromptDurationSec', 'voicePromptQuestion', 'voicePromptUpdatedAt',
     // Cross-device toggles — server is the source of truth so they
     // sync from phone to web to tablet.
     'incognito', 'appMode',
@@ -91,22 +107,40 @@ export async function updateProfile(updates) {
       .from('User')
       .update(userFields)
       .eq('id', appUser.id);
-    if (error) throw error;
+    if (error) throw labeled('User update', error);
   }
 
   if (Object.keys(profileFields).length > 0) {
-    const { error } = await supabase
+    // `.select()` so we can distinguish a real write from a silent
+    // 0-row write. A Profile UPDATE that matches no row — whether
+    // because the Profile row is missing or an RLS predicate filtered
+    // it — returns success with an empty result and NO error, which is
+    // exactly how "I saved but nothing changed" happens. If no row was
+    // updated, insert it so first-time / legacy accounts that never got
+    // a Profile row (or had it deleted) still persist their edits.
+    const { data: updatedRows, error } = await supabase
       .from('Profile')
       .update(profileFields)
-      .eq('userId', appUser.id);
-    if (error) throw error;
+      .eq('userId', appUser.id)
+      .select('id');
+    if (error) throw labeled('Profile update', error);
+    if (!updatedRows || updatedRows.length === 0) {
+      const { error: insertErr } = await supabase
+        .from('Profile')
+        .insert({ userId: appUser.id, ...profileFields });
+      if (insertErr) throw labeled('Profile insert', insertErr);
+    }
   }
 
-  const { data: updated } = await supabase
+  // Error-check the readback. Previously this swallowed errors and could
+  // return undefined, which the caller would then set as the auth user —
+  // wiping the profile from the UI even though the write succeeded.
+  const { data: updated, error: refetchErr } = await supabase
     .from('User')
     .select('*, profile:Profile(*), photos:Photo(*)')
     .eq('id', appUser.id)
     .single();
+  if (refetchErr) throw labeled('Profile re-fetch', refetchErr);
 
   return updated;
 }
@@ -232,6 +266,29 @@ export async function uploadPhoto(imageUri) {
     try { await supabase.storage.from('photos').remove([storagePath]); } catch {}
     throw labeled('Photo insert', insertError);
   }
+
+  // Fire-and-forget moderation. Posts already do this; profile
+  // photos didn't, which meant the highest-stakes media on the
+  // platform (the literal first impression every user makes) was
+  // never scanned. moderate-image's prod-env hard-fail ensures the
+  // function refuses to silently auto-approve when no provider is
+  // configured.
+  //
+  // We don't await — moderation is async by design so a flaky
+  // third-party provider doesn't block the upload flow. The function
+  // updates Post.moderationStatus on completion (when postId+kind=='post'
+  // are passed); for photos we currently rely on the audit log alone.
+  // A future enhancement would extend the function to mirror onto
+  // Photo.moderationStatus once that column exists.
+  try {
+    supabase.functions
+      .invoke('moderate-image', {
+        method: 'POST',
+        body: { imageUrl: urlData.publicUrl, kind: 'photo', photoId: photo.id },
+      })
+      .catch(() => {});
+  } catch {}
+
   return photo;
 }
 

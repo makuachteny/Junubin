@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, Typography } from '../theme';
 import { imageSource } from '../utils/imageSource';
+import { reportError } from '../utils/reportError';
 import { useCurrentUser } from '../hooks';
 import { GraffitiSend } from '../components/icons';
 import PostCard from '../components/PostCard';
@@ -122,8 +123,6 @@ export default function PostDetailScreen({ navigation, route }) {
   const initialComments = (DEMO_DATA_ENABLED && isDemoPost)
     ? (mockComments[postId] || [])
     : [];
-  const [liked, setLiked] = useState(false);
-
   const [comments, setComments] = useState(initialComments);
   const [commentText, setCommentText] = useState('');
   const [commentLikes, setCommentLikes] = useState({});
@@ -143,7 +142,7 @@ export default function PostDetailScreen({ navigation, route }) {
     let cancelled = false;
     commentService.listComments(postId)
       .then((rows) => { if (!cancelled) setComments(rows); })
-      .catch(() => {});
+      .catch((err) => reportError('PostDetailScreen.listComments', err, { postId }));
     return () => { cancelled = true; };
   }, [postId]);
 
@@ -170,7 +169,7 @@ export default function PostDetailScreen({ navigation, route }) {
     }
     commentService.listComments(postId)
       .then(setComments)
-      .catch(() => {})
+      .catch((err) => reportError('PostDetailScreen.refreshComments', err, { postId }))
       .finally(() => setRefreshing(false));
   }, [postId]);
 
@@ -214,10 +213,16 @@ export default function PostDetailScreen({ navigation, route }) {
     postComment(text);
   };
 
-  // One-tap emoji reaction — posts the emoji as its own comment.
-  const handleEmojiPost = useCallback((emoji) => {
-    postComment(emoji);
-  }, [postComment]);
+  // Tap an emoji shortcut → append it to the draft comment and bring
+  // up the keyboard. The user then types around it / hits Send when
+  // ready. Previously this fired off the emoji as its own comment
+  // immediately, which made the row feel like an "unsend" button.
+  const handleEmojiInsert = useCallback((emoji) => {
+    setCommentText((prev) => (prev || '') + emoji);
+    // Defer focus so the appended text is rendered before the cursor
+    // lands — otherwise the keyboard sometimes opens on a stale value.
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
 
   const handleCommentLike = (commentId) => {
     setCommentLikes((prev) => ({ ...prev, [commentId]: !prev[commentId] }));
@@ -289,7 +294,11 @@ export default function PostDetailScreen({ navigation, route }) {
         refreshControl={<ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
         {/* ─── The Post itself — rendered as a full PostCard ─── */}
-        <PostCard post={{ ...post, comments: comments.length }} pressEnabled={false} />
+        <PostCard
+          post={{ ...post, comments: comments.length }}
+          pressEnabled={false}
+          hideViewAllComments
+        />
 
         {/* ─── Comments List ─── */}
         <View style={styles.commentsSection}>
@@ -358,17 +367,18 @@ export default function PostDetailScreen({ navigation, route }) {
           </View>
         )}
 
-        {/* Emoji shortcuts — tap to post the emoji as a one-tap reaction */}
+        {/* Emoji shortcuts — tap to append the emoji to the draft. The
+            user can then keep typing and send when ready. */}
         <View style={styles.emojiRow}>
           {QUICK_EMOJIS.map((emoji) => (
             <TouchableOpacity
               key={emoji}
               style={styles.emojiBtn}
-              onPress={() => handleEmojiPost(emoji)}
+              onPress={() => handleEmojiInsert(emoji)}
               activeOpacity={0.6}
               hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               accessibilityRole="button"
-              accessibilityLabel={`React with ${emoji}`}
+              accessibilityLabel={`Add ${emoji} to comment`}
             >
               <Text style={styles.emojiText}>{emoji}</Text>
             </TouchableOpacity>
@@ -441,9 +451,12 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
 
   // ─── Comments List — Instagram-style flat layout ───
+  // Horizontal padding mirrors PostCard's outer inset (CARD_INSET = 12)
+  // plus its internal content padding (~12) so the comment avatars line
+  // up vertically with Adau's avatar inside the post card above.
   commentsSection: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
+    paddingHorizontal: 24,
+    paddingTop: 8,
   },
   commentRow: {
     flexDirection: 'row',
@@ -456,18 +469,22 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginBottom: 14,
     marginTop: -6,
   },
+  // Avatar sized + spaced to match PostCard.header (32px avatar + 10
+  // gap). Keeping these in lockstep means names and timestamps line up
+  // vertically between the post-card row above and the comment rows
+  // below, instead of staggering by ~8px.
   commentAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    marginRight: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginRight: 10,
     marginTop: 1,
     backgroundColor: colors.gray300,
   },
   replyAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     marginRight: 10,
   },
   commentAvatarOwn: {
@@ -540,20 +557,26 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
 
   // ─── Comment Input ───
+  // The whole dock — replyBar + emojiRow + inputRow — sits on a single
+  // cardBg surface with one top border. All three children share the
+  // same horizontal padding so the composer reads as one cohesive
+  // group rather than three stacked bands.
   commentInput: {
     backgroundColor: colors.cardBg,
     borderTopWidth: 1,
     borderTopColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray200,
+    paddingTop: 4,
   },
   replyBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(206,17,38,0.03)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : colors.gray200,
+    paddingVertical: 6,
+    marginHorizontal: 14,
+    marginBottom: 4,
+    borderRadius: 10,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(206,17,38,0.05)',
   },
   replyBarLeft: {
     flexDirection: 'row',
@@ -565,26 +588,32 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 13,
     color: colors.gray600,
   },
+  // Reactions sit just above the input. Smaller emoji + tighter padding
+  // so they feel like a shortcut row inside the composer rather than
+  // their own standalone section.
   emojiRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingTop: 4,
+    paddingBottom: 6,
   },
   emojiBtn: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 15,
   },
   emojiText: {
-    fontSize: 22,
+    fontSize: 20,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 14,
-    paddingTop: 4,
+    paddingTop: 0,
+    paddingBottom: 2,
     gap: 10,
   },
   stickerBtn: {

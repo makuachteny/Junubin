@@ -13,7 +13,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily } from '../theme';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
+import PaymentMethodSelector from '../components/PaymentMethodSelector';
+import StripeCheckout from '../components/StripeCheckout';
 import { useSubscription, PRODUCT_IDS, SHOW_PAYMENTS_UI } from '../payments';
+import { PAYMENT_METHODS } from '../payments/paymentMethods';
+import { useCurrentUser } from '../hooks';
 import { formatPerMonth } from '../payments/pricing';
 import { GraffitiCrown, GraffitiShield } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
@@ -156,12 +160,50 @@ function EliteScreenPaid({ navigation }) {
   const [selectedPlan, setSelectedPlan] = useState(1);
   const scrollRef = useRef(null);
   const [featureIndex, setFeatureIndex] = useState(0);
-  const { purchase, restorePurchases, tier, hasTier, purchaseInProgress, offerings } = useSubscription();
+  const {
+    purchase,
+    purchaseWithStripe,
+    confirmStripePayment,
+    restorePurchases,
+    tier,
+    hasTier,
+    purchaseInProgress,
+    offerings,
+  } = useSubscription();
+  const { currentUser } = useCurrentUser();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
+  const [showMethods, setShowMethods] = useState(false);
+  const [stripeCheckout, setStripeCheckout] = useState(null); // { url, sessionId }
+  const countryCode = currentUser?.countryCode || 'US';
   const tierSlide = useRef(new Animated.Value(1)).current;
   const [tierTabWidth, setTierTabWidth] = useState(0);
 
-  const features = selectedTier === 'junub' ? JUNUB_FEATURES : PLUS_FEATURES;
+  // Mode-aware feature copy. The premium tiers exist primarily to
+  // unlock dating-specific behaviors (whispers, unlimited likes,
+  // see-who-likes-you), so a viewer who is currently in Social mode
+  // sees a tailored set that calls out the few perks that ARE
+  // relevant to socializing (incognito, diaspora-wide search, no ads)
+  // and explicitly notes that the rest of the perks activate when
+  // they toggle into Dating. This stops the pitch from reading as
+  // mode-mixed copy ("Swipe right as much as you want" makes no
+  // sense to a Social-only user).
+  const viewerMode = currentUser?.preferences?.mode === 'Social' ? 'Social' : 'Dating';
+  const isSocialMode = viewerMode === 'Social';
+  const PLUS_FEATURES_SOCIAL = [
+    { icon: 'shield-checkmark', title: 'No Ads. Ever.', desc: 'Clean, focused, respectful — no ads in your feed.' },
+    { icon: 'options', title: 'Advanced Filters', desc: 'Filter people you discover by interests, language, and more.' },
+    { icon: 'flash', title: 'Priority Visibility', desc: 'Stand out in groups and on the map a little more.' },
+    { icon: 'heart', title: 'Plus Everything in Dating', desc: 'Whispers, unlimited likes, rewinds — unlocked when you toggle to Dating.' },
+  ];
+  const JUNUB_FEATURES_SOCIAL = [
+    { icon: 'globe', title: 'Diaspora Connect', desc: 'Find South Sudanese friends across cities and countries worldwide.' },
+    { icon: 'eye-off', title: 'Incognito Mode', desc: 'Browse invisibly. Only people you wave at will know you exist.' },
+    { icon: 'flash', title: '1 Free Spotlight/Month', desc: 'Jump to the top of the people-near-you feed every month.' },
+    { icon: 'star', title: 'Everything in JuNubin+', desc: 'Plus all dating perks — unlocked the moment you toggle to Dating.' },
+  ];
+  const features = selectedTier === 'junub'
+    ? (isSocialMode ? JUNUB_FEATURES_SOCIAL : JUNUB_FEATURES)
+    : (isSocialMode ? PLUS_FEATURES_SOCIAL : PLUS_FEATURES);
   const { plans } = buildPlans(offerings, selectedTier);
   const tierLabel = selectedTier === 'junub' ? 'Junub' : 'JuNubin+';
 
@@ -172,7 +214,12 @@ function EliteScreenPaid({ navigation }) {
   useEffect(() => {
     if (hasAnimatedFeaturesRef.current) return;
     hasAnimatedFeaturesRef.current = true;
-    const maxFeatures = Math.max(JUNUB_FEATURES.length, PLUS_FEATURES.length);
+    const maxFeatures = Math.max(
+      JUNUB_FEATURES.length,
+      PLUS_FEATURES.length,
+      JUNUB_FEATURES_SOCIAL.length,
+      PLUS_FEATURES_SOCIAL.length,
+    );
     const anims = Array.from({ length: maxFeatures }, () => new Animated.Value(0));
     featureAnimsRef.current = anims;
     const staggered = anims.map((anim, i) =>
@@ -206,26 +253,54 @@ function EliteScreenPaid({ navigation }) {
     scrollRef.current?.scrollTo({ x: 0, animated: false });
   }, [tierSlide]);
 
-  const handleSubscribe = async () => {
+  // Tapping the Subscribe button opens the payment-method sheet
+  // (Stripe on Android/web, App Store IAP on iOS). The actual purchase
+  // is dispatched in handlePaymentMethod.
+  const handleSubscribe = () => {
+    setShowMethods(true);
+  };
+
+  const successTitle = selectedTier === 'junub' ? 'Welcome to Junub!' : 'Welcome to JuNubin+!';
+
+  const handlePaymentMethod = async (method) => {
     const plan = plans[selectedPlan];
-    setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Subscribing to ${tierLabel}` });
 
-    // Use RevenueCat package if available, otherwise fall back to product ID
-    const purchaseTarget = plan.rcPackage || plan.productId;
-    const result = await purchase(purchaseTarget);
-
-    if (result.success) {
-      setModal({
-        visible: true,
-        type: 'success',
-        title: selectedTier === 'junub' ? 'Welcome to Junub!' : 'Welcome to JuNubin+!',
-        message: `You're in. Enjoy your new features.`,
-      });
-    } else if (result.error === 'cancelled') {
+    if (method === PAYMENT_METHODS.STRIPE) {
+      setModal({ visible: true, type: 'loading', title: 'Opening checkout...', message: `Subscribing to ${tierLabel}` });
+      const result = await purchaseWithStripe({ productId: plan.productId });
       setModal((m) => ({ ...m, visible: false }));
-    } else {
-      setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
+      if (result.success && result.url) {
+        setStripeCheckout({ url: result.url, sessionId: result.sessionId });
+      } else if (result.error) {
+        setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error });
+      }
+      return;
     }
+
+    if (method === PAYMENT_METHODS.APP_STORE) {
+      setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Subscribing to ${tierLabel}` });
+      // Use RevenueCat package if available, otherwise fall back to product ID
+      const purchaseTarget = plan.rcPackage || plan.productId;
+      const result = await purchase(purchaseTarget);
+      if (result.success) {
+        setModal({ visible: true, type: 'success', title: successTitle, message: `You're in. Enjoy your new features.` });
+      } else if (result.error === 'cancelled') {
+        setModal((m) => ({ ...m, visible: false }));
+      } else {
+        setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
+      }
+    }
+  };
+
+  const handleStripeSuccess = async (sessionId) => {
+    setStripeCheckout(null);
+    await confirmStripePayment(sessionId);
+    setModal({ visible: true, type: 'success', title: successTitle, message: `You're in. Enjoy your new features.` });
+  };
+  const handleStripeCancel = () => setStripeCheckout(null);
+  const handleStripeError = (msg) => {
+    setStripeCheckout(null);
+    setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: msg || 'Please try again.' });
   };
 
   const alreadyHasTier = hasTier(selectedTier);
@@ -370,10 +445,18 @@ function EliteScreenPaid({ navigation }) {
           ))}
         </View>
 
-        {/* Social mode callout */}
+        {/* Social-mode callout. When the user is already in Social
+            mode, lean into it — most of the premium value sits on the
+            Dating side, so we surface that explicitly instead of the
+            ambiguous old line. When the user is in Dating mode, the
+            previous "Socializing is free" copy stays. */}
         <View style={styles.socialCallout}>
-          <Ionicons name="people" size={18} color={colors.accent} />
-          <Text style={styles.socialCalloutText}>Socializing mode is always free for everyone</Text>
+          <Ionicons name={isSocialMode ? 'sparkles' : 'people'} size={18} color={colors.accent} />
+          <Text style={styles.socialCalloutText}>
+            {isSocialMode
+              ? 'Most premium perks unlock when you toggle to Dating — socializing always stays free.'
+              : 'Socializing mode is always free for everyone'}
+          </Text>
         </View>
 
         {/* Plan cards */}
@@ -443,6 +526,26 @@ function EliteScreenPaid({ navigation }) {
           </>
         )}
       </ScrollView>
+
+      <PaymentMethodSelector
+        visible={showMethods}
+        onClose={() => setShowMethods(false)}
+        onSelect={handlePaymentMethod}
+        countryCode={countryCode}
+        productLabel={`${tierLabel} ${plans[selectedPlan]?.duration} ${plans[selectedPlan]?.unit}`}
+        priceLabel={plans[selectedPlan]?.price || ''}
+      />
+
+      {stripeCheckout && (
+        <StripeCheckout
+          visible={!!stripeCheckout}
+          url={stripeCheckout.url}
+          sessionId={stripeCheckout.sessionId}
+          onSuccess={handleStripeSuccess}
+          onCancel={handleStripeCancel}
+          onError={handleStripeError}
+        />
+      )}
 
       <PurchaseModal
         visible={modal.visible}

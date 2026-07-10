@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, Layout } from '../theme';
 import Button from '../components/Button';
@@ -19,13 +20,23 @@ import { useSubscription, SHOW_PAYMENTS_UI } from '../payments';
 import { useCurrentUser } from '../hooks';
 import { useMyFollowCounts } from '../hooks/useFollow';
 import { calculateCompleteness } from '../utils/profileCompleteness';
+import { REFERRALS_BACKEND_READY } from '../utils/referralService';
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { spotlights, superLikes, whispers, hasTier } = useSubscription();
-  const { currentUser } = useCurrentUser();
+  const { currentUser, refreshUser } = useCurrentUser();
+
+  // Re-pull the user from the server every time Profile gains focus so
+  // edits made in EditProfile (a modal pushed on top) are always
+  // reflected when the user returns here — never a stale in-memory copy.
+  useFocusEffect(
+    useCallback(() => {
+      refreshUser?.();
+    }, [refreshUser]),
+  );
 
   const displayUser = currentUser;
   const followCounts = useMyFollowCounts(currentUser?.id);
@@ -78,11 +89,11 @@ export default function ProfileScreen({ navigation }) {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="chevron-back" size={Layout.headerBackIconSize} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => navigation.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Settings">
           <Ionicons name="settings-outline" size={Layout.headerIconSize} color={colors.black} />
         </TouchableOpacity>
       </View>
@@ -145,16 +156,21 @@ export default function ProfileScreen({ navigation }) {
           colors={colors}
         />
 
-        {/* Quick actions */}
+        {/* Quick actions. "Invite" hides while REFERRALS_BACKEND_READY
+            is false — the reward path is local-only, so surfacing the
+            entry point would let users grant themselves free Super
+            Likes / Spotlights without any server verification. */}
         <View style={styles.quickActions}>
           <QuickAction icon="create-outline" label="Edit profile" onPress={handleEdit} colors={colors} />
           <QuickAction icon="shield-checkmark-outline" label="Verify" onPress={handleVerify} colors={colors} />
-          <QuickAction
-            icon="gift-outline"
-            label="Invite"
-            onPress={() => navigation.navigate('Referral')}
-            colors={colors}
-          />
+          {REFERRALS_BACKEND_READY && (
+            <QuickAction
+              icon="gift-outline"
+              label="Invite"
+              onPress={() => navigation.navigate('Referral')}
+              colors={colors}
+            />
+          )}
         </View>
 
         {/* Stats — hidden during v1 launch (SHOW_PAYMENTS_UI). The tile

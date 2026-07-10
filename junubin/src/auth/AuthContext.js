@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState, useCall
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../config/supabase';
 import PaymentService from '../payments/PaymentService';
+import { identifyUser, resetIdentity } from '../utils/analytics';
 
 const AuthContext = createContext(null);
 
@@ -32,7 +33,7 @@ export function AuthProvider({ children }) {
       setSession(s);
       if (s) {
         PaymentService.identify(s.user.id);
-        fetchUser(s.user.id);
+        fetchUser(s.user.id).catch(() => {});
       } else {
         PaymentService.logout();
         setUser(null);
@@ -84,6 +85,16 @@ export function AuthProvider({ children }) {
           return null;
         }
         setUser(data);
+        // Identify to PostHog + Sentry the moment we have a User row.
+        // Subscription tier is included as a trait so cohort splits
+        // (free vs plus vs junub) are queryable. Mode comes from the
+        // profile if set; defaults to dating to keep cohort columns
+        // populated even for users who haven't picked yet.
+        identifyUser(data.id, {
+          tier: data.subscriptionTier || 'free',
+          mode: data?.profile?.appMode || data?.profile?.accountPurpose || 'unset',
+          verified: !!data.isVerified,
+        });
         return data;
       }
       return null;
@@ -133,6 +144,10 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     PaymentService.logout();
+    // Drop the analytics identity so subsequent events aren't
+    // mistakenly attributed to the previous user. Mirrors the
+    // PaymentService.logout pattern.
+    resetIdentity();
     setUser(null);
     setSession(null);
     // Clear local user-state so the next sign-in / sign-up runs the full

@@ -1,68 +1,33 @@
 import React from 'react';
-import Svg, { Path, Rect, G } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 
-// Swipe-deck glyph — the front card sits slightly tilted (like a card mid-
-// swipe), a back card shows behind it (the next profile waiting to come up),
-// and short motion lines on either side imply left/right swipe direction.
+// Swipe-deck glyph — single rounded card with a heart inside.
+// Single-silhouette outline to match the visual weight of GraffitiCommunity
+// and GraffitiHeart (which are also single-shape silhouettes), so the four
+// tab icons read as one family.
 function GraffitiSwipeCard({ size = 24, color = '#000', filled = false, style }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" style={style}>
-      {/* Back card — slightly behind, lighter */}
+      {/* Card frame */}
       <Rect
-        x="6"
-        y="5.5"
-        width="11"
-        height="14.5"
-        rx="2"
+        x="5"
+        y="3"
+        width="14"
+        height="18"
+        rx="3"
         fill={filled ? color : 'none'}
         stroke={color}
-        strokeWidth={filled ? 0 : 1.6}
-        opacity={filled ? 0.35 : 0.55}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
       />
-
-      {/* Front card — tilted right ~10° to suggest active swipe */}
-      <G transform="rotate(8 12 13)">
-        <Rect
-          x="7"
-          y="5"
-          width="11"
-          height="14.5"
-          rx="2"
-          fill={filled ? color : 'none'}
-          stroke={color}
-          strokeWidth={filled ? 0 : 1.8}
-          strokeLinejoin="round"
-        />
-      </G>
-
-      {/* Motion line — left side (swipe left/pass) */}
+      {/* Centered heart — inverted color on filled state so it stays visible */}
       <Path
-        d="M3 11.5 L1.5 11.5"
-        stroke={color}
+        d="M12 16.2s-4-2.4-4-5.3c0-1.6 1.2-2.7 2.6-2.7.8 0 1.4.4 1.7.8.3-.4.9-.8 1.7-.8 1.4 0 2.6 1.1 2.6 2.7 0 2.9-4 5.3-4 5.3z"
+        fill={filled ? '#FFFFFF' : 'none'}
+        stroke={filled ? '#FFFFFF' : color}
         strokeWidth={1.6}
         strokeLinecap="round"
-      />
-      <Path
-        d="M3.5 14 L2.2 14"
-        stroke={color}
-        strokeWidth={1.6}
-        strokeLinecap="round"
-        opacity={0.6}
-      />
-
-      {/* Motion line — right side (swipe right/like) */}
-      <Path
-        d="M21 11.5 L22.5 11.5"
-        stroke={color}
-        strokeWidth={1.6}
-        strokeLinecap="round"
-      />
-      <Path
-        d="M20.5 14 L21.8 14"
-        stroke={color}
-        strokeWidth={1.6}
-        strokeLinecap="round"
-        opacity={0.6}
+        strokeLinejoin="round"
       />
     </Svg>
   );

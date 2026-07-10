@@ -26,8 +26,13 @@ const POST_INTERACTIONS_ENABLED = true;
 
 // Aspect-ratio bounds that match Instagram's clamps so a single
 // extreme upload can't produce a wall-of-card or a sliver.
-const MIN_RATIO = 0.5625; // 9:16, full portrait
-const MAX_RATIO = 1.91;   // 1.91:1, full landscape
+// In-feed clamp — matches Instagram + LinkedIn behaviour. Portrait is
+// capped at 4:5 (0.8) so a 9:16 phone video doesn't dominate the feed
+// scroll. Stored aspectRatio can still go down to 9:16 (0.5625) — the
+// fullscreen VideoReelsScreen uses the natural ratio. Landscape cap
+// (1.91) matches both networks' open-graph / link-preview standard.
+const MIN_RATIO = 0.8;    // 4:5, portrait cap in feed
+const MAX_RATIO = 1.91;   // 1.91:1, landscape cap
 const FALLBACK_RATIO = 1; // square — what we render when no aspect info
 
 // Cheap, deterministic string hash so a post without an explicit
@@ -132,7 +137,7 @@ const computeMediaHeight = (rawRatio) => {
   return MEDIA_W / clamped;
 };
 
-const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPress }) => {
+const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPress, hideViewAllComments = false }) => {
   // `post.liked` / `post.reposted` are pre-hydrated by the feed screen via
   // postService.getLikedPostIds / getRepostedPostIds (batch lookup). When
   // PostCard is rendered outside a feed (e.g. PostDetailScreen), they
@@ -160,13 +165,10 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
   const [reposted, setReposted] = useState(!!post.reposted);
   const [repostCount, setRepostCount] = useState(post.repostCount ?? post.reposts ?? 0);
 
-  // Video state. `videoPlaying` mirrors the Video component's status —
-  // we drive it via the playback object's pause/play methods so a
-  // tap-to-pause toggles the play overlay back on without us hand-
-  // managing two sources of truth.
+  // In-feed video preview ref. We don't track play/mute state here —
+  // the preview is always muted + paused; real playback happens in
+  // VideoReelsScreen.
   const videoRef = useRef(null);
-  const [videoPlaying, setVideoPlaying] = useState(false);
-  const [videoMuted, setVideoMuted] = useState(true);
 
   const sub = colors.gray500;
   const txt = colors.black;
@@ -368,21 +370,13 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
     setIsTruncated(visibleChars < post.content.length);
   }, [expanded, post.content]);
 
-  const handleVideoPress = useCallback(async (e) => {
+  // Tap a video in the feed → open the fullscreen Reels pager starting
+  // on this post. The in-feed preview is muted, looping, and click-to-
+  // play-only by design; the immersive playback lives in VideoReels.
+  const handleVideoPress = useCallback((e) => {
     stop(e);
-    const v = videoRef.current;
-    if (!v) return;
-    if (videoPlaying) {
-      await v.pauseAsync();
-    } else {
-      await v.playAsync();
-    }
-  }, [videoPlaying]);
-
-  const handleVideoMuteToggle = useCallback((e) => {
-    stop(e);
-    setVideoMuted((m) => !m);
-  }, []);
+    nav.navigate('VideoReels', { startingPost: post });
+  }, [nav, post]);
 
   const cardBg = colors.cardBg;
   const borderColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)';
@@ -402,18 +396,35 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
     >
       {/* ── Header ─────────────────────────────────────────────────── */}
       <View style={$.header}>
-        <Image source={imageSource(post.user.avatar)} style={[$.avatar, { backgroundColor: colors.gray300 }]} />
-        <View style={$.hInfo}>
-          <View style={$.nameRow}>
-            <Text style={[$.name, { color: txt }]} numberOfLines={1}>{post.user.name}</Text>
-            {post.user.verified && <Ionicons name="checkmark-circle" size={13} color="#0A66C2" />}
+        {/* Avatar + name area routes to the author's profile. stop(e)
+            prevents the underlying card press from firing (which would
+            navigate to PostDetail instead). */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={(e) => {
+            stop(e);
+            if (post.user?.id) {
+              nav.navigate('ProfileDetail', { profile: post.user });
+            }
+          }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${post.user?.name || 'profile'}`}
+          style={$.headerUser}
+        >
+          <Image source={imageSource(post.user.avatar)} style={[$.avatar, { backgroundColor: colors.gray300 }]} />
+          <View style={$.hInfo}>
+            <View style={$.nameRow}>
+              <Text style={[$.name, { color: txt }]} numberOfLines={1}>{post.user.name}</Text>
+              {post.user.verified && <Ionicons name="checkmark-circle" size={13} color="#0A66C2" />}
+            </View>
+            {(post.user.location || post.timestamp) && (
+              <Text style={[$.metaLine, { color: sub }]} numberOfLines={1}>
+                {[post.user.location, post.timestamp].filter(Boolean).join(' · ')}
+              </Text>
+            )}
           </View>
-          {(post.user.location || post.timestamp) && (
-            <Text style={[$.metaLine, { color: sub }]} numberOfLines={1}>
-              {[post.user.location, post.timestamp].filter(Boolean).join(' · ')}
-            </Text>
-          )}
-        </View>
+        </TouchableOpacity>
         <TouchableOpacity
           testID="post-more-action"
           onPress={(e) => {
@@ -466,33 +477,23 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
           style={[$.videoWrap, { height: mediaHeight, backgroundColor: '#000' }]}
           onPress={handleVideoPress}
         >
+          {/* In-feed preview: muted, paused, looping disabled. The first
+              frame acts as the thumbnail; tapping enters VideoReels for
+              real playback. We keep <Video> over <Image> so we don't
+              need a separate thumbnail upload. */}
           <Video
             ref={videoRef}
             source={{ uri: mediaUri }}
             style={StyleSheet.absoluteFill}
             resizeMode={ResizeMode.COVER}
-            isMuted={videoMuted}
-            isLooping
+            isMuted
             shouldPlay={false}
-            onPlaybackStatusUpdate={(status) => {
-              if (!status?.isLoaded) return;
-              setVideoPlaying(!!status.isPlaying);
-            }}
           />
-          {!videoPlaying && (
-            <View style={$.playOverlay} pointerEvents="none">
-              <View style={$.playCircle}>
-                <Ionicons name="play" size={28} color="#FFFFFF" />
-              </View>
+          <View style={$.playOverlay} pointerEvents="none">
+            <View style={$.playCircle}>
+              <Ionicons name="play" size={28} color="#FFFFFF" />
             </View>
-          )}
-          <TouchableOpacity
-            style={$.muteBtn}
-            onPress={handleVideoMuteToggle}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name={videoMuted ? 'volume-mute' : 'volume-high'} size={14} color="#FFFFFF" />
-          </TouchableOpacity>
+          </View>
         </Pressable>
       )}
 
@@ -614,7 +615,7 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
           <ActionButton
             testID="post-comment-action"
             iconName="chatbubble-outline"
-            iconSize={22}
+            iconSize={24}
             color={txt}
             mutedColor={sub}
             count={post.comments || 0}
@@ -636,6 +637,7 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
             testID="post-save-action"
             graffitiWave
             waveFilled={waved}
+            iconSize={24}
             color={waved ? colors.accent : txt}
             mutedColor={sub}
             count={waveCount}
@@ -688,7 +690,10 @@ const PostCard = ({ post, reactionState, onLikeToggle, pressEnabled = true, onPr
       )}
 
       {/* ── Comments link ──────────────────────────────────────────── */}
-      {(post.comments || 0) > 0 && (
+      {/* Hidden when the card is rendered inside the comments thread
+          itself (PostDetailScreen) — there'd be nowhere to "view all"
+          to, since they're already being viewed below the card. */}
+      {!hideViewAllComments && (post.comments || 0) > 0 && (
         <TouchableOpacity
           onPress={(e) => { stop(e); handleCardPress(); }}
           hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
@@ -805,6 +810,15 @@ const $ = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     paddingBottom: 10,
+    gap: 10,
+  },
+  // Tappable wrapper around avatar + name + meta. Stretches to fill the
+  // header row (minus the trailing more-button) so the entire author
+  // chip — not just the avatar — routes to the profile on tap.
+  headerUser: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   avatar: { width: 32, height: 32, borderRadius: 16 },

@@ -22,4 +22,4 @@ The Express backend, the `payments` table (lowercase), Render config, Cloudinary
 | JWT + bcrypt | Supabase Auth (OTP) |
 | Socket.IO + JWT handshake | Supabase Realtime postgres-changes |
 | Cloudinary | Supabase Storage (`photos`, `posts`, `stories` buckets) |
-| `payments` table (Flutterwave) | Canonical `Payment` table (00009) — discriminated by `(provider, providerRef)` |
+| `payments` table (legacy) | Canonical `Payment` table (00009) — discriminated by `(provider, providerRef)` |

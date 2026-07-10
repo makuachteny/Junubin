@@ -635,7 +635,7 @@ export default function MessagesScreen({ navigation, route }) {
           >
             <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8}>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Your profile">
             <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
           </TouchableOpacity>
         </View>

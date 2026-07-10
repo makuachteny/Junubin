@@ -7,7 +7,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import Button from '../components/Button';
 import * as referralService from '../utils/referralService';
+import { REFERRALS_BACKEND_READY } from '../utils/referralService';
 import { useSubscription } from '../payments';
+import { reportError } from '../utils/reportError';
 
 const REWARD_TIERS = [
   { id: 'superlikes_5', count: 1, reward: '5 Super Likes', icon: 'star', color: '#0047AB' },
@@ -26,6 +28,15 @@ export default function ReferralScreen({ navigation }) {
   const { addCoins, addSpotlights, addSuperLikes, grantPromoTier } = useSubscription();
 
   const applyRewards = useCallback(async (stats) => {
+    // Auto-grant is intentionally a no-op while the referral backend
+    // isn't live — the count comes from local AsyncStorage which any
+    // user can edit, so granting Super Likes / Spotlights / Plus
+    // weeks / coins from it would let them mint paid items for free.
+    // Once the server-side ledger lands, the grants below resume.
+    if (!REFERRALS_BACKEND_READY) {
+      setClaimedRewards(Array.isArray(stats.claimedRewards) ? stats.claimedRewards : []);
+      return;
+    }
     const claimed = Array.isArray(stats.claimedRewards) ? stats.claimedRewards : [];
     for (const tier of REWARD_TIERS) {
       if (stats.count >= tier.count && !claimed.includes(tier.id)) {
@@ -48,7 +59,7 @@ export default function ReferralScreen({ navigation }) {
         setClaimedRewards(stats.claimedRewards || []);
         applyRewards(stats);
       }
-    }).catch(() => {});
+    }).catch((err) => reportError('ReferralScreen.getStats', err));
   }, [applyRewards]);
 
   const handleShare = async () => {

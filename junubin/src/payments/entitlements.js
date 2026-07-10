@@ -3,33 +3,52 @@
 // Tiers: free → plus (JuNubin+) → junub (premium)
 //
 // ── FREE-FOR-ALL FLAG ──────────────────────────────────────────────
-// For the v1 TestFlight launch we ship with ALL features unlocked for
-// every user regardless of tier. This pairs with the
-// `PAYMENTS_ENABLED = false` gate in src/payments/comingSoon.js — no
-// one can buy anything yet, so it would be hostile to lock the
-// premium UX behind paywalls. Flip both flags simultaneously when
-// payments go live.
+// When true every entitlement check short-circuits to `true`,
+// daily-like ceilings are uncapped, and consumable balances are
+// treated as infinite. Used during pre-monetization launches when we
+// want the premium UX visible to everyone without a paywall.
 //
-// All entitlement checks below early-return `true` while this flag is
-// on, so every screen's `hasTier(...)` / `canUse*(...)` evaluation
-// resolves to "yes, you can use this." Daily like limits and
-// consumable-balance gates are bypassed at their respective call
-// sites (HomeScreen swipe, super-like / whisper handlers, etc.) —
-// search the codebase for `ALL_FEATURES_FREE` to find them.
+// v1 launch posture: false — payments are live (see
+// `PAYMENTS_ENABLED` in src/payments/comingSoon.js), so we gate
+// premium features behind real subscription tiers and consumable
+// balances. Daily like limits per tier come from
+// `DAILY_LIKE_LIMIT_BY_TIER` below. Search for `ALL_FEATURES_FREE`
+// to find every bypassed gate.
 
 import { TIER_RANK } from './products';
 
-export const ALL_FEATURES_FREE = true;
+export const ALL_FEATURES_FREE = false;
 
 export function hasTierAccess(currentTier, requiredTier) {
   if (ALL_FEATURES_FREE) return true;
   return (TIER_RANK[currentTier] || 0) >= (TIER_RANK[requiredTier] || 0);
 }
 
-// JuNubin+ (plus) features
+// Daily like ceiling per subscription tier. `null` == uncapped.
+// Source of truth for the client; the Edge Function (swipe/index.ts)
+// and SQL RPC (00037_per_tier_swipe_limit.sql) hold the same map on
+// the server. Keep all three in sync — drift surfaces as either a UI
+// lie or a surprise 429.
+export const DAILY_LIKE_LIMIT_BY_TIER = Object.freeze({
+  free: 20,
+  plus: 50,
+  junub: null,
+});
+
+export function getDailyLikeLimit(tier) {
+  if (Object.prototype.hasOwnProperty.call(DAILY_LIKE_LIMIT_BY_TIER, tier)) {
+    return DAILY_LIKE_LIMIT_BY_TIER[tier];
+  }
+  return DAILY_LIKE_LIMIT_BY_TIER.free;
+}
+
+// "Unlimited" means the tier has no daily ceiling — currently junub
+// only. Plus moved off the unlimited bench in the per-tier reform
+// (00037) and now has a 50/day cap, so the UI badge needs to render
+// for it too.
 export function hasUnlimitedLikes(tier) {
   if (ALL_FEATURES_FREE) return true;
-  return hasTierAccess(tier, 'plus');
+  return getDailyLikeLimit(tier) === null;
 }
 
 export function hasUnlimitedRewinds(tier) {

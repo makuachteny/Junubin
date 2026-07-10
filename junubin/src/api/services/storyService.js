@@ -143,6 +143,25 @@ export async function createStory({ mode, text, photoUri, videoUri, bgColor }) {
     .single();
   if (error) throw error;
 
+  // Fire-and-forget moderation for stories with image media. Stories
+  // are 24h-ephemeral but they still sit on the global StoriesRow
+  // until they expire — anything explicit is visible to every
+  // signed-in user for that window. moderate-image will hard-fail in
+  // production if no provider is configured (00038 audit hardening),
+  // so silent auto-approval is impossible. Videos are skipped here —
+  // video moderation requires a separate provider track (Sightengine
+  // / AWS Rekognition Video) and is on the post-launch roadmap.
+  if (uploaded?.url && !isVideo) {
+    try {
+      supabase.functions
+        .invoke('moderate-image', {
+          method: 'POST',
+          body: { imageUrl: uploaded.url, kind: 'story', storyId: data.id },
+        })
+        .catch(() => {});
+    } catch {}
+  }
+
   return normalizeStory(data, me);
 }
 

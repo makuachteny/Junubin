@@ -1,5 +1,22 @@
-// AnaJunubin — Referral Service (placeholder for backend integration)
+// AnaJunubin — Referral Service
+//
+// The reward path (count → tiered grants) is gated on
+// REFERRALS_BACKEND_READY. While the flag is false, this service is a
+// local-only sandbox: `recordReferral` and `markRewardClaimed` keep
+// writing to AsyncStorage so the UI can be exercised in development,
+// but `applyReferralCode` refuses every code and the screen-level
+// auto-grant short-circuits (see ReferralScreen).
+//
+// Why the gate exists: without a server validating that a referred
+// user actually signed up — and capping the rewards budget — any
+// caller can synthesize an arbitrary local count and harvest Super
+// Likes / Spotlights / Plus weeks / coins for free. The audit
+// (2026-05-22) flagged this as the highest-risk stub in the app.
+// Flip the flag when the referral Edge Function + budget ledger are
+// live.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+export const REFERRALS_BACKEND_READY = false;
 
 const REF_KEY = '@junubin_referral';
 
@@ -40,7 +57,13 @@ export async function markRewardClaimed(rewardId) {
 }
 
 export async function applyReferralCode(code) {
-  // In production, validate with backend
+  if (!REFERRALS_BACKEND_READY) {
+    return { success: false, error: 'Referrals are not available yet.' };
+  }
   if (!code || code.length < 4) return { success: false, error: 'Invalid code' };
+  // TODO: Server validation when the referral Edge Function ships —
+  // POST { code, userId } and let the server tell us if it's real,
+  // hasn't been used, and is within budget. Local checks can be
+  // bypassed by anyone with a debugger.
   return { success: true };
 }

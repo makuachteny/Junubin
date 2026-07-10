@@ -4,10 +4,26 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, getUser, errorResponse, jsonResponse } from "../_shared/utils.ts";
+import { captureException } from "../_shared/sentry.ts";
 
-const FREE_DAILY_LIKE_LIMIT = 25;
+// Daily like ceiling per subscription tier. `null` means uncapped —
+// kept on Junub as the top-tier perk. Mirror this map in:
+//   - 00037_per_tier_swipe_limit.sql (server-side RPC the UI badge reads)
+//   - src/payments/entitlements.js  (client-side hasUnlimitedLikes)
+// Drift between any of them will surface as either a UI badge that
+// lies or a server 429 the user can't see coming.
+const DAILY_LIKE_LIMIT_BY_TIER: Record<string, number | null> = {
+  free: 20,
+  plus: 50,
+  junub: null,
+};
 const ELO_K_FACTOR = 32;
 const MIN_SWIPES_FOR_VECTOR = 20;
+
+function limitForTier(tier: string | null | undefined): number | null {
+  if (tier && tier in DAILY_LIKE_LIMIT_BY_TIER) return DAILY_LIKE_LIMIT_BY_TIER[tier];
+  return DAILY_LIKE_LIMIT_BY_TIER.free;
+}
 
 function makePairKey(a: string, b: string): string {
   return [a, b].sort().join(":");
@@ -98,14 +114,27 @@ Deno.serve(async (req: Request) => {
       else mode = "dating";
     }
 
-    // 2. Dating-mode actions require a completed survey. Pass
-    //    (left-swipe) is allowed without survey so users can browse
-    //    the deck while filling in their profile.
-    if ((type === "like" || type === "super_like")) {
+    // 2. Survey-completion gate for dating-mode actions.
+    //
+    //    A "dating action" is either (a) a like/super_like from a
+    //    user whose stored purpose is dating/both/unset, OR (b) any
+    //    like/super_like sent with mode="dating" in the request body
+    //    — including from a Social-onboarded user who has toggled the
+    //    HomeScreen mode switch to Dating for this session. The
+    //    previous check only looked at stored purpose, so a Social-
+    //    onboarded user could bypass the dating survey simply by
+    //    toggling to Dating in the UI; the server would accept the
+    //    like (their purpose is "socialize", so the dating-path
+    //    branch was skipped).
+    //
+    //    Pass (left-swipe) stays unrestricted so users can browse the
+    //    deck while filling in their profile.
+    if (type === "like" || type === "super_like") {
       const profile = (callerSafety as any).profile;
       const purpose = profile?.accountPurpose;
-      const isDatingPath = purpose === "dating" || purpose === "both" || !purpose; // default: dating
-      if (isDatingPath && !profile?.surveyCompletedAt) {
+      const storedDatingPath = purpose === "dating" || purpose === "both" || !purpose;
+      const requestIsDating = mode === "dating";
+      if ((storedDatingPath || requestIsDating) && !profile?.surveyCompletedAt) {
         return errorResponse("survey_required", 403);
       }
     }
@@ -135,6 +164,25 @@ Deno.serve(async (req: Request) => {
       return errorResponse("Action not allowed", 403);
     }
 
+    // Anti-bot rate-limit: per-user, per-second cap. Honest UX rarely
+    // produces >5 swipes/sec; bots can produce hundreds. Read the last
+    // second's window and short-circuit if the burst exceeds the cap.
+    // Cheap query — Swipe is indexed on fromUserId + createdAt.
+    {
+      const oneSecAgo = new Date(Date.now() - 1000).toISOString();
+      const { count: recentCount } = await supabase
+        .from("Swipe")
+        .select("id", { count: "exact", head: true })
+        .eq("fromUserId", userId)
+        .gte("createdAt", oneSecAgo);
+      if ((recentCount || 0) >= 5) {
+        return jsonResponse(
+          { error: "rate_limited", message: "Slow down a bit", retryAfterMs: 1000 },
+          429,
+        );
+      }
+    }
+
     // Enforce daily like limit for free users
     if (type === "like" || type === "super_like") {
       const { data: currentUser } = await supabase
@@ -152,7 +200,11 @@ Deno.serve(async (req: Request) => {
       const promoTier = currentUser?.promoTier || "free";
       const tier =
         promoActive && (tierRank[promoTier] > tierRank[baseTier]) ? promoTier : baseTier;
-      if (tier === "free") {
+      const tierLimit = limitForTier(tier);
+      // tierLimit === null means "no cap" (junub today). Skip the count
+      // round-trip in that case so unlimited swipers don't pay for a
+      // query whose answer we'd ignore anyway.
+      if (tierLimit !== null) {
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
         const { count } = await supabase
@@ -162,13 +214,20 @@ Deno.serve(async (req: Request) => {
           .in("type", ["like", "super_like"])
           .gte("createdAt", startOfDay.toISOString());
 
-        if ((count || 0) >= FREE_DAILY_LIKE_LIMIT) {
+        if ((count || 0) >= tierLimit) {
+          // Tomorrow at 00:00 UTC. Clients render a real countdown
+          // ("Resets in 7h 42m") instead of the previous opaque
+          // "limit reached" toast.
+          const resetAt = new Date();
+          resetAt.setUTCHours(24, 0, 0, 0);
           return jsonResponse({
             error: "daily_limit",
             message: "Daily like limit reached",
+            tier,
             used: count,
-            limit: FREE_DAILY_LIKE_LIMIT,
+            limit: tierLimit,
             remaining: 0,
+            resetAt: resetAt.toISOString(),
           }, 429);
         }
       }
@@ -199,12 +258,20 @@ Deno.serve(async (req: Request) => {
 
     // Update Elo / receipt counters with the OLD type → NEW type delta. If the
     // type didn't change, this is a no-op — no double counting.
+    //
+    // These two are fire-and-forget because they're background-quality
+    // — discover ranking still works without an up-to-date Elo, just
+    // less accurately. Promoting to Sentry instead of silent swallow
+    // so a sustained failure (e.g. RPC missing after a migration) is
+    // visible on the dashboard before discover quality drifts for weeks.
     if (prevType !== type) {
-      updateElo(supabase, userId, toUserId, type, prevType).catch(() => {});
+      updateElo(supabase, userId, toUserId, type, prevType)
+        .catch((err) => captureException(err, { fn: "swipe", task: "updateElo" }));
     }
 
     // Fire-and-forget: recompute preference vector if stale
-    recomputeVectorIfStale(supabase, userId).catch(() => {});
+    recomputeVectorIfStale(supabase, userId)
+      .catch((err) => captureException(err, { fn: "swipe", task: "recomputeVectorIfStale" }));
 
     // Check for match on like/super_like
     let match = null;
@@ -282,7 +349,10 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Return daily status with response
+    // Return daily status with response. Re-resolve the effective tier
+    // so the dailyStatus payload reflects the same numbers the per-tier
+    // gate above enforced — and so unlimited tiers (junub) get a
+    // truthful `unlimited: true` instead of a phantom remaining count.
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
     const { count: usedToday } = await supabase
@@ -292,14 +362,34 @@ Deno.serve(async (req: Request) => {
       .in("type", ["like", "super_like"])
       .gte("createdAt", startOfDay.toISOString());
 
+    const { data: tierRow } = await supabase
+      .from("User")
+      .select("subscriptionTier, promoTier, promoEndsAt")
+      .eq("id", userId)
+      .maybeSingle();
+    const baseTier = tierRow?.subscriptionTier || "free";
+    const tierRank: Record<string, number> = { free: 0, plus: 1, junub: 2 };
+    const promoActive =
+      tierRow?.promoTier &&
+      tierRow?.promoEndsAt &&
+      new Date(tierRow.promoEndsAt).getTime() > Date.now();
+    const promoTier = tierRow?.promoTier || "free";
+    const effectiveTier =
+      promoActive && (tierRank[promoTier] > tierRank[baseTier]) ? promoTier : baseTier;
+    const effectiveLimit = limitForTier(effectiveTier);
+
     return jsonResponse({
       ok: true,
       match,
-      dailyStatus: {
-        used: usedToday || 0,
-        limit: FREE_DAILY_LIKE_LIMIT,
-        remaining: Math.max(0, FREE_DAILY_LIKE_LIMIT - (usedToday || 0)),
-      },
+      dailyStatus: effectiveLimit === null
+        ? { tier: effectiveTier, used: usedToday || 0, limit: null, remaining: null, unlimited: true }
+        : {
+            tier: effectiveTier,
+            used: usedToday || 0,
+            limit: effectiveLimit,
+            remaining: Math.max(0, effectiveLimit - (usedToday || 0)),
+            unlimited: false,
+          },
     }, 201);
   } catch (err: any) {
     return errorResponse(err.message || "Internal error", 500);

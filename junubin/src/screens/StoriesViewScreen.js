@@ -1,7 +1,8 @@
 // AnaJunubin — Stories Viewer (full-screen, progress bars, tap nav)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated, TextInput, Alert, useWindowDimensions, PanResponder } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Dimensions, Animated, TextInput, Alert, Modal, Pressable, useWindowDimensions, PanResponder } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Video } from 'expo-av';
@@ -9,8 +10,11 @@ import { imageSource } from '../utils/imageSource';
 import { FontFamily } from '../theme';
 import { interactiveStore } from '../utils/interactiveStore';
 import { useSubscription } from '../payments';
-import { hapticSelection } from '../utils/haptics';
+import { hapticSelection, hapticMedium } from '../utils/haptics';
 import { useAccessibilityPreferences } from '../accessibility';
+import * as discoverService from '../api/services/discoverService';
+import { isDemoId } from '../config/demoData';
+import { reportError } from '../utils/reportError';
 
 const { width: W, height: H } = Dimensions.get('window');
 const STORY_DURATION = 5000;
@@ -19,7 +23,7 @@ export default function StoriesViewScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isCompact = width < 375;
-  const { hasTier } = useSubscription();
+  const { hasTier, whispers, consumeWhisper } = useSubscription();
   const { prefs } = useAccessibilityPreferences();
   const storyList = route.params?.storyList || [];
   const startIndex = route.params?.storyIndex ?? 0;
@@ -36,6 +40,16 @@ export default function StoriesViewScreen({ navigation, route }) {
   // resume. Tracked via a counter ref so overlapping touches don't
   // ratchet pause state into a stuck "paused" once both fingers lift.
   const [isPaused, setIsPaused] = useState(false);
+  // "..." overflow menu (Wave / Like). When open, story progress is
+  // paused — handled below via the isPaused effect dep — so the
+  // viewer doesn't blow past the current story while choosing.
+  const [moreOpen, setMoreOpen] = useState(false);
+  // Lightweight in-flight guard. Prevents the Wave/Like buttons from
+  // double-firing if the user taps fast — recordSwipe is idempotent on
+  // the server but a duplicate request still costs a round trip and
+  // could surface a confusing "Already swiped" error from the Edge
+  // Function. Cleared once the request settles.
+  const [sending, setSending] = useState(false);
   // Vertical drag distance for the swipe-down-to-dismiss gesture.
   const dragY = useRef(new Animated.Value(0)).current;
   // Real-time video duration captured from the player on first load.
@@ -48,22 +62,63 @@ export default function StoriesViewScreen({ navigation, route }) {
   const reactionFloat = useRef(new Animated.Value(0)).current;
   const reactionOpacity = useRef(new Animated.Value(0)).current;
 
-  const handleReaction = useCallback((emoji) => {
-    setReaction(emoji);
-    hapticSelection?.();
-    if (prefs?.reducedMotion) {
-      setSentReaction(emoji);
-      reactionFloat.setValue(-18);
-      reactionOpacity.setValue(1);
-      setTimeout(() => setSentReaction(null), 380);
+  const storyGroup = groups[currentGroupIndex];
+  const stories = storyGroup?.stories || [];
+  const story = stories[currentIndex];
+  // Story progress pauses whenever the user is interacting with
+  // anything that takes their attention off the photo/video itself:
+  // long-press, swipe-down drag, OR the "..." menu being open.
+  // Folding those into one boolean keeps the auto-advance effect's
+  // dependency list small and prevents drift between gates.
+  const effectivelyPaused = isPaused || moreOpen;
+  const ownerId = storyGroup?.userId;
+  const ownerIsReal = ownerId && !isDemoId(ownerId);
+
+  // Open the story owner's profile in the card-first ProfileView. Push
+  // on top of the story stack (don't replace) — Instagram's pattern
+  // is that closing the profile drops you back into wherever you came
+  // from. The story is paused via useFocusEffect below for the same
+  // reason. Demo stories short-circuit with a friendly nudge instead
+  // of pushing an empty ProfileView that has no swipe target.
+  const handleOpenProfile = useCallback(() => {
+    if (!storyGroup) return;
+    if (!ownerIsReal) {
+      Alert.alert('Demo story', 'This is a sample profile shown while you explore the app.');
       return;
     }
-    // Bounce the chip
-    Animated.sequence([
-      Animated.timing(reactionScale, { toValue: 1.3, duration: 100, useNativeDriver: true }),
-      Animated.spring(reactionScale, { toValue: 1, friction: 3, useNativeDriver: true }),
-    ]).start();
-    // Float-up burst
+    hapticSelection?.();
+    // Pause explicitly so the progress bar doesn't keep ticking while
+    // ProfileView is mounted on top. The useFocusEffect cleanup on
+    // re-focus clears it.
+    setIsPaused(true);
+    navigation.navigate('ProfileView', {
+      profile: {
+        id: ownerId,
+        name: storyGroup.userName,
+        images: storyGroup.avatar ? [storyGroup.avatar] : [],
+      },
+    });
+  }, [storyGroup, ownerIsReal, ownerId, navigation]);
+
+  // Send a Like (mode: 'dating') or Wave (mode: 'social') to the
+  // story owner. Both write a Swipe row via the existing `swipe` Edge
+  // Function — same server contract as a swipe-right from the deck —
+  // which fires the recipient notification and creates a Match if
+  // they've already swiped back. The story can result in a match if
+  // they have a swipe back. We surface the floating-emoji burst as
+  // immediate feedback so the user knows the action landed, then
+  // auto-advance to the next story to keep the Instagram-style
+  // forward momentum.
+  const sendStoryAction = useCallback((kind /* 'like' | 'wave' */) => {
+    if (sending) return;
+    setMoreOpen(false);
+    if (!ownerIsReal) {
+      Alert.alert('Demo story', 'Try this on a real member to see it land.');
+      return;
+    }
+    setSending(true);
+    hapticMedium?.();
+    const emoji = kind === 'wave' ? '👋' : '❤️';
     setSentReaction(emoji);
     reactionFloat.setValue(0);
     reactionOpacity.setValue(1);
@@ -71,11 +126,23 @@ export default function StoriesViewScreen({ navigation, route }) {
       Animated.timing(reactionFloat, { toValue: -120, duration: 800, useNativeDriver: true }),
       Animated.timing(reactionOpacity, { toValue: 0, duration: 800, useNativeDriver: true }),
     ]).start(() => setSentReaction(null));
-  }, [prefs, reactionScale, reactionFloat, reactionOpacity]);
+    const mode = kind === 'wave' ? 'social' : 'dating';
+    discoverService
+      .recordSwipe(ownerId, 'like', { mode })
+      .catch((err) => reportError(`StoriesViewScreen.${kind}`, err, { ownerId }))
+      .finally(() => setSending(false));
+  }, [sending, ownerIsReal, ownerId, reactionFloat, reactionOpacity]);
 
-  const storyGroup = groups[currentGroupIndex];
-  const stories = storyGroup?.stories || [];
-  const story = stories[currentIndex];
+  // Pause the story while this screen is blurred (e.g. ProfileView is
+  // pushed on top). Resume on re-focus. Without this the progress bar
+  // ticks underneath ProfileView and the viewer returns to a story
+  // they didn't actually watch.
+  useFocusEffect(
+    useCallback(() => {
+      setIsPaused(false);
+      return () => setIsPaused(true);
+    }, []),
+  );
   const reactionSet = isCompact ? ['🔥', '✨', '😍', '💌'] : ['🔥', '✨', '💫', '😍', '💌'];
   const threadKey = useMemo(() => `${storyGroup?.id || 'story'}-${story?.id || currentIndex}`, [storyGroup?.id, story?.id, currentIndex]);
 
@@ -148,7 +215,7 @@ export default function StoriesViewScreen({ navigation, route }) {
   // While `isPaused` is true the timer stops in place (Instagram parity:
   // press-and-hold pauses; release resumes from where we paused).
   useEffect(() => {
-    if (!story || isPaused) return;
+    if (!story || effectivelyPaused) return;
     const isVideoStory = story.type === 'video';
     // For video stories we prefer the duration the player reported
     // (videoDurationMs, captured in onPlaybackStatusUpdate below) so
@@ -174,7 +241,7 @@ export default function StoriesViewScreen({ navigation, route }) {
       if (finished && !isVideoStory) goNext();
     });
     return () => anim.stop();
-  }, [story, goNext, progressAnim, prefs, isPaused]);
+  }, [story, goNext, progressAnim, prefs, effectivelyPaused, videoDurationMs]);
 
   // Watchdog for video stories: if the player never reports
   // `didJustFinish` (network drop, unsupported codec, busted source URI),
@@ -182,13 +249,16 @@ export default function StoriesViewScreen({ navigation, route }) {
   // progress bar caps at 100% but goNext is never called from the
   // timer (videos opt out) or the playback callback. Bail after
   // duration + 8s grace so the user can keep moving through stories.
+  // Prefer the real clip length captured by the player; otherwise fall
+  // back to story.duration or STORY_DURATION. Without this, a 30s
+  // story would auto-bail at 13s.
   useEffect(() => {
-    if (!story || isPaused) return;
+    if (!story || effectivelyPaused) return;
     if (story.type !== 'video') return;
-    const fullDuration = story.duration || STORY_DURATION;
+    const fullDuration = videoDurationMs || story.duration || STORY_DURATION;
     const handle = setTimeout(() => goNext(), fullDuration + 8000);
     return () => clearTimeout(handle);
-  }, [story, goNext, isPaused]);
+  }, [story, goNext, effectivelyPaused, videoDurationMs]);
 
   // Reset the progress bar each time the story (id) actually changes —
   // separate from the pause effect above so pausing doesn't restart it.
@@ -200,24 +270,82 @@ export default function StoriesViewScreen({ navigation, route }) {
     setVideoDurationMs(null);
   }, [story?.id, progressAnim]);
 
+  // Reply / react to a story = send a Whisper to the owner: a like + a
+  // short note they'll see in their Likes BEFORE matching. This is the
+  // popular "message before match" pattern (Bumble Compliments, Tinder
+  // Super-Like notes, Hinge prompt comments), reusing JuNubin's existing
+  // whisper rail. JuNubin+ only, and it spends one Whisper credit. If
+  // they like back it becomes a match — and only then unlock chat/calls.
   const postReply = useCallback((rawValue) => {
-    if (!hasTier('junub')) {
-      Alert.alert('Junub Feature', 'Story reply threads are available on Junub and higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+    const value = (rawValue || '').trim().slice(0, 150); // Bumble-style 150-char note
+    if (!value || sending) return;
+
+    // Premium gate — saying hi from a story is a JuNubin+ feature.
+    if (!hasTier('plus')) {
+      Alert.alert(
+        'JuNubin+ feature',
+        `Say hi straight from ${storyGroup?.userName || 'their'} story with a Whisper — a note they'll see in their Likes. Upgrade to JuNubin+ to send one.`,
+        [
+          { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
+          { text: 'Not now', style: 'cancel' },
+        ],
+      );
       return;
     }
-    const value = (rawValue || '').trim();
-    if (!value) return;
-    const next = [value, ...thread].slice(0, 4);
-    setThread(next);
+    // Demo stories aren't real members — nothing to send to.
+    if (!ownerIsReal) {
+      setThreadInput('');
+      Alert.alert('Demo story', 'Try this on a real member to see your hi land in their Likes.');
+      return;
+    }
+    // Whisper economy — out of credits routes to the store.
+    if ((whispers ?? 0) <= 0) {
+      Alert.alert(
+        'Out of Whispers',
+        "You're out of Whispers. Get more to keep saying hi from stories.",
+        [
+          { text: 'Get Whispers', onPress: () => navigation.navigate('Elite') },
+          { text: 'Not now', style: 'cancel' },
+        ],
+      );
+      return;
+    }
+
+    setSending(true);
+    hapticMedium?.();
     setThreadInput('');
-    interactiveStore.getStoryThreads().then((all) => {
-      const merged = { ...(all || {}), [threadKey]: next };
-      interactiveStore.setStoryThreads(merged);
-    }).catch(() => {});
-  }, [hasTier, navigation, thread, threadKey]);
+    setThread((prev) => [value, ...prev].slice(0, 4)); // in-session echo
+
+    // Floating burst for quick single-emoji reactions.
+    if (value.length <= 2 && !prefs?.reducedMotion) {
+      setReaction(value);
+      setSentReaction(value);
+      reactionFloat.setValue(0);
+      reactionOpacity.setValue(1);
+      Animated.parallel([
+        Animated.timing(reactionFloat, { toValue: -120, duration: 800, useNativeDriver: true }),
+        Animated.timing(reactionOpacity, { toValue: 0, duration: 800, useNativeDriver: true }),
+      ]).start(() => setSentReaction(null));
+    }
+
+    discoverService
+      .recordSwipe(ownerId, 'like', { whisper: value, mode: 'dating' })
+      .then(() => {
+        consumeWhisper();
+        Alert.alert(
+          'Hi sent! 👋',
+          `${storyGroup?.userName || 'They'}'ll see your hi in their Likes. If they like you back, it's a match.`,
+        );
+      })
+      .catch((err) => {
+        reportError('StoriesViewScreen.storyWhisper', err, { ownerId });
+        Alert.alert('Could not send', 'Something went wrong sending your hi. Please try again.');
+      })
+      .finally(() => setSending(false));
+  }, [
+    hasTier, ownerIsReal, ownerId, whispers, consumeWhisper, sending,
+    storyGroup, navigation, prefs, reactionFloat, reactionOpacity,
+  ]);
 
   const handlePostReply = useCallback(() => {
     postReply(threadInput);
@@ -355,10 +483,32 @@ export default function StoriesViewScreen({ navigation, route }) {
         })}
       </View>
 
-      {/* Header */}
+      {/* Header. Avatar + username are a single tap target that opens
+          the owner's profile (Instagram parity). The "..." opens an
+          action menu with Wave / Like so the viewer can send the
+          owner a real notification without leaving the story. The X
+          stays as the explicit close, distinct from "more". */}
       <View style={[styles.header, { top: insets.top + 20 }]}>
-        <Image source={imageSource(storyGroup?.avatar)} style={styles.avatar} />
-        <Text style={styles.userName}>{storyGroup?.userName}</Text>
+        <TouchableOpacity
+          onPress={handleOpenProfile}
+          style={styles.headerIdentity}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${storyGroup?.userName || 'profile'}`}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+        >
+          <Image source={imageSource(storyGroup?.avatar)} style={styles.avatar} />
+          <Text style={styles.userName} numberOfLines={1}>{storyGroup?.userName}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setMoreOpen(true)}
+          style={styles.moreBtn}
+          accessibilityRole="button"
+          accessibilityLabel="More options"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={safeClose}
           style={styles.closeBtn}
@@ -411,7 +561,7 @@ export default function StoriesViewScreen({ navigation, route }) {
                   prefs?.largerTouchTargets && styles.reactChipLarge,
                   reaction === emoji && styles.reactChipActive,
                 ]}
-                onPress={() => handleReaction(emoji)}
+                onPress={() => postReply(emoji)}
                 accessibilityRole="button"
                 accessibilityLabel={`React with ${emoji}`}
                 hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -423,11 +573,11 @@ export default function StoriesViewScreen({ navigation, route }) {
           <TextInput
             value={threadInput}
             onChangeText={setThreadInput}
-            placeholder="Reply..."
+            placeholder="Say hi ✨ (JuNubin+)"
             placeholderTextColor={prefs?.highContrast ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.55)'}
             style={[styles.threadInput, prefs?.largerTouchTargets && styles.threadInputLarge]}
-            maxLength={80}
-            accessibilityLabel="Reply to story"
+            maxLength={150}
+            accessibilityLabel="Say hi from their story — a JuNubin+ Whisper they'll see in their Likes"
           />
           <TouchableOpacity
             style={styles.sendBtn}
@@ -462,6 +612,61 @@ export default function StoriesViewScreen({ navigation, route }) {
           ))}
         </View>
       )}
+
+      {/* "..." overflow menu. Bottom sheet with Wave / Like / Cancel.
+          Wave persists as Swipe(mode='social'); Like persists as
+          Swipe(mode='dating'). Both flow through the existing `swipe`
+          Edge Function which fires the recipient notification and
+          creates a Match if reciprocal. The story stays paused while
+          this is open via `effectivelyPaused`. */}
+      <Modal
+        visible={moreOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMoreOpen(false)}
+      >
+        <Pressable style={styles.moreBackdrop} onPress={() => setMoreOpen(false)}>
+          <Pressable style={styles.moreSheet} onPress={() => {}}>
+            <Text style={styles.moreSheetTitle}>
+              Send {storyGroup?.userName || 'them'} a hello
+            </Text>
+            <TouchableOpacity
+              style={[styles.moreOption, styles.moreOptionWave]}
+              onPress={() => sendStoryAction('wave')}
+              disabled={sending}
+              accessibilityRole="button"
+              accessibilityLabel="Send a wave"
+            >
+              <Text style={styles.moreOptionEmoji}>👋</Text>
+              <View style={styles.moreOptionTextWrap}>
+                <Text style={styles.moreOptionLabel}>Wave</Text>
+                <Text style={styles.moreOptionHint}>They'll get a Social-mode wave</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.moreOption, styles.moreOptionLike]}
+              onPress={() => sendStoryAction('like')}
+              disabled={sending}
+              accessibilityRole="button"
+              accessibilityLabel="Send a like"
+            >
+              <Text style={styles.moreOptionEmoji}>❤️</Text>
+              <View style={styles.moreOptionTextWrap}>
+                <Text style={styles.moreOptionLabel}>Like</Text>
+                <Text style={styles.moreOptionHint}>Show up in their Likes</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.moreCancel}
+              onPress={() => setMoreOpen(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={styles.moreCancelLabel}>Cancel</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Animated.View>
   );
 }
@@ -528,8 +733,19 @@ const styles = StyleSheet.create({
     right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 4,
     zIndex: 20,
+  },
+  // The avatar + name pair behaves as one tap target (opens profile).
+  // flex:1 so it eats the gap between the identity cluster and the
+  // right-side icons, giving the user a generous touch zone without
+  // crowding the close button.
+  headerIdentity: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
   },
   avatar: {
     width: 36,
@@ -545,6 +761,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.semibold,
     color: '#FFFFFF',
   },
+  moreBtn: { padding: 8 },
   closeBtn: { padding: 8 },
   tapZones: {
     ...StyleSheet.absoluteFillObject,
@@ -649,5 +866,75 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 11,
     lineHeight: 15,
+  },
+  // ── "..." overflow menu ──
+  moreBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  moreSheet: {
+    backgroundColor: '#1A1A1C',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 28,
+    gap: 10,
+  },
+  moreSheetTitle: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  moreOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  moreOptionWave: {
+    borderColor: 'rgba(252,205,18,0.55)',
+  },
+  moreOptionLike: {
+    borderColor: 'rgba(206,17,38,0.55)',
+  },
+  moreOptionEmoji: {
+    fontSize: 26,
+  },
+  moreOptionTextWrap: {
+    flex: 1,
+  },
+  moreOptionLabel: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+  },
+  moreOptionHint: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    marginTop: 2,
+  },
+  moreCancel: {
+    marginTop: 6,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+  },
+  moreCancelLabel: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
   },
 });

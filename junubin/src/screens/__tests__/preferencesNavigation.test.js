@@ -82,14 +82,47 @@ describe('PreferencesScreen navigation', () => {
     mockUseCurrentUser.mockReturnValue({ refreshUser: jest.fn() });
   });
 
-  it('routes back to Discover when returnTo=Discover and Done is pressed', async () => {
-    const navigation = {
-      navigate: jest.fn(),
-      goBack: jest.fn(),
-      canGoBack: jest.fn(() => true),
-      setParams: jest.fn(),
-    };
+  const makeNav = () => ({
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+    canGoBack: jest.fn(() => true),
+    setParams: jest.fn(),
+  });
+
+  it('routes to the Connect tab when returnTo=Discover and Done is pressed', async () => {
+    const navigation = makeNav();
     const route = { params: { returnTo: 'Discover' } };
+
+    const { getByText } = render(
+      <PreferencesScreen navigation={navigation} route={route} />
+    );
+
+    fireEvent.press(getByText('Done'));
+
+    await waitFor(() => {
+      expect(navigation.navigate).toHaveBeenCalledWith('Main', { screen: 'HomeTab' });
+    });
+    expect(navigation.goBack).not.toHaveBeenCalled();
+  });
+
+  it('routes to the Likes tab when returnTo=Likes and Done is pressed', async () => {
+    const navigation = makeNav();
+    const route = { params: { returnTo: 'Likes' } };
+
+    const { getByText } = render(
+      <PreferencesScreen navigation={navigation} route={route} />
+    );
+
+    fireEvent.press(getByText('Done'));
+
+    await waitFor(() => {
+      expect(navigation.navigate).toHaveBeenCalledWith('Main', { screen: 'LikesTab' });
+    });
+  });
+
+  it('falls back to goBack when no returnTo is provided', async () => {
+    const navigation = makeNav();
+    const route = { params: {} };
 
     const { getByText } = render(
       <PreferencesScreen navigation={navigation} route={route} />

@@ -2,12 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PaymentService from './PaymentService';
-import FlutterwaveService from './FlutterwaveService';
+import StripeService from './StripeService';
 import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { supabase } from '../config/supabase';
 import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed, ALL_FEATURES_FREE } from './entitlements';
 import { PAYMENTS_ENABLED, showPaymentsComingSoon } from './comingSoon';
 import { useTheme } from '../theme';
+import { reportError } from '../utils/reportError';
 
 const STORAGE_KEY = '@junubin_subscription';
 
@@ -64,7 +65,9 @@ export function SubscriptionProvider({ children }) {
         .from('User')
         .update({ subscriptionTier: tierToSync })
         .eq('auth_id', authUser.id);
-    } catch {}
+    } catch (err) {
+      reportError('SubscriptionContext.syncTier', err, { tierToSync });
+    }
   }, []);
 
   const syncPromoToBackend = useCallback(async (promoTier, promoEndsAt) => {
@@ -75,7 +78,9 @@ export function SubscriptionProvider({ children }) {
         .from('User')
         .update({ promoTier: promoTier || null, promoEndsAt: promoEndsAt || null })
         .eq('auth_id', authUser.id);
-    } catch {}
+    } catch (err) {
+      reportError('SubscriptionContext.syncPromo', err);
+    }
   }, []);
 
   const loadServerState = useCallback(async () => {
@@ -88,7 +93,8 @@ export function SubscriptionProvider({ children }) {
         .eq('auth_id', authUser.id)
         .single();
       return data || null;
-    } catch {
+    } catch (err) {
+      reportError('SubscriptionContext.loadServerState', err);
       return null;
     }
   }, []);
@@ -108,9 +114,28 @@ export function SubscriptionProvider({ children }) {
           const parsed = JSON.parse(stored);
           setState((prev) => normalizeState({ ...prev, ...parsed }));
         }
-      } catch {}
+      } catch (err) {
+        reportError('SubscriptionContext.loadPersisted', err);
+      }
 
-      // Load server-side state (coins + tier fallback)
+      // Load server-side state (coins + authoritative tier).
+      //
+      // ── Why the server tier is authoritative across all providers ──
+      // Two rails can mutate User.subscriptionTier: RevenueCat (iOS
+      // IAP / Google Play) and Stripe (web checkout). Both webhooks
+      // write directly to the same column. Previously this client
+      // only trusted the server value when in `isDemoMode`; in
+      // production it deferred to RevenueCat alone — which produced
+      // a silent payment regression: a user who upgraded via Stripe
+      // got the tier granted on the server but the app continued to
+      // show them as 'free' because it ignored that column and read
+      // RevenueCat (which knew nothing about the Stripe purchase).
+      //
+      // Hydrate from the server first; RevenueCat (when available)
+      // can still upgrade the value via the customer-info fetch
+      // below if it knows about an even-newer purchase. That keeps
+      // RevenueCat's near-real-time push working while Stripe users
+      // see their tier reflected on the very next app open.
       const serverState = await loadServerState();
       if (serverState) {
         setState((prev) => normalizeState({
@@ -122,19 +147,48 @@ export function SubscriptionProvider({ children }) {
           promoTier: serverState.promoTier || prev.promoTier,
           promoEndsAt: serverState.promoEndsAt || prev.promoEndsAt,
           adsEnabled: typeof serverState.adsEnabled === 'boolean' ? serverState.adsEnabled : prev.adsEnabled,
-          tier: PaymentService.isDemoMode && serverState.subscriptionTier ? serverState.subscriptionTier : prev.tier,
+          // Always trust the server tier — it's the single column all
+          // three providers' webhooks write. RevenueCat lift below.
+          tier: serverState.subscriptionTier || prev.tier,
         }));
       }
 
-      // Fetch real customer info from RevenueCat (if available)
+      // Fetch real customer info from RevenueCat (if available).
+      //
+      // ── Important: RevenueCat can UPGRADE the tier but never DOWNGRADE ──
+      // A user might be on 'plus' from a Stripe (web) purchase that
+      // RevenueCat knows nothing about. The naive
+      // "setState({ tier: info.tier })" path used to clobber that
+      // valid server tier back to 'free' whenever RevenueCat returned
+      // a no-active-entitlements response — silently revoking a paid
+      // subscription on every app launch.
+      //
+      // The right rule: only apply RevenueCat's tier when it ranks
+      // strictly higher than what we already have. Subscription
+      // cancellations/expirations flow through the Stripe webhook
+      // (which DOES write subscriptionTier='free') so we don't lose
+      // the downgrade signal — it just doesn't come from RevenueCat
+      // for purchases RevenueCat didn't make.
       if (!PaymentService.isDemoMode) {
         try {
           const info = await PaymentService.getCustomerInfo();
           if (info.success && info.tier) {
-            setState((prev) => ({ ...prev, tier: info.tier }));
-            syncTierToBackend(info.tier);
+            setState((prev) => {
+              const prevRank = TIER_RANK[prev.tier] ?? 0;
+              const rcRank = TIER_RANK[info.tier] ?? 0;
+              if (rcRank > prevRank) {
+                // RevenueCat sees a higher tier than the server gave
+                // us — likely an IAP that hasn't reached our webhook
+                // yet. Trust RC and write it back.
+                syncTierToBackend(info.tier);
+                return { ...prev, tier: info.tier };
+              }
+              return prev;
+            });
           }
-        } catch {}
+        } catch (err) {
+          reportError('SubscriptionContext.rcCustomerInfo', err);
+        }
       }
 
       // Fetch offerings (localized prices)
@@ -143,20 +197,33 @@ export function SubscriptionProvider({ children }) {
         if (currentOffering) {
           setOfferings(currentOffering);
         }
-      } catch {}
+      } catch (err) {
+        reportError('SubscriptionContext.getOfferings', err);
+      }
 
       setLoaded(true);
     })();
   }, [loadServerState, normalizeState, syncTierToBackend]);
 
-  // Listen for customer info updates (subscription renewal/expiry)
+  // Listen for customer info updates (subscription renewal/expiry).
+  // Same upgrade-only rule as the initial fetch above: RevenueCat
+  // can grant a higher tier in real time when an IAP completes, but
+  // must not silently revoke a Stripe-granted tier. A genuine expiry
+  // on the RC side will arrive through the Stripe webhook's
+  // downgradeToFree path.
   useEffect(() => {
     if (loaded && !PaymentService.isDemoMode) {
       unsubRef.current = PaymentService.onCustomerInfoUpdate(({ tier }) => {
-        if (tier) {
-          setState((prev) => ({ ...prev, tier }));
-          syncTierToBackend(tier);
-        }
+        if (!tier) return;
+        setState((prev) => {
+          const prevRank = TIER_RANK[prev.tier] ?? 0;
+          const rcRank = TIER_RANK[tier] ?? 0;
+          if (rcRank > prevRank) {
+            syncTierToBackend(tier);
+            return { ...prev, tier };
+          }
+          return prev;
+        });
       });
     }
     return () => {
@@ -183,7 +250,7 @@ export function SubscriptionProvider({ children }) {
               tier: PaymentService.isDemoMode && serverState.subscriptionTier ? serverState.subscriptionTier : prev.tier,
             }));
           }
-        }).catch(() => {});
+        }).catch((err) => reportError('SubscriptionContext.authChangeReload', err));
       }
     });
     return () => subscription.unsubscribe();
@@ -200,7 +267,8 @@ export function SubscriptionProvider({ children }) {
       if (error || !data?.[0]?.granted) return false;
       setState((prev) => ({ ...prev, spotlights: data[0].spotlights }));
       return true;
-    } catch {
+    } catch (err) {
+      reportError('SubscriptionContext.claimMonthly', err);
       return false;
     }
   }, []);
@@ -292,12 +360,14 @@ export function SubscriptionProvider({ children }) {
       if (product?.type === 'consumable') {
         const { data: { user: authUser } } = await supabase.auth.getUser();
         if (authUser) {
+          const rpcArgs = { user_auth_id: authUser.id, amount: product.quantity };
+          const onFail = (err) => reportError('SubscriptionContext.addConsumable', err, { category: product.category });
           if (product.category === 'spotlight') {
-            supabase.rpc('add_spotlights', { user_auth_id: authUser.id, amount: product.quantity }).catch(() => {});
+            supabase.rpc('add_spotlights', rpcArgs).catch(onFail);
           } else if (product.category === 'superlike') {
-            supabase.rpc('add_superlikes', { user_auth_id: authUser.id, amount: product.quantity }).catch(() => {});
+            supabase.rpc('add_superlikes', rpcArgs).catch(onFail);
           } else if (product.category === 'coins') {
-            supabase.rpc('add_coins', { user_auth_id: authUser.id, amount: product.quantity }).catch(() => {});
+            supabase.rpc('add_coins', rpcArgs).catch(onFail);
           }
         }
       }
@@ -311,37 +381,39 @@ export function SubscriptionProvider({ children }) {
   }, []);
 
   /**
-   * Purchase via Flutterwave (M-Pesa, MoMo, bank, card).
-   * Returns a payment link for the WebView checkout.
-   * Entitlements are granted server-side via webhook after payment completes.
+   * Purchase via Stripe Checkout — JuNubin's primary payment rail.
+   *
+   * Returns a hosted Checkout URL + sessionId; the caller opens it in
+   * the StripeCheckout WebView modal (or system browser on web).
+   * Entitlements are granted server-side via the `stripe-webhook` edge
+   * function once Stripe marks the session paid, and the resulting
+   * Payment row is what `confirmStripePayment` polls for.
    */
-  const purchaseWithFlutterwave = useCallback(async ({ productId, paymentMethod, currency, phoneNumber, eventMeta }) => {
-    // Same coming-soon gate as the RevenueCat path.
+  const purchaseWithStripe = useCallback(async ({ productId, successUrl, cancelUrl } = {}) => {
     if (!PAYMENTS_ENABLED) {
       return showPaymentsComingSoon();
     }
     setPurchaseInProgress(true);
     try {
-      const result = await FlutterwaveService.createPayment({
-        productId, paymentMethod, currency, phoneNumber, eventMeta,
-      });
-      return { success: true, paymentLink: result.paymentLink, txRef: result.txRef };
+      const result = await StripeService.createCheckout({ productId, successUrl, cancelUrl });
+      return { success: true, url: result.url, sessionId: result.sessionId };
     } catch (err) {
-      return { success: false, error: err.message || 'Failed to create payment' };
+      return { success: false, error: err.message || 'Failed to create Stripe checkout' };
     } finally {
       setPurchaseInProgress(false);
     }
   }, []);
 
   /**
-   * Confirm a Flutterwave payment after the user returns from checkout.
-   * Polls the status endpoint and refreshes local state when confirmed.
+   * Confirm a Stripe payment after the user returns from the hosted
+   * Checkout. Polls the Payment row written by `stripe-webhook`; when
+   * it lands as `succeeded` we refresh server state so the local
+   * tier / consumable balance reflects the granted entitlement.
    */
-  const confirmFlutterwavePayment = useCallback(async (txRef) => {
+  const confirmStripePayment = useCallback(async (sessionId) => {
     try {
-      const result = await FlutterwaveService.checkPaymentStatus(txRef);
-      if (result.status === 'successful') {
-        // Refresh state from server to pick up granted entitlements
+      const result = await StripeService.getSessionStatus(sessionId);
+      if (result.status === 'succeeded') {
         const serverState = await loadServerState();
         if (serverState) {
           setState((prev) => normalizeState({
@@ -356,6 +428,7 @@ export function SubscriptionProvider({ children }) {
       }
       return result;
     } catch (err) {
+      reportError('SubscriptionContext.confirmStripe', err, { sessionId });
       return { status: 'error', productId: null };
     }
   }, [loadServerState, normalizeState]);
@@ -411,7 +484,8 @@ export function SubscriptionProvider({ children }) {
       if (typeof data.balance === 'number') {
         setState((prev) => ({ ...prev, [field]: data.balance }));
       }
-    } catch {
+    } catch (err) {
+      reportError('SubscriptionContext.reconcile', err, { field });
       setState((prev) => ({ ...prev, [field]: (prev[field] ?? 0) + refundDelta }));
     }
   }, []);
@@ -421,73 +495,50 @@ export function SubscriptionProvider({ children }) {
   // decrementing the balance or hitting the server-side reconcile
   // RPC. Returning `true` lets the caller proceed exactly as if the
   // balance were sufficient.
-  const consumeSpotlight = useCallback(() => {
+  //
+  // The four consume callbacks below all follow the same shape:
+  //   1. If ALL_FEATURES_FREE → return true.
+  //   2. Pre-flight: refuse if the current balance is below the cost.
+  //   3. Optimistically decrement local state (UI stays snappy).
+  //   4. Reconcile against the server `try_consume_*` RPC; refund the
+  //      decrement if the server rejects.
+  // `makeConsume` packs that pattern so we describe each consume in
+  // one line instead of eight nearly identical lines.
+  const makeConsume = useCallback((field, rpcName, buildArgs = () => ({})) => (amount = 1) => {
     if (ALL_FEATURES_FREE) return true;
-    if ((stateRef.current?.spotlights ?? 0) <= 0) return false;
-    setState((prev) => ({ ...prev, spotlights: Math.max(0, (prev.spotlights ?? 0) - 1) }));
-    reconcileBalance('spotlights', 1)('try_consume_spotlight', {});
+    const current = stateRef.current?.[field] ?? 0;
+    if (current < amount) return false;
+    setState((prev) => ({ ...prev, [field]: Math.max(0, (prev[field] ?? 0) - amount) }));
+    reconcileBalance(field, amount)(rpcName, buildArgs(amount));
     return true;
   }, [reconcileBalance]);
 
-  const consumeSuperLike = useCallback(() => {
-    if (ALL_FEATURES_FREE) return true;
-    if ((stateRef.current?.superLikes ?? 0) <= 0) return false;
-    setState((prev) => ({ ...prev, superLikes: Math.max(0, (prev.superLikes ?? 0) - 1) }));
-    reconcileBalance('superLikes', 1)('try_consume_superlike', {});
-    return true;
-  }, [reconcileBalance]);
+  // useMemo (not useCallback) — these are factory results, not closures
+  // over fresh state. Identity is stable for downstream consumers that
+  // put them in dependency arrays.
+  const consumeSpotlight = useMemo(() => makeConsume('spotlights', 'try_consume_spotlight'), [makeConsume]);
+  const consumeSuperLike = useMemo(() => makeConsume('superLikes', 'try_consume_superlike'), [makeConsume]);
+  const consumeWhisper   = useMemo(() => makeConsume('whispers',   'try_consume_whisper'),   [makeConsume]);
+  const consumeCoins     = useMemo(() => makeConsume('coins',      'try_consume_coins', (amount) => ({ p_amount: amount })), [makeConsume]);
 
-  const consumeWhisper = useCallback(() => {
-    if (ALL_FEATURES_FREE) return true;
-    if ((stateRef.current?.whispers ?? 0) <= 0) return false;
-    setState((prev) => ({ ...prev, whispers: Math.max(0, (prev.whispers ?? 0) - 1) }));
-    reconcileBalance('whispers', 1)('try_consume_whisper', {});
-    return true;
-  }, [reconcileBalance]);
-
-  const consumeCoins = useCallback((amount) => {
-    if (ALL_FEATURES_FREE) return true;
-    if ((stateRef.current?.coins ?? 0) < amount) return false;
-    setState((prev) => ({ ...prev, coins: Math.max(0, (prev.coins ?? 0) - amount) }));
-    reconcileBalance('coins', amount)('try_consume_coins', { p_amount: amount });
-    return true;
-  }, [reconcileBalance]);
-
-  const addCoins = useCallback((amount) => {
-    setState((prev) => ({ ...prev, coins: prev.coins + amount }));
+  // Grant helpers (matching shape). Increment local state immediately,
+  // then fire the matching `add_*` RPC server-side. Failures are
+  // best-effort: the local cache already updated, and any drift gets
+  // reconciled on the next `loadServerState()` round-trip (app
+  // foreground refresh or auth change).
+  const makeAdd = useCallback((field, rpcName) => (amount) => {
+    setState((prev) => ({ ...prev, [field]: (prev[field] ?? 0) + amount }));
     supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      if (authUser) {
-        supabase.rpc('add_coins', { user_auth_id: authUser.id, amount }).catch(() => {});
-      }
-    }).catch(() => {});
+      if (!authUser) return;
+      supabase.rpc(rpcName, { user_auth_id: authUser.id, amount })
+        .catch((err) => reportError(`SubscriptionContext.${rpcName}`, err));
+    }).catch((err) => reportError(`SubscriptionContext.${rpcName}.getUser`, err));
   }, []);
 
-  const addSpotlights = useCallback((amount) => {
-    setState((prev) => ({ ...prev, spotlights: prev.spotlights + amount }));
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      if (authUser) {
-        supabase.rpc('add_spotlights', { user_auth_id: authUser.id, amount }).catch(() => {});
-      }
-    }).catch(() => {});
-  }, []);
-
-  const addSuperLikes = useCallback((amount) => {
-    setState((prev) => ({ ...prev, superLikes: prev.superLikes + amount }));
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      if (authUser) {
-        supabase.rpc('add_superlikes', { user_auth_id: authUser.id, amount }).catch(() => {});
-      }
-    }).catch(() => {});
-  }, []);
-
-  const addWhispers = useCallback((amount) => {
-    setState((prev) => ({ ...prev, whispers: prev.whispers + amount }));
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      if (authUser) {
-        supabase.rpc('add_whispers', { user_auth_id: authUser.id, amount }).catch(() => {});
-      }
-    }).catch(() => {});
-  }, []);
+  const addCoins      = useMemo(() => makeAdd('coins',      'add_coins'),      [makeAdd]);
+  const addSpotlights = useMemo(() => makeAdd('spotlights', 'add_spotlights'), [makeAdd]);
+  const addSuperLikes = useMemo(() => makeAdd('superLikes', 'add_superlikes'), [makeAdd]);
+  const addWhispers   = useMemo(() => makeAdd('whispers',   'add_whispers'),   [makeAdd]);
 
   const setAdsEnabled = useCallback((enabled) => {
     setState((prev) => ({ ...prev, adsEnabled: !!enabled }));
@@ -497,9 +548,9 @@ export function SubscriptionProvider({ children }) {
           .from('User')
           .update({ adsEnabled: !!enabled })
           .eq('auth_id', authUser.id)
-          .catch(() => {});
+          .catch((err) => reportError('SubscriptionContext.setAdsEnabled', err));
       }
-    }).catch(() => {});
+    }).catch((err) => reportError('SubscriptionContext.setAdsEnabled.getUser', err));
   }, []);
 
   const grantPromoTier = useCallback((tier, days) => {
@@ -541,8 +592,8 @@ export function SubscriptionProvider({ children }) {
 
   const actionsValue = useMemo(() => ({
     purchase,
-    purchaseWithFlutterwave,
-    confirmFlutterwavePayment,
+    purchaseWithStripe,
+    confirmStripePayment,
     restorePurchases,
     cancelSubscription,
     consumeSpotlight,
@@ -561,7 +612,7 @@ export function SubscriptionProvider({ children }) {
     // / consumable purchase made elsewhere.
     refreshServerState: loadServerState,
     reset,
-  }), [purchase, purchaseWithFlutterwave, confirmFlutterwavePayment, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, consumeCoins, addCoins, addSpotlights, addSuperLikes, addWhispers, setAdsEnabled, grantPromoTier, claimMonthlyJunubSpotlight, loadServerState, reset]);
+  }), [purchase, purchaseWithStripe, confirmStripePayment, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, consumeCoins, addCoins, addSpotlights, addSuperLikes, addWhispers, setAdsEnabled, grantPromoTier, claimMonthlyJunubSpotlight, loadServerState, reset]);
 
   if (!loaded) {
     return (

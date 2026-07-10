@@ -1,9 +1,20 @@
-// AnaJunubin — Payment Service (RevenueCat + Demo Fallback)
-// Uses RevenueCat for real App Store / Google Play purchases globally.
-// Falls back to demo mode when REVENUECAT_API_KEY is not set (dev environment).
+// JuNubin — App Store / Play Store IAP rail via RevenueCat.
+//
+// On iOS this is the ONLY purchase rail App Review allows for digital
+// goods (see getAvailableMethods in paymentMethods.js). On Android it
+// sits behind Stripe in the method picker. Stripe lives in its own
+// service (StripeService).
+//
+// Demo-mode fallback: when EXPO_PUBLIC_REVENUECAT_IOS_KEY /
+// EXPO_PUBLIC_REVENUECAT_ANDROID_KEY are unset (dev machines, EAS
+// preview builds without the env block) every purchase simulates a
+// successful round-trip. Set the SDK keys in eas.json's production
+// `env` block before flipping live IAP — without them, real users
+// would receive entitlements without ever being charged.
 
 import { Platform } from 'react-native';
 import { OFFERING_ID, tierFromEntitlements, PRODUCTS } from './products';
+import { reportError } from '../utils/reportError';
 
 const RC_API_KEY_IOS = process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || '';
 const RC_API_KEY_ANDROID = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || '';
@@ -17,7 +28,8 @@ async function loadRC() {
   try {
     const mod = await import('react-native-purchases');
     return mod.default || mod;
-  } catch {
+  } catch (err) {
+    reportError('PaymentService.loadRC', err);
     return null;
   }
 }
@@ -55,7 +67,8 @@ const PaymentService = {
 
     try {
       Purchases.configure({ apiKey, appUserID: appUserId || null });
-    } catch {
+    } catch (err) {
+      reportError('PaymentService.configure', err);
       _demoMode = true;
     }
   },
@@ -70,7 +83,8 @@ const PaymentService = {
     try {
       const offerings = await Purchases.getOfferings();
       return offerings?.current || null;
-    } catch {
+    } catch (err) {
+      reportError('PaymentService.getOfferings', err);
       return null;
     }
   },
@@ -167,9 +181,11 @@ const PaymentService = {
       };
       Purchases.addCustomerInfoUpdateListener(listener);
       return () => {
-        try { Purchases.removeCustomerInfoUpdateListener(listener); } catch {}
+        try { Purchases.removeCustomerInfoUpdateListener(listener); }
+        catch (err) { reportError('PaymentService.removeListener', err); }
       };
-    } catch {
+    } catch (err) {
+      reportError('PaymentService.addListener', err);
       return () => {};
     }
   },
@@ -182,7 +198,9 @@ const PaymentService = {
 
     try {
       await Purchases.logIn(appUserId);
-    } catch {}
+    } catch (err) {
+      reportError('PaymentService.identify', err);
+    }
   },
 
   /**
@@ -193,7 +211,9 @@ const PaymentService = {
 
     try {
       await Purchases.logOut();
-    } catch {}
+    } catch (err) {
+      reportError('PaymentService.logout', err);
+    }
   },
 };
 

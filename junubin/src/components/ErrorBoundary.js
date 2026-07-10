@@ -1,7 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Colors } from '../theme';
+import { reportError } from '../utils/reportError';
 
+// Catches render-phase exceptions in the wrapped subtree and shows a
+// retry surface instead of unmounting silently. Reports to Sentry with
+// a `boundary` tag so we can tell screen-scope crashes apart from
+// app-root crashes in the dashboard.
 export default class ErrorBoundary extends React.Component {
   state = { hasError: false };
 
@@ -10,7 +15,10 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    if (__DEV__) console.warn('ErrorBoundary caught:', error, info.componentStack);
+    const boundary = this.props.boundary || 'app';
+    reportError(`ErrorBoundary:${boundary}`, error, {
+      componentStack: info?.componentStack,
+    });
   }
 
   handleRetry = () => {

@@ -24,16 +24,19 @@ import MatchCelebrationOverlay from '../components/MatchCelebrationOverlay';
 import HeartBurstOverlay from '../components/HeartBurstOverlay';
 import CardSkeleton from '../components/CardSkeleton';
 import Button from '../components/Button';
+import UpgradeLimitModal from '../components/UpgradeLimitModal';
 // SpotlightCard removed — spotlights now appear inline in the swipe deck
 import { mockProfiles } from '../data/__dev__/mockProfiles';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import { POPULAR_TRIBE_KEYS } from '../data/tribes';
 import { imageSource } from '../utils/imageSource';
+import { reportError } from '../utils/reportError';
 import { useSubscription, hasUnlimitedLikes, canUseWhispers, ALL_FEATURES_FREE, SHOW_PAYMENTS_UI } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser, useEligibility } from '../hooks';
 import * as discoverService from '../api/services/discoverService';
 import * as profileService from '../api/services/profileService';
+import { trackEvent, AnalyticsEvents } from '../utils/analytics';
 import { hapticHeavy } from '../utils/haptics';
 import { enqueueAction, processQueue } from '../utils/offlineQueue';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
@@ -44,6 +47,13 @@ import {
 } from '../utils/notifications';
 
 import { canShowSpotlight, markSpotlightShown } from '../utils/spotlightScheduler';
+
+// Module-scoped dedup set for match celebrations. A single match can
+// arrive twice on the optimistic-swipe → offline-queue replay path
+// AND via realtime; we only want the overlay once. In-memory only —
+// cold restart wipes it (correct: a fresh launch genuinely should
+// celebrate again if the user hasn't opened that chat yet).
+const shownMatchIds = new Set();
 
 // Storage key — bump if we ever want to re-ask everyone (e.g. switching
 // providers, big onboarding redesign).
@@ -325,10 +335,6 @@ const HomeScreen = ({ navigation, route }) => {
   // every cold start brings the user back to the deck since the
   // deck is the canonical surface and the map is a side trip.
   const [viewMode, setViewMode] = useState('deck');
-  // Track whether the user has manually toggled mode this session. If they
-  // have, we stop overwriting their choice when `currentUser.preferences.mode`
-  // updates async — they pulled the lever, respect it.
-  const userToggledModeRef = useRef(false);
   const [lastSwiped, setLastSwiped] = useState(null); // { profile, direction }
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
   const [heartBurst, setHeartBurst] = useState(null); // { x, y }
@@ -337,8 +343,23 @@ const HomeScreen = ({ navigation, route }) => {
   const [likeStatus, setLikeStatus] = useState(null); // { used, limit, remaining }
   const [showWhisperComposer, setShowWhisperComposer] = useState(false);
   const [whisperDraft, setWhisperDraft] = useState('');
+  // Upgrade-prompt modal. Fires once-per-session when the user spends
+  // their last allowed like, and on every subsequent right-swipe
+  // attempt past the cap (so a determined user always sees the path
+  // to upgrade rather than a silent no-op). Junub users never see it
+  // — their tier has no cap. Dismissal is tracked by ref so the modal
+  // doesn't re-pop on every swipe within the same session.
+  const [upgradePrompt, setUpgradePrompt] = useState({ visible: false, used: 0 });
+  const upgradePromptShownRef = useRef(false);
+  // Reset the once-per-session guard whenever the user's effective
+  // tier changes — e.g. they actually subscribed and came back. The
+  // new tier has its own ceiling (or none), and the user should see
+  // the relevant prompt next time they hit it rather than the silent
+  // no-op the old guard would produce.
+  useEffect(() => {
+    upgradePromptShownRef.current = false;
+  }, [tier]);
   const setModeAndPersist = useCallback((nextMode) => {
-    userToggledModeRef.current = true;
     setMode(nextMode);
     // Reset filters when switching modes — dating and social have different filter sets
     setActiveFilters([]);
@@ -350,7 +371,8 @@ const HomeScreen = ({ navigation, route }) => {
     setProfiles(getFallbackDeck(nextMode));
     // Local fast-path cache — survives cold starts before the network
     // round-trip lands.
-    AsyncStorage.setItem('@junubin_mode', nextMode).catch(() => {});
+    AsyncStorage.setItem('@junubin_mode', nextMode)
+      .catch((err) => reportError('HomeScreen.persistMode', err, { nextMode }));
     // Server source-of-truth — Profile.appMode syncs the toggle across
     // all devices the user signs in on (00016 migration). Falls back
     // silently if the migration hasn't been applied yet.
@@ -363,26 +385,33 @@ const HomeScreen = ({ navigation, route }) => {
         // AuthContext. Without this, flipping the toggle here only
         // affects HomeScreen's local state until the next cold start
         // or background→foreground refresh, and the inbox sort lags.
-        .then(() => { try { refreshUser?.(); } catch {} })
-        .catch(() => {});
+        .then(() => { try { refreshUser?.(); } catch (err) { reportError('HomeScreen.refreshUser', err); } })
+        .catch((err) => reportError('HomeScreen.updateMode', err, { dbValue }));
     }
   }, [session, refreshUser]);
 
-  // When the real profile lands (post-ProfileSetup), `currentUser.preferences.mode`
-  // updates from the mock fallback to the survey-derived value. The local `mode`
-  // state was initialized once from the mock — sync it to the real value here,
-  // unless the user has already manually toggled this session.
+  // Keep local `mode` in lockstep with the canonical source
+  // (currentUser.preferences.mode ← Profile.appMode). This fires whenever
+  // the mode changes ANYWHERE — the survey resolving, the Date/Socialize
+  // toggle on the Preferences screen, or a sync from another device — so
+  // Home's deck, filters and action buttons always match the active mode.
+  //
+  // A local toggle (setModeAndPersist) sets `mode` optimistically and
+  // persists appMode; once refreshUser lands, apiMode equals the value we
+  // already set, so this no-ops. We depend ONLY on apiMode (not local
+  // `mode`) so the optimistic toggle isn't reverted before the server
+  // round-trip lands — the effect simply doesn't run until apiMode itself
+  // changes.
   useEffect(() => {
     const apiMode = currentUser?.preferences?.mode;
-    if (!apiMode || userToggledModeRef.current) return;
-    if (apiMode !== mode) {
-      setMode(apiMode);
-      setActiveFilters([]);
-      setFilterSelections({});
-      setUnfilteredProfiles(null);
-      setProfiles(getFallbackDeck(apiMode));
-    }
-  }, [currentUser?.preferences?.mode, mode]);
+    if (!apiMode || apiMode === mode) return;
+    setMode(apiMode);
+    setActiveFilters([]);
+    setFilterSelections({});
+    setUnfilteredProfiles(null);
+    setProfiles(getFallbackDeck(apiMode));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.preferences?.mode]);
   // Check if spotlight should show
   useEffect(() => {
     canShowSpotlight().then((canShow) => {
@@ -442,6 +471,15 @@ const HomeScreen = ({ navigation, route }) => {
   profilesRef.current = profiles;
   const topMotion = useRef(new Animated.Value(0)).current;
   const apiCursorRef = useRef(null);
+  // Lets button handlers pre-stage the swipe type (super_like vs like,
+  // optional whisper text, success/error hooks) so the card animation
+  // can ride through handleSwipe without us recording the swipe twice.
+  // handleSwipe consumes this once and clears it — a stale extras ref
+  // would mis-attribute the NEXT physical swipe, which is exactly the
+  // bug this pattern replaces. Each producer sets it immediately before
+  // calling profileCardRef.current.swipe() so the read+clear in
+  // handleSwipe happens for the correct card.
+  const nextSwipeExtrasRef = useRef(null);
 
   // Advance deck when returning from ProfileDetail after a reaction
   useEffect(() => {
@@ -573,8 +611,12 @@ const HomeScreen = ({ navigation, route }) => {
       // The server-side swipe endpoint is idempotent on
       // (fromUserId, toUserId) — re-issuing the same swipe just
       // refreshes the existing row. So we don't need to dedupe
-      // against the user's swipe history here.
-      await discoverService.recordSwipe(action.toUserId, action.type, { mode: action.mode });
+      // against the user's swipe history here. Whisper text is
+      // carried through so a queued whisper isn't downgraded to a
+      // silent like on replay.
+      const replayExtras = { mode: action.mode };
+      if (action.whisper) replayExtras.whisper = action.whisper;
+      await discoverService.recordSwipe(action.toUserId, action.type, replayExtras);
     }).catch(() => {});
   }, [isConnected, session]);
 
@@ -590,18 +632,28 @@ const HomeScreen = ({ navigation, route }) => {
     const swipedProfile = currentProfiles[0];
     if (!swipedProfile) return;
 
+    // Read + clear the staged extras for this card. Button-triggered
+    // swipes (super-like, reaction, whisper) set this before kicking
+    // off the card animation so we can record the *right* type and
+    // attach the whisper without a follow-up recordSwipe round-trip.
+    // Physical drag swipes leave extras null and fall back to the
+    // direction→type mapping below.
+    const extras = nextSwipeExtrasRef.current || {};
+    nextSwipeExtrasRef.current = null;
+
     // Survey / moderation gate — only applies to right-swipes (likes).
     // Left-swipes (passes) are unrestricted so users can browse without
     // committing. Server-side try_record_swipe duplicates this check
     // for the like path so a tampered client can't slip through.
     if (direction === 'right' && !gate('swipe_like')) return;
 
-    // Check daily like limit for right-swipes (free users)
+    // Check daily like limit for right-swipes. Free + Plus both have
+    // caps now (per 00037); only Junub is uncapped. Show the upgrade
+    // modal instead of a generic alert so the user sees the concrete
+    // path forward (free → Plus or Junub; Plus → Junub).
     if (direction === 'right' && likeStatus && likeStatus.remaining <= 0 && !hasUnlimitedLikes(tier || 'free')) {
-      Alert.alert('Daily Limit Reached', 'You\'ve used all your likes for today.', [
-        { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
-        { text: 'OK', style: 'cancel' },
-      ]);
+      setUpgradePrompt({ visible: true, used: likeStatus.used ?? likeStatus.limit ?? 0 });
+      upgradePromptShownRef.current = true;
       return;
     }
 
@@ -620,15 +672,41 @@ const HomeScreen = ({ navigation, route }) => {
     // intent was lost. Daily-limit 429s are NOT queued; they're a real
     // server-side rejection.
     if (session && swipedProfile?.id) {
-      const type = direction === 'right' ? 'like' : 'pass';
+      // extras.type wins so a super-like button-tap records as
+      // 'super_like' even though the visual direction is 'right'.
+      // Falls back to the historic direction→type mapping for plain
+      // physical swipes.
+      const type = extras.type || (direction === 'right' ? 'like' : 'pass');
       const swipeMode = mode === 'Social' ? 'social' : 'dating';
-      discoverService.recordSwipe(swipedProfile.id, type, { mode: swipeMode }).then((result) => {
+      const recordExtras = { mode: swipeMode };
+      if (extras.whisper) recordExtras.whisper = extras.whisper;
+      // Funnel: every swipe — type and mode only, no PII. Powers the
+      // daily-active + swipes-per-session views in PostHog.
+      trackEvent(AnalyticsEvents.SWIPE, { type, mode: swipeMode });
+      discoverService.recordSwipe(swipedProfile.id, type, recordExtras).then((result) => {
+        // Fire-once guard — match payload from the server can arrive
+        // twice on certain retry paths (offline → reconnect re-sends
+        // the queued swipe, then the realtime channel also surfaces
+        // the Match row). Track shown match ids in a module-scoped
+        // Set so the celebration overlay never replays for the same
+        // pair. Cleared on sign-out via the AsyncStorage purge in
+        // AuthContext (the Set is in-memory only — survives screen
+        // re-mounts but not cold restart, which is the right window).
         if (result?.match) {
-          hapticHeavy();
-          setMatchData({
-            matchedUser: swipedProfile,
-            conversationId: result.match.conversation?.id,
-          });
+          const mid = result.match.id || result.match.conversation?.id;
+          if (mid && !shownMatchIds.has(mid)) {
+            shownMatchIds.add(mid);
+            hapticHeavy();
+            // Funnel: a match landed. Single biggest event for
+            // retention modelling. Mode included so we can split
+            // Dating vs Social conversion rates separately.
+            trackEvent(AnalyticsEvents.MATCH, { type, mode: swipeMode });
+            setMatchData({
+              matchedUser: swipedProfile,
+              conversationId: result.match.conversation?.id,
+              matchId: mid,
+            });
+          }
         }
         // Reconcile with server-authoritative dailyStatus, not a
         // local optimistic decrement. Avoids the drift the audit
@@ -639,10 +717,44 @@ const HomeScreen = ({ navigation, route }) => {
         } else if (direction === 'right') {
           setLikeStatus((prev) => prev ? { ...prev, used: prev.used + 1, remaining: Math.max(0, prev.remaining - 1) } : prev);
         }
+        // Surface the upgrade modal exactly once per session at the
+        // moment the user spends their final allowed like. Subsequent
+        // attempts past the cap still trip the pre-flight gate above,
+        // so dismissing this once doesn't strand the user — they'll
+        // see it again the next time they try to swipe right.
+        const next = result?.dailyStatus;
+        if (
+          direction === 'right'
+          && next
+          && next.unlimited !== true
+          && Number(next.remaining) <= 0
+          && !upgradePromptShownRef.current
+          && !hasUnlimitedLikes(tier || 'free')
+        ) {
+          setUpgradePrompt({ visible: true, used: next.used ?? next.limit ?? 0 });
+          upgradePromptShownRef.current = true;
+        }
+        // Run any consumer-supplied success hook (whisper consume,
+        // super-like sent toast, etc.). Wrapped so a thrown callback
+        // can't swallow the swipe.
+        try { extras.onSuccess?.(result); } catch {}
       }).catch((err) => {
         const status = err?.status || err?.statusCode;
         if (status === 429) {
-          setLikeStatus((prev) => prev ? { ...prev, remaining: 0 } : { used: 25, limit: 25, remaining: 0 });
+          // Free-tier fallback only; if the server actually returned a
+          // tier-specific limit on the 429 payload, use that instead.
+          const serverLimit = Number(err?.body?.limit) || 20;
+          const serverUsed = Number(err?.body?.used) || serverLimit;
+          setLikeStatus((prev) => prev ? { ...prev, remaining: 0 } : { used: serverLimit, limit: serverLimit, remaining: 0, tier: err?.body?.tier || 'free' });
+          // 429 means the user just hit the cap (or hit it earlier
+          // and we didn't know yet). Either way, surface the upgrade
+          // path now — same once-per-session guard as the success
+          // path so we don't double-pop.
+          if (!upgradePromptShownRef.current) {
+            setUpgradePrompt({ visible: true, used: serverUsed });
+            upgradePromptShownRef.current = true;
+          }
+          try { extras.onError?.(err); } catch {}
           return;
         }
         // Transient errors (no network, 5xx, fetch aborts) → queue
@@ -656,8 +768,10 @@ const HomeScreen = ({ navigation, route }) => {
             type,
             mode: swipeMode,
             enqueuedAt: Date.now(),
+            ...(recordExtras.whisper ? { whisper: recordExtras.whisper } : {}),
           }).catch(() => {});
         }
+        try { extras.onError?.(err); } catch {}
       });
     }
 
@@ -711,12 +825,18 @@ const HomeScreen = ({ navigation, route }) => {
       return;
     }
     if (!consumeSuperLike()) return;
+    // Stage the type so handleSwipe records 'super_like' instead of
+    // 'like' when the card animation completes. Previously the
+    // animation path always fell through to a plain like on the
+    // server — the consumable was debited but the recipient saw a
+    // regular like.
+    nextSwipeExtrasRef.current = { type: 'super_like' };
     if (profileCardRef.current?.swipe) {
       profileCardRef.current.swipe('right');
     } else {
       handleSwipe('right');
     }
-  }, [superLikes, consumeSuperLike, profileCardRef, handleSwipe, navigation]);
+  }, [superLikes, consumeSuperLike, profileCardRef, handleSwipe, navigation, gate]);
 
   const handleRewind = useCallback(() => {
     if (!hasTier('plus')) {
@@ -792,44 +912,49 @@ const HomeScreen = ({ navigation, route }) => {
     // Optimistic UX: animate the swipe + close the composer immediately.
     setShowWhisperComposer(false);
     setWhisperDraft('');
+    // Stage the type + whisper text so the single recordSwipe in
+    // handleSwipe ships them together. Previously the card animation
+    // recorded a plain like first, then a follow-up recordSwipe added
+    // the whisper — two round-trips per send, with a brief window
+    // where the recipient could already see the like without the
+    // whisper attached. Consume the whisper credit only on the
+    // server-confirmed success path so a transient failure refunds
+    // automatically.
+    if (targetId && session) {
+      nextSwipeExtrasRef.current = {
+        type: 'like',
+        whisper: text,
+        onSuccess: () => {
+          consumeWhisper();
+          Alert.alert('Whisper sent', `If they like you back, they'll see: "${text}"`);
+        },
+        onError: () => {
+          Alert.alert('Whisper not sent', 'We couldn\'t deliver your whisper. Your credit was not used.');
+        },
+      };
+    }
     if (profileCardRef.current?.swipe) {
       profileCardRef.current.swipe('right');
     } else {
       handleSwipe('right');
     }
 
-    // Network: record the swipe with the whisper attached. Only debit
-    // the local credit after the server accepts — that way a network
-    // failure refunds the user automatically (their balance never
-    // moved). Without a session, we treat it as a local-only demo
-    // whisper and skip the consume too.
-    if (targetId && session) {
-      discoverService
-        .recordSwipe(targetId, 'like', { whisper: text, mode: mode === 'Social' ? 'social' : 'dating' })
-        .then(() => {
-          consumeWhisper();
-          Alert.alert('Whisper sent', `If they like you back, they'll see: "${text}"`);
-        })
-        .catch((err) => {
-          if (__DEV__) console.warn('Whisper swipe failed:', err);
-          Alert.alert('Whisper not sent', 'We couldn\'t deliver your whisper. Your credit was not used.');
-        });
-    } else {
+    if (!targetId || !session) {
       Alert.alert('Whisper sent', `If they like you back, they'll see: "${text}"`);
     }
-  }, [whisperDraft, whispers, consumeWhisper, handleSwipe, currentProfile?.id, session]);
+  }, [whisperDraft, whispers, consumeWhisper, handleSwipe, currentProfile?.id, session, gate]);
 
   const filtersLocked = !hasTier('plus');
-  // Per-pill paywall: lock every label in the active filter set except
-  // Age (Social mode has no Age filter, so all of its pills end up
-  // locked when on free tier).
+  // All filters are paywalled for free tier — tapping any pill (including
+  // Age) routes through the upgrade prompt. Previously Age was free, but
+  // product moved to a single gated set so the upgrade ask is consistent.
   const lockedFilterLabels = useMemo(() => {
     if (!filtersLocked) return [];
     const list = mode === 'Social' ? SOCIAL_FILTERS : DEFAULT_FILTERS;
-    return list.filter((f) => f.label !== 'Age').map((f) => f.label);
+    return list.map((f) => f.label);
   }, [filtersLocked, mode]);
   const showFiltersUpgrade = useCallback(() => {
-    Alert.alert('JuNubin+ Filters', 'Upgrade to JuNubin+ to unlock advanced filters. Age stays free.', [
+    Alert.alert('JuNubin+ Filters', 'Upgrade to JuNubin+ to use filters and meet exactly the people you\'re looking for.', [
       { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
       { text: 'Cancel', style: 'cancel' },
     ]);
@@ -837,11 +962,11 @@ const HomeScreen = ({ navigation, route }) => {
 
   const handleFilterPress = useCallback((filterName) => {
     if (filterName === 'More') {
-      navigation?.navigate?.('Preferences');
+      navigation?.navigate?.('Preferences', { returnTo: 'Discover' });
       return;
     }
-    // Age stays free; everything else gated
-    if (filtersLocked && filterName !== 'Age') {
+    // All filters gated on free tier — including Age.
+    if (filtersLocked) {
       showFiltersUpgrade();
       return;
     }
@@ -853,7 +978,7 @@ const HomeScreen = ({ navigation, route }) => {
   }, [navigation, filtersLocked, showFiltersUpgrade]);
 
   const handleFilterSelect = useCallback((filterName, value) => {
-    if (filtersLocked && filterName !== 'Age') {
+    if (filtersLocked) {
       showFiltersUpgrade();
       return;
     }
@@ -876,20 +1001,20 @@ const HomeScreen = ({ navigation, route }) => {
     profileCardRef.current?.swipe ? profileCardRef.current.swipe('right') : handleSwipe('right');
   }, [handleSwipe]);
 
-  const handleReaction = useCallback((emoji) => {
-    // Send reaction as a super-like with the emoji attached
-    if (currentProfile?.id && session) {
-      const swipeMode = mode === 'Social' ? 'social' : 'dating';
-      discoverService.recordSwipe(currentProfile.id, 'super_like', { mode: swipeMode }).catch((err) => {
-        if (__DEV__) console.warn('Reaction swipe failed:', err);
-      });
-    }
+  const handleReaction = useCallback((/* emoji */) => {
+    // A reaction is a super-like under the hood. Stage the type so
+    // the single recordSwipe in handleSwipe writes 'super_like' —
+    // previously this fired an explicit recordSwipe AND then the card
+    // animation re-recorded the same target as 'like', and because
+    // the server upserts on (fromUserId, toUserId) the 'like' clobbered
+    // the 'super_like' and the recipient never saw a star.
+    nextSwipeExtrasRef.current = { type: 'super_like' };
     if (profileCardRef.current?.swipe) {
       profileCardRef.current.swipe('right');
     } else {
       handleSwipe('right');
     }
-  }, [currentProfile, session, handleSwipe]);
+  }, [handleSwipe]);
 
   const handleDoubleTap = useCallback(({ x, y, profile }) => {
     setHeartBurst({ x, y });
@@ -902,7 +1027,7 @@ const HomeScreen = ({ navigation, route }) => {
   }, [handleSwipe]);
 
   const handleSettingsPress = useCallback(() => {
-    navigation?.navigate?.('Preferences');
+    navigation?.navigate?.('Preferences', { returnTo: 'Discover' });
   }, [navigation]);
 
   const overlayCurrentUser = useMemo(() => ({
@@ -1021,16 +1146,31 @@ const HomeScreen = ({ navigation, route }) => {
                     <View style={styles.deckPeekCard} />
                   </View>
                 )}
-                {/* Deck peek — 1st card behind */}
+                {/* Deck peek — 1st card behind.
+                    `infoBottom` MUST match the top card's value (88).
+                    The default (96) leaves the underlying name/pills
+                    sitting 8px lower than the swiping card's, so as
+                    the top card translates off you see the info text
+                    "jump down" — a noticeable glitch during swipes. */}
                 {hasNextProfile && (
                   <View style={styles.deckPeek1} pointerEvents="none">
                     <ProfileCard
                       profile={nextProfile}
                       style={styles.fullCard}
+                      infoBottom={88}
                     />
                   </View>
                 )}
-                {/* Current card — swipeable, on top */}
+                {/* Current card — swipeable, on top.
+                    `infoBottom={88}` puts the name + pills cluster
+                    directly above the action button row (which
+                    anchors at bottom:18, super-like is 62px tall).
+                    Stack math:
+                      bottom 18 + button height 62 = top at 80
+                      pills at 88                  ⇒ 8-pt gap
+                    Buttons sit a touch off the card bottom so the
+                    row reads as a deliberate dock rather than
+                    glued-to-the-edge. */}
                 <View style={styles.currentCard}>
                   <ProfileCard
                     key={currentProfile.id}
@@ -1040,6 +1180,7 @@ const HomeScreen = ({ navigation, route }) => {
                     onExpand={handleExpand}
                     onDoubleTap={handleDoubleTap}
                     style={styles.fullCard}
+                    infoBottom={88}
                   />
                 </View>
               </View>
@@ -1086,7 +1227,7 @@ const HomeScreen = ({ navigation, route }) => {
                   variant="primary"
                   size="md"
                   fullWidth
-                  onPress={() => navigation?.navigate?.('Preferences')}
+                  onPress={() => navigation?.navigate?.('Preferences', { returnTo: 'Discover' })}
                 />
                 <Button
                   title={mode === 'Dating' ? 'Try Social Mode' : 'Try Dating Mode'}
@@ -1126,6 +1267,8 @@ const HomeScreen = ({ navigation, route }) => {
               onPress={() => setModeAndPersist(mode === 'Dating' ? 'Social' : 'Dating')}
               activeOpacity={0.8}
               style={styles.modeToggle}
+              accessibilityRole="button"
+              accessibilityLabel={`Switch to ${mode === 'Dating' ? 'Socialize' : 'Dating'} mode`}
             >
               <Ionicons name="swap-horizontal" size={15} color={colors.black} />
             </TouchableOpacity>
@@ -1139,7 +1282,17 @@ const HomeScreen = ({ navigation, route }) => {
                 the canonical Connect surface and the map is a side
                 trip that shouldn't persist across cold starts. */}
             <TouchableOpacity
-              onPress={() => setViewMode((v) => (v === 'deck' ? 'map' : 'deck'))}
+              onPress={() => setViewMode((v) => {
+                const next = v === 'deck' ? 'map' : 'deck';
+                // Funnel: map opens are a strong intent signal (users
+                // flipping to the map are usually closer to actually
+                // meeting in person). Captured in PostHog with mode
+                // attached so we can split Dating vs Social map usage.
+                if (next === 'map') {
+                  trackEvent('map_view_opened', { mode: mode === 'Social' ? 'social' : 'dating' });
+                }
+                return next;
+              })}
               activeOpacity={0.7}
               style={styles.mapToggle}
               accessibilityRole="button"
@@ -1287,6 +1440,22 @@ const HomeScreen = ({ navigation, route }) => {
           useEligibility / SurveyNudgeModal. Mounted once at screen
           root so any handler that calls gate() can surface it. */}
       {surveyNudge}
+
+      {/* Daily-like-cap prompt. Fires on the swipe that drains the
+          quota and on every subsequent right-swipe attempt past it.
+          Tier-aware copy lives in UpgradeLimitModal — free users see
+          both paid tiers, plus users see Junub only, junub users
+          never see it. */}
+      <UpgradeLimitModal
+        visible={upgradePrompt.visible}
+        tier={likeStatus?.tier || tier || 'free'}
+        used={upgradePrompt.used}
+        onCancel={() => setUpgradePrompt((s) => ({ ...s, visible: false }))}
+        onChoose={() => {
+          setUpgradePrompt((s) => ({ ...s, visible: false }));
+          navigation?.navigate?.('Elite');
+        }}
+      />
     </View>
   );
 };
@@ -1414,9 +1583,26 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     flex: 1,
     width: '100%',
   },
+  // Action row sits at the bottom edge of the card per the
+  // Socialize-mock signed off by design. Sequence:
+  //   bottom: 14  — original, hugged tab bar (rejected)
+  //   bottom: 32  — left a band of photo between buttons and
+  //                 tab bar (rejected — looked broken)
+  //   bottom: 16  — snug to the card bottom; ~10pt was lost to
+  //                 the safe-area inset, the row read as "stuck"
+  //   bottom: 22  — hugged the card bottom with breathing room,
+  //                 but mock review wanted tighter
+  //   bottom: 10  — matched mock to the pixel but the row felt
+  //                 pressed against the card edge on real devices
+  //   bottom: 18  — current, lifted slightly off the bottom edge
+  //                 so the row reads as deliberate rather than
+  //                 "stuck." Roughly 14pt visible card showing
+  //                 below the buttons.
+  // Pairs with ProfileCard `infoBottom={88}` so name + pills sit
+  // immediately above the action row with an 8-pt gap.
   actionOverlay: {
     position: 'absolute',
-    bottom: 14,
+    bottom: 18,
     left: 0,
     right: 0,
     zIndex: 15,
@@ -1489,9 +1675,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
 
   // ── Like counter ──
+  // Tracks the action overlay — must sit above it. Action row bottom
+  // is at 32 and ~62pt tall, so the counter anchors at 102 to keep
+  // an 8pt gap above the buttons.
   likeCounter: {
     position: 'absolute',
-    bottom: 84,
+    bottom: 102,
     alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',

@@ -3,15 +3,11 @@
 // `Profile.stickers` (JSON). Not user-generated content — this is the
 // vocabulary the product offers, vetted by the moderation team.
 //
-// Add new sticker entries here (and only here) — don't seed them from
-// the deleted mock-profiles bundle. Order is intentional: ethnic-tribe
-// stickers first, then thematic identity tags.
+// Tribes (Dinka, Nuer, Shilluk, Bari, …) live on the Ethnicity field,
+// not here — keep this list to thematic / interest-shaped tags so a
+// user's ethnicity isn't double-categorised in two places.
 
 export const CULTURAL_STICKERS = [
-  { emoji: '🦁',  label: 'Dinka' },
-  { emoji: '🐆',  label: 'Nuer' },
-  { emoji: '🏛️', label: 'Shilluk' },
-  { emoji: '🌿',  label: 'Bari' },
   { emoji: '🌍',  label: 'Junub' },
   { emoji: '🎭',  label: 'Cultural' },
   { emoji: '💃',  label: 'Dance' },

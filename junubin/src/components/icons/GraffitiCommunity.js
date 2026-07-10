@@ -1,58 +1,55 @@
 import React from 'react';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
+// Community glyph — globe with latitude + longitude lines.
+// Single-silhouette outline so this tab matches the visual weight of the
+// other tabs (Likes heart, Connect card, Chats bubble). Replaces the prior
+// three-person silhouette in favor of a "global community" reading.
 function GraffitiCommunity({ size = 24, color = '#000', filled = false, style }) {
   const fill = filled ? color : 'none';
+  // Inner-stroke colour: keep meridians/equator readable when the body is
+  // filled (focused tab) by inverting them; outline state uses base color.
+  const innerStroke = filled ? '#FFFFFF' : color;
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" style={style}>
-      {/* Center person */}
-      <Path
-        d="M12 4c1.7 0 3 1.3 3 3s-1.3 3-3 3-3-1.3-3-3 1.3-3 3-3z"
+      {/* Globe body */}
+      <Circle
+        cx="12"
+        cy="12"
+        r="9"
         fill={fill}
         stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeWidth={1.8}
       />
+      {/* Equator */}
       <Path
-        d="M12 13c-3.3 0-6 1.8-6 4v1.5h12V17c0-2.2-2.7-4-6-4z"
-        fill={fill}
-        stroke={color}
-        strokeWidth={1.5}
+        d="M3 12h18"
+        stroke={innerStroke}
+        strokeWidth={1.4}
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
-      {/* Left person (smaller, behind) */}
+      {/* Central meridian */}
       <Path
-        d="M5.5 7.5c1 0 1.8.8 1.8 1.8S6.5 11.1 5.5 11.1s-1.8-.8-1.8-1.8.8-1.8 1.8-1.8z"
-        fill={fill}
-        stroke={color}
-        strokeWidth={1.2}
+        d="M12 3v18"
+        stroke={innerStroke}
+        strokeWidth={1.4}
         strokeLinecap="round"
-        strokeLinejoin="round"
       />
+      {/* Curved meridian — left lobe (suggests sphere depth) */}
       <Path
-        d="M2.5 15.5c0-1.4 1.3-2.5 3-2.5.6 0 1.1.1 1.6.3"
+        d="M12 3c-3 2.5-4.5 5.5-4.5 9s1.5 6.5 4.5 9"
         fill="none"
-        stroke={color}
-        strokeWidth={1.2}
+        stroke={innerStroke}
+        strokeWidth={1.4}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      {/* Right person (smaller, behind) */}
+      {/* Curved meridian — right lobe */}
       <Path
-        d="M18.5 7.5c-1 0-1.8.8-1.8 1.8s.8 1.8 1.8 1.8 1.8-.8 1.8-1.8-.8-1.8-1.8-1.8z"
-        fill={fill}
-        stroke={color}
-        strokeWidth={1.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path
-        d="M21.5 15.5c0-1.4-1.3-2.5-3-2.5-.6 0-1.1.1-1.6.3"
+        d="M12 3c3 2.5 4.5 5.5 4.5 9s-1.5 6.5-4.5 9"
         fill="none"
-        stroke={color}
-        strokeWidth={1.2}
+        stroke={innerStroke}
+        strokeWidth={1.4}
         strokeLinecap="round"
         strokeLinejoin="round"
       />

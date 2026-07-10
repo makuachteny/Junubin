@@ -26,8 +26,22 @@ import * as profileService from '../api/services/profileService';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LogoMark from '../components/LogoMark';
+import DateWheelPicker from '../components/DateWheelPicker';
+import SearchablePicker from '../components/SearchablePicker';
 import { getEthnicIdentity } from '../utils/ethnicIdentity';
 import { ALL_TRIBE_KEYS } from '../data/tribes';
+import { GENDER_OPTIONS, toDbGender, toUiGender } from '../data/gender';
+import {
+  PRONOUN_OPTIONS,
+  DATE_PREF_OPTIONS,
+  INTENTION_OPTIONS,
+  EDUCATION_OPTIONS,
+  INTEREST_OPTIONS,
+  PROMPT_OPTIONS,
+  SEXUALITY_OPTIONS,
+  CHILDREN_OPTIONS,
+} from '../data/profileOptions';
+import { COUNTRY_PICKER_OPTIONS, COUNTRY_BY_CODE } from '../data/worldCountries';
 import { promptToOpenSettings } from '../utils/permissionAlert';
 
 const { width } = Dimensions.get('window');
@@ -48,6 +62,7 @@ const ALL_STEPS = [
   { key: 'birthday',  title: 'When were you born?',           icon: 'calendar',           subtitle: 'Your age will be shown on your profile.' },
   { key: 'gender',    title: 'What\'s your gender?',          icon: 'body',               subtitle: 'Select the option that best describes you.' },
   { key: 'pronouns',  title: 'What are your pronouns?',       icon: 'chatbubbles',        subtitle: 'Select up to 4. This will be visible on your profile.' },
+  { key: 'country',   title: 'Which country do you most identify with?', icon: 'earth',     subtitle: 'Pick the country that best represents who you are.' },
   { key: 'ethnicity', title: 'What\'s your background?',      icon: 'flag',               subtitle: 'Help others learn more about you.' },
   { key: 'education', title: 'Education level',               icon: 'school',             subtitle: 'Optional — visible on your profile.' },
   { key: 'photos',    title: 'Add your best photos',          icon: 'camera',             subtitle: 'Add at least 3 photos. The more, the better!' },
@@ -61,29 +76,17 @@ const ALL_STEPS = [
 ];
 
 // ─── Options Data ───
-const GENDER_OPTIONS = ['Man', 'Woman', 'Nonbinary'];
-const PRONOUN_OPTIONS = ['she/her/hers', 'he/him/his', 'they/them/theirs', 'ze/zir/zirs'];
-const SEXUALITY_OPTIONS = ['Straight', 'Gay', 'Lesbian', 'Bisexual', 'Pansexual', 'Asexual', 'Queer', 'Prefer not to say'];
-const DATE_PREF_OPTIONS = ['Men', 'Women', 'Everyone'];
-const INTENTION_OPTIONS = ['Life partner', 'Long-term relationship', 'Short-term relationship', 'Figuring it out', 'Prefer not to say'];
+// GENDER_OPTIONS imported from src/data/gender.js (UI ↔ DB enum mapping).
+// The six survey-vocab arrays — PRONOUN_OPTIONS, DATE_PREF_OPTIONS,
+// INTENTION_OPTIONS, EDUCATION_OPTIONS, INTEREST_OPTIONS, PROMPT_OPTIONS
+// — plus SEXUALITY_OPTIONS / CHILDREN_OPTIONS now live in the shared
+// src/data/profileOptions.js so this screen and EditProfile can't drift
+// out of sync. (Previously each screen defined its own copy with a
+// "mirror this in the other file" comment — exactly the pattern that
+// produces "saved value doesn't match a chip" bugs.)
+// ETHNICITY_OPTIONS is kept local because it's just a thin alias over
+// ALL_TRIBE_KEYS from src/data/tribes.js — no list values to maintain.
 const ETHNICITY_OPTIONS = ALL_TRIBE_KEYS;
-const EDUCATION_OPTIONS = ['High school', 'Some college', 'Associate degree', 'Bachelor\'s degree', 'Master\'s degree', 'Doctorate', 'Trade school', 'Prefer not to say'];
-const CHILDREN_OPTIONS = ['No children', 'Have children', 'Want children someday', 'Don\'t want children', 'Open to children', 'Prefer not to say'];
-const INTEREST_OPTIONS = [
-  'Cooking', 'Basketball', 'Music', 'Travel', 'Fashion', 'Faith', 'Fitness', 'Tech',
-  'Art', 'Reading', 'Movies', 'Gaming', 'Dancing', 'Business', 'Photography', 'Soccer',
-  'Poetry', 'Singing', 'Running', 'Volunteering', 'Food', 'Nature', 'Languages', 'History',
-];
-const PROMPT_OPTIONS = [
-  'The way to my heart is...',
-  'A fun fact about me is...',
-  'My ideal Sunday looks like...',
-  'I\'m looking for someone who...',
-  'My most controversial opinion is...',
-  'Two truths and a lie...',
-  'I get along best with people who...',
-  'My love language is...',
-];
 
 const PURPOSE_OPTIONS = [
   {
@@ -116,6 +119,8 @@ const RESUME_KEY_BY_ELIGIBILITY_ID = {
   displayName:      'name',
   dob:              'birthday',
   gender:           'gender',
+  country:          'country',
+  countryCode:      'country',
   photos:           'photos',
   interestedIn:     'datePref',
   datingIntentions: 'intention',
@@ -126,7 +131,20 @@ const RESUME_KEY_BY_ELIGIBILITY_ID = {
 
 const ProfileSetupScreen = ({ navigation, route }) => {
   const resumeAtParam = route?.params?.resumeAt || null;
-  const [purpose, setPurpose] = useState(null); // null until the user picks on the purpose step
+  // `mode` is the authoritative mode the caller wants this setup run
+  // to target. SurveyNudgeModal / deep links pass it so the user lands
+  // in the right STEPS subset even when their stored accountPurpose
+  // hasn't been set yet (early onboarding) or is out of sync with the
+  // mode they're currently using the app in (post-launch mode switch).
+  // Accepted values: 'socialize', 'dating', 'both'. Anything else is
+  // treated as "no override" — fall back to the stored purpose.
+  const modeParam = route?.params?.mode || null;
+  const initialPurpose = modeParam === 'socialize'
+    ? 'socialize'
+    : modeParam === 'dating' || modeParam === 'both'
+      ? modeParam
+      : null;
+  const [purpose, setPurpose] = useState(initialPurpose); // null until the user picks on the purpose step
   const isSocialOnly = purpose === 'socialize';
 
   // Step list reshapes around purpose:
@@ -207,6 +225,11 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const [selectedDatePref, setSelectedDatePref] = useState('');
   const [selectedIntention, setSelectedIntention] = useState('');
   const [selectedEthnicity, setSelectedEthnicity] = useState('');
+  // Country = ISO 3166-1 alpha-2 code stored on User.countryCode. The
+  // step uses a searchable modal picker (240+ entries) instead of a
+  // radio list — too long to scroll inline.
+  const [selectedCountry, setSelectedCountry] = useState('');
+  const [countryPickerOpen, setCountryPickerOpen] = useState(false);
   const [selectedEducation, setSelectedEducation] = useState('');
   const [selectedChildren, setSelectedChildren] = useState('');
   const [selectedInterests, setSelectedInterests] = useState([]);
@@ -240,9 +263,17 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     // it from accountPurpose so the resumeAt seek effect lands on the
     // right index. 'date' is the legacy spelling from 00010; treat it
     // as 'dating' for the UI.
-    const ap = profile.accountPurpose;
-    if (ap === 'socialize') setPurpose('socialize');
-    else if (ap === 'dating' || ap === 'date' || ap === 'both') setPurpose('dating');
+    //
+    // BUT if the caller passed a `mode` route param (SurveyNudgeModal /
+    // deep link), that's the authoritative target for this run and we
+    // must NOT overwrite it with the stored accountPurpose. A user
+    // currently in Social mode tapping a dating CTA elsewhere should
+    // land in dating steps; the inverse must also hold.
+    if (!modeParam) {
+      const ap = profile.accountPurpose;
+      if (ap === 'socialize') setPurpose('socialize');
+      else if (ap === 'dating' || ap === 'date' || ap === 'both') setPurpose('dating');
+    }
 
     if (authUser.displayName) setFirstName(authUser.displayName);
 
@@ -260,9 +291,8 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     // capitalized strings. 'other' has no matching option, so leave
     // it unset and the user picks again — but every other value
     // round-trips losslessly.
-    const genderUiMap = { man: 'Man', woman: 'Woman', non_binary: 'Nonbinary' };
-    if (authUser.gender && genderUiMap[authUser.gender]) {
-      setSelectedGender(genderUiMap[authUser.gender]);
+    if (authUser.gender && toUiGender(authUser.gender)) {
+      setSelectedGender(toUiGender(authUser.gender));
     }
 
     // Pronouns serialize to a comma-separated string in updateProfile;
@@ -277,6 +307,9 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     if (profile.sexuality) setSelectedSexuality(profile.sexuality);
     if (profile.lookingForGender) setSelectedDatePref(profile.lookingForGender);
     if (profile.datingIntentions) setSelectedIntention(profile.datingIntentions);
+    // countryCode lives on User (not Profile), so hydrate from the
+    // outer record. Stored as uppercase ISO 3166-1 alpha-2 (e.g. 'KE').
+    if (authUser.countryCode) setSelectedCountry(authUser.countryCode);
     if (profile.ethnicity) setSelectedEthnicity(profile.ethnicity);
     if (profile.education) setSelectedEducation(profile.education);
     if (profile.children) setSelectedChildren(profile.children);
@@ -349,6 +382,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
 
     if (!selectedGender) missing.push('gender');
     if (!selectedPronouns || selectedPronouns.length === 0) missing.push('pronouns');
+    if (!selectedCountry) missing.push('country');
     if (!selectedEthnicity) missing.push('ethnicity / background');
     if (!selectedInterests || selectedInterests.length < 3) missing.push('at least 3 interests');
     if (!selectedPrompt) missing.push('a profile prompt');
@@ -378,13 +412,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         dateOfBirth = new Date(`${yyyy}-${mm}-${dd}T00:00:00.000Z`).toISOString();
       }
 
-      // Map gender
-      const genderMap = { Man: 'man', Woman: 'woman', Nonbinary: 'non_binary' };
-
       const updates = {
         displayName: firstName.trim(),
         ...(dateOfBirth ? { dateOfBirth } : {}),
-        ...(selectedGender ? { gender: genderMap[selectedGender] || 'other' } : {}),
+        ...(selectedGender ? { gender: toDbGender(selectedGender) || 'other' } : {}),
         pronouns: selectedPronouns.join(', '),
         ...(isSocialOnly ? {} : {
           sexuality: selectedSexuality,
@@ -393,6 +424,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
           children: selectedChildren,
         }),
         ethnicity: selectedEthnicity,
+        // User.countryCode — ISO 3166-1 alpha-2. profileService routes
+        // this to the User table (USER_KEYS) so it persists alongside
+        // displayName, dateOfBirth, gender.
+        countryCode: selectedCountry,
         education: selectedEducation,
         interests: selectedInterests,
         promptQuestion: selectedPrompt,
@@ -640,6 +675,8 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         return selectedDatePref ? null : 'Please select who you want to date.';
       case 'intention':
         return selectedIntention ? null : 'Please select what you\'re looking for.';
+      case 'country':
+        return selectedCountry ? null : 'Please choose the country you most identify with.';
       case 'ethnicity':
         return selectedEthnicity ? null : 'Please select your background.';
       case 'education':
@@ -684,6 +721,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     : step.key === 'sexuality' ? selectedSexuality
     : step.key === 'datePref' ? selectedDatePref
     : step.key === 'intention' ? selectedIntention
+    : step.key === 'country' ? selectedCountry
     : step.key === 'ethnicity' ? selectedEthnicity
     : step.key === 'education' ? selectedEducation
     : step.key === 'children' ? selectedChildren
@@ -749,18 +787,16 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     );
   };
 
-  const renderVisibilityToggle = (label, value, onToggle) => (
-    <View style={styles.visibilityRow}>
-      <Text style={styles.visibilityLabel}>{label}</Text>
-      <Switch
-        value={value}
-        onValueChange={onToggle}
-        trackColor={{ false: colors.gray200, true: colors.accent }}
-        thumbColor="#FFFFFF"
-        ios_backgroundColor={colors.gray200}
-      />
-    </View>
-  );
+  // ── Visibility toggles removed ──
+  // The four "Visible on profile" switches (gender / pronouns /
+  // sexuality / ethnicity) were UI-only scaffolding — they flipped
+  // local state but were never included in the save payload and no
+  // display code read them, so the toggles did nothing. Removed from
+  // the render path so the survey only surfaces inputs that actually
+  // persist. The show* state vars remain in the file as dead-but-safe
+  // declarations until a future PR brings real per-field visibility
+  // (would need a Profile.fieldVisibility JSONB column).
+  const renderVisibilityToggle = () => null;
 
   // ─── Step Content ───
   const renderStepContent = () => {
@@ -786,15 +822,11 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       case 'birthday':
         return (
           <View style={styles.stepContent}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="MM/DD/YYYY"
-              placeholderTextColor={colors.gray400}
+            <DateWheelPicker
+              testID="setup-dob"
               value={birthDate}
-              onChangeText={handleDateChange}
-              keyboardType="number-pad"
-              maxLength={10}
-              autoFocus
+              placeholder="Tap to pick your birth date"
+              onChange={(payload) => setBirthDate(payload.mmddyyyy)}
             />
             <Text style={styles.helperText}>You must be 18 or older to use JuNubin.</Text>
           </View>
@@ -838,6 +870,42 @@ const ProfileSetupScreen = ({ navigation, route }) => {
             {INTENTION_OPTIONS.map((opt) => renderRadioOption(opt, selectedIntention, setSelectedIntention))}
           </View>
         );
+
+      case 'country': {
+        // 240+ countries → a single tap opens the SearchablePicker
+        // modal instead of trying to render an inline radio list.
+        // Mirrors the EditProfile pattern for the ethnicity row.
+        const country = selectedCountry ? COUNTRY_BY_CODE[selectedCountry] : null;
+        return (
+          <View style={styles.stepContent}>
+            <TouchableOpacity
+              style={[
+                styles.radioRow,
+                selectedCountry && { borderColor: colors.accent, backgroundColor: 'rgba(206,17,38,0.06)' },
+              ]}
+              onPress={() => setCountryPickerOpen(true)}
+              activeOpacity={0.7}
+              testID="setup-country-row"
+            >
+              <Text style={{ fontSize: 22, marginRight: 6 }}>
+                {country ? country.flag : '🌍'}
+              </Text>
+              <Text style={[
+                styles.radioText,
+                selectedCountry && { color: colors.black, fontWeight: '600', fontFamily: FontFamily.semibold },
+              ]}>
+                {country ? country.name : 'Tap to choose a country'}
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={colors.gray400}
+                style={{ marginLeft: 'auto' }}
+              />
+            </TouchableOpacity>
+          </View>
+        );
+      }
 
       case 'ethnicity':
         return (
@@ -1202,6 +1270,18 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         <ActivityIndicator size="small" color="rgba(255,255,255,0.5)" style={{ marginTop: 16 }} />
       </Animated.View>
     )}
+    {/* Country picker — modal opened from the `country` survey step.
+        Lives at the screen root so it can render above the step content
+        regardless of which step is active. */}
+    <SearchablePicker
+      visible={countryPickerOpen}
+      onClose={() => setCountryPickerOpen(false)}
+      title="Choose your country"
+      searchPlaceholder="Search countries…"
+      options={COUNTRY_PICKER_OPTIONS}
+      selectedValue={selectedCountry}
+      onSelect={(value) => setSelectedCountry(value)}
+    />
     </>
   );
 };

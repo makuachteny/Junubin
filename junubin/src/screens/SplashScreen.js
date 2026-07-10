@@ -5,19 +5,16 @@ import {
   StyleSheet,
   Animated,
   Dimensions,
-  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontFamily } from '../theme';
 import LogoMark from '../components/LogoMark';
 
-const { width: W, height: H } = Dimensions.get('window');
-const LANDING_IMAGE = require('../assets/landing.jpeg');
+const { width: W } = Dimensions.get('window');
 
 export default function SplashScreen({ onFinish, authReady }) {
-  const logoFade = useRef(new Animated.Value(0)).current;
-  const logoScale = useRef(new Animated.Value(0.7)).current;
-  const bgZoom = useRef(new Animated.Value(1)).current;
+  const fade = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.86)).current;
   const flagW = useRef(new Animated.Value(0)).current;
   const animDone = useRef(false);
   const hasFinished = useRef(false);
@@ -25,23 +22,19 @@ export default function SplashScreen({ onFinish, authReady }) {
   const tryFinish = useCallback(() => {
     if (animDone.current && authReady && !hasFinished.current) {
       hasFinished.current = true;
-      Animated.timing(logoFade, {
+      Animated.timing(fade, {
         toValue: 0, duration: 350, useNativeDriver: true,
       }).start(() => onFinish?.());
     }
-  }, [authReady, logoFade, onFinish]);
+  }, [authReady, fade, onFinish]);
 
   useEffect(() => { tryFinish(); }, [tryFinish]);
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(logoFade, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.spring(logoScale, { toValue: 1, friction: 6, tension: 40, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 7, tension: 50, useNativeDriver: true }),
     ]).start();
-
-    Animated.timing(bgZoom, {
-      toValue: 1.08, duration: 4000, useNativeDriver: true,
-    }).start();
 
     Animated.timing(flagW, {
       toValue: W, duration: 900, delay: 200, useNativeDriver: false,
@@ -51,32 +44,16 @@ export default function SplashScreen({ onFinish, authReady }) {
     // not to hold the user back when auth resolves quickly.
     const timer = setTimeout(() => { animDone.current = true; tryFinish(); }, 600);
     return () => clearTimeout(timer);
-  }, [logoFade, logoScale, bgZoom, flagW, tryFinish]);
+  }, [fade, scale, flagW, tryFinish]);
 
   return (
     <View style={s.root}>
-      {/* Background image — South Sudanese ladies */}
-      <Animated.View style={[s.bgWrap, { transform: [{ scale: bgZoom }] }]}>
-        <Image source={LANDING_IMAGE} style={s.bgImage} resizeMode="cover" />
-      </Animated.View>
-
-      {/* Gradient overlay — fades photo to black at bottom for legibility */}
-      <LinearGradient
-        colors={[
-          'rgba(0,0,0,0.25)',
-          'rgba(0,0,0,0.10)',
-          'rgba(0,0,0,0.55)',
-          'rgba(0,0,0,0.92)',
-          'rgba(0,0,0,0.98)',
-        ]}
-        locations={[0, 0.30, 0.62, 0.85, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-
-      {/* Logo + tagline */}
-      <Animated.View style={[s.center, { opacity: logoFade, transform: [{ scale: logoScale }] }]}>
-        <LogoMark size={90} light />
-        <View style={{ height: 12 }} />
+      {/* Centered lockup — Instagram-style: framed icon, wordmark, tagline */}
+      <Animated.View style={[s.center, { opacity: fade, transform: [{ scale }] }]}>
+        <View style={s.logoFrame}>
+          <LogoMark size={96} light />
+        </View>
+        <Text style={s.wordmark}>JuNubin</Text>
         <Text style={s.tagline}>South Sudanese Community</Text>
       </Animated.View>
 
@@ -96,26 +73,45 @@ export default function SplashScreen({ onFinish, authReady }) {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
-  bgWrap: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  bgImage: {
-    width: W * 1.2,
-    height: H * 1.05,
-    marginLeft: -(W * 0.1),
+  root: {
+    flex: 1,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   center: {
-    flex: 1,
-    justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingBottom: H * 0.18,
+    justifyContent: 'center',
+  },
+  // Rounded white-bordered tile holding the JB mark — matches the app icon
+  // language (black square, white JB) but framed so it reads as a polished
+  // brand badge rather than a bare cutout.
+  logoFrame: {
+    width: 148,
+    height: 148,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 28,
+  },
+  wordmark: {
+    fontSize: 36,
+    fontFamily: FontFamily.extrabold || FontFamily.bold,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 1.2,
+    marginBottom: 12,
   },
   tagline: {
-    fontSize: 12, fontFamily: FontFamily.medium, fontWeight: '500',
-    color: 'rgba(255,255,255,0.55)', letterSpacing: 2.5, textTransform: 'uppercase',
-    textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6,
+    fontSize: 11,
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.55)',
+    letterSpacing: 2.5,
+    textTransform: 'uppercase',
   },
   flagBar: {
     position: 'absolute', bottom: 0, left: 0,

@@ -4,6 +4,12 @@ import { cacheGet, cacheSet } from '../../utils/offlineCache';
 
 const OFFLINE_LIKES_TTL = 300_000; // 5 min
 
+// A whisper ("say hi" note attached to a like) is time-sensitive, like
+// a Bumble Compliment: if the recipient doesn't act within 24h the note
+// expires and stops showing. The underlying like stays (it's still a
+// genuine like) — only the note vanishes.
+const WHISPER_TTL_MS = 24 * 60 * 60 * 1000;
+
 export async function getReceivedLikes() {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   if (!authUser) throw new Error('Not authenticated');
@@ -50,7 +56,12 @@ export async function getReceivedLikes() {
     .filter((s) => !swipedIds.has(s.fromUser?.id))
     .map((s) => {
       const profile = normalizeProfile(s.fromUser);
-      const whisperText = (typeof s.whisper === 'string' && s.whisper.trim()) || null;
+      const rawWhisper = (typeof s.whisper === 'string' && s.whisper.trim()) || null;
+      // Expire the note after 24h (Bumble-Compliment parity). Guard
+      // against an unparseable createdAt by treating it as not-expired.
+      const createdMs = new Date(s.createdAt).getTime();
+      const whisperExpired = Number.isFinite(createdMs) && (Date.now() - createdMs) > WHISPER_TTL_MS;
+      const whisperText = whisperExpired ? null : rawWhisper;
       return {
         ...profile,
         likeId: s.id,

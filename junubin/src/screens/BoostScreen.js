@@ -12,9 +12,13 @@ import { GraffitiFlame } from '../components/icons';
 import { SpraySplatter } from '../components/GraffitiAccents';
 import Button from '../components/Button';
 import PurchaseModal from '../components/PurchaseModal';
+import PaymentMethodSelector from '../components/PaymentMethodSelector';
+import StripeCheckout from '../components/StripeCheckout';
 import BoostPulseRing from '../components/BoostPulseRing';
 import { useSubscription, PRODUCT_IDS, SHOW_PAYMENTS_UI } from '../payments';
+import { PAYMENT_METHODS } from '../payments/paymentMethods';
 import { formatPerUnit } from '../payments/pricing';
+import { useCurrentUser } from '../hooks';
 
 // Fallback packs (USD) — replaced by localized prices when RevenueCat is active
 const PACKS_FALLBACK = [
@@ -95,27 +99,67 @@ function BoostScreenPaid({ navigation }) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [selected, setSelected] = useState(1);
-  const { purchase, spotlights, purchaseInProgress, offerings } = useSubscription();
+  const {
+    purchase,
+    purchaseWithStripe,
+    confirmStripePayment,
+    spotlights,
+    purchaseInProgress,
+    offerings,
+  } = useSubscription();
+  const { currentUser } = useCurrentUser();
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
+  const [showMethods, setShowMethods] = useState(false);
+  const [stripeCheckout, setStripeCheckout] = useState(null);
+  const countryCode = currentUser?.countryCode || 'US';
 
   const PACKS = buildPacks(offerings);
   const selectedPack = PACKS[selected];
 
-  const handleBuy = async () => {
+  const successTitle = (pack) => `${pack.count} Spotlight${pack.count > 1 ? 's' : ''} added to your account!`;
+
+  // Tap → open the method sheet (Stripe on Android/web, App Store IAP
+  // on iOS). The chosen method is dispatched in handlePaymentMethod below.
+  const handleBuy = () => setShowMethods(true);
+
+  const handlePaymentMethod = async (method) => {
     const pack = PACKS[selected];
-    setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Getting ${pack.count} Spotlight${pack.count > 1 ? 's' : ''}` });
 
-    // Use RevenueCat package if available, otherwise fall back to product ID
-    const purchaseTarget = pack.rcPackage || pack.productId;
-    const result = await purchase(purchaseTarget);
-
-    if (result.success) {
-      setModal({ visible: true, type: 'success', title: 'Spotlights Added!', message: `${pack.count} Spotlight${pack.count > 1 ? 's' : ''} added to your account!` });
-    } else if (result.error === 'cancelled') {
+    if (method === PAYMENT_METHODS.STRIPE) {
+      setModal({ visible: true, type: 'loading', title: 'Opening checkout...', message: `Getting ${pack.count} Spotlight${pack.count > 1 ? 's' : ''}` });
+      const result = await purchaseWithStripe({ productId: pack.productId });
       setModal((m) => ({ ...m, visible: false }));
-    } else {
-      setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
+      if (result.success && result.url) {
+        setStripeCheckout({ url: result.url, sessionId: result.sessionId });
+      } else if (result.error) {
+        setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error });
+      }
+      return;
     }
+
+    if (method === PAYMENT_METHODS.APP_STORE) {
+      setModal({ visible: true, type: 'loading', title: 'Processing...', message: `Getting ${pack.count} Spotlight${pack.count > 1 ? 's' : ''}` });
+      const purchaseTarget = pack.rcPackage || pack.productId;
+      const result = await purchase(purchaseTarget);
+      if (result.success) {
+        setModal({ visible: true, type: 'success', title: 'Spotlights Added!', message: successTitle(pack) });
+      } else if (result.error === 'cancelled') {
+        setModal((m) => ({ ...m, visible: false }));
+      } else {
+        setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: result.error || 'Please try again.' });
+      }
+    }
+  };
+
+  const handleStripeSuccess = async (sessionId) => {
+    setStripeCheckout(null);
+    await confirmStripePayment(sessionId);
+    setModal({ visible: true, type: 'success', title: 'Spotlights Added!', message: successTitle(selectedPack) });
+  };
+  const handleStripeCancel = () => setStripeCheckout(null);
+  const handleStripeError = (msg) => {
+    setStripeCheckout(null);
+    setModal({ visible: true, type: 'error', title: 'Purchase Failed', message: msg || 'Please try again.' });
   };
 
   return (
@@ -213,6 +257,26 @@ function BoostScreenPaid({ navigation }) {
           onPress={() => navigation.goBack()}
         />
       </View>
+
+      <PaymentMethodSelector
+        visible={showMethods}
+        onClose={() => setShowMethods(false)}
+        onSelect={handlePaymentMethod}
+        countryCode={countryCode}
+        productLabel={`${selectedPack.count} Spotlight${selectedPack.count > 1 ? 's' : ''}`}
+        priceLabel={selectedPack.price}
+      />
+
+      {stripeCheckout && (
+        <StripeCheckout
+          visible={!!stripeCheckout}
+          url={stripeCheckout.url}
+          sessionId={stripeCheckout.sessionId}
+          onSuccess={handleStripeSuccess}
+          onCancel={handleStripeCancel}
+          onError={handleStripeError}
+        />
+      )}
 
       <PurchaseModal
         visible={modal.visible}

@@ -8,15 +8,15 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 import { useAuth } from '../auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLinkTo } from '@react-navigation/native';
 import { hapticSelection } from '../utils/haptics';
 import * as pendingDeepLink from '../utils/pendingDeepLink';
-import { GraffitiCommunity, GraffitiHeart, GraffitiChat, GraffitiSwipeCard } from '../components/icons';
 import LogoMark from '../components/LogoMark';
+import ErrorBoundary from '../components/ErrorBoundary';
 // Tab-bar screens stay eager — they render immediately when the user lands on
 // `Main`. Auth-flow screens are eager too because Jest's CommonJS runtime
 // cannot resolve `import()` callbacks; React.lazy on these breaks our snapshot
@@ -28,6 +28,24 @@ import CommunityScreen from '../screens/CommunityScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SignupScreen from '../screens/SignupScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
+
+// Per-screen error boundary so a render crash inside one screen falls
+// back to the boundary's retry surface instead of bubbling up to the
+// root boundary and unmounting the whole nav tree (which logs the user
+// out visually). Tag carries through to Sentry for triage.
+function withBoundary(Component, tag) {
+  return function ScreenWithBoundary(props) {
+    return (
+      <ErrorBoundary boundary={tag}>
+        <Component {...props} />
+      </ErrorBoundary>
+    );
+  };
+}
+const HomeScreenSafe = withBoundary(HomeScreen, 'home');
+const CommunityScreenSafe = withBoundary(CommunityScreen, 'community');
+const MessagesScreenSafe = withBoundary(MessagesScreen, 'messages');
+const LikesScreenSafe = withBoundary(LikesScreen, 'likes');
 
 // Lazy-loaded screens (behind navigation.navigate)
 function LazyFallback() {
@@ -57,9 +75,9 @@ const SettingsScreen = lazify(() => import('../screens/SettingsScreen'));
 const PreferencesScreen = lazify(() => import('../screens/PreferencesScreen'));
 const BoostScreen = lazify(() => import('../screens/BoostScreen'));
 const EliteScreen = lazify(() => import('../screens/EliteScreen'));
-const ChatScreen = lazify(() => import('../screens/ChatScreen'));
+const ChatScreen = withBoundary(lazify(() => import('../screens/ChatScreen')), 'chat');
 const CreatePostScreen = lazify(() => import('../screens/CreatePostScreen'));
-const PostDetailScreen = lazify(() => import('../screens/PostDetailScreen'));
+const PostDetailScreen = withBoundary(lazify(() => import('../screens/PostDetailScreen')), 'post-detail');
 const GroupDetailScreen = lazify(() => import('../screens/GroupDetailScreen'));
 const EditProfileScreen = lazify(() => import('../screens/EditProfileScreen'));
 const NotificationsScreen = lazify(() => import('../screens/NotificationsScreen'));
@@ -70,6 +88,7 @@ const CallScreen = lazify(() => import('../screens/CallScreen'));
 const PhotoVerificationScreen = lazify(() => import('../screens/PhotoVerificationScreen'));
 const ReferralScreen = lazify(() => import('../screens/ReferralScreen'));
 const StoriesViewScreen = lazify(() => import('../screens/StoriesViewScreen'));
+const VideoReelsScreen = lazify(() => import('../screens/VideoReelsScreen'));
 const CreateStoryScreen = lazify(() => import('../screens/CreateStoryScreen'));
 const CreateGroupScreen = lazify(() => import('../screens/CreateGroupScreen'));
 const InteractivityHubScreen = lazify(() => import('../screens/InteractivityHubScreen'));
@@ -124,19 +143,19 @@ function HomeTabs() {
             let icon;
             switch (route.name) {
               case 'HomeTab':
-                // Custom swipe-deck glyph: a tilted top card + a back card +
-                // motion lines on either side. Communicates "swipe left/right"
-                // directly, unlike the generic albums/globe stand-ins.
-                icon = <GraffitiSwipeCard size={size} color={iconColor} filled={focused} />;
+                // cards — three profile cards fanned out, the classic swipe-
+                // deck silhouette (Hinge Discover, Bumble, etc.). MCI ships
+                // both filled + outline variants so focus state still flips.
+                icon = <MaterialCommunityIcons name={focused ? 'cards' : 'cards-outline'} size={size + 2} color={iconColor} />;
                 break;
               case 'CommunityTab':
-                icon = <GraffitiCommunity size={size} color={iconColor} filled={focused} />;
+                icon = <Ionicons name={focused ? 'earth' : 'earth-outline'} size={size} color={iconColor} />;
                 break;
               case 'LikesTab':
-                icon = <GraffitiHeart size={size} color={iconColor} filled={focused} />;
+                icon = <Ionicons name={focused ? 'heart' : 'heart-outline'} size={size} color={iconColor} />;
                 break;
               case 'MessagesTab':
-                icon = <GraffitiChat size={size} color={iconColor} filled={focused} />;
+                icon = <Ionicons name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={size} color={iconColor} />;
                 break;
               default:
                 icon = null;
@@ -166,10 +185,10 @@ function HomeTabs() {
           },
         })}
       >
-        <Tab.Screen name="HomeTab" component={HomeScreen} options={{ tabBarLabel: 'Connect' }} />
-        <Tab.Screen name="CommunityTab" component={CommunityScreen} options={{ tabBarLabel: 'Community' }} />
-        <Tab.Screen name="LikesTab" component={LikesScreen} options={{ tabBarLabel: 'Likes' }} />
-        <Tab.Screen name="MessagesTab" component={MessagesScreen} options={{ tabBarLabel: 'Chats' }} />
+        <Tab.Screen name="HomeTab" component={HomeScreenSafe} options={{ tabBarLabel: 'Connect' }} />
+        <Tab.Screen name="CommunityTab" component={CommunityScreenSafe} options={{ tabBarLabel: 'Community' }} />
+        <Tab.Screen name="LikesTab" component={LikesScreenSafe} options={{ tabBarLabel: 'Likes' }} />
+        <Tab.Screen name="MessagesTab" component={MessagesScreenSafe} options={{ tabBarLabel: 'Chats' }} />
       </Tab.Navigator>
   );
 }
@@ -246,6 +265,7 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="PhotoVerification" component={PhotoVerificationScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Referral" component={ReferralScreen} />
       <MainStack.Screen name="StoriesView" component={StoriesViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
+      <MainStack.Screen name="VideoReels" component={VideoReelsScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
       <MainStack.Screen name="CreateStory" component={CreateStoryScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="CreateGroup" component={CreateGroupScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="InteractivityHub" component={InteractivityHubScreen} />

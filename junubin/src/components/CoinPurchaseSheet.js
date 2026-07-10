@@ -6,9 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSubscription, SHOW_PAYMENTS_UI } from '../payments';
 import { PRODUCT_IDS } from '../payments/products';
 import PaymentMethodSelector from './PaymentMethodSelector';
-import FlutterwaveCheckout from './FlutterwaveCheckout';
-import { PAYMENT_METHODS } from '../payments/FlutterwaveService';
-import { getLocalizedPrice, formatAfricanPrice, detectCurrency } from '../payments/africanPricing';
+import StripeCheckout from './StripeCheckout';
+import { PAYMENT_METHODS } from '../payments/paymentMethods';
 import { useCurrentUser } from '../hooks';
 
 const COIN_PACKS = [
@@ -30,16 +29,21 @@ export default function CoinPurchaseSheet(props) {
 function CoinPurchaseSheetImpl({ visible, onClose }) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
-  const { coins, purchase, purchaseWithFlutterwave, confirmFlutterwavePayment, purchaseInProgress } = useSubscription();
+  const {
+    coins,
+    purchase,
+    purchaseWithStripe,
+    confirmStripePayment,
+    purchaseInProgress,
+  } = useSubscription();
   const { currentUser } = useCurrentUser();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   const [selectedPack, setSelectedPack] = useState(null);
   const [showPaymentMethods, setShowPaymentMethods] = useState(false);
-  const [flwCheckout, setFlwCheckout] = useState(null); // { paymentLink, txRef }
+  const [stripeCheckout, setStripeCheckout] = useState(null); // { url, sessionId }
 
   const countryCode = currentUser?.countryCode || 'US';
-  const currency = detectCurrency(countryCode);
 
   const handleSelectPack = (pack) => {
     setSelectedPack(pack);
@@ -49,41 +53,36 @@ function CoinPurchaseSheetImpl({ visible, onClose }) {
   const handlePaymentMethod = async (method) => {
     if (!selectedPack) return;
 
+    if (method === PAYMENT_METHODS.STRIPE) {
+      // Primary path — Stripe Checkout in a WebView modal.
+      const result = await purchaseWithStripe({ productId: selectedPack.id });
+      if (result.success && result.url) {
+        setStripeCheckout({ url: result.url, sessionId: result.sessionId });
+      }
+      return;
+    }
+
     if (method === PAYMENT_METHODS.APP_STORE) {
-      // Use RevenueCat
+      // iOS / Android IAP via RevenueCat
       const result = await purchase(selectedPack.id);
       if (result.success) onClose?.();
-    } else {
-      // Use Flutterwave
-      const result = await purchaseWithFlutterwave({
-        productId: selectedPack.id,
-        paymentMethod: method,
-        currency,
-      });
-      if (result.success && result.paymentLink) {
-        setFlwCheckout({ paymentLink: result.paymentLink, txRef: result.txRef });
-      }
     }
   };
 
-  const handleFlwSuccess = async (txRef) => {
-    setFlwCheckout(null);
-    await confirmFlutterwavePayment(txRef);
+  const handleStripeSuccess = async (sessionId) => {
+    setStripeCheckout(null);
+    await confirmStripePayment(sessionId);
     onClose?.();
   };
 
-  const handleFlwCancel = () => setFlwCheckout(null);
-  const handleFlwError = () => setFlwCheckout(null);
+  const handleStripeCancel = () => setStripeCheckout(null);
+  const handleStripeError = () => setStripeCheckout(null);
 
-  const getPrice = (pack) => {
-    const local = getLocalizedPrice(pack.id, currency);
-    if (local && currency !== 'USD') return formatAfricanPrice(local, currency);
-    return pack.price;
-  };
+  const getPrice = (pack) => pack.price;
 
   return (
     <>
-      <Modal visible={visible && !flwCheckout} transparent animationType="slide" onRequestClose={onClose}>
+      <Modal visible={visible && !stripeCheckout} transparent animationType="slide" onRequestClose={onClose}>
         <Pressable style={styles.overlay} onPress={onClose}>
           <View style={[styles.sheet, { paddingBottom: insets.bottom + 20 }]} onStartShouldSetResponder={() => true}>
             <View style={styles.handle} />
@@ -133,14 +132,14 @@ function CoinPurchaseSheetImpl({ visible, onClose }) {
         priceLabel={selectedPack ? getPrice(selectedPack) : ''}
       />
 
-      {flwCheckout && (
-        <FlutterwaveCheckout
-          visible={!!flwCheckout}
-          paymentLink={flwCheckout.paymentLink}
-          txRef={flwCheckout.txRef}
-          onSuccess={handleFlwSuccess}
-          onCancel={handleFlwCancel}
-          onError={handleFlwError}
+      {stripeCheckout && (
+        <StripeCheckout
+          visible={!!stripeCheckout}
+          url={stripeCheckout.url}
+          sessionId={stripeCheckout.sessionId}
+          onSuccess={handleStripeSuccess}
+          onCancel={handleStripeCancel}
+          onError={handleStripeError}
         />
       )}
     </>

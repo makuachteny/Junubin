@@ -85,7 +85,17 @@ const ProfileDetailScreen = ({ navigation, route }) => {
     if (!gate('swipe_like')) return;
     if (session && profile.id) {
       discoverService.recordSwipe(profile.id, 'like', { mode: swipeMode }).then((r) => {
-        if (r?.match) Alert.alert('It\'s a Match!', `You and ${profile.name} liked each other!`);
+        // Match celebration is owned by HomeScreen's MatchCelebrationOverlay.
+        // We navigate back via goBackWithSwipe and HomeScreen renders the
+        // overlay once it spots the new match on next focus. Duplicate
+        // popping an Alert here would race with the overlay and surface
+        // two "It's a Match!" dialogs on top of each other.
+        if (r?.match) {
+          navigation.navigate('Main', {
+            screen: 'HomeTab',
+            params: { celebrateMatchId: r.match.id, matchedProfile: profile },
+          });
+        }
       }).catch((e) => { if (__DEV__) console.warn('Like swipe failed:', e); });
     }
     goBackWithSwipe('right');

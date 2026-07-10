@@ -1,20 +1,20 @@
 /**
- * FlutterwaveCheckout
+ * StripeCheckout
  *
- * Full-screen modal that renders the Flutterwave hosted checkout
- * in a WebView. Detects success/failure redirects and returns control
- * to the app.
+ * Full-screen modal that renders Stripe's hosted Checkout in a WebView.
+ * Detects the junubin:// success / cancel redirect and hands control
+ * back to the caller so it can refresh server state.
  *
  * Props:
- *   visible - boolean
- *   paymentLink - URL from FlutterwaveService.createPayment()
- *   txRef - transaction reference for status polling
- *   onSuccess(txRef) - called when payment succeeds
- *   onCancel() - called when user cancels or closes
- *   onError(message) - called on payment failure
+ *   visible    - boolean
+ *   url        - Stripe Checkout Session URL from StripeService.createCheckout()
+ *   sessionId  - Session id used to poll the Payment table for webhook confirmation
+ *   onSuccess(sessionId) - called once the webhook-confirmed Payment row is `succeeded`
+ *   onCancel()           - called when user aborts or closes
+ *   onError(message)     - called on payment failure
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -22,22 +22,21 @@ import {
   Modal,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily } from '../theme';
-import FlutterwaveService from '../payments/FlutterwaveService';
+import { useTheme, FontFamily } from '../theme';
+import StripeService from '../payments/StripeService';
 
-/** Max time to poll for payment confirmation (ms) */
-const POLL_TIMEOUT = 120000; // 2 minutes
-const POLL_INTERVAL = 3000; // 3 seconds
+/** Max time to poll for webhook confirmation (ms) */
+const POLL_TIMEOUT = 60000;   // Stripe webhooks normally land in <5s; give 60s headroom
+const POLL_INTERVAL = 2000;
 
-export default function FlutterwaveCheckout({
+export default function StripeCheckout({
   visible,
-  paymentLink,
-  txRef,
+  url,
+  sessionId,
   onSuccess,
   onCancel,
   onError,
@@ -49,33 +48,40 @@ export default function FlutterwaveCheckout({
   const webViewRef = useRef(null);
 
   /**
-   * Poll the payment status endpoint until success, failure, or timeout.
+   * Poll the Payment table until the webhook marks the session
+   * succeeded / failed / cancelled, or we hit the timeout. Stripe's
+   * own redirect happens before the webhook lands, so we have to
+   * confirm separately rather than trusting the redirect URL alone.
    */
-  const pollPaymentStatus = useCallback(async () => {
-    if (!txRef) return;
+  const pollStatus = useCallback(async () => {
+    if (!sessionId) {
+      onSuccess?.(null);
+      return;
+    }
     setVerifying(true);
-
     const startTime = Date.now();
+
     const poll = async () => {
       try {
-        const result = await FlutterwaveService.checkPaymentStatus(txRef);
-        if (result.status === 'successful') {
+        const result = await StripeService.getSessionStatus(sessionId);
+        if (result.status === 'succeeded') {
           setVerifying(false);
-          onSuccess?.(txRef);
+          onSuccess?.(sessionId);
           return;
         }
-        if (result.status === 'failed' || result.status === 'cancelled') {
+        if (result.status === 'failed' || result.status === 'cancelled' || result.status === 'refunded') {
           setVerifying(false);
           onError?.(`Payment ${result.status}`);
           return;
         }
-        // Still pending — poll again if within timeout
         if (Date.now() - startTime < POLL_TIMEOUT) {
           setTimeout(poll, POLL_INTERVAL);
         } else {
+          // Webhook hasn't landed yet. Stripe will retry the delivery
+          // so the row will appear eventually — return success and let
+          // the caller refresh on next foreground.
           setVerifying(false);
-          // Payment may still be processing — tell user to check later
-          onSuccess?.(txRef); // Optimistic: webhook will grant entitlement
+          onSuccess?.(sessionId);
         }
       } catch {
         setVerifying(false);
@@ -84,37 +90,30 @@ export default function FlutterwaveCheckout({
     };
 
     poll();
-  }, [txRef, onSuccess, onError]);
+  }, [sessionId, onSuccess, onError]);
 
   /**
-   * Intercept navigation to detect Flutterwave redirect URLs.
-   * Flutterwave redirects to the configured redirect_url on completion.
+   * Intercept WebView navigation to detect Stripe's redirect to the
+   * junubin:// success/cancel deep link.
    */
   const handleNavigationChange = useCallback((navState) => {
-    const url = navState.url || '';
+    const navUrl = navState.url || '';
 
-    // Detect success redirect (configured as junubin://payment/callback or a custom URL)
-    if (
-      url.includes('junubin://payment') ||
-      url.includes('/payment/callback') ||
-      url.includes('status=successful') ||
-      url.includes('status=completed')
-    ) {
-      pollPaymentStatus();
+    if (navUrl.startsWith('junubin://payment/stripe/success') ||
+        navUrl.includes('payment/stripe/success')) {
+      pollStatus();
       return false;
     }
-
-    // Detect cancel
-    if (url.includes('status=cancelled') || url.includes('cancel')) {
+    if (navUrl.startsWith('junubin://payment/stripe/cancel') ||
+        navUrl.includes('payment/stripe/cancel')) {
       onCancel?.();
       return false;
     }
-
     return true;
-  }, [pollPaymentStatus, onCancel]);
+  }, [pollStatus, onCancel]);
 
   const handleClose = () => {
-    if (verifying) return; // Don't allow close while verifying
+    if (verifying) return;
     onCancel?.();
   };
 
@@ -129,7 +128,7 @@ export default function FlutterwaveCheckout({
             <Ionicons name="close" size={24} color={verifying ? colors.gray400 : colors.black} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Ionicons name="shield-checkmark" size={16} color="#009739" />
+            <Ionicons name="shield-checkmark" size={16} color="#635BFF" />
             <Text style={[styles.headerTitle, { color: colors.black }]}>Secure Payment</Text>
           </View>
           <View style={{ width: 36 }} />
@@ -144,18 +143,28 @@ export default function FlutterwaveCheckout({
                 Confirming Payment...
               </Text>
               <Text style={[styles.verifyingDesc, { color: colors.gray500 }]}>
-                Waiting for mobile money confirmation.{'\n'}This may take up to 2 minutes.
+                Stripe is finalising your transaction.{'\n'}This usually takes a few seconds.
               </Text>
             </View>
           </View>
         )}
 
         {/* WebView */}
-        {paymentLink && !verifying && (
+        {url && !verifying && (
           <WebView
             ref={webViewRef}
-            source={{ uri: paymentLink }}
+            source={{ uri: url }}
             onNavigationStateChange={handleNavigationChange}
+            onShouldStartLoadWithRequest={(req) => {
+              // Catch the junubin:// redirect on iOS too (some versions
+              // don't surface custom schemes through onNavigationStateChange).
+              if (req.url?.startsWith('junubin://')) {
+                if (req.url.includes('stripe/success')) pollStatus();
+                else if (req.url.includes('stripe/cancel')) onCancel?.();
+                return false;
+              }
+              return true;
+            }}
             onLoadStart={() => setLoading(true)}
             onLoadEnd={() => setLoading(false)}
             javaScriptEnabled
@@ -194,7 +203,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    borderBottomWidth: 0,
   },
   closeBtn: {
     width: 36,

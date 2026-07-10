@@ -17,9 +17,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontFamily } from '../theme';
+import { reportError } from '../utils/reportError';
 
 const ONBOARDED_KEY = '@junubin_onboarded';
-const markOnboarded = () => AsyncStorage.setItem(ONBOARDED_KEY, 'true').catch(() => {});
+const markOnboarded = () =>
+  AsyncStorage.setItem(ONBOARDED_KEY, 'true')
+    .catch((err) => reportError('OnboardingScreen.markOnboarded', err));
 
 const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
