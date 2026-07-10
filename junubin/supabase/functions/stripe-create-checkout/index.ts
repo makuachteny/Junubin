@@ -24,6 +24,17 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const STRIPE_API = "https://api.stripe.com/v1";
 
+// Stripe Tax is OFF by default. Enabling `automatic_tax` without a
+// registered tax location in the Stripe dashboard makes Checkout fail
+// with `tax_calculation_could_not_be_performed` for buyers in
+// jurisdictions you haven't registered — a silent revenue leak at
+// launch. Once you've added your tax registration(s) in
+// dashboard.stripe.com → Settings → Tax, set the Supabase secret
+// `STRIPE_AUTOMATIC_TAX=true` to turn it on. No code change / redeploy
+// of intent needed beyond the secret.
+const STRIPE_AUTOMATIC_TAX =
+  (Deno.env.get("STRIPE_AUTOMATIC_TAX") || "").toLowerCase() === "true";
+
 function form(obj: Record<string, unknown>, prefix = ""): string {
   const parts: string[] = [];
   for (const [k, v] of Object.entries(obj)) {
@@ -38,14 +49,26 @@ function form(obj: Record<string, unknown>, prefix = ""): string {
   return parts.filter(Boolean).join("&");
 }
 
-async function stripe(method: string, pathname: string, body?: Record<string, unknown>): Promise<any> {
+async function stripe(
+  method: string,
+  pathname: string,
+  body?: Record<string, unknown>,
+  idempotencyKey?: string,
+): Promise<any> {
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Stripe-Version": "2024-06-20",
+  };
+  // Idempotency key — Stripe returns the SAME object for repeated POSTs
+  // carrying the same key (24h window). Guards against a double-tap on
+  // "Subscribe"/"Buy" creating two checkout sessions (and, worse, two
+  // customers) from one user intent.
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
+
   const res = await fetch(`${STRIPE_API}${pathname}`, {
     method,
-    headers: {
-      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Stripe-Version": "2024-06-20",
-    },
+    headers,
     body: body ? form(body) : undefined,
   });
   const json = await res.json();
@@ -145,7 +168,11 @@ serve(async (req) => {
       success_url: successUrl,
       cancel_url: cancelUrl,
       "line_items[0]": { price: product.stripePriceId, quantity: 1 },
-      "automatic_tax[enabled]": "true",
+      // Off until a tax registration exists in Stripe — controlled by the
+      // STRIPE_AUTOMATIC_TAX secret (see top of file). Enabling it without
+      // a registration makes Checkout throw "no tax registration for
+      // customer" for buyers in those regions.
+      "automatic_tax[enabled]": STRIPE_AUTOMATIC_TAX ? "true" : "false",
       "payment_method_types[0]": "card",
       // For consumables, attach our internal ids so the webhook can grant
       // entitlements without a DB round-trip.
@@ -162,7 +189,25 @@ serve(async (req) => {
       sessionBody["subscription_data[metadata][auth_user_id]"] = authUser.id;
     }
 
-    const session = await stripe("POST", "/checkout/sessions", sessionBody);
+    // Idempotency key scoped to (user, product, time bucket). A repeated
+    // POST inside the window reuses the same Checkout Session instead of
+    // spawning a duplicate, guarding against a double-tap on Subscribe/Buy.
+    //
+    // The window differs by product kind on purpose:
+    //   • subscription — 10 min. Re-buying the same sub you're mid-checkout
+    //     on is never a legitimate distinct intent, so a wide window is safe
+    //     and maximally dedupes.
+    //   • consumable   — 15 s. Coins / Super Likes / Spotlights are
+    //     genuinely re-purchasable; a user may deliberately buy a second
+    //     pack moments later. A wide bucket would hand them back the FIRST
+    //     (already-completed) session and silently block the second sale —
+    //     a real revenue leak. 15 s still absorbs an accidental double-tap
+    //     while letting a deliberate repurchase get its own session.
+    const windowMs = product.kind === "subscription" ? 10 * 60 * 1000 : 15 * 1000;
+    const bucket = Math.floor(Date.now() / windowMs);
+    const idempotencyKey = `checkout:${userId}:${productId}:${bucket}`;
+
+    const session = await stripe("POST", "/checkout/sessions", sessionBody, idempotencyKey);
 
     return jsonResponse({ sessionId: session.id, url: session.url });
   } catch (err) {

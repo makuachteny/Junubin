@@ -31,10 +31,24 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, errorResponse, jsonResponse } from "../_shared/utils.ts";
+import { captureException } from "../_shared/sentry.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const PROVIDER     = (Deno.env.get("MODERATION_PROVIDER") || "none").toLowerCase();
+// Environment posture. App.config.js distinguishes development /
+// preview / production via APP_VARIANT for the client; the Edge
+// Function side mirrors that with an env secret set at deploy time.
+// We accept EITHER `NODE_ENV` or `ENVIRONMENT` because the operator
+// runbook (docs/production-readiness) historically instructed
+// `supabase secrets set ENVIRONMENT=production` while the code read
+// NODE_ENV — a naming mismatch that silently disabled this fail-closed
+// guard. Reading both closes that hole: whichever the operator sets,
+// production is detected. Any non-development env that selects
+// PROVIDER=none is treated as a misconfiguration — the function refuses
+// rather than silently auto-approving every photo. May 2026 audit P0.5.
+const NODE_ENV     = (Deno.env.get("NODE_ENV") || Deno.env.get("ENVIRONMENT") || "development").toLowerCase();
+const IS_PROD_LIKE = NODE_ENV !== "development" && NODE_ENV !== "test";
 
 // Confidence thresholds. Any label above REJECT_AT auto-rejects; labels
 // in the [FLAG_AT, REJECT_AT) band need human review.
@@ -163,6 +177,22 @@ async function moderate(imageUrl: string): Promise<Verdict> {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // ── Fail-closed in production-like envs ────────────────────────────
+  // The previous default — PROVIDER = "none" → auto-approve — meant a
+  // deploy with no provider configured silently turned moderation off.
+  // For a dating app shipping in 2026 the cost of one un-moderated
+  // explicit image landing on the feed is far higher than the cost of
+  // a hard error. Refuse the request loudly so the operator notices.
+  if (IS_PROD_LIKE && PROVIDER === "none") {
+    console.error(
+      "[moderate-image] MODERATION_PROVIDER=none in production. Refusing to auto-approve.",
+    );
+    return errorResponse(
+      "Moderation provider not configured. Set MODERATION_PROVIDER to aws|google|sightengine.",
+      503,
+    );
+  }
+
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json();
@@ -197,6 +227,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(verdict);
   } catch (err) {
     console.error("moderate-image error:", err);
+    await captureException(err, { fn: "moderate-image", provider: PROVIDER });
     return errorResponse((err as Error).message || "Internal server error", 500);
   }
 });

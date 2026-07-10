@@ -10,9 +10,23 @@ if (IS_PROD) {
   if (!easProjectId) missing.push('EAS_PROJECT_ID');
   if (!supabaseUrl) missing.push('EXPO_PUBLIC_SUPABASE_URL');
   if (!supabaseAnonKey) missing.push('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+  // Android Maps blank-tile guard: a production build that ships
+  // without the Google Maps key renders the People map as gray with
+  // a "For development purposes only" watermark. Treat this as a
+  // launch blocker so a missed env var is caught at build time, not
+  // by a tester opening the map on day 1.
+  if (!process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) {
+    missing.push('EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (Android maps will be blank without this)');
+  }
   if (missing.length > 0) {
     throw new Error(`[JuNubin] Missing required production env vars: ${missing.join(', ')}`);
   }
+}
+
+if (!IS_PROD && !process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY) {
+  // Dev / preview warning only — don't block local builds since
+  // developers may not need the map on every iteration.
+  console.warn('[JuNubin] EXPO_PUBLIC_GOOGLE_MAPS_API_KEY not set — Android map will show a blank tile.');
 }
 
 const getAppName = () => {
@@ -65,7 +79,13 @@ export default {
         NSPhotoLibraryAddUsageDescription: 'JuNubin saves images you create (e.g. event posters or shared memes) to your photo library only when you tap save.',
         NSLocationWhenInUseUsageDescription: 'JuNubin uses your location to show people nearby and let you tag posts with where they were taken. Location is only collected while you are using the app.',
         NSContactsUsageDescription: 'JuNubin can scan your contacts to find friends who already have an account. Contact data is only used for this lookup and is never shown to other users.',
-        NSFaceIDUsageDescription: 'JuNubin can use Face ID to quickly unlock your account on this device.',
+        // NSFaceIDUsageDescription intentionally OMITTED. Face ID unlock
+        // is not implemented — `expo-local-authentication` isn't a
+        // dependency and no code calls the LocalAuthentication API.
+        // Declaring a purpose string for an API the app never accesses
+        // is dead config and a possible App Review flag. Add this back
+        // together with `expo-local-authentication` if/when biometric
+        // unlock ships.
         // NSUserTrackingUsageDescription intentionally OMITTED.
         // App Review treats a tracking permission string without the
         // matching ATT prompt at runtime as a rejection vector — and
@@ -112,6 +132,19 @@ export default {
         backgroundColor: '#000000',
       },
       package: getBundleId(),
+      // Google Maps API key — required for the Android PeopleMap to
+      // render real tiles. Without it the map shows a blank gray
+      // canvas with a "For development purposes only" watermark —
+      // the most common "the map is broken!" report at launch for
+      // RN apps using react-native-maps. iOS uses Apple MapKit and
+      // needs no key. Get the key from Google Cloud Console with
+      // "Maps SDK for Android" enabled, restrict it to the bundle
+      // ID + your release / debug SHA-1 fingerprints.
+      config: {
+        googleMaps: {
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+        },
+      },
       permissions: [
         'android.permission.CAMERA',
         'android.permission.RECORD_AUDIO',
@@ -120,6 +153,17 @@ export default {
         'android.permission.ACCESS_FINE_LOCATION',
         'android.permission.READ_CONTACTS',
         'android.permission.READ_MEDIA_IMAGES',
+      ],
+      // Strip permissions that transitive SDKs (analytics, etc.) merge
+      // into the final manifest but that JuNubin does not use. AD_ID is
+      // the important one: PostHog and other libs auto-add
+      // com.google.android.gms.permission.AD_ID, which forces an
+      // "advertising ID" disclosure in the Play Console Data Safety
+      // form. JuNubin runs no ads and no ad attribution ("No ads ever",
+      // src/payments/products.js), so we block it to keep the Data
+      // Safety declaration honest and minimal.
+      blockedPermissions: [
+        'com.google.android.gms.permission.AD_ID',
       ],
     },
     web: {
