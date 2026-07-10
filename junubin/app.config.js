@@ -172,6 +172,13 @@ export default {
     plugins: [
       'expo-font',
       'expo-asset',
+      // Sentry native SDK wiring. Required by @sentry/react-native (the
+      // SDK-54-pinned 7.2.x line) so native crashes are captured and
+      // source maps upload at build time — JS-only Sentry.init() in
+      // App.js can't do either on its own. Safe no-op until the operator
+      // sets EXPO_PUBLIC_SENTRY_DSN (and, for source-map upload,
+      // SENTRY_ORG / SENTRY_PROJECT / SENTRY_AUTH_TOKEN in EAS secrets).
+      '@sentry/react-native',
       [
         'expo-notifications',
         {
