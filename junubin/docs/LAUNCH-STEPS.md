@@ -11,6 +11,25 @@ Legend: 🔴 blocker · 🟡 required to sell · 🟢 pre-submit
 
 ---
 
+## ✅ Current state — verified live on 2026-07-09
+
+Checked against the linked project `uvtyiytbgkasemabtznc` ("Junub"). What's
+already done and what's actually left:
+
+| Step | Status |
+|---|---|
+| 1 · DB migrations | ✅ **DONE** — remote is at 00045 (incl. the 00044 money-fix). Nothing to push. |
+| 2 · Secrets | ⚠️ **Partial** — `STRIPE_SECRET_KEY` ✅ and `DAILY_API_KEY` ✅ are set. **Still missing:** `STRIPE_WEBHOOK_SECRET`, `MODERATION_PROVIDER` (+ `SIGHTENGINE_USER`/`SIGHTENGINE_SECRET`), `JUNUBIN_INTERNAL_SECRET`, `NODE_ENV`. |
+| 3 · Stripe webhook | ❌ **Not done** — no `STRIPE_WEBHOOK_SECRET`, so Stripe→app webhooks can't verify. Payment grants won't fire until this is set. |
+| 4 · Edge functions | ⚠️ **Stale** — deployed versions are from May 10–17 and predate this session's hardening (idempotency, moderation env, renewal handler). The old Flutterwave functions (`flw-*`) are also still live and should be removed. Redeploy per step 4 once secrets are in. |
+| 5 · RevenueCat keys | ❌ Placeholders in `eas.json`. |
+| 6–11 | ❌ Not started (store/IAP/RevenueCat/submit). |
+
+**So the true next action is Step 2/3** (Stripe webhook secret + moderation
+provider), *then* redeploy functions (Step 4), *then* the store work.
+
+---
+
 ## 0 · One-time tooling (~10 min)
 
 | Tool | Install / link |
@@ -112,14 +131,33 @@ recurring prices; the 9 consumables are one-time prices.)
 
 ## 🔴 4 · Deploy edge functions (~5 min)
 
+> ⚠️ **verify_jwt gotcha.** `supabase functions deploy` defaults to
+> *requiring* a Supabase JWT. `stripe-webhook` is called by Stripe with
+> **no** JWT (it verifies its own HMAC signature), so it MUST deploy with
+> `--no-verify-jwt` or every webhook 401s and payment grants never fire.
+> All other functions are called with a user JWT — keep verification on.
+
 ```bash
 cd /Users/makuachtenygatluak/Documents/Projects/ss_junubin/junubin
-for fn in $(ls supabase/functions | grep -v '^_'); do
+
+# stripe-webhook is public (Stripe has no Supabase JWT) — does its own HMAC check
+supabase functions deploy stripe-webhook --no-verify-jwt
+
+# everything else keeps JWT verification (called with a user token)
+for fn in $(ls supabase/functions | grep -vE '^_|^stripe-webhook$'); do
   supabase functions deploy "$fn"
 done
 ```
 
-**Verify** (should return 401, not 404):
+**Clean up the removed Flutterwave functions** (still live on remote from a
+prior deploy; the app no longer calls them):
+```bash
+supabase functions delete flw-create-payment
+supabase functions delete flw-check-status
+supabase functions delete flw-webhook
+```
+
+**Verify** (should return 401/400, not 404):
 ```bash
 curl -i https://uvtyiytbgkasemabtznc.supabase.co/functions/v1/stripe-webhook
 curl -i https://uvtyiytbgkasemabtznc.supabase.co/functions/v1/push-send
