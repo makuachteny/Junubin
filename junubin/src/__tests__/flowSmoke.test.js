@@ -4,8 +4,6 @@ import { NavigationContainer } from '@react-navigation/native';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SignupScreen from '../screens/SignupScreen';
-import PostCard from '../components/PostCard';
-import PostDetailScreen from '../screens/PostDetailScreen';
 
 const mockUseTheme = jest.fn();
 const mockUseAuth = jest.fn();
@@ -60,17 +58,6 @@ jest.mock('react-native-safe-area-context', () => ({
 
 jest.mock('../utils/haptics', () => ({
   hapticSelection: jest.fn(),
-}));
-
-// PostCard.handleLike fires toggleLike() and rolls back on rejection.
-// Without this mock the real service runs and its promise settles after
-// the test's synchronous assertions, producing an act(...) warning.
-jest.mock('../api/services/postService', () => ({
-  toggleLike: jest.fn(async () => ({})),
-  toggleRepost: jest.fn(async () => ({})),
-  toggleWave: jest.fn(async () => ({})),
-  deletePost: jest.fn(async () => ({})),
-  updatePostContent: jest.fn(async () => ({})),
 }));
 
 jest.mock('@react-navigation/native', () => {
@@ -135,41 +122,4 @@ describe('Flow smoke tests', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('Signup');
   });
 
-  it('post card opens detail on card press, not on like', async () => {
-    const post = {
-      id: 'p1',
-      user: { name: 'Asha', avatar: null, location: 'Juba' },
-      timestamp: 'Today',
-      content: 'Hello world',
-      likes: 2,
-      comments: 1,
-    };
-    const { getByText, getByTestId } = render(<PostCard post={post} />);
-    await act(async () => {
-      fireEvent.press(getByTestId('post-like-action'));
-    });
-    expect(mockNavigate).not.toHaveBeenCalled();
-    fireEvent.press(getByText('Hello world'));
-    expect(mockNavigate).toHaveBeenCalledWith('PostDetail', { post });
-  });
-
-  it('post detail like increments count', () => {
-    const navigation = { goBack: jest.fn() };
-    const route = { params: { post: { id: 'p2', likes: 10, user: { name: 'Asha', avatar: null, location: 'Juba' } } } };
-    const { getByTestId } = render(
-      <NavigationContainer>
-        <PostDetailScreen navigation={navigation} route={route} />
-      </NavigationContainer>
-    );
-    const flatten = (node) => {
-      if (node == null || typeof node === 'boolean') return '';
-      if (typeof node === 'string' || typeof node === 'number') return String(node);
-      if (Array.isArray(node)) return node.map(flatten).join('');
-      if (node.props?.children) return flatten(node.props.children);
-      return '';
-    };
-    expect(flatten(getByTestId('post-like-count'))).toContain('10');
-    fireEvent.press(getByTestId('post-like-action'));
-    expect(flatten(getByTestId('post-like-count'))).toContain('11');
-  });
 });

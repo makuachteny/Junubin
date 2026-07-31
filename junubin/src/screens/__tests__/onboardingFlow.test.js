@@ -11,6 +11,7 @@ const mockUseAuth = jest.fn();
 const mockUseSubscription = jest.fn();
 const mockUseCurrentUser = jest.fn();
 const mockSetItem = jest.fn(async () => {});
+const mockGetItem = jest.fn(async () => null);
 
 jest.mock('../../theme', () => {
   const actual = jest.requireActual('../../theme');
@@ -32,7 +33,7 @@ jest.mock('../../hooks', () => ({
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
   setItem: (...args) => mockSetItem(...args),
-  getItem: jest.fn(async () => null),
+  getItem: (...args) => mockGetItem(...args),
 }));
 
 jest.mock('../../accessibility', () => ({
@@ -80,13 +81,9 @@ jest.mock('../HomeScreen', () => () => {
   const { Text } = require('react-native');
   return <Text>Home Screen</Text>;
 });
-jest.mock('../LikesScreen', () => () => {
+jest.mock('../DirectoryScreen', () => () => {
   const { Text } = require('react-native');
-  return <Text>Likes Screen</Text>;
-});
-jest.mock('../CommunityScreen', () => () => {
-  const { Text } = require('react-native');
-  return <Text>Community Screen</Text>;
+  return <Text>Directory Screen</Text>;
 });
 jest.mock('../MessagesScreen', () => () => {
   const { Text } = require('react-native');
@@ -108,10 +105,11 @@ const COLORS = {
   error: '#CE1126', success: '#009739', rose: '#E84393', gold: '#FCCD12',
 };
 
-describe('Purpose / Intention flow', () => {
+describe('Onboarding / open-to flow', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockGetItem.mockResolvedValue(null);
     mockUseTheme.mockReturnValue({ isDark: false, toggleTheme: jest.fn(), colors: COLORS });
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
@@ -145,38 +143,40 @@ describe('Purpose / Intention flow', () => {
     jest.useRealTimers();
   });
 
-  it('renders the purpose step first on ProfileSetup', () => {
-    // Purpose moved to step 1 so we never waste a user's time on
-    // generic questions before they tell us which mode they want.
+  it('renders the open-to step first on ProfileSetup', () => {
+    // "What are you open to?" replaced the Dating/Socialize purpose
+    // cards in the social pivot. It leads because it is what makes
+    // someone findable by the right people.
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
     const { getByText } = render(<ProfileSetupScreen navigation={nav} route={route} />);
-    expect(getByText('What brings you here?')).toBeTruthy();
+    expect(getByText('What are you open to?')).toBeTruthy();
   });
 
-  it('purpose step shows Dating and Socialize options', () => {
+  it('open-to step shows the community badges', () => {
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
-    const { getByText, getByTestId } = render(
+    const { getByTestId } = render(
       <ProfileSetupScreen navigation={nav} route={route} />
     );
-    expect(getByText('What brings you here?')).toBeTruthy();
-    // Both purpose option cards are rendered immediately — the user
-    // has to pick one before any other step appears.
-    expect(getByTestId('purpose-dating')).toBeTruthy();
-    expect(getByTestId('purpose-socialize')).toBeTruthy();
+    expect(getByTestId('open-to-friendship')).toBeTruthy();
+    expect(getByTestId('open-to-community')).toBeTruthy();
+    expect(getByTestId('open-to-student')).toBeTruthy();
   });
 
-  it('dating-only steps are hidden before purpose is chosen', () => {
+  it('asks no dating questions anywhere in onboarding', () => {
+    // Acceptance criterion for the pivot: a new user is never asked
+    // about sexuality, who they want to date, dating intentions, or
+    // children. These steps were deleted, not hidden behind a flag.
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
     const { queryByText } = render(
       <ProfileSetupScreen navigation={nav} route={route} />
     );
-    // Dating-only steps (sexuality, datePref, intention, children)
-    // should not be visible since purpose hasn't been selected
     expect(queryByText("What's your sexuality?")).toBeNull();
     expect(queryByText('Who do you want to date?')).toBeNull();
+    expect(queryByText('Do you have children?')).toBeNull();
+    expect(queryByText('What brings you here?')).toBeNull();
   });
 
   it('authenticated user with complete profile goes to Main (Home)', async () => {
@@ -221,8 +221,8 @@ describe('Purpose / Intention flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    // First step is now the purpose card, not the name field.
-    expect(await findByText('What brings you here?')).toBeTruthy();
+    // First step is the open-to badges, not the name field.
+    expect(await findByText('What are you open to?')).toBeTruthy();
   });
 
   it('unauthenticated user sees Onboarding', async () => {
@@ -239,5 +239,21 @@ describe('Purpose / Intention flow', () => {
     // Onboarding landing now shows the Get Started CTA (Skip removed
      // when the multi-page flow collapsed to a single landing screen).
     expect(await findByText('Get Started')).toBeTruthy();
+  });
+
+  it('returning unauthenticated user skips landing and sees Signup', async () => {
+    mockGetItem.mockResolvedValue('true');
+    mockUseAuth.mockReturnValue({
+      ready: true, isAuthenticated: false, session: null, user: null,
+      logout: jest.fn(), updateUser: jest.fn(),
+    });
+
+    const { findByText, queryByText } = render(
+      <NavigationContainer>
+        <AppNavigator />
+      </NavigationContainer>
+    );
+    expect(await findByText('JOIN THE COMMUNITY')).toBeTruthy();
+    expect(queryByText('Get Started')).toBeNull();
   });
 });

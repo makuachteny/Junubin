@@ -1,6 +1,11 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../../config/supabase';
 
+function firstRelation(value) {
+  if (Array.isArray(value)) return value[0] || null;
+  return value || null;
+}
+
 /**
  * Resize + recompress a local image URI before upload. Caps the long
  * edge at 1600px (expo-image-manipulator preserves aspect ratio when
@@ -43,7 +48,11 @@ export async function getMyProfile() {
     .single();
 
   if (error) throw error;
-  return data;
+  return {
+    ...data,
+    profile: firstRelation(data?.profile),
+    photos: Array.isArray(data?.photos) ? data.photos : [],
+  };
 }
 
 export async function updateProfile(updates) {
@@ -91,6 +100,12 @@ export async function updateProfile(updates) {
     // Settings → Appear on map. The map component reads it via the
     // discover/profile fetch path.
     'shareLocation',
+    // Social-pivot profile fields (00047). `locationVisibility`
+    // supersedes `shareLocation` — the DB trigger keeps the two in
+    // sync in whichever direction the client wrote, so an old build
+    // sending only `shareLocation` still works.
+    'languages', 'openTo', 'profession',
+    'locationVisibility', 'locationVisibleUntil', 'directoryVisible',
   ];
 
   for (const [key, value] of Object.entries(updates)) {
@@ -142,7 +157,27 @@ export async function updateProfile(updates) {
     .single();
   if (refetchErr) throw labeled('Profile re-fetch', refetchErr);
 
-  return updated;
+  const normalized = {
+    ...updated,
+    profile: firstRelation(updated?.profile),
+    photos: Array.isArray(updated?.photos) ? updated.photos : [],
+  };
+  const updatedProfile = normalized.profile;
+  const missingPersistedFields = [];
+  if (updates.profileComplete && !updatedProfile?.profileComplete) {
+    missingPersistedFields.push('profileComplete');
+  }
+  if (updates.accountPurpose && updatedProfile?.accountPurpose !== updates.accountPurpose) {
+    missingPersistedFields.push('accountPurpose');
+  }
+  if (updates.surveyCompletedAt && !updatedProfile?.surveyCompletedAt) {
+    missingPersistedFields.push('surveyCompletedAt');
+  }
+  if (missingPersistedFields.length > 0) {
+    throw new Error(`Profile save did not persist: ${missingPersistedFields.join(', ')}`);
+  }
+
+  return normalized;
 }
 
 // Decorate Supabase errors with their PostgREST/Storage codes so we
@@ -447,6 +482,20 @@ export function normalizeProfile(apiUser) {
     education: profile.education || '',
     children: profile.children || '',
     gender: apiUser.gender,
+    // ── Social-pivot fields (00047) ──────────────────────────────────
+    // Purely additive — every field above keeps its existing meaning
+    // and nullability so the dating-era screens are untouched. The
+    // directory / connection surfaces read these.
+    city: apiUser.city || '',
+    countryCode: apiUser.countryCode || '',
+    languages: Array.isArray(profile.languages) ? profile.languages : [],
+    openTo: Array.isArray(profile.openTo) ? profile.openTo : [],
+    profession: profile.profession || '',
+    lastActiveAt: apiUser.lastActiveAt || null,
+    // 'off' | 'city' | 'coarse'. Defaults to 'off' when the row
+    // pre-dates the migration or the caller didn't select the column —
+    // failing closed is the right default for a location field.
+    locationVisibility: profile.locationVisibility || 'off',
     _raw: apiUser,
   };
 }

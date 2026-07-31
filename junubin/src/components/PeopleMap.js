@@ -1,17 +1,26 @@
-// PeopleMap — Snap-Map-style overlay for the Connect / Home tab.
+// PeopleMap — the map surface of the Home tab: South Sudanese people
+// near you who chose to be visible.
 //
-// Privacy contract (must stay in sync with 00032_share_location_optin.sql):
-//   1. Users are visible on the map only if Profile.shareLocation === true.
+// Privacy contract (must stay in sync with 00032_share_location_optin.sql
+// and 00047_social_pivot.sql):
+//   1. Users are visible on the map only if they set
+//      Profile.locationVisibility to something other than 'off'
+//      (mirrored onto the legacy Profile.shareLocation boolean).
 //   2. Coordinates are bucketed to 3 decimal places (~110m precision)
 //      client-side before rendering, so even an opted-in user never
 //      reveals a precise apartment.
-//   3. The map is read-only for tier 1 — tapping a pin opens a small
-//      preview card that links to ProfileDetail. No DM-from-map yet
-//      (would surface as a stalker vector before we have proper
-//      "ghost mode" tooling).
-//   4. Demo users from DEMO_ROSTER appear regardless of
-//      shareLocation — they're seed data for testability, not real
-//      people whose privacy could leak.
+//   3. This component NEVER asks the OS for location until the caller
+//      passes `disclosureAccepted`, which is set only after the user
+//      has read the in-app disclosure (components/LocationDisclosure).
+//      Google Play requires prominent disclosure plus affirmative
+//      consent before collecting location; Apple expects the system
+//      prompt to arrive with context. Do not "simplify" this away.
+//   4. The map is read-only — tapping a pin opens a preview card that
+//      links to the profile. No DM-from-map (that would be a stalker
+//      vector before we have proper hide-from-specific-people tooling).
+//   5. Demo users from DEMO_ROSTER appear regardless of visibility —
+//      they're seed data for testability, not real people whose
+//      privacy could leak.
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
@@ -34,6 +43,7 @@ import { imageSource } from '../utils/imageSource';
 import { DEMO_ROSTER } from '../data/__dev__/demoRoster';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as discoverService from '../api/services/discoverService';
+import LocationDisclosure from './LocationDisclosure';
 
 // `react-native-maps` ships a native module. When the JS bundle is
 // loaded by Expo Go (or by any client missing the linked native code —
@@ -112,6 +122,11 @@ const distanceKm = (a, b) => {
 
 const KM_PER_MILE = 1.609344;
 
+// Height of the horizontal chip row, including its vertical padding.
+// The privacy strip is positioned directly beneath it, so the two must
+// agree — see the `banner` offset in the render below.
+const CHIP_ROW_HEIGHT = 38;
+
 // Distance filter presets. Values are radii in km; null = no cap.
 // Matches the Distance dropdown in the swipe-deck FilterBar so a user
 // who set "25 miles" there sees the same vocabulary on the map.
@@ -156,7 +171,23 @@ const peopleForMode = (mode, center) => {
     .filter(Boolean);
 };
 
-export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 12 }) {
+export default function PeopleMap({
+  // `mode` is a legacy dating/social discriminator. It defaults to null
+  // now — the app has one mode — but the prop is kept so any remaining
+  // caller doesn't change behaviour unexpectedly.
+  mode = null,
+  onPersonPress,
+  topInset = 12,
+  // Location consent gate. Until this is true we render the in-app
+  // disclosure and do NOT touch expo-location. See the privacy contract
+  // at the top of this file.
+  disclosureAccepted = false,
+  onDisclosureAccept,
+  onDisclosureDecline,
+  // Lets the disclosure's "Not now" path hand the user to the list view
+  // instead of stranding them on an empty map.
+  onBrowseList,
+}) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { width: screenW } = useWindowDimensions();
@@ -179,13 +210,20 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
   // the chip row stays scannable. 'any' = no filter applied.
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [genderFilter, setGenderFilter] = useState('any');  // 'any' | 'man' | 'woman'
 
-  // Pull the caller's current location once. If they decline the
+  // Pull the caller's current location once, but ONLY after the user
+  // has accepted the in-app disclosure. If they decline the OS
   // permission, fall back to a centroid of the visible people so the
-  // map opens on Adau's continent and not Antarctica.
+  // map opens on a populated continent rather than Antarctica.
   useEffect(() => {
+    if (!disclosureAccepted) {
+      // Nothing to do yet — the disclosure card is what's rendered.
+      // Clear the spinner so flipping consent doesn't flash "Loading".
+      setLocating(false);
+      return undefined;
+    }
     let cancelled = false;
+    setLocating(true);
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -218,11 +256,11 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
       }
     })();
     return () => { cancelled = true; };
-    // We intentionally only run this on mount — the centroid fallback
-    // uses the initial mode snapshot which is fine, the map's pan
-    // gestures handle further navigation.
+    // Runs on mount and again the moment consent flips to true. The
+    // centroid fallback uses the current mode snapshot, which is fine —
+    // the map's pan gestures handle further navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [disclosureAccepted]);
 
   // Resolve the offset center from the current region (caller's
   // device location once Location resolves). When region is still
@@ -278,22 +316,26 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
   // Apply chip filters. `Nearby` / `25mi` / `50mi` cap by haversine
   // distance from the caller; `any` disables the cap. Active-now
   // intersects with `activity === 'active'`.
+  //
+  // City-only users are dropped here, not server-side. `discover-nearby`
+  // returns everyone whose visibility is not 'off' so the list surfaces
+  // can show them, but we promised city-only members "no pin on the
+  // map" — putting one down anyway would break that promise even
+  // though the coordinate is coarse. They still appear in the Home list
+  // and the Directory, which is what they consented to.
   const visiblePeople = useMemo(() => {
     const cfg = DISTANCE_FILTERS.find((d) => d.id === distanceFilter) || DISTANCE_FILTERS[3];
     return allPeople.filter((p) => {
+      if (p.locationVisibility === 'city') return false;
+      if (!p.coords) return false;
       if (activeOnly && p.activity !== 'active') return false;
       if (verifiedOnly && !p.verified) return false;
-      if (genderFilter !== 'any') {
-        const g = String(p.gender || '').toLowerCase();
-        if (genderFilter === 'man' && g !== 'man') return false;
-        if (genderFilter === 'woman' && g !== 'woman') return false;
-      }
       if (cfg.maxKm == null || !center) return true;
       return distanceKm(center, p.coords) <= cfg.maxKm;
     });
-  }, [allPeople, distanceFilter, activeOnly, verifiedOnly, genderFilter, center]);
+  }, [allPeople, distanceFilter, activeOnly, verifiedOnly, center]);
 
-  const moreFiltersActive = verifiedOnly || genderFilter !== 'any';
+  const moreFiltersActive = verifiedOnly;
 
   const openPreview = useCallback(async (person) => {
     setSelected(person);
@@ -409,30 +451,11 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
           <View style={styles.sheetGrabber} />
           <Text style={styles.sheetTitle}>Customize</Text>
 
-          <Text style={styles.sheetSection}>Show me</Text>
-          <View style={styles.sheetPillRow}>
-            {[
-              { id: 'any',   label: 'Everyone' },
-              { id: 'man',   label: 'Men' },
-              { id: 'woman', label: 'Women' },
-            ].map((opt) => {
-              const active = genderFilter === opt.id;
-              return (
-                <TouchableOpacity
-                  key={opt.id}
-                  style={[styles.sheetPill, active && styles.sheetPillActive]}
-                  onPress={() => setGenderFilter(opt.id)}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                >
-                  <Text style={[styles.sheetPillText, active && styles.sheetPillTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {/* The gender filter that used to live here ("Show me: Men /
+              Women") was a dating affordance. In a community directory
+              it invites exactly the browsing behaviour we don't want,
+              so it's gone. Filter by background, language and what
+              someone is open to on the Directory tab instead. */}
 
           <Text style={styles.sheetSection}>Trust</Text>
           <TouchableOpacity
@@ -454,7 +477,7 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
           <View style={styles.sheetActions}>
             <TouchableOpacity
               style={styles.sheetClearBtn}
-              onPress={() => { setVerifiedOnly(false); setGenderFilter('any'); }}
+              onPress={() => setVerifiedOnly(false)}
               activeOpacity={0.8}
             >
               <Text style={styles.sheetClearText}>Clear</Text>
@@ -472,6 +495,26 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
     </Modal>
   );
 
+  // ── Location disclosure gate ──
+  // Rendered BEFORE anything that could touch expo-location. Until the
+  // user accepts, we have not asked the OS for anything and we do not
+  // know where they are. "Not now" hands them to the list view, which
+  // needs no location at all.
+  if (!disclosureAccepted) {
+    return (
+      <View style={styles.container}>
+        <LocationDisclosure
+          onAccept={() => onDisclosureAccept?.()}
+          onDecline={() => {
+            onDisclosureDecline?.();
+            onBrowseList?.();
+          }}
+          declineLabel={onBrowseList ? 'Not now — browse the list' : 'Not now'}
+        />
+      </View>
+    );
+  }
+
   // ── Fallback when react-native-maps native module is missing
   // (Expo Go, broken dev client). Render the same chrome — privacy
   // banner, filter chips, recenter shell — but with an explanatory
@@ -486,10 +529,10 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
             The map needs a native build. Open this view in TestFlight or a custom dev client.
           </Text>
         </View>
-        <View style={[styles.banner, { top: topInset + 48 }]}>
-          <Ionicons name="shield-checkmark" size={14} color="#FFF" />
-          <Text style={styles.bannerText} numberOfLines={2}>
-            You&apos;re hidden by default. Turn on &quot;Appear on map&quot; in Settings to share.
+        <View style={[styles.banner, { top: topInset + CHIP_ROW_HEIGHT }]} pointerEvents="none">
+          <Ionicons name="shield-checkmark" size={12} color="#FFF" />
+          <Text style={styles.bannerText} numberOfLines={1}>
+            You&apos;re hidden by default · Settings → Privacy
           </Text>
         </View>
         {renderFilters()}
@@ -554,24 +597,24 @@ export default function PeopleMap({ mode = 'Dating', onPersonPress, topInset = 1
         ))}
       </MapView>
 
-      {/* Privacy disclaimer overlays the top of the map so the rule is
-          visible every time a user opens this view. */}
-      <View style={styles.banner}>
-        <Ionicons name="shield-checkmark" size={14} color="#FFF" />
-        <Text style={styles.bannerText} numberOfLines={2}>
-          You&apos;re hidden by default. Turn on &quot;Appear on map&quot; in Settings to share.
-        </Text>
-      </View>
-
       {renderFilters()}
       {renderMoreFiltersSheet()}
 
-      {/* Result count pill — confirms the filter is doing something
-          and gives an immediate sense of "is anyone near me?". */}
-      <View style={[styles.countPill, { top: topInset + 92 }]}>
-        <Text style={styles.countPillText}>
-          {visiblePeople.length} {visiblePeople.length === 1 ? 'person' : 'people'}
+      {/* Privacy reminder + result count share one compact strip below
+          the chip row. This used to be a full-width banner pinned at
+          `top: 0` with no offset, which rendered *underneath* the chips
+          and made both unreadable. Keep the explicit offset in step
+          with CHIP_ROW_HEIGHT if the chips ever change size. */}
+      <View style={[styles.banner, { top: topInset + CHIP_ROW_HEIGHT }]} pointerEvents="none">
+        <Ionicons name="shield-checkmark" size={12} color="#FFF" />
+        <Text style={styles.bannerText} numberOfLines={1}>
+          You&apos;re hidden by default · Settings → Privacy
         </Text>
+        <View style={styles.bannerCount}>
+          <Text style={styles.bannerCountText}>
+            {visiblePeople.length} {visiblePeople.length === 1 ? 'person' : 'people'}
+          </Text>
+        </View>
       </View>
 
       {/* Recenter FAB — bottom-right, above the preview card slot. */}
@@ -691,20 +734,31 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   banner: {
     position: 'absolute',
-    left: 16, right: 16,
+    left: 12, right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 12,
+    gap: 5,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999,
   },
   bannerText: {
     flex: 1,
     color: '#FFF',
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 11,
+    lineHeight: 15,
     fontFamily: FontFamily.medium,
+  },
+  bannerCount: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  bannerCountText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontFamily: FontFamily.semibold,
   },
   filterBar: {
     position: 'absolute',
@@ -890,16 +944,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 14,
     fontFamily: FontFamily.bold,
     color: '#FFFFFF',
-  },
-  countPill: {
-    position: 'absolute',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: 999,
-  },
-  countPillText: {
-    color: '#FFF', fontSize: 11, fontFamily: FontFamily.semibold,
   },
   marker: {
     width: 44, height: 44, borderRadius: 22,

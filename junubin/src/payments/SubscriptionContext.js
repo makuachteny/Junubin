@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PaymentService from './PaymentService';
 import StripeService from './StripeService';
+import FlutterwaveService from './FlutterwaveService';
 import { PRODUCTS, TIER_RANK, tierFromEntitlements } from './products';
 import { supabase } from '../config/supabase';
 import { hasTierAccess, canSeeWhoLikesYou, hasUnlimitedLikes, canUseAdvancedFilters, canUseIncognito as canUseIncognitoFn, canUseDiasporaConnect, isSubscribed as checkSubscribed, ALL_FEATURES_FREE } from './entitlements';
@@ -13,17 +14,31 @@ import { reportError } from '../utils/reportError';
 const STORAGE_KEY = '@junubin_subscription';
 
 const DEFAULT_STATE = {
-  tier: 'free',
+  tier: ALL_FEATURES_FREE ? 'junub' : 'free',
   tierProductId: null,
-  spotlights: 3,
-  superLikes: 5,
-  whispers: 2,
-  coins: 100,
+  spotlights: ALL_FEATURES_FREE ? 999 : 3,
+  superLikes: ALL_FEATURES_FREE ? 999 : 5,
+  whispers: ALL_FEATURES_FREE ? 999 : 2,
+  coins: ALL_FEATURES_FREE ? 999999 : 100,
   promoTier: null,
   promoEndsAt: null,
-  adsEnabled: true,
+  adsEnabled: false,
   purchaseHistory: [],
 };
+
+function applyFreeLaunchState(next) {
+  if (!ALL_FEATURES_FREE) return next;
+  return {
+    ...next,
+    tier: 'junub',
+    tierProductId: null,
+    spotlights: Math.max(Number(next.spotlights) || 0, 999),
+    superLikes: Math.max(Number(next.superLikes) || 0, 999),
+    whispers: Math.max(Number(next.whispers) || 0, 999),
+    coins: Math.max(Number(next.coins) || 0, 999999),
+    adsEnabled: false,
+  };
+}
 
 const SubscriptionStateContext = createContext(null);
 const SubscriptionActionsContext = createContext(null);
@@ -46,9 +61,9 @@ export function SubscriptionProvider({ children }) {
   const normalizeState = useCallback((next) => {
     const promoEndsAt = next.promoEndsAt ? new Date(next.promoEndsAt).getTime() : null;
     if (promoEndsAt && promoEndsAt <= Date.now()) {
-      return { ...next, promoTier: null, promoEndsAt: null };
+      return applyFreeLaunchState({ ...next, promoTier: null, promoEndsAt: null });
     }
-    return next;
+    return applyFreeLaunchState(next);
   }, []);
 
   const getEffectiveTier = useCallback((baseTier, promoTier, promoEndsAt) => {
@@ -102,9 +117,11 @@ export function SubscriptionProvider({ children }) {
   // Load persisted state + initialize PaymentService on mount
   useEffect(() => {
     (async () => {
-      await PaymentService.initialize();
+      if (!ALL_FEATURES_FREE) {
+        await PaymentService.initialize();
+      }
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
+      if (authUser && !ALL_FEATURES_FREE) {
         PaymentService.identify(authUser.id);
       }
 
@@ -169,7 +186,7 @@ export function SubscriptionProvider({ children }) {
       // (which DOES write subscriptionTier='free') so we don't lose
       // the downgrade signal — it just doesn't come from RevenueCat
       // for purchases RevenueCat didn't make.
-      if (!PaymentService.isDemoMode) {
+      if (!ALL_FEATURES_FREE && !PaymentService.isDemoMode) {
         try {
           const info = await PaymentService.getCustomerInfo();
           if (info.success && info.tier) {
@@ -212,7 +229,7 @@ export function SubscriptionProvider({ children }) {
   // on the RC side will arrive through the Stripe webhook's
   // downgradeToFree path.
   useEffect(() => {
-    if (loaded && !PaymentService.isDemoMode) {
+    if (loaded && !ALL_FEATURES_FREE && !PaymentService.isDemoMode) {
       unsubRef.current = PaymentService.onCustomerInfoUpdate(({ tier }) => {
         if (!tier) return;
         setState((prev) => {
@@ -235,7 +252,9 @@ export function SubscriptionProvider({ children }) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       if (s?.user?.id) {
-        PaymentService.identify(s.user.id);
+        if (!ALL_FEATURES_FREE) {
+          PaymentService.identify(s.user.id);
+        }
         loadServerState().then((serverState) => {
           if (serverState) {
             setState((prev) => normalizeState({
@@ -247,7 +266,7 @@ export function SubscriptionProvider({ children }) {
               promoTier: serverState.promoTier || prev.promoTier,
               promoEndsAt: serverState.promoEndsAt || prev.promoEndsAt,
               adsEnabled: typeof serverState.adsEnabled === 'boolean' ? serverState.adsEnabled : prev.adsEnabled,
-              tier: PaymentService.isDemoMode && serverState.subscriptionTier ? serverState.subscriptionTier : prev.tier,
+              tier: ALL_FEATURES_FREE ? 'junub' : (PaymentService.isDemoMode && serverState.subscriptionTier ? serverState.subscriptionTier : prev.tier),
             }));
           }
         }).catch((err) => reportError('SubscriptionContext.authChangeReload', err));
@@ -345,6 +364,13 @@ export function SubscriptionProvider({ children }) {
           next.tierProductId = productId;
           syncTierToBackend(finalTier);
         } else if (product?.type === 'consumable') {
+          // Unreachable: the app is free and PRODUCTS no longer
+          // contains any consumable (spotlights, super likes and coins
+          // were retired with the dating monetization — see
+          // RETIRED_PRODUCT_IDS in products.js). The branch is kept so
+          // that a legacy receipt replayed through restorePurchases
+          // still credits the balance it was paid for rather than
+          // silently dropping it.
           if (product.category === 'spotlight') {
             next.spotlights = prev.spotlights + product.quantity;
           } else if (product.category === 'superlike') {
@@ -433,6 +459,58 @@ export function SubscriptionProvider({ children }) {
     }
   }, [loadServerState, normalizeState]);
 
+  /**
+   * Mobile-money purchase via Flutterwave (M-Pesa, MTN MoMo, Airtel).
+   * Mirrors purchaseWithStripe: creates a hosted-checkout payment link
+   * server-side and returns it for the FlutterwaveCheckout WebView.
+   * Dormant unless the operator has enabled the rail — the edge
+   * function 503s cleanly when FLUTTERWAVE_SECRET_KEY is unset.
+   */
+  const purchaseWithFlutterwave = useCallback(async ({ productId, paymentMethod, currency, phoneNumber, eventMeta } = {}) => {
+    if (!PAYMENTS_ENABLED) {
+      return showPaymentsComingSoon();
+    }
+    setPurchaseInProgress(true);
+    try {
+      const result = await FlutterwaveService.createPayment({
+        productId, paymentMethod, currency, phoneNumber, eventMeta,
+      });
+      return { success: true, paymentLink: result.paymentLink, txRef: result.txRef };
+    } catch (err) {
+      return { success: false, error: err.message || 'Failed to create payment' };
+    } finally {
+      setPurchaseInProgress(false);
+    }
+  }, []);
+
+  /**
+   * Confirm a Flutterwave payment after the user returns from checkout.
+   * Polls the status endpoint; on success refreshes server state so the
+   * granted tier / balances land locally (grants happen in flw-webhook).
+   */
+  const confirmFlutterwavePayment = useCallback(async (txRef) => {
+    try {
+      const result = await FlutterwaveService.checkPaymentStatus(txRef);
+      if (result.status === 'successful') {
+        const serverState = await loadServerState();
+        if (serverState) {
+          setState((prev) => normalizeState({
+            ...prev,
+            coins: Number.isFinite(serverState.coins) ? serverState.coins : prev.coins,
+            spotlights: Number.isFinite(serverState.spotlights) ? serverState.spotlights : prev.spotlights,
+            superLikes: Number.isFinite(serverState.superLikes) ? serverState.superLikes : prev.superLikes,
+            whispers: Number.isFinite(serverState.whispers) ? serverState.whispers : prev.whispers,
+            tier: serverState.subscriptionTier || prev.tier,
+          }));
+        }
+      }
+      return result;
+    } catch (err) {
+      reportError('SubscriptionContext.confirmFlutterwave', err, { txRef });
+      return { status: 'error', productId: null };
+    }
+  }, [loadServerState, normalizeState]);
+
   const restorePurchases = useCallback(async () => {
     setPurchaseInProgress(true);
     try {
@@ -454,10 +532,10 @@ export function SubscriptionProvider({ children }) {
   const cancelSubscription = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      tier: 'free',
+      tier: ALL_FEATURES_FREE ? 'junub' : 'free',
       tierProductId: null,
     }));
-    syncTierToBackend('free');
+    syncTierToBackend(ALL_FEATURES_FREE ? 'junub' : 'free');
   }, [syncTierToBackend]);
 
   // Atomic consumes. The server (try_consume_* RPCs in 00014) is the
@@ -496,7 +574,7 @@ export function SubscriptionProvider({ children }) {
   // RPC. Returning `true` lets the caller proceed exactly as if the
   // balance were sufficient.
   //
-  // The four consume callbacks below all follow the same shape:
+  // Most consume callbacks below follow the same shape:
   //   1. If ALL_FEATURES_FREE → return true.
   //   2. Pre-flight: refuse if the current balance is below the cost.
   //   3. Optimistically decrement local state (UI stays snappy).
@@ -513,10 +591,33 @@ export function SubscriptionProvider({ children }) {
     return true;
   }, [reconcileBalance]);
 
+  // Spotlight has a separate async activation path because the backend
+  // still needs to mark Profile.spotlightedUntil even when payment
+  // balances are ignored during the free launch.
+  const activateSpotlight = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc('try_consume_spotlight');
+      if (error || !data?.ok) {
+        return { success: false, reason: data?.reason || error?.message || 'unknown' };
+      }
+      if (!ALL_FEATURES_FREE && typeof data.balance === 'number') {
+        setState((prev) => ({ ...prev, spotlights: data.balance }));
+      }
+      return { success: true, spotlightedUntil: data.spotlightedUntil || null };
+    } catch (err) {
+      reportError('SubscriptionContext.activateSpotlight', err);
+      return { success: false, reason: err?.message || 'network' };
+    }
+  }, []);
+
+  const consumeSpotlight = useCallback((amount = 1) => {
+    if (ALL_FEATURES_FREE) return true;
+    return makeConsume('spotlights', 'try_consume_spotlight')(amount);
+  }, [makeConsume]);
+
   // useMemo (not useCallback) — these are factory results, not closures
   // over fresh state. Identity is stable for downstream consumers that
   // put them in dependency arrays.
-  const consumeSpotlight = useMemo(() => makeConsume('spotlights', 'try_consume_spotlight'), [makeConsume]);
   const consumeSuperLike = useMemo(() => makeConsume('superLikes', 'try_consume_superlike'), [makeConsume]);
   const consumeWhisper   = useMemo(() => makeConsume('whispers',   'try_consume_whisper'),   [makeConsume]);
   const consumeCoins     = useMemo(() => makeConsume('coins',      'try_consume_coins', (amount) => ({ p_amount: amount })), [makeConsume]);
@@ -567,6 +668,7 @@ export function SubscriptionProvider({ children }) {
   const effectiveTier = getEffectiveTier(state.tier, state.promoTier, state.promoEndsAt);
 
   const stateValue = useMemo(() => ({
+    loaded,
     tier: state.tier,
     effectiveTier,
     tierProductId: state.tierProductId,
@@ -588,15 +690,18 @@ export function SubscriptionProvider({ children }) {
     canUseAdvancedFilters: () => canUseAdvancedFilters(effectiveTier),
     canUseDiasporaConnect: () => canUseDiasporaConnect(effectiveTier),
     canUseIncognito: () => canUseIncognitoFn(effectiveTier),
-  }), [state, purchaseInProgress, offerings, effectiveTier]);
+  }), [loaded, state, purchaseInProgress, offerings, effectiveTier]);
 
   const actionsValue = useMemo(() => ({
     purchase,
     purchaseWithStripe,
     confirmStripePayment,
+    purchaseWithFlutterwave,
+    confirmFlutterwavePayment,
     restorePurchases,
     cancelSubscription,
     consumeSpotlight,
+    activateSpotlight,
     consumeSuperLike,
     consumeWhisper,
     consumeCoins,
@@ -612,20 +717,16 @@ export function SubscriptionProvider({ children }) {
     // / consumable purchase made elsewhere.
     refreshServerState: loadServerState,
     reset,
-  }), [purchase, purchaseWithStripe, confirmStripePayment, restorePurchases, cancelSubscription, consumeSpotlight, consumeSuperLike, consumeWhisper, consumeCoins, addCoins, addSpotlights, addSuperLikes, addWhispers, setAdsEnabled, grantPromoTier, claimMonthlyJunubSpotlight, loadServerState, reset]);
-
-  if (!loaded) {
-    return (
-      <View style={[styles.loading, { backgroundColor: colors.cream }]}>
-        <ActivityIndicator size="large" color="#CE1126" />
-      </View>
-    );
-  }
+  }), [purchase, purchaseWithStripe, confirmStripePayment, purchaseWithFlutterwave, confirmFlutterwavePayment, restorePurchases, cancelSubscription, consumeSpotlight, activateSpotlight, consumeSuperLike, consumeWhisper, consumeCoins, addCoins, addSpotlights, addSuperLikes, addWhispers, setAdsEnabled, grantPromoTier, claimMonthlyJunubSpotlight, loadServerState, reset]);
 
   return (
     <SubscriptionStateContext.Provider value={stateValue}>
       <SubscriptionActionsContext.Provider value={actionsValue}>
-        {children}
+        {loaded ? children : (
+          <View style={[styles.loading, { backgroundColor: colors.cream }]}>
+            <ActivityIndicator size="large" color="#CE1126" />
+          </View>
+        )}
       </SubscriptionActionsContext.Provider>
     </SubscriptionStateContext.Provider>
   );

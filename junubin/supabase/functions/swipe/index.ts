@@ -6,15 +6,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders, getUser, errorResponse, jsonResponse } from "../_shared/utils.ts";
 import { captureException } from "../_shared/sentry.ts";
 
-// Daily like ceiling per subscription tier. `null` means uncapped —
-// kept on Junub as the top-tier perk. Mirror this map in:
+// Daily like ceiling per subscription tier. JuNubin is currently free
+// end-to-end, so every tier is uncapped. Mirror this map in:
 //   - 00037_per_tier_swipe_limit.sql (server-side RPC the UI badge reads)
 //   - src/payments/entitlements.js  (client-side hasUnlimitedLikes)
 // Drift between any of them will surface as either a UI badge that
 // lies or a server 429 the user can't see coming.
 const DAILY_LIKE_LIMIT_BY_TIER: Record<string, number | null> = {
-  free: 20,
-  plus: 50,
+  free: null,
+  plus: null,
   junub: null,
 };
 const ELO_K_FACTOR = 32;
@@ -183,7 +183,9 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Enforce daily like limit for free users
+    // Enforce daily like limits when a tier has a cap. During the
+    // free launch every tier maps to null, so this path is skipped
+    // after resolving the effective tier.
     if (type === "like" || type === "super_like") {
       const { data: currentUser } = await supabase
         .from("User")
@@ -201,7 +203,7 @@ Deno.serve(async (req: Request) => {
       const tier =
         promoActive && (tierRank[promoTier] > tierRank[baseTier]) ? promoTier : baseTier;
       const tierLimit = limitForTier(tier);
-      // tierLimit === null means "no cap" (junub today). Skip the count
+      // tierLimit === null means "no cap". Skip the count
       // round-trip in that case so unlimited swipers don't pay for a
       // query whose answer we'd ignore anyway.
       if (tierLimit !== null) {

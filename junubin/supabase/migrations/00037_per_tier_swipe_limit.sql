@@ -1,10 +1,9 @@
 -- 00037 — Per-tier daily swipe limits.
 --
 -- The 00029 RPC encoded "free = 25, anything paid = unlimited" inline.
--- Product moved to a tiered ceiling: free = 20, plus = 50, junub
--- unlimited. Replace the function so the UI badge (which reads this
--- RPC's `limit`/`remaining`) matches the per-tier gate the swipe Edge
--- Function now enforces. The constants here MUST stay in lock-step
+-- Product previously used a tiered ceiling. JuNubin is now free
+-- end-to-end, so this RPC reports every tier as unlimited. The
+-- constants here MUST stay in lock-step
 -- with DAILY_LIKE_LIMIT_BY_TIER in supabase/functions/swipe/index.ts
 -- and getDailyLikeLimit() in src/payments/entitlements.js — drift
 -- shows up as a UI lie or a surprise 429.
@@ -33,8 +32,8 @@ DECLARE
   used          INT;
   start_today   TIMESTAMPTZ;
   tier_limit    INT;       -- NULL == uncapped
-  free_limit    CONSTANT INT := 20;
-  plus_limit    CONSTANT INT := 50;
+  free_limit    CONSTANT INT := NULL;
+  plus_limit    CONSTANT INT := NULL;
 BEGIN
   SELECT id, "subscriptionTier", "promoTier", "promoEndsAt"
     INTO me_id, base_tier, promo_tier, promo_ends_at
@@ -68,10 +67,8 @@ BEGIN
      AND type IN ('like', 'super_like')
      AND "createdAt" >= start_today;
 
-  -- Resolve the per-tier ceiling. junub stays uncapped (NULL); plus
-  -- and free get hard daily ceilings. An unknown tier value falls
-  -- back to the free limit so a misconfigured row can't accidentally
-  -- grant unlimited swipes.
+  -- Resolve the per-tier ceiling. NULL means uncapped. During the
+  -- free launch every tier is uncapped.
   tier_limit := CASE effective
                   WHEN 'junub' THEN NULL
                   WHEN 'plus'  THEN plus_limit

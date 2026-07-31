@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../config/supabase';
 import PaymentService from '../payments/PaymentService';
 import { identifyUser, resetIdentity } from '../utils/analytics';
+import { getProfileRecord } from '../utils/eligibility';
 
 const AuthContext = createContext(null);
 
@@ -63,11 +64,16 @@ export function AuthProvider({ children }) {
         .single();
 
       if (!error && data) {
+        const normalizedUser = {
+          ...data,
+          profile: getProfileRecord(data),
+          photos: Array.isArray(data.photos) ? data.photos : [],
+        };
         // Banned-on-load: forcibly sign the user out before returning.
         // This catches the "banned while logged in" case the next time
         // their session resumes — they don't see the app, they see the
         // sign-in screen and a one-time alert.
-        if (data.moderationStatus === 'banned') {
+        if (normalizedUser.moderationStatus === 'banned') {
           try { await supabase.auth.signOut(); } catch {}
           setUser(null);
           // Defer the alert so it surfaces *after* the navigator has
@@ -84,18 +90,18 @@ export function AuthProvider({ children }) {
           }, 600);
           return null;
         }
-        setUser(data);
+        setUser(normalizedUser);
         // Identify to PostHog + Sentry the moment we have a User row.
         // Subscription tier is included as a trait so cohort splits
         // (free vs plus vs junub) are queryable. Mode comes from the
         // profile if set; defaults to dating to keep cohort columns
         // populated even for users who haven't picked yet.
-        identifyUser(data.id, {
-          tier: data.subscriptionTier || 'free',
-          mode: data?.profile?.appMode || data?.profile?.accountPurpose || 'unset',
-          verified: !!data.isVerified,
+        identifyUser(normalizedUser.id, {
+          tier: normalizedUser.subscriptionTier || 'free',
+          mode: normalizedUser.profile?.appMode || normalizedUser.profile?.accountPurpose || 'unset',
+          verified: !!normalizedUser.isVerified,
         });
-        return data;
+        return normalizedUser;
       }
       return null;
     } finally {

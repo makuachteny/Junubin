@@ -173,7 +173,15 @@ serve(async (req) => {
       // a registration makes Checkout throw "no tax registration for
       // customer" for buyers in those regions.
       "automatic_tax[enabled]": STRIPE_AUTOMATIC_TAX ? "true" : "false",
-      "payment_method_types[0]": "card",
+      // NO payment_method_types — omitting it opts into Stripe "dynamic
+      // payment methods": cards + wallets (Apple Pay, Google Pay, Link)
+      // turn on automatically, and every additional method enabled in
+      // the Dashboard (Klarna, iDEAL, SEPA, Alipay, …100+) is offered
+      // to eligible buyers, localized per currency/region, with
+      // recurring-capable methods auto-filtered for subscription mode.
+      // Control the set at: dashboard.stripe.com → Settings → Payment methods.
+      // (Hardcoding card-only here was leaving international conversions
+      // on the table.)
       // For consumables, attach our internal ids so the webhook can grant
       // entitlements without a DB round-trip.
       "metadata[junubin_user_id]": userId,

@@ -33,11 +33,15 @@ const INFO_PAGES = {
       },
       {
         heading: 'How do filters work?',
-        body: 'Use Dating Preferences to tune age, distance, intentions, and other profile criteria.',
+        body: 'On the Directory tab, filter people by city, background, language, what they are open to, and verification. Every filter is free.',
       },
       {
-        heading: 'Can I undo a swipe?',
-        body: 'Rewind is available with JuNubin+ and above.',
+        heading: 'How do I connect with someone?',
+        body: 'Follow them. If they follow you back you are connected and can message each other directly. If you are not connected yet, send a message request — they choose whether to accept it.',
+      },
+      {
+        heading: 'Who can see where I am?',
+        body: 'Nobody, unless you choose otherwise. Location visibility is off by default. You can switch it to city-only, or to an approximate area accurate to about a kilometre, in Settings → Privacy. Your exact address is never shared.',
       },
     ],
   },
@@ -80,11 +84,11 @@ const INFO_PAGES = {
       },
       {
         heading: '6. Subscriptions & Auto-Renewal',
-        body: 'JuNubin+ and Junub subscriptions auto-renew at the end of each billing period unless cancelled at least 24 hours before the period ends. On iOS and Android, manage and cancel via your App Store or Google Play account settings. On the web, manage via the Stripe customer portal linked from Settings. Refunds are handled by the platform that processed your payment (Apple, Google, or Stripe) under their respective policies.',
+        body: 'JuNubin does not sell subscriptions. There is nothing to renew, cancel, or refund. If you subscribed before JuNubin became free, manage or cancel that legacy subscription through the platform that processed it — your App Store or Google Play account settings, or the Stripe customer portal.',
       },
       {
         heading: '7. Virtual Items',
-        body: 'Coins, Spotlights, Super Likes, and similar in-app items are virtual goods. They have no real-world cash value, are not transferable, and are non-refundable once granted to your account. Unused virtual items may be forfeited if your account is terminated for violating these Terms.',
+        body: 'JuNubin is free. There are no subscriptions, no in-app purchases and no virtual goods, so nothing on the service is sold to you and nothing needs to be refunded.',
       },
       {
         heading: '8. Safety & Reporting',
@@ -118,11 +122,11 @@ const INFO_PAGES = {
     sections: [
       {
         heading: '1. Who We Are',
-        body: 'JuNubin is a community + dating app for the South Sudanese community and diaspora. This Privacy Policy explains what data we collect, how we use it, who we share it with, and your rights. By using JuNubin you agree to this Policy.',
+        body: 'JuNubin is a free social networking app for the South Sudanese community and diaspora — it helps you find, follow and message other South Sudanese people near you or in a city you care about. This Privacy Policy explains what data we collect, how we use it, who we share it with, and your rights. By using JuNubin you agree to this Policy.',
       },
       {
         heading: '2. Data You Give Us',
-        body: 'When you sign up: phone number or email, name, date of birth, gender, photos, and profile fields you choose to fill (e.g. tribe, religion, intentions, education, height). When you use the app: posts you create, messages you send, swipes/likes, voice/video call records (metadata only — calls themselves are peer-to-peer), and reports you submit. When you pay: billing details handled by Apple, Google, or Stripe — we never see your full card number.',
+        body: 'When you sign up: phone number or email, name, date of birth, gender, photos, and profile fields you choose to fill (e.g. city, background, languages, profession, interests, what you are open to). When you use the app: text messages you send, who you follow, message requests, reports you submit, and — only if you turn location visibility on — a coarse location accurate to roughly a kilometre. We do not collect precise location, we do not collect location in the background, and we never sell it or use it for ad targeting. JuNubin is free, so we collect no billing information at all.',
       },
       {
         heading: '3. Data Collected Automatically',

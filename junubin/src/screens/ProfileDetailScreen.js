@@ -1,6 +1,6 @@
 // JuNubin — Profile Detail Screen
 
-import React, { useMemo, useRef, useEffect, useState } from 'react';
+import React, { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,15 +13,15 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiHeart, GraffitiStar } from '../components/icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription, canUseWhispers, ALL_FEATURES_FREE } from '../payments';
 import { useAuth } from '../auth';
-import * as discoverService from '../api/services/discoverService';
 import * as safetyService from '../api/services/safetyService';
+import * as connectionService from '../api/services/connectionService';
+import * as messageRequestService from '../api/services/messageRequestService';
+import MessageRequestComposer from '../components/MessageRequestComposer';
 import { useMyFollowCounts, useFollow } from '../hooks/useFollow';
 import { useCurrentUser, useEligibility } from '../hooks';
 import { getEthnicIdentity } from '../utils/ethnicIdentity';
@@ -54,8 +54,6 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const { colors, isDark } = useTheme();
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const profile = route.params?.profile || {};
-  const fromLikes = route.params?.fromLikes || false;
-  const { consumeSuperLike, superLikes, hasTier, whispers, consumeWhisper, tier } = useSubscription();
   const { session } = useAuth();
   const followCounts = useMyFollowCounts(profile.id);
   const {
@@ -65,104 +63,67 @@ const ProfileDetailScreen = ({ navigation, route }) => {
     loading: followLoading,
   } = useFollow(profile.id);
   const { currentUser } = useCurrentUser();
-  const { gate, nudge: surveyNudge } = useEligibility();
+  const { nudge: surveyNudge } = useEligibility();
   const isOwnProfile = !!currentUser?.id && currentUser.id === profile.id;
 
-  // Mode the user is currently in — records on the Swipe row so
-  // MessagesScreen can sort conversations by the mode they originated
-  // in. Falls back to 'dating' when the profile context hasn't loaded.
-  const swipeMode = currentUser?.preferences?.mode === 'Social' ? 'social' : 'dating';
+  // ── Messaging permission ──
+  // canMessageDirectly is true for a mutual connection OR an accepted
+  // message request. Anyone else has to send a request first. We start
+  // pessimistic (false) so the composer is the default for strangers —
+  // failing open would drop people straight into a chat they aren't
+  // allowed to post in, and the server would reject the send.
+  const [canMessage, setCanMessage] = useState(false);
+  const [requestStatus, setRequestStatus] = useState('none');
+  const [showComposer, setShowComposer] = useState(false);
 
-  const goBackWithSwipe = (direction) => {
-    navigation.navigate({ name: 'Main', params: { screen: 'HomeTab', params: { swipeAction: direction, swipedProfileId: profile.id } }, merge: true });
-  };
-
-  const handlePass = () => {
-    if (session && profile.id) discoverService.recordSwipe(profile.id, 'pass', { mode: swipeMode }).catch((e) => { if (__DEV__) console.warn('Pass swipe failed:', e); });
-    goBackWithSwipe('left');
-  };
-  const handleLike = () => {
-    if (!gate('swipe_like')) return;
-    if (session && profile.id) {
-      discoverService.recordSwipe(profile.id, 'like', { mode: swipeMode }).then((r) => {
-        // Match celebration is owned by HomeScreen's MatchCelebrationOverlay.
-        // We navigate back via goBackWithSwipe and HomeScreen renders the
-        // overlay once it spots the new match on next focus. Duplicate
-        // popping an Alert here would race with the overlay and surface
-        // two "It's a Match!" dialogs on top of each other.
-        if (r?.match) {
-          navigation.navigate('Main', {
-            screen: 'HomeTab',
-            params: { celebrateMatchId: r.match.id, matchedProfile: profile },
-          });
-        }
-      }).catch((e) => { if (__DEV__) console.warn('Like swipe failed:', e); });
-    }
-    goBackWithSwipe('right');
-  };
-  const handleMatchAndChat = () => {
-    if (!gate('open_match')) return;
-    // Only open Chat when the swipe actually produced a mutual match.
-    // A one-sided like should pop back to the deck silently — landing
-    // on a Chat thread with someone who hasn't liked you yet would be
-    // misleading (and would create a one-sided "conversation").
-    // Conversation id lives at `match.conversation.id` — same shape
-    // HomeScreen already consumes; keep the read paths in sync.
-    if (session && profile.id) {
-      discoverService.recordSwipe(profile.id, 'like', { mode: swipeMode }).then((r) => {
-        if (r?.match) {
-          const convId = r.match.conversation?.id;
-          navigation.replace('Chat', {
-            conversationId: convId,
-            match: { ...profile, conversationId: convId },
-            fromMatch: true,
-          });
-        } else {
-          goBackWithSwipe('right');
-        }
-      }).catch((e) => {
-        if (__DEV__) console.warn('Match swipe failed:', e);
-        goBackWithSwipe('right');
-      });
-    } else {
-      goBackWithSwipe('right');
-    }
-  };
-  const handleWhisper = () => {
-    if (!gate('like_with_whisper')) return;
-    if (!canUseWhispers(tier || 'free')) {
-      Alert.alert('JuNubin+ Feature', 'Whispers let you message before matching. Upgrade to JuNubin+ to unlock.', [
-        { text: 'See Plans', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
+  const refreshConnection = useCallback(async () => {
+    if (!session || !profile?.id || isOwnProfile) return;
+    try {
+      const [state, direct] = await Promise.all([
+        connectionService.getConnectionState(profile.id),
+        connectionService.canMessageDirectly(profile.id),
       ]);
+      setRequestStatus(state?.requestStatus || 'none');
+      setCanMessage(!!direct);
+    } catch (e) {
+      // Degrade to "send a request" rather than blanking the screen.
+      if (__DEV__) console.warn('Connection state failed:', e?.message);
+      setCanMessage(false);
+    }
+  }, [session, profile?.id, isOwnProfile]);
+
+  useEffect(() => { refreshConnection(); }, [refreshConnection]);
+
+  const handleMessage = useCallback(() => {
+    if (canMessage) {
+      navigation.navigate('Chat', { match: profile });
       return;
     }
-    if (!ALL_FEATURES_FREE && whispers <= 0) {
-      Alert.alert('No Whispers', 'You\'re out of whispers!', [
-        { text: 'Get More', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+    if (requestStatus === 'pending_out') {
+      Alert.alert('Request sent', `${profile.name || 'They'} will see your note. You can chat once they accept.`);
       return;
     }
-    // Defer consumption to ChatScreen's first whisper send so users
-    // who back out without sending don't lose a credit. Pass the
-    // intent flag — ChatScreen reads it and consumes on send.
-    navigation.navigate('Chat', { match: profile, whisperIntent: true });
-  };
+    if (requestStatus === 'declined') {
+      Alert.alert('Request not accepted', 'You cannot send another request to this person.');
+      return;
+    }
+    setShowComposer(true);
+  }, [canMessage, requestStatus, navigation, profile]);
 
-  const handleSuperLike = () => {
-    if (!ALL_FEATURES_FREE && superLikes <= 0) {
-      Alert.alert('No Super Likes', 'You\'re out of Super Likes!', [
-        { text: 'Get More', onPress: () => { navigation.goBack(); navigation.navigate('Elite'); } },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
+  const handleSendRequest = useCallback(async (text) => {
+    try {
+      const res = await messageRequestService.sendMessageRequest(profile.id, text);
+      setShowComposer(false);
+      setRequestStatus(res?.status === 'accepted' ? 'accepted' : 'pending_out');
+      Alert.alert('Request sent', `${profile.name || 'They'} will see your note and can start the conversation.`);
+    } catch (e) {
+      Alert.alert('Could not send', e?.message || 'Try again in a moment.');
     }
-    const consumed = consumeSuperLike();
-    if (consumed === false) return;
-    if (session && profile.id) discoverService.recordSwipe(profile.id, 'super_like', { mode: swipeMode }).catch((e) => { if (__DEV__) console.warn('Super like failed:', e); });
-    goBackWithSwipe('right');
-  };
+  }, [profile.id, profile.name]);
+
+  const messageLabel = canMessage ? 'Message'
+    : requestStatus === 'pending_out' ? 'Requested'
+    : 'Message';
 
   // ── Header overflow menu — Report / Block ──
   // App Review requires safety actions to be reachable from a user's
@@ -208,7 +169,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         style: 'destructive',
         onPress: () => Alert.alert(
           `Block ${displayName}?`,
-          'You will both stop seeing each other in matches, chats, and discovery.',
+          'You will both stop seeing each other across JuNubin — profiles, conversations, and the directory.',
           [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -252,15 +213,43 @@ const ProfileDetailScreen = ({ navigation, route }) => {
     ]).start();
   }, [factsAnim, promptAnim, aboutAnim, sectionsAnim, actionBarAnim]);
 
-  const { name = 'User', age = 0, distance = 0, verified = false, bio = '', about = '', job = '', school = '', images = [], interests = [], stickers = [], height = '', lookingFor = '', ethnicity = '', intention = '', pronouns = '', education = '', children = '', promptQuestion = '', promptAnswer = '', currentlyInto = [] } = profile;
+  const {
+    name = 'User', age = 0, distance = 0, verified = false, bio = '', about = '',
+    job = '', school = '', images = [], interests = [], stickers = [], height = '',
+    lookingFor = '', ethnicity = '', intention = '', pronouns = '', education = '',
+    children = '', promptQuestion = '', promptAnswer = '', currentlyInto = [],
+    // Social-pivot fields. All optional — a profile written before the
+    // pivot simply renders without these rows.
+    city = '', countryCode = '', languages = [], openTo = [], profession = '',
+    lastActiveAt = null,
+  } = profile;
+
+  // "Active 3h ago" style hint. Deliberately coarse — an exact
+  // last-seen timestamp is a stalking vector, so anything inside the
+  // hour collapses to "Active now" and anything past a week is dropped.
+  const lastActiveLabel = (() => {
+    if (!lastActiveAt) return '';
+    const diff = Date.now() - new Date(lastActiveAt).getTime();
+    if (Number.isNaN(diff) || diff < 0) return '';
+    const hrs = Math.floor(diff / 3600000);
+    if (hrs < 1) return 'Active now';
+    if (hrs < 24) return `Active ${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days <= 7) return `Active ${days}d ago`;
+    return '';
+  })();
 
   const pQ = promptQuestion || 'The perfect date would be';
   const pA = promptAnswer || bio || about || 'Going on a late drive and getting food while we talk.';
   const gallery = (() => { const src = (images || []).filter(Boolean); if (!src.length) return []; const f = [...src]; let i = 0; while (f.length < 6) { f.push(src[i % src.length]); i++; } return f; })();
 
   // Quick facts — compact inline items (age already shown in name overlay, skip it)
-  const countryInfo = getCountryByCode(profile.country);
+  const countryInfo = getCountryByCode(countryCode || profile.country);
   const quickFacts = [
+    // Where someone is and what they do are the two things that matter
+    // most on a community platform — they lead the pill row now.
+    [city, getCountryByCode(countryCode)?.name].filter(Boolean).join(', '),
+    profession || job,
     pronouns,
     height,
     distance && `${distance} mi`,
@@ -312,11 +301,14 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               <Text style={s.nameText}>{name}, {age} {countryInfo?.flag || ''}</Text>
               {verified && <Ionicons name="checkmark-circle" size={20} color={colors.black} style={{ marginLeft: 5 }} />}
             </View>
-            {(job || school || education) && (
+            {(profession || job || school || education) && (
               <Text style={s.subtitleText}>
-                {job}{job && (school || education) ? '  ·  ' : ''}{school || education}
+                {profession || job}{(profession || job) && (school || education) ? '  ·  ' : ''}{school || education}
               </Text>
             )}
+            {lastActiveLabel ? (
+              <Text style={s.subtitleText}>{lastActiveLabel}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -452,6 +444,54 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         <InlinePhoto index={3} />
 
         <View style={s.sectionBody}>
+          {/* ── Languages ── */}
+          {languages?.length > 0 && (
+            <Animated.View style={{
+              opacity: sectionsAnim,
+              transform: [{ translateY: sectionsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            }}>
+              <View style={s.section}>
+                <View style={s.sectionHeader}>
+                  <Ionicons name="language-outline" size={16} color={colors.gray500} />
+                  <Text style={s.sectionLabel}>Speaks</Text>
+                </View>
+                <View style={s.pillRow}>
+                  {languages.map((lang, i) => (
+                    <View key={`lang-${i}`} style={s.interestPill}>
+                      <Text style={s.interestText}>{typeof lang === 'string' ? lang : lang?.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </Animated.View>
+          )}
+
+          {/* ── Open to — what this person actually wants out of
+              JuNubin (mentoring, business, housing leads, community
+              events…). Filled pills so they read as intent, not trivia. ── */}
+          {openTo?.length > 0 && (
+            <Animated.View style={{
+              opacity: sectionsAnim,
+              transform: [{ translateY: sectionsAnim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+            }}>
+              <View style={[s.section, { marginTop: languages?.length > 0 ? 20 : 0 }]}>
+                <View style={s.sectionHeader}>
+                  <Ionicons name="people-outline" size={16} color={colors.gray500} />
+                  <Text style={s.sectionLabel}>Open to</Text>
+                </View>
+                <View style={s.pillRow}>
+                  {openTo.map((item, i) => (
+                    <View key={`open-${i}`} style={s.openToPill}>
+                      <Text style={s.openToText}>{typeof item === 'string' ? item : item?.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </Animated.View>
+          )}
+        </View>
+
+        <View style={s.sectionBody}>
           {/* ── Interests (includes hobby stickers) ── */}
           {(interests.length > 0 || stickers.length > 0) && (() => {
             const hobbyWords = ['photo', 'water', 'music', 'cooking', 'travel', 'art', 'sports', 'gaming', 'reading', 'fitness', 'dance', 'fashion', 'film', 'yoga', 'hiking'];
@@ -517,7 +557,12 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         </View>
       </ScrollView>
 
-      {/* ── Bottom Action Bar ── */}
+      {/* ── Bottom Action Bar ──
+          Social actions only: Follow / Following, Message (direct when
+          we're allowed, otherwise a request composer), and the overflow
+          that carries Block + Report. The like / pass / super-like /
+          whisper / game row that used to live here is gone with the
+          dating model. */}
       <Animated.View style={[
         s.actionBar,
         { paddingBottom: insets.bottom + 12 },
@@ -531,49 +576,76 @@ const ProfileDetailScreen = ({ navigation, route }) => {
           }],
         },
       ]}>
-        {fromLikes ? (
+        {!isOwnProfile && (
           <>
-            <TouchableOpacity style={s.passBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-              <Ionicons name="close" size={24} color={colors.rose} />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.matchBtn} onPress={handleMatchAndChat} activeOpacity={0.8}>
-              <Ionicons name="chatbubble" size={18} color="#FFF" />
-              <Text style={s.likeBtnText}>Match & Chat</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity style={s.passBtn} onPress={handlePass} activeOpacity={0.7}>
-              <Ionicons name="close" size={24} color={colors.rose} />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.likeBtn} onPress={handleLike} activeOpacity={0.8}>
-              <GraffitiHeart size={20} color="#FFF" filled />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.superBtn} onPress={handleSuperLike} activeOpacity={0.7}>
-              <GraffitiStar size={20} color={colors.black} filled />
-            </TouchableOpacity>
-            <TouchableOpacity style={s.whisperBtn} onPress={handleWhisper} activeOpacity={0.7}>
-              <Ionicons name="chatbubble" size={18} color={colors.accent} />
-            </TouchableOpacity>
             <TouchableOpacity
-              style={s.challengeBtn}
+              style={[s.followActionBtn, (isFollowing || isFriend) && s.followActionBtnActive]}
               onPress={() => {
-                if (!hasTier('plus')) {
-                  Alert.alert('JuNubin+ Feature', 'In-chat games require JuNubin+ or higher.', [
-                    { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-                    { text: 'Cancel', style: 'cancel' },
-                  ]);
-                  return;
-                }
-                navigation.navigate('Chat', { match: profile, startGame: true });
+                toggleFollow();
+                // Following back can complete a mutual connection, which
+                // is what unlocks direct messaging — re-read the state
+                // rather than guessing at it locally.
+                setTimeout(refreshConnection, 400);
               }}
-              activeOpacity={0.7}
+              disabled={followLoading}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isFollowing || isFriend, disabled: followLoading }}
+              accessibilityLabel={
+                isFriend ? `Connected with ${name}, tap to unfollow`
+                : isFollowing ? `Following ${name}, tap to unfollow`
+                : `Follow ${name}`
+              }
             >
-              <Ionicons name="game-controller" size={18} color="#FCCD12" />
+              <Ionicons
+                name={isFriend ? 'people' : isFollowing ? 'checkmark' : 'person-add-outline'}
+                size={17}
+                color={(isFollowing || isFriend) ? colors.black : '#FFF'}
+              />
+              <Text style={[
+                s.followActionText,
+                { color: (isFollowing || isFriend) ? colors.black : '#FFF' },
+              ]}>
+                {isFriend ? 'Connected' : isFollowing ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.messageActionBtn}
+              onPress={handleMessage}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={
+                canMessage
+                  ? `Message ${name}`
+                  : requestStatus === 'pending_out'
+                    ? `Message request already sent to ${name}`
+                    : `Send ${name} a message request`
+              }
+            >
+              <Ionicons name="chatbubble-outline" size={17} color={colors.black} />
+              <Text style={s.messageActionText}>{messageLabel}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.moreActionBtn}
+              onPress={handleProfileMenu}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="More options, including block and report"
+            >
+              <Ionicons name="ellipsis-horizontal" size={20} color={colors.black} />
             </TouchableOpacity>
           </>
         )}
       </Animated.View>
+
+      <MessageRequestComposer
+        visible={showComposer}
+        name={name}
+        onCancel={() => setShowComposer(false)}
+        onSend={handleSendRequest}
+      />
       {surveyNudge}
     </View>
   );
@@ -675,13 +747,34 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Action Bar ──
   actionBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: isDark ? colors.surface : 'rgba(255,255,255,0.97)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 0.5, borderTopColor: colors.separator },
-  passBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(201,93,79,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(201,93,79,0.2)' },
-  likeBtn: { flex: 1, height: 46, backgroundColor: colors.accent, borderRadius: 23, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, shadowColor: colors.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
-  matchBtn: { flex: 1, height: 46, backgroundColor: colors.accent, borderRadius: 23, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, shadowColor: colors.accent, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
-  likeBtnText: { color: '#FFF', fontSize: 16, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.3 },
-  superBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.roseTint12, justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: colors.roseTint20 },
-  whisperBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(206,17,38,0.10)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(206,17,38,0.20)' },
-  challengeBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(252,205,18,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 0.5, borderColor: 'rgba(252,205,18,0.25)' },
+  // Follow and Message share the width; More is a fixed square. All
+  // three clear 46pt, comfortably over the 44pt minimum.
+  followActionBtn: {
+    flex: 1, height: 46, borderRadius: 23, backgroundColor: colors.accent,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
+  },
+  followActionBtnActive: {
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,13,12,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)',
+  },
+  followActionText: { fontSize: 15, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.2 },
+  messageActionBtn: {
+    flex: 1, height: 46, borderRadius: 23,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,13,12,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)',
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
+  },
+  messageActionText: { color: colors.black, fontSize: 15, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.2 },
+  moreActionBtn: {
+    width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,13,12,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)',
+  },
+  openToPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, backgroundColor: colors.black },
+  openToText: { color: isDark ? '#1A1A1A' : '#FFF', fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
 });
 
 export default ProfileDetailScreen;

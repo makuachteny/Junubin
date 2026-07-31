@@ -118,7 +118,6 @@ export const mockMessages = {
 // Post card theme presets — re-exported here for legacy importers
 // that still pull POST_THEMES from this file. New code should import
 // directly from src/data/postThemes.js.
-export { POST_THEMES, POST_THEME_CYCLE } from '../postThemes';
 
 // Cultural stickers re-exported for the same legacy reason. New code
 // should import from src/data/culturalStickers.js.

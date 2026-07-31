@@ -1,13 +1,12 @@
 // Sanity tests on the demo roster + downstream mock surfaces. These
 // guarantee identity stays consistent across mockProfiles, mockMatches,
-// mockLikes, mockMessages, mockPosts, and mockStories — the property
+// mockLikes and mockMessages — the property
 // we promised the user when re-introducing demo data.
 
 import { DEMO_ROSTER, DEMO_BY_ID } from '../data/__dev__/demoRoster';
 import {
   mockProfiles, mockMatches, mockLikes, mockMessages, mockPosts, mockComments,
 } from '../data/__dev__/mockProfiles';
-import { mockStories } from '../data/__dev__/mockStories';
 import { isDemoId, DEMO_DATA_ENABLED, DEMO_ID_PREFIX } from '../config/demoData';
 
 describe('Demo roster — base contract', () => {
@@ -75,12 +74,6 @@ describe('Photo consistency — primary image is the same across surfaces', () =
     });
   });
 
-  it('mockStories avatar equals the linked user\'s primary photo', () => {
-    mockStories.forEach((s) => {
-      const user = DEMO_BY_ID[s.userId];
-      expect(s.avatar).toBe(user.photos[0]);
-    });
-  });
 
   it('mockPosts user.avatar equals the linked user\'s primary photo', () => {
     mockPosts.forEach((p) => {
@@ -135,21 +128,9 @@ describe('Cross-surface consistency', () => {
     Object.keys(mockComments).forEach((k) => expect(postIds.has(k)).toBe(true));
   });
 
-  it('every mockStories.userId points at a real roster member', () => {
-    mockStories.forEach((s) => {
-      expect(isDemoId(s.userId)).toBe(true);
-      expect(DEMO_BY_ID[s.userId]).toBeTruthy();
-    });
-  });
 
   // Demo stories MUST use `avatar` (storyService's field name), not
   // `userImage`. Catches the regression we just fixed.
-  mockStories.forEach((s) => {
-    it(`mockStories[${s.id}] uses avatar (not userImage)`, () => {
-      expect(s.avatar).toBeTruthy();
-      expect(s.userImage).toBeUndefined();
-    });
-  });
 });
 
 describe('Demo flag plumbing', () => {

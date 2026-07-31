@@ -51,19 +51,16 @@ import { useFonts } from 'expo-font';
 
 import { ThemeProvider, useTheme, fontAssets } from './src/theme';
 import { AccessibilityPreferencesProvider } from './src/accessibility';
-import { SubscriptionProvider } from './src/payments';
-import { AuthProvider, useAuth } from './src/auth';
+import { SubscriptionProvider, useSubscription } from './src/payments/SubscriptionContext';
+import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
 import ScreenshotGuard from './src/components/ScreenshotGuard';
 import OfflineBanner from './src/components/OfflineBanner';
-import IncomingCallOverlay from './src/components/IncomingCallOverlay';
 import { NetworkProvider } from './src/utils/useNetworkStatus';
 import { useNotifications } from './src/utils/useNotifications';
-import { useIncomingCall } from './src/api/hooks/useIncomingCall';
 import { migrateLegacyStorageKeys } from './src/utils/migrateLegacyKeys';
 import { useAppStateRefresh } from './src/utils/useAppStateRefresh';
-import { useSubscription } from './src/payments';
 import * as Linking from 'expo-linking';
 import * as pendingDeepLink from './src/utils/pendingDeepLink';
 
@@ -73,16 +70,19 @@ import * as pendingDeepLink from './src/utils/pendingDeepLink';
 // load-bearing for either a push notification or an external link the
 // app advertises.
 //
-//   junubin://survey                 → ProfileSetup at next incomplete
-//   junubin://survey?step=interests  → ProfileSetup at a named step
-//   junubin://chat/:matchId          → ChatScreen with that match
-//   junubin://live/:hostId           → LiveView for that host
-//   junubin://event/:eventId         → EventDetail
+//   junubin://survey                    → ProfileSetup at next incomplete
+//   junubin://survey?step=interests     → ProfileSetup at a named step
+//   junubin://chat/:conversationId      → ChatScreen for that conversation
+//   junubin://message-requests          → pending message requests
 //
 // The ProfileSetup screen reads `route.params.resumeAt` (which the URL
 // query param maps to via `parse`).
 //
-// Auth gate: paths under chat/, live/, event/, survey/ require an
+// The `live/` and `event/` paths were removed with the live-video and
+// events features. Old links now fall through to the app's default
+// route rather than resolving to a screen that no longer exists.
+//
+// Auth gate: paths under chat/, message-requests/, survey/ require an
 // authenticated session. If one of those URLs arrives while the user
 // is on the auth stack (cold-launched from a push notification while
 // signed out), React Navigation can't resolve the route and the link
@@ -117,13 +117,11 @@ const linkingConfig = {
       ProfileSetup:       { path: 'survey', parse: { step: sanitizeSurveyStep } },
       AccessibilitySurvey: 'accessibility-survey',
       Chat:               { path: 'chat/:conversationId' },
-      LiveView:           { path: 'live/:hostId' },
-      EventDetail:        { path: 'event/:eventId' },
+      MessageRequests:    'message-requests',
       Main: {
         screens: {
           HomeTab:      'home',
-          CommunityTab: 'community',
-          LikesTab:     'likes',
+          DirectoryTab: 'directory',
           MessagesTab:  'messages',
         },
       },
@@ -179,20 +177,9 @@ function AppInner() {
     refreshServerState?.().catch(() => {});
   });
 
-  // App-level incoming-call listener — surfaces the overlay regardless of
-  // which tab the receiver is currently on.
-  const { incoming, accept, decline } = useIncomingCall(user?.id);
-  const handleAccept = useCallback(() => {
-    const accepted = accept();
-    if (accepted) {
-      navigationRef.current?.navigate?.('Call', {
-        match: accepted.caller,
-        callType: accepted.callType,
-        callId: accepted.callId,
-        direction: 'incoming',
-      });
-    }
-  }, [accept]);
+  // The app-level incoming-call listener and its overlay were removed
+  // along with voice/video calling. Communication is text-only, so
+  // there is nothing to surface here and no `Call` route to navigate to.
 
   const handleSplashFinish = useCallback(() => {
     setShowSplash(false);
@@ -226,12 +213,6 @@ function AppInner() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <AppNavigator />
       <OfflineBanner />
-      <IncomingCallOverlay
-        visible={!!incoming}
-        caller={incoming?.caller}
-        onAccept={handleAccept}
-        onDecline={decline}
-      />
     </NavigationContainer>
   );
 }

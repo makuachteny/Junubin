@@ -10,8 +10,6 @@ import {
   Alert,
   Animated,
   TextInput,
-  Modal,
-  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GraffitiChat } from '../components/icons';
@@ -20,20 +18,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily, Layout } from '../theme';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import { mockMatches, mockLikes } from '../data/__dev__/mockProfiles';
-import { mockStories } from '../data/__dev__/mockStories';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as matchesService from '../api/services/matchesService';
-import * as likesService from '../api/services/likesService';
-import * as storyService from '../api/services/storyService';
+import * as messageRequestService from '../api/services/messageRequestService';
 import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
-import StoriesRow from '../components/StoriesRow';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
-import ProfilePromptBanner from '../components/ProfilePromptBanner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAccessibilityPreferences } from '../accessibility';
 
@@ -45,7 +38,6 @@ export default function MessagesScreen({ navigation, route }) {
   const [likes, setLikes] = useState([]);
   const styles = useMemo(() => getStyles(colors, isDark, prefs), [colors, isDark, prefs]);
   const [searchQuery, setSearchQuery] = useState('');
-  const { hasTier } = useSubscription();
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
   const { onMatchCreated } = useRealtime(currentUser?.id);
@@ -54,7 +46,6 @@ export default function MessagesScreen({ navigation, route }) {
   const hasAnimatedRef = useRef(false);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showCreateSheet, setShowCreateSheet] = useState(false);
   const [activeCategory, setActiveCategory] = useState('All');
   // Mode is read from the authoritative source — `useCurrentUser`
   // resolves it from Profile.appMode → accountPurpose → AsyncStorage
@@ -66,20 +57,11 @@ export default function MessagesScreen({ navigation, route }) {
   // Lowercase form for Match/Swipe row comparisons; the DB stores
   // 'dating' / 'social', not the capitalized client-side labels.
   const modeKey = mode === 'Social' ? 'social' : 'dating';
-  const isPlus = hasTier('plus');
   const loadingTimeoutRef = useRef(null);
   const [seenConnections, setSeenConnections] = useState(new Set());
-  const [storiesRefreshKey, setStoriesRefreshKey] = useState(0);
-
-  // CreateStoryScreen returns the freshly-created story via
-  // route.params.createdStory. Bump the StoriesRow refreshKey so it
-  // refetches and the new story appears in the strip immediately.
-  useEffect(() => {
-    if (route?.params?.createdStory) {
-      setStoriesRefreshKey((k) => k + 1);
-      navigation.setParams({ createdStory: undefined });
-    }
-  }, [route?.params?.createdStory, navigation]);
+  // Pending incoming message requests. Fetched alongside the inbox and
+  // refreshed on focus so accepting one elsewhere clears the badge.
+  const [requestCount, setRequestCount] = useState(0);
 
   // Hydrate seen-connections from AsyncStorage. Mode is no longer read
   // here — `currentUser.preferences.mode` is the source of truth and is
@@ -95,14 +77,6 @@ export default function MessagesScreen({ navigation, route }) {
       }
     }).catch(() => {});
   }, []);
-  const filtersLocked = !isPlus;
-
-  const showFiltersLocked = useCallback(() => {
-    Alert.alert('JuNubin+ Filters', 'Upgrade to JuNubin+ to unlock message filters and search.', [
-      { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  }, [navigation]);
 
   // Demo-mode fallback. When DEMO_DATA_ENABLED is true (TestFlight
   // launch period), the inbox is seeded with mockMatches/mockLikes
@@ -130,9 +104,25 @@ export default function MessagesScreen({ navigation, route }) {
       matchesService.getMatches().then((apiMatches) => {
         setMatches(apiMatches.length > 0 ? apiMatches : demoMatches);
       }),
-      likesService.getReceivedLikes().then((apiLikes) => {
-        setLikes(apiLikes.length > 0 ? apiLikes : demoLikes);
+      // "Invites" used to be received likes. Likes are gone; the
+      // equivalent signal is now a pending message request. Flatten the
+      // sender onto the row so it renders with the same shape the
+      // invite list already expects.
+      messageRequestService.getIncomingRequests().then((requests) => {
+        const invites = (requests || [])
+          .filter((r) => r.status === 'pending' && r.from)
+          .map((r) => ({
+            ...r.from,
+            requestId: r.id,
+            requestMessage: r.message,
+            likedAt: r.createdAt,
+          }));
+        setLikes(invites.length > 0 ? invites : demoLikes);
       }),
+      // Pending message requests. getIncomingRequestCount already
+      // swallows its own errors and resolves 0, so it can't reject the
+      // Promise.all and blank the inbox behind it.
+      messageRequestService.getIncomingRequestCount().then(setRequestCount),
     ]).catch((err) => {
       if (__DEV__) console.warn('Messages fetch failed:', err);
       setMatches(demoMatches);
@@ -184,50 +174,16 @@ export default function MessagesScreen({ navigation, route }) {
     navigation.navigate('Chat', { match });
   };
 
-  // Try to open the tapped person's active story, if they have one.
-  // Resolves real story groups via storyService (so a story posted by
-  // someone you matched with on the server actually plays here).
-  // Returns true when a story was opened so the caller can
-  // short-circuit its default tap handler. Returns false (silently)
-  // when there's no active story for the user — there is no longer
-  // any mock-stories fallback, so the row just isn't taken.
-  const handleOpenStoryIfAvailable = useCallback(async (person) => {
-    const name = person?.name?.trim().toLowerCase();
-    const userId = person?.userId || person?.id;
-    if (!name && !userId) return false;
-    try {
-      const groups = await storyService.listActiveStoryGroups();
-      const index = groups.findIndex((g) => {
-        if (userId && g.userId === userId) return true;
-        if (name && g.userName?.trim().toLowerCase() === name) return true;
-        return false;
-      });
-      if (index >= 0) {
-        navigation.navigate('StoriesView', {
-          story: groups[index],
-          storyIndex: index,
-          storyList: groups,
-        });
-        return true;
-      }
-    } catch {
-      // listActiveStoryGroups failed — just don't open a story.
-    }
-    return false;
-  }, [navigation]);
-
   const handleLikePress = (like) => {
-    if (!hasTier('junub')) {
-      Alert.alert('Junub Feature', `Upgrade to Junub to message people who ${mode === 'Social' ? 'waved at' : 'liked'} you.`, [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+    // An invite is someone who sent a message request. Accepting or
+    // declining belongs on the requests screen, which owns that flow.
+    if (like?.requestId) {
+      navigation.navigate('MessageRequests', { initialTab: 'received' });
       return;
     }
-    // A `like` is someone who has liked YOU but you haven't matched
-    // back yet — there's no conversation thread, so opening Chat would
-    // load mock history (or nothing). Route to ProfileDetail instead
-    // so the user can like-back to create a real match → conversation.
+    // Demo rows (and any legacy invite) have no request to act on and
+    // no conversation thread, so opening Chat would load nothing.
+    // Route to the profile, where the user can follow back.
     if (!like?.conversationId) {
       navigation.navigate('ProfileDetail', { profile: like });
       return;
@@ -249,13 +205,12 @@ export default function MessagesScreen({ navigation, route }) {
   // pre-date the 00025 migration default to 'dating' at the service
   // layer, so an unmigrated install still produces a stable order.
   const conversationData = useMemo(() => {
-    const q = (filtersLocked ? '' : searchQuery).toLowerCase().trim();
+    const q = searchQuery.toLowerCase().trim();
     const likeItems = likes.map((like) => ({ ...like, type: 'like' }));
     const matchItems = matches.map((match) => ({ ...match, type: 'match' }));
     let all = [...likeItems, ...matchItems];
-    const effectiveCategory = filtersLocked ? 'All' : activeCategory;
-    if (effectiveCategory === 'Matches') all = matchItems;
-    else if (effectiveCategory === 'Likes') all = likeItems;
+    if (activeCategory === 'Conversations') all = matchItems;
+    else if (activeCategory === 'Invites') all = likeItems;
     if (q) all = all.filter((item) => item.name?.toLowerCase().includes(q));
 
     const sortKey = (item) => {
@@ -269,13 +224,7 @@ export default function MessagesScreen({ navigation, route }) {
       if (aMatchesMode !== bMatchesMode) return aMatchesMode ? -1 : 1;
       return sortKey(b) - sortKey(a);
     });
-  }, [likes, matches, searchQuery, activeCategory, filtersLocked, modeKey]);
-
-  useEffect(() => {
-    if (!filtersLocked) return;
-    if (activeCategory !== 'All') setActiveCategory('All');
-    if (searchQuery) setSearchQuery('');
-  }, [filtersLocked, activeCategory, searchQuery]);
+  }, [likes, matches, searchQuery, activeCategory, modeKey]);
 
   // Build row animation values when conversation data changes (only first render)
   useEffect(() => {
@@ -325,13 +274,12 @@ export default function MessagesScreen({ navigation, route }) {
             }}
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${mode === 'Social' ? 'waved at you' : 'liked you recently'}` : item.name}
+            accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, wants to connect with you` : item.name}
           >
             <TouchableOpacity
               style={styles.avatarContainer}
               onPress={(e) => {
                 e.stopPropagation?.();
-                if (handleOpenStoryIfAvailable(item)) return;
                 navigation.navigate('ProfileDetail', { profile: item });
               }}
               activeOpacity={0.8}
@@ -353,7 +301,7 @@ export default function MessagesScreen({ navigation, route }) {
                 )}
               </View>
               <Text style={[styles.likePreviewPrimary, isNew && styles.likePreviewNew]} numberOfLines={1}>
-                {mode === 'Social' ? 'Wants to connect' : 'Liked your profile'}
+                Wants to connect
               </Text>
             </View>
             <View style={styles.rowRight}>
@@ -379,17 +327,14 @@ export default function MessagesScreen({ navigation, route }) {
           onPress={() => handleMatchPress(item)}
           activeOpacity={0.7}
           accessibilityRole="button"
-          accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${isUnread ? `${unreadCount || 1} unread message${(unreadCount || 1) === 1 ? '' : 's'}` : 'message thread'}` : item.name}
+          accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${isUnread ? `${unreadCount || 1} unread message${(unreadCount || 1) === 1 ? '' : 's'}` : 'conversation'}` : item.name}
         >
           <TouchableOpacity
             style={styles.avatarContainer}
             onPress={(e) => {
               e.stopPropagation?.();
-              // Avatar tap shows the full profile card (same as the swipe
-              // deck's expand action). Story takes priority if one's
-              // active. Falls back to ProfileDetail rather than Chat so
-              // users can review who they're about to talk to.
-              if (handleOpenStoryIfAvailable(item)) return;
+              // Avatar tap opens the full profile rather than the thread,
+              // so users can review who they're about to talk to.
               navigation.navigate('ProfileDetail', { profile: item });
             }}
             activeOpacity={0.8}
@@ -442,50 +387,65 @@ export default function MessagesScreen({ navigation, route }) {
 
   const unreadMatchCount = useMemo(() => matches.filter((m) => (m.unreadCount > 0) || m.unread).length, [matches]);
   const likesCount = likes.length;
+  // Chip labels are connection vocabulary. The underlying buckets are
+  // unchanged (conversation rows vs. message-request rows) — this pass
+  // is copy, not a data migration.
   const CATEGORIES = [
     { label: 'All', badge: unreadMatchCount + likesCount },
-    { label: 'Matches', badge: unreadMatchCount },
-    { label: 'Likes', badge: likesCount },
+    { label: 'Conversations', badge: unreadMatchCount },
+    { label: 'Invites', badge: likesCount },
   ];
 
-  // New matches for horizontal scroll
-  const newMatchAvatars = useMemo(() => {
-    const combined = [...likes.slice(0, 8), ...matches.filter(m => m.unread).slice(0, 4)];
-    const seen = new Set();
-    return combined.filter(p => { if (seen.has(p.id)) return false; seen.add(p.id); return true; });
-  }, [likes, matches]);
-
-  // Stories scroll with the list (rendered as the first list item).
-  // Pulled out so the FlatList and the loading/empty ScrollViews can
-  // share the exact same component instance.
-  const renderStories = useCallback(() => (
-    <StoriesRow
-      colors={colors}
-      refreshKey={storiesRefreshKey}
-      onCreatePress={() => navigation.navigate('CreateStory')}
-      onStoryPress={(story, storyIndex, storyList) =>
-        navigation.navigate('StoriesView', { story, storyIndex, storyList })
+  // Message requests entry — sits at the very top of the inbox. Always
+  // rendered (not only when there are pending ones) so people can find
+  // the surface, with the count badge carrying the "act on this" signal.
+  const renderRequestsEntry = useCallback(() => (
+    <TouchableOpacity
+      style={styles.requestsRow}
+      onPress={() => navigation.navigate('MessageRequests')}
+      activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={
+        requestCount > 0
+          ? `Message requests, ${requestCount} waiting`
+          : 'Message requests'
       }
-    />
-  ), [colors, storiesRefreshKey, navigation]);
+    >
+      <View style={styles.requestsIcon}>
+        <Ionicons name="mail-outline" size={20} color={colors.accent} />
+      </View>
+      <View style={styles.msgInfo}>
+        <Text style={styles.requestsTitle}>Message requests</Text>
+        <Text style={styles.requestsSub} numberOfLines={1}>
+          {requestCount > 0
+            ? `${requestCount} ${requestCount === 1 ? 'person wants' : 'people want'} to start a conversation`
+            : 'From people you are not connected with'}
+        </Text>
+      </View>
+      {requestCount > 0 && (
+        <View style={styles.unreadCountDot}>
+          <Text style={styles.unreadCountText}>{requestCount > 99 ? '99+' : requestCount}</Text>
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
+    </TouchableOpacity>
+  ), [styles, colors, navigation, requestCount]);
 
-  // Banners/ads/upsell — scroll BELOW the sticky filters. Always returns a
-  // wrapper view so this slot has a stable identity in the list (keeps the
-  // sticky-header index math predictable even when nothing is shown).
+  // Banners slot, scrolling BELOW the sticky filters. Both entries that used to live here were paywall
+  // upsells pointing at the (now unregistered) purchase screen, and the
+  // "who wants to connect" card blurred faces to sell an unlock. What's
+  // left is an unblurred, free summary that scrolls to the invites
+  // filter — the same information without the tollbooth. The wrapper
+  // View stays so the sticky-header index math is unchanged.
   const renderBanners = useCallback(() => (
     <View>
-      {!hasTier('plus') && (
-        <ProfilePromptBanner
-          message="Unlock unlimited messages with JuNubin+"
-          onPress={() => navigation.navigate('Elite')}
-          colors={colors}
-        />
-      )}
-      {!hasTier('junub') && likesCount > 0 && (
+      {likesCount > 0 && activeCategory !== 'Invites' && (
         <TouchableOpacity
           style={styles.upsellCard}
-          onPress={() => navigation.navigate('Elite')}
+          onPress={() => setActiveCategory('Invites')}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`${likesCount} ${likesCount === 1 ? 'person wants' : 'people want'} to connect. Show invites.`}
         >
           <View style={styles.upsellAvatarStack}>
             {likes.slice(0, 4).map((like, i) => (
@@ -493,7 +453,6 @@ export default function MessagesScreen({ navigation, route }) {
                 key={like.id}
                 source={imageSource(like.images?.[0])}
                 style={[styles.upsellStackAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 4 - i }]}
-                blurRadius={8}
               />
             ))}
             {likesCount > 4 && (
@@ -503,13 +462,16 @@ export default function MessagesScreen({ navigation, route }) {
             )}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.upsellTitle}>{likesCount} people {mode === 'Social' ? 'waved at you' : 'liked you'}</Text>
-            <Text style={styles.upsellDesc}>Tap to match instantly</Text>
+            <Text style={styles.upsellTitle}>
+              {likesCount} {likesCount === 1 ? 'person wants' : 'people want'} to connect
+            </Text>
+            <Text style={styles.upsellDesc}>Tap to see who</Text>
           </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
         </TouchableOpacity>
       )}
     </View>
-  ), [colors, navigation, hasTier, likes, likesCount, mode, styles]);
+  ), [colors, likes, likesCount, activeCategory, styles]);
 
   const filtersPanel = useCallback(() => (
     <View style={styles.filtersPanel}>
@@ -517,7 +479,7 @@ export default function MessagesScreen({ navigation, route }) {
         <View style={styles.categoryChips}>
           {CATEGORIES.map((cat) => {
             const isActive = activeCategory === cat.label;
-            const isLikes = cat.label === 'Likes';
+            const isLikes = cat.label === 'Invites';
             const countText = cat.badge > 0 ? `${cat.badge > 99 ? '99+' : cat.badge}` : '';
             return (
               <TouchableOpacity
@@ -525,13 +487,12 @@ export default function MessagesScreen({ navigation, route }) {
                 style={[
                   styles.categoryChip,
                   isActive && (isLikes ? styles.categoryChipLikes : styles.categoryChipActive),
-                  filtersLocked && styles.categoryChipLocked,
                 ]}
-                onPress={() => {
-                  if (filtersLocked) { showFiltersLocked(); return; }
-                  setActiveCategory(cat.label);
-                }}
-                activeOpacity={filtersLocked ? 1 : 0.8}
+                onPress={() => setActiveCategory(cat.label)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={cat.badge > 0 ? `${cat.label}, ${cat.badge}` : cat.label}
               >
                 <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>
                   {cat.label}
@@ -558,34 +519,23 @@ export default function MessagesScreen({ navigation, route }) {
             onChangeText={setSearchQuery}
             returnKeyType="search"
             autoCorrect={false}
-            editable={!filtersLocked}
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close-circle" size={19} color={colors.gray400} />
             </TouchableOpacity>
           )}
-          {filtersLocked && (
-            <Pressable style={styles.searchLockOverlay} onPress={showFiltersLocked} />
-          )}
         </View>
       </View>
-
-      {filtersLocked && (
-        <TouchableOpacity style={styles.filtersLockedRow} onPress={showFiltersLocked} activeOpacity={0.8}>
-          <Ionicons name="lock-closed" size={14} color={colors.gray500} />
-          <Text style={styles.filtersLockedText}>Filters are JuNubin+ only</Text>
-        </TouchableOpacity>
-      )}
     </View>
-  ), [CATEGORIES, activeCategory, filtersLocked, searchQuery, colors, showFiltersLocked]);
+  ), [CATEGORIES, activeCategory, searchQuery, colors, styles]);
 
-  // Unified data for the FlatList. Keeping a fixed prefix (stories,
+  // Unified data for the FlatList. Keeping a fixed prefix (requests,
   // filters, banners) means stickyHeaderIndices=[1] always points at
   // the filters strip. `__type` is read by the dispatcher below.
   const listData = useMemo(() => {
     const head = [
-      { __type: 'stories', id: '__stories' },
+      { __type: 'requests', id: '__requests' },
       { __type: 'filters', id: '__filters' },
       { __type: 'banners', id: '__banners' },
     ];
@@ -598,12 +548,12 @@ export default function MessagesScreen({ navigation, route }) {
 
   const renderListItem = useCallback(({ item }) => {
     switch (item.__type) {
-      case 'stories': return renderStories();
+      case 'requests': return renderRequestsEntry();
       case 'filters': return filtersPanel();
       case 'banners': return renderBanners();
       default: return renderConversation({ item, index: item.__convIndex });
     }
-  }, [renderStories, filtersPanel, renderBanners]);
+  }, [renderRequestsEntry, filtersPanel, renderBanners]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -643,7 +593,7 @@ export default function MessagesScreen({ navigation, route }) {
 
       {/* ─── Everything scrolls together ───
           Layout contract:
-            - index 0 (stories) scrolls up and off-screen
+            - index 0 (message requests) scrolls up and off-screen
             - index 1 (filters + search) sticks to the top once it
               reaches it; everything below it scrolls underneath
             - index 2 (banners/ads/upsell) and beyond scroll normally
@@ -653,7 +603,7 @@ export default function MessagesScreen({ navigation, route }) {
           stickyHeaderIndices={[1]}
           showsVerticalScrollIndicator={false}
         >
-          {renderStories()}
+          {renderRequestsEntry()}
           {filtersPanel()}
           {renderBanners()}
           <MessageListSkeleton />
@@ -663,13 +613,13 @@ export default function MessagesScreen({ navigation, route }) {
           stickyHeaderIndices={[1]}
           showsVerticalScrollIndicator={false}
         >
-          {renderStories()}
+          {renderRequestsEntry()}
           {filtersPanel()}
           {renderBanners()}
           <View style={styles.emptyMessages}>
             <GraffitiChat size={50} color={colors.gray400} />
-            <Text style={styles.emptyText}>No messages yet</Text>
-            <Text style={styles.emptySubtext}>Start swiping to find connections!</Text>
+            <Text style={styles.emptyText}>No conversations yet</Text>
+            <Text style={styles.emptySubtext}>Find people in the community and say hello.</Text>
           </View>
         </ScrollView>
       ) : (
@@ -692,35 +642,6 @@ export default function MessagesScreen({ navigation, route }) {
         />
       )}
 
-      {/* ─── Create Bottom Sheet ─── */}
-      <Modal
-        visible={showCreateSheet}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowCreateSheet(false)}
-      >
-        <View style={styles.sheetOverlay}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowCreateSheet(false)} />
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Create</Text>
-            <TouchableOpacity
-              style={styles.sheetRow}
-              onPress={() => {
-                setShowCreateSheet(false);
-                navigation.navigate('CreateStory');
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add-circle-outline" size={20} color={colors.black} />
-              <View style={styles.sheetTextWrap}>
-                <Text style={styles.sheetRowTitle}>Add Story</Text>
-                <Text style={styles.sheetRowSub}>Share a moment with your followers</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -866,9 +787,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderRadius: 20,
     backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
   },
-  categoryChipLocked: {
-    opacity: 0.7,
-  },
   categoryChipActive: {
     backgroundColor: colors.black,
     borderColor: colors.black,
@@ -911,9 +829,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     height: 40,
     gap: 8,
   },
-  searchLockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-  },
   searchInput: {
     flex: 1,
     ...Typography.caption,
@@ -921,19 +836,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     color: colors.black,
     paddingVertical: 0,
   },
-  filtersLockedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
-  },
-  filtersLockedText: {
-    ...Typography.caption,
-    color: colors.gray500,
-    fontSize: 12,
-  },
-
   // ─── New Connections ───
   // ─── Messages Header ───
   messagesHeader: {
@@ -1158,50 +1060,38 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     marginLeft: 8,
   },
 
-  // ─── Create Sheet ───
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.cardBg,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 18,
-    paddingTop: 10,
-    paddingBottom: 20,
-  },
-  sheetHandle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gray300,
-    marginBottom: 8,
-  },
-  sheetTitle: {
-    ...Typography.h4,
-    color: colors.black,
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  sheetRow: {
+  // ─── Message requests entry ───
+  requestsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    // Comfortably over the 44pt minimum even before the accessibility
+    // preference bumps it — this is the first row in the inbox and gets
+    // tapped a lot.
+    paddingVertical: prefs?.largerTouchTargets ? 16 : 13,
+    marginHorizontal: 8,
+    marginTop: 4,
+    borderRadius: 14,
   },
-  sheetTextWrap: {
-    flex: 1,
+  requestsIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)',
   },
-  sheetRowTitle: {
+  requestsTitle: {
     ...Typography.bodySmallMedium,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
     color: colors.black,
   },
-  sheetRowSub: {
+  requestsSub: {
     ...Typography.caption,
-    color: colors.gray500,
+    color: prefs?.highContrast ? colors.gray700 : colors.gray500,
     marginTop: 2,
   },
 

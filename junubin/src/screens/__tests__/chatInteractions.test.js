@@ -29,6 +29,17 @@ jest.mock('../../hooks', () => ({
   useEligibility: () => ({ gate: () => true, lastVerdict: () => null, nudge: null }),
 }));
 
+// Chat is text + images only. connectionService is reached from the
+// overflow menu's "Remove connection" action; stub it so the screen
+// renders without a Supabase client.
+jest.mock('../../api/services/connectionService', () => ({
+  disconnect: jest.fn(async () => ({ success: true })),
+  getConnectionState: jest.fn(async () => ({
+    following: false, followedBy: false, isConnected: false, requestStatus: 'none',
+  })),
+  canMessageDirectly: jest.fn(async () => true),
+}));
+
 // ChatScreen calls useFocusEffect for read-receipt persistence; tests
 // render outside a NavigationContainer so we stub it to a no-op.
 jest.mock('@react-navigation/native', () => {
@@ -52,7 +63,7 @@ jest.mock('../../api/hooks/useRealtime', () => ({
 jest.mock('../../api/services/chatService', () => ({
   getMessages: jest.fn(async () => []),
   sendMessage: jest.fn(async () => ({ id: 'sent-1' })),
-  sendAudioMessage: jest.fn(async () => ({ id: 'audio-1' })),
+  sendImageMessage: jest.fn(async () => ({ id: 'img-1', url: 'https://example.com/i.jpg' })),
   toggleReaction: jest.fn(async () => ({ added: true })),
   getReactions: jest.fn(async () => ({})),
   markConversationRead: jest.fn(async () => 0),
@@ -138,6 +149,7 @@ describe('Chat interactive actions', () => {
       coins: 200,
       adsEnabled: true,
       consumeCoins: () => true,
+      consumeWhisper: jest.fn(),
       addCoins: jest.fn(),
       addSpotlights: jest.fn(),
       addSuperLikes: jest.fn(),
@@ -159,33 +171,36 @@ describe('Chat interactive actions', () => {
 
   // Mini Game (Quick Pick) and Co-watch / Co-listen UI removed in v1 strip; tests deleted.
 
-  it('mic action opens voice call flow for eligible tiers', async () => {
+  // Chat is text + images only. These two cases lock that in: the
+  // composer must not offer voice, and the action row must not offer
+  // gifts or games. If someone re-adds a mic or a call button, the
+  // queries below start finding it and these fail.
+  it('composer offers no voice note or call affordance', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const match = { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] };
     const route = { params: { match } };
-    const { getByTestId } = render(
+    const { queryByTestId } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
 
-    await act(async () => {
-      fireEvent.press(getByTestId('chat-mic'));
-    });
-
-    // Mic now opens the in-chat voice recorder modal (replacing the
-    // old "navigate to Call screen as a placeholder" behaviour). The
-    // recorder modal renders its own title text on mount.
+    expect(queryByTestId('chat-mic')).toBeNull();
+    expect(queryByTestId('chat-send')).toBeTruthy();
     expect(navigation.navigate).not.toHaveBeenCalledWith('Call', expect.anything());
+
+    // Flush mount-time getMessages()/markConversationRead() promises.
+    await act(async () => {});
   });
 
-  it('sticker action prompts upgrade for non-premium users', async () => {
+  it('action row offers photo and stickers only, with no upgrade prompt', async () => {
     mockUseSubscription.mockReturnValue({
       hasTier: () => false,
       effectiveTier: 'free',
       promoTier: null,
       promoEndsAt: null,
-      coins: 200,
+      coins: 0,
       adsEnabled: true,
       consumeCoins: () => true,
+      consumeWhisper: jest.fn(),
       addCoins: jest.fn(),
       addSpotlights: jest.fn(),
       addSuperLikes: jest.fn(),
@@ -195,15 +210,23 @@ describe('Chat interactive actions', () => {
     });
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
-    const { getByTestId } = render(
+    const { getByTestId, queryByTestId } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
 
     fireEvent.press(getByTestId('chat-plus'));
-    fireEvent.press(getByTestId('chat-sticker'));
 
-    expect(alertSpy).toHaveBeenCalled();
-    // Flush mount-time getMessages()/markConversationRead() promises.
+    expect(getByTestId('chat-photo')).toBeTruthy();
+    expect(getByTestId('chat-sticker')).toBeTruthy();
+    expect(queryByTestId('chat-gift')).toBeNull();
+    expect(queryByTestId('chat-game')).toBeNull();
+
+    // Stickers are free now — there is no tier to upgrade to, so
+    // tapping must open the tray rather than raise a paywall alert.
+    fireEvent.press(getByTestId('chat-sticker'));
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(navigation.navigate).not.toHaveBeenCalledWith('Elite');
+
     await act(async () => {});
   });
 

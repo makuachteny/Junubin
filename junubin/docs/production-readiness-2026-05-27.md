@@ -1,5 +1,12 @@
 # JuNubin — Production Readiness Audit (Full Codebase)
 
+> **⚠️ STALE — written for the dating product.** JuNubin has since pivoted to a
+> free South Sudanese social-networking app: no swiping, matching, likes or
+> subscriptions, and no posts/stories/groups/events/games/calls. Category,
+> age rating, privacy labels, screenshots, review notes and IAP sections in
+> this document are all wrong until rewritten. See
+> `docs/social-platform-redesign-plan.md` → "Implementation Status".
+
 **Date:** 2026-05-27
 **Verdict:** App is **production-ready on the code side**. The remaining work is operator configuration in third-party dashboards (Supabase, Stripe, RevenueCat, App Store Connect, Play Console). Estimated time to launch: **~60-90 minutes of dashboard work** + TestFlight verification.
 

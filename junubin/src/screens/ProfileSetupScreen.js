@@ -33,169 +33,149 @@ import { ALL_TRIBE_KEYS } from '../data/tribes';
 import { GENDER_OPTIONS, toDbGender, toUiGender } from '../data/gender';
 import {
   PRONOUN_OPTIONS,
-  DATE_PREF_OPTIONS,
-  INTENTION_OPTIONS,
   EDUCATION_OPTIONS,
   INTEREST_OPTIONS,
   PROMPT_OPTIONS,
-  SEXUALITY_OPTIONS,
-  CHILDREN_OPTIONS,
+  LOCATION_VISIBILITY_OPTIONS,
+  normalizeLocationVisibility,
 } from '../data/profileOptions';
+import { OPEN_TO_OPTIONS, normalizeOpenTo, openToLabels } from '../data/openTo';
+import { LANGUAGE_OPTIONS, normalizeLanguages } from '../data/languages';
 import { COUNTRY_PICKER_OPTIONS, COUNTRY_BY_CODE } from '../data/worldCountries';
 import { promptToOpenSettings } from '../utils/permissionAlert';
+import { getProfileRecord } from '../utils/eligibility';
 
 const { width } = Dimensions.get('window');
 
 // ─── Step Definitions ───
-// Purpose comes first so we only ask the questions a given user needs:
-// - everyone answers the generic block (name → interests)
-// - dating users also answer sexuality / lookingFor / children / intention
-// - social-only users skip those entirely.
+// One flat list, walked start to finish. JuNubin pivoted from a dating
+// app to a South Sudanese social/community platform, which removed the
+// four dating-only steps (sexuality, datePref, children, intention) and
+// with them the whole `datingOnly` / `isSocialOnly` branching mechanism
+// — there is no longer a mode that reshapes the step list, so STEPS is
+// simply ALL_STEPS.
 //
-// `datingOnly: true` marks a step as gated on purpose === 'dating' |
-// 'both'. The STEPS useMemo below filters ALL_STEPS based on the
-// current purpose, so the screen reshapes itself the moment the user
-// taps a card on step 1 — no separate routing, no nav stack churn.
+// Step 1 is `openTo` ("What are you open to?"), the multi-select that
+// replaced the Dating/Socialize purpose cards. `locationVisibility` is
+// LAST and must stay last: it's the privacy consent gate, and the user
+// should have seen what the app is for before deciding whether to
+// appear on the map.
 const ALL_STEPS = [
-  { key: 'purpose',   title: 'What brings you here?',         icon: 'options',            subtitle: 'Choose your vibe. You can switch any time in Settings.' },
+  { key: 'openTo',    title: 'What are you open to?',         icon: 'sparkles',           subtitle: 'Pick everything that fits. This is how people find their people.' },
   { key: 'name',      title: "What's your first name?",       icon: 'person',             subtitle: 'This is how you\'ll appear on JuNubin.' },
   { key: 'birthday',  title: 'When were you born?',           icon: 'calendar',           subtitle: 'Your age will be shown on your profile.' },
-  { key: 'gender',    title: 'What\'s your gender?',          icon: 'body',               subtitle: 'Select the option that best describes you.' },
+  { key: 'gender',    title: 'What\'s your gender?',          icon: 'body',               subtitle: 'Optional — skip it if you\'d rather not say.' },
   { key: 'pronouns',  title: 'What are your pronouns?',       icon: 'chatbubbles',        subtitle: 'Select up to 4. This will be visible on your profile.' },
   { key: 'country',   title: 'Which country do you most identify with?', icon: 'earth',     subtitle: 'Pick the country that best represents who you are.' },
-  { key: 'ethnicity', title: 'What\'s your background?',      icon: 'flag',               subtitle: 'Help others learn more about you.' },
+  { key: 'city',      title: 'Which city are you in?',        icon: 'business',           subtitle: 'Optional — it helps people nearby find you. No exact address.' },
+  { key: 'ethnicity', title: 'What\'s your background?',      icon: 'flag',               subtitle: 'Optional — help others learn more about you.' },
+  { key: 'languages', title: 'Which languages do you speak?', icon: 'language',           subtitle: 'Optional — pick as many as you like.' },
   { key: 'education', title: 'Education level',               icon: 'school',             subtitle: 'Optional — visible on your profile.' },
+  { key: 'profession', title: 'What do you do?',              icon: 'briefcase',          subtitle: 'Optional — your work and where you studied.' },
   { key: 'photos',    title: 'Add your best photos',          icon: 'camera',             subtitle: 'Add at least 3 photos. The more, the better!' },
   { key: 'verify',    title: 'Verify your identity',          icon: 'shield-checkmark',   subtitle: 'Take a quick selfie to prove you\'re real.' },
   { key: 'interests', title: 'What do you love?',             icon: 'star',               subtitle: 'Pick at least 3 interests.' },
   { key: 'prompts',   title: 'Answer a profile prompt',       icon: 'chatbox-ellipses',   subtitle: 'Show off your personality.' },
-  { key: 'sexuality', title: 'What\'s your sexuality?',       icon: 'heart',              subtitle: 'This helps us find your best matches.', datingOnly: true },
-  { key: 'datePref',  title: 'Who do you want to date?',      icon: 'people',             subtitle: 'You can always change this later.', datingOnly: true },
-  { key: 'children',  title: 'Do you have children?',         icon: 'happy',              subtitle: 'Optional — visible on your profile.', datingOnly: true },
-  { key: 'intention', title: 'What are you looking for?',     icon: 'compass',            subtitle: 'Be upfront about your intentions.', datingOnly: true },
+  { key: 'locationVisibility', title: 'Who can see where you are?', icon: 'map',          subtitle: 'You\'re in control. Location sharing is off unless you turn it on.' },
 ];
 
 // ─── Options Data ───
 // GENDER_OPTIONS imported from src/data/gender.js (UI ↔ DB enum mapping).
-// The six survey-vocab arrays — PRONOUN_OPTIONS, DATE_PREF_OPTIONS,
-// INTENTION_OPTIONS, EDUCATION_OPTIONS, INTEREST_OPTIONS, PROMPT_OPTIONS
-// — plus SEXUALITY_OPTIONS / CHILDREN_OPTIONS now live in the shared
-// src/data/profileOptions.js so this screen and EditProfile can't drift
-// out of sync. (Previously each screen defined its own copy with a
-// "mirror this in the other file" comment — exactly the pattern that
-// produces "saved value doesn't match a chip" bugs.)
+// The survey vocabularies — PRONOUN_OPTIONS, EDUCATION_OPTIONS,
+// INTEREST_OPTIONS, PROMPT_OPTIONS, LOCATION_VISIBILITY_OPTIONS — live
+// in the shared src/data/profileOptions.js, and the two long ones
+// (OPEN_TO_OPTIONS, LANGUAGE_OPTIONS) in their own files, so this
+// screen and EditProfile can't drift out of sync. (Previously each
+// screen defined its own copy with a "mirror this in the other file"
+// comment — exactly the pattern that produces "saved value doesn't
+// match a chip" bugs.)
 // ETHNICITY_OPTIONS is kept local because it's just a thin alias over
 // ALL_TRIBE_KEYS from src/data/tribes.js — no list values to maintain.
 const ETHNICITY_OPTIONS = ALL_TRIBE_KEYS;
 
-const PURPOSE_OPTIONS = [
-  {
-    key: 'dating',
-    icon: 'heart',
-    label: 'Dating',
-    description: 'Find meaningful connections and meet someone special.',
-    gradient: ['#CE1126', '#009739'],
-  },
-  {
-    key: 'socialize',
-    icon: 'people',
-    label: 'Socialize',
-    description: 'Make friends, join communities, and stay connected.',
-    gradient: ['#7B61FF', '#5B8DEF'],
-  },
-];
+// Every profile still carries accountPurpose: 'socialize'. The value is
+// no longer a user choice — the Dating/Socialize cards are gone — but
+// profile-completeness checks, AppNavigator's deep-link routing and
+// AuthContext's mode resolution all still branch on it, so the pivot
+// keeps writing it rather than orphaning those call sites. What the
+// user actually picks now lands in Profile.openTo.
+const ACCOUNT_PURPOSE = 'socialize';
+
+// Profile.lookingFor predates the pivot and still carried dating copy
+// ('Something serious', 'Marriage-minded'). New signups get a neutral
+// value derived from their first openTo pick instead of a dating
+// default, so no card or preview surface has to special-case it.
+const openToPrimaryLabel = (keys) => openToLabels(keys)[0] || 'Community';
 
 // Map eligibility step ids → ProfileSetup step keys. Used when the
 // SurveyNudgeModal opens this screen with `resumeAt` set: we seek to
-// the matching step in STEPS rather than starting from the top.
-// Map eligibility step id → ProfileSetup step key. Kept in lockstep
-// with STEP_ORDER in src/utils/eligibility.js. `prompts` is the new
-// id for the prompt-answer gate that replaced the broken `bio` gate;
-// `bio` is preserved here as a defensive alias in case any older
-// resumeAt value (in flight via push notification, deep link, or
-// stored AsyncStorage) still references it.
+// the matching step in STEPS rather than starting from the top. Kept
+// in lockstep with STEP_ORDER in src/utils/eligibility.js.
+//
+// The bottom block is defensive aliases for ids that no longer exist
+// in STEP_ORDER but may still be in flight in a push notification, a
+// deep link, or a stored AsyncStorage value written before the
+// community pivot / before the `bio` → `prompts` rename. They resolve
+// to the nearest surviving step so a stale resumeAt lands somewhere
+// sensible instead of falling through to `resumeAt` itself and
+// silently no-op'ing the seek.
 const RESUME_KEY_BY_ELIGIBILITY_ID = {
-  purpose:          'purpose',
+  purpose:          'openTo',
+  openTo:           'openTo',
   displayName:      'name',
   dob:              'birthday',
   gender:           'gender',
   country:          'country',
   countryCode:      'country',
+  city:             'city',
+  languages:        'languages',
+  profession:       'profession',
+  locationVisibility: 'locationVisibility',
   photos:           'photos',
-  interestedIn:     'datePref',
-  datingIntentions: 'intention',
   prompts:          'prompts',
-  bio:              'prompts',
   interests:        'interests',
+  // ── legacy / removed ids ──
+  bio:              'prompts',
+  interestedIn:     'openTo',
+  datingIntentions: 'openTo',
+  sexuality:        'openTo',
+  datePref:         'openTo',
+  intention:        'openTo',
+  children:         'openTo',
+  survey:           'prompts',
 };
 
 const ProfileSetupScreen = ({ navigation, route }) => {
   const resumeAtParam = route?.params?.resumeAt || null;
-  // `mode` is the authoritative mode the caller wants this setup run
-  // to target. SurveyNudgeModal / deep links pass it so the user lands
-  // in the right STEPS subset even when their stored accountPurpose
-  // hasn't been set yet (early onboarding) or is out of sync with the
-  // mode they're currently using the app in (post-launch mode switch).
-  // Accepted values: 'socialize', 'dating', 'both'. Anything else is
-  // treated as "no override" — fall back to the stored purpose.
-  const modeParam = route?.params?.mode || null;
-  const initialPurpose = modeParam === 'socialize'
-    ? 'socialize'
-    : modeParam === 'dating' || modeParam === 'both'
-      ? modeParam
-      : null;
-  const [purpose, setPurpose] = useState(initialPurpose); // null until the user picks on the purpose step
-  const isSocialOnly = purpose === 'socialize';
 
-  // Step list reshapes around purpose:
-  //   - Before purpose is chosen → only the purpose card is visible.
-  //     This forces the user to answer "Dating or Socialize?" first so
-  //     they can't waste 10 generic steps on a flow they won't finish.
-  //   - After purpose === 'socialize' → generic steps only.
-  //   - After purpose === 'dating' or 'both' → generic + dating-only.
-  //
-  // `currentStep` is an index into this filtered list; the seek effect
-  // below re-resolves it whenever STEPS changes so the user lands on
-  // the right card after the list grows.
-  const STEPS = useMemo(
-    () => ALL_STEPS.filter((s) => {
-      if (s.key === 'purpose') return true;
-      if (!purpose) return false;
-      if (!s.datingOnly) return true;
-      return !isSocialOnly;
-    }),
-    [purpose, isSocialOnly]
-  );
+  // The step list is fixed now. It used to reshape around `purpose`
+  // (dating vs socialize), which meant `currentStep` was an index into
+  // a list that could grow mid-flow. With the dating branch gone STEPS
+  // is a stable constant, so a resumeAt index resolved on mount stays
+  // valid for the whole run.
+  const STEPS = ALL_STEPS;
 
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
   // Seek to the requested step when ProfileSetup is opened from the
-  // SurveyNudgeModal (or a deep link). The seek waits for STEPS to
-  // stabilize after `purpose` hydrates from authUser — dating-only
-  // steps only appear once `purpose` is non-null, and we don't want
-  // to land on (e.g.) `photos` while STEPS is still the pre-purpose
-  // subset, since that picks the wrong index.
+  // SurveyNudgeModal (or a deep link).
   //
   // Tracked via a ref so the seek only fires once per (resumeAtParam,
   // mount) — once the user manually advances or goes back, we never
-  // bounce them back here even if STEPS recomputes for another reason.
+  // bounce them back here.
   const didSeekResumeRef = useRef(false);
   useEffect(() => {
     if (!resumeAtParam || didSeekResumeRef.current) return;
     const targetKey = RESUME_KEY_BY_ELIGIBILITY_ID[resumeAtParam] || resumeAtParam;
     const idx = STEPS.findIndex((s) => s.key === targetKey);
     if (idx < 0) return;
-    // Wait for hydration: if the target step is in the dating-only
-    // section but `purpose` hasn't loaded yet, defer until STEPS
-    // includes the dating steps. We detect that by checking whether
-    // the matched index sits inside the dating-only block.
-    if (idx >= 0 && idx !== currentStep) {
+    if (idx !== currentStep) {
       setCurrentStep(idx);
       didSeekResumeRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeAtParam, STEPS.length]);
+  }, [resumeAtParam]);
   const savingFade = useRef(new Animated.Value(0)).current;
   const savingPulse = useRef(new Animated.Value(1)).current;
 
@@ -221,27 +201,41 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const [birthDate, setBirthDate] = useState('');
   const [selectedGender, setSelectedGender] = useState('');
   const [selectedPronouns, setSelectedPronouns] = useState([]);
-  const [selectedSexuality, setSelectedSexuality] = useState('');
-  const [selectedDatePref, setSelectedDatePref] = useState('');
-  const [selectedIntention, setSelectedIntention] = useState('');
   const [selectedEthnicity, setSelectedEthnicity] = useState('');
   // Country = ISO 3166-1 alpha-2 code stored on User.countryCode. The
   // step uses a searchable modal picker (240+ entries) instead of a
   // radio list — too long to scroll inline.
   const [selectedCountry, setSelectedCountry] = useState('');
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
+  // City = free text on User.city. Deliberately not a picker: there is
+  // no canonical list that covers Juba, Kakuma, Omaha and Melbourne
+  // equally well, and a wrong-but-close pick is worse than what people
+  // type themselves.
+  const [city, setCity] = useState('');
   const [selectedEducation, setSelectedEducation] = useState('');
-  const [selectedChildren, setSelectedChildren] = useState('');
+  // Profession → Profile.profession (free text). `job` and `school`
+  // are the pre-existing columns and keep being written from the same
+  // step so nothing that already reads them regresses.
+  const [profession, setProfession] = useState('');
+  const [school, setSchool] = useState('');
+  // openTo → Profile.openTo (array of keys from src/data/openTo.js).
+  const [selectedOpenTo, setSelectedOpenTo] = useState([]);
+  // languages → Profile.languages (array of labels).
+  const [selectedLanguages, setSelectedLanguages] = useState([]);
+  // locationVisibility → Profile.locationVisibility. 'off' by default,
+  // for everyone, always. Nothing on this screen may change that
+  // without an explicit tap.
+  const [locationVisibility, setLocationVisibility] = useState('off');
   const [selectedInterests, setSelectedInterests] = useState([]);
   const [selectedPrompt, setSelectedPrompt] = useState('');
   const [promptAnswer, setPromptAnswer] = useState('');
   const [photos, setPhotos] = useState(Array(6).fill(null));
   const [verificationPhoto, setVerificationPhoto] = useState(null);
 
-  // Visibility toggles (BLK feature)
+  // Visibility toggles (BLK feature) — see renderVisibilityToggle below;
+  // these are declared-but-inert until per-field visibility ships.
   const [showGender, setShowGender] = useState(true);
   const [showPronouns, setShowPronouns] = useState(true);
-  const [showSexuality, setShowSexuality] = useState(false);
   const [showEthnicity, setShowEthnicity] = useState(true);
 
   // Hydrate form fields from the existing User/Profile row so a returning
@@ -257,23 +251,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     if (hydratedForUserRef.current === authUser.id) return;
     hydratedForUserRef.current = authUser.id;
 
-    const profile = authUser.profile || {};
-
-    // Purpose drives the STEPS array (datingOnly visibility). Hydrate
-    // it from accountPurpose so the resumeAt seek effect lands on the
-    // right index. 'date' is the legacy spelling from 00010; treat it
-    // as 'dating' for the UI.
-    //
-    // BUT if the caller passed a `mode` route param (SurveyNudgeModal /
-    // deep link), that's the authoritative target for this run and we
-    // must NOT overwrite it with the stored accountPurpose. A user
-    // currently in Social mode tapping a dating CTA elsewhere should
-    // land in dating steps; the inverse must also hold.
-    if (!modeParam) {
-      const ap = profile.accountPurpose;
-      if (ap === 'socialize') setPurpose('socialize');
-      else if (ap === 'dating' || ap === 'date' || ap === 'both') setPurpose('dating');
-    }
+    const profile = getProfileRecord(authUser) || {};
 
     if (authUser.displayName) setFirstName(authUser.displayName);
 
@@ -304,15 +282,28 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       setSelectedPronouns(profile.pronouns);
     }
 
-    if (profile.sexuality) setSelectedSexuality(profile.sexuality);
-    if (profile.lookingForGender) setSelectedDatePref(profile.lookingForGender);
-    if (profile.datingIntentions) setSelectedIntention(profile.datingIntentions);
-    // countryCode lives on User (not Profile), so hydrate from the
-    // outer record. Stored as uppercase ISO 3166-1 alpha-2 (e.g. 'KE').
+    // countryCode / city live on User (not Profile), so hydrate from
+    // the outer record. countryCode is uppercase ISO 3166-1 alpha-2
+    // (e.g. 'KE'); city is free text.
     if (authUser.countryCode) setSelectedCountry(authUser.countryCode);
+    if (typeof authUser.city === 'string' && authUser.city.trim()) setCity(authUser.city);
     if (profile.ethnicity) setSelectedEthnicity(profile.ethnicity);
     if (profile.education) setSelectedEducation(profile.education);
-    if (profile.children) setSelectedChildren(profile.children);
+    if (profile.profession) setProfession(profile.profession);
+    else if (profile.job) setProfession(profile.job);
+    if (profile.school) setSchool(profile.school);
+
+    // The three pivot columns may not exist yet on an un-migrated
+    // backend, in which case they arrive as undefined/null. The
+    // normalizers below collapse anything unexpected to the safe
+    // default ([] / [] / 'off') rather than letting a null reach a
+    // .map() or a comparison in the render path.
+    const hydratedOpenTo = normalizeOpenTo(profile.openTo);
+    if (hydratedOpenTo.length) setSelectedOpenTo(hydratedOpenTo);
+    const hydratedLanguages = normalizeLanguages(profile.languages);
+    if (hydratedLanguages.length) setSelectedLanguages(hydratedLanguages);
+    setLocationVisibility(normalizeLocationVisibility(profile.locationVisibility));
+
     if (Array.isArray(profile.interests) && profile.interests.length) {
       setSelectedInterests(profile.interests);
     }
@@ -360,7 +351,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     const missing = [];
 
     if (!trimmedName || trimmedName.length < 2) missing.push('first name (at least 2 characters)');
-    if (!purpose) missing.push('account purpose (dating or socializing)');
+    if (!selectedOpenTo || selectedOpenTo.length === 0) missing.push('at least one thing you\'re open to');
 
     // Birthday — full MM/DD/YYYY + 18+ age check (mirrors validateStep 'birthday')
     let birthdayValid = false;
@@ -380,21 +371,17 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     }
     if (!birthdayValid) missing.push('date of birth (must be 18+)');
 
-    if (!selectedGender) missing.push('gender');
+    // Gender, city, ethnicity, languages, education, profession and
+    // locationVisibility are all optional-skippable steps, so they are
+    // deliberately absent from this list. Requiring a field here that
+    // the Skip pill lets the user bypass produces an "incomplete
+    // profile" alert with no way to satisfy it.
     if (!selectedPronouns || selectedPronouns.length === 0) missing.push('pronouns');
     if (!selectedCountry) missing.push('country');
-    if (!selectedEthnicity) missing.push('ethnicity / background');
     if (!selectedInterests || selectedInterests.length < 3) missing.push('at least 3 interests');
     if (!selectedPrompt) missing.push('a profile prompt');
     if (!trimmedPromptAnswer || trimmedPromptAnswer.length < 10) missing.push('prompt answer (at least 10 characters)');
     if (photos.filter(Boolean).length < 3) missing.push('at least 3 photos');
-
-    if (!isSocialOnly) {
-      if (!selectedSexuality) missing.push('sexuality');
-      if (!selectedDatePref) missing.push('who you want to date');
-      if (!selectedIntention) missing.push('dating intentions');
-      if (!selectedChildren) missing.push('children preference');
-    }
 
     if (missing.length > 0) {
       Alert.alert(
@@ -417,31 +404,41 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         ...(dateOfBirth ? { dateOfBirth } : {}),
         ...(selectedGender ? { gender: toDbGender(selectedGender) || 'other' } : {}),
         pronouns: selectedPronouns.join(', '),
-        ...(isSocialOnly ? {} : {
-          sexuality: selectedSexuality,
-          lookingForGender: selectedDatePref,
-          datingIntentions: selectedIntention,
-          children: selectedChildren,
-        }),
         ethnicity: selectedEthnicity,
         // User.countryCode — ISO 3166-1 alpha-2. profileService routes
         // this to the User table (USER_KEYS) so it persists alongside
-        // displayName, dateOfBirth, gender.
+        // displayName, dateOfBirth, gender, city.
         countryCode: selectedCountry,
+        city: city.trim(),
         education: selectedEducation,
+        // Profession is the new canonical column; job/school keep being
+        // written so the profile surfaces that already read them (card
+        // pills, preview sheet) don't go blank for new signups.
+        profession: profession.trim(),
+        job: profession.trim(),
+        school: school.trim(),
+        languages: selectedLanguages,
+        openTo: selectedOpenTo,
+        // Privacy: whatever the user picked on the final consent step,
+        // defaulting to 'off'. Never inferred, never defaulted to a
+        // more-visible value.
+        locationVisibility,
         interests: selectedInterests,
         promptQuestion: selectedPrompt,
         promptAnswer: promptAnswer.trim(),
-        accountPurpose: purpose,
+        // Neutral, community-flavoured "here for" derived from the
+        // first openTo pick, so the existing Profile.lookingFor column
+        // stops carrying dating copy for new signups.
+        lookingFor: openToPrimaryLabel(selectedOpenTo),
+        accountPurpose: ACCOUNT_PURPOSE,
         profileComplete: true,
-        // Mark the survey as complete here — the 15-step (dating) /
-        // 11-step (social) flow this user just finished IS the survey.
-        // Previously this flag only flipped inside AccessibilitySurvey,
-        // which meant the eligibility gate kept re-nudging dating
-        // users to a second screen after they'd already answered every
-        // question. AccessibilitySurvey remains reachable from Settings
-        // for users who want to tune accessibility preferences (it's
-        // about contrast / motion / non-color cues, not dating data).
+        // Mark the survey as complete here — the flow this user just
+        // finished IS the survey. Previously this flag only flipped
+        // inside AccessibilitySurvey, which meant the eligibility gate
+        // kept re-nudging users to a second screen after they'd already
+        // answered every question. AccessibilitySurvey remains reachable
+        // from Settings for users who want to tune accessibility
+        // preferences (contrast / motion / non-color cues).
         surveyCompletedAt: new Date().toISOString(),
         // EULA acceptance was checked on the SignupScreen before the
         // user reached this point. Stamp it on the Profile now that
@@ -494,6 +491,19 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       const user = await profileService.updateProfile(updates);
       updateUser(user);
 
+      // Keep the local mode fallback in step with the persisted
+      // accountPurpose. useCurrentUser falls back to @junubin_mode for
+      // legacy installs; the old purpose cards used to write it, and
+      // leaving it unset after the pivot would make those installs
+      // resolve to 'unset'. Best-effort — a storage failure must not
+      // undo a saved profile.
+      try {
+        await AsyncStorage.setItem('@junubin_mode', 'Social');
+        await AsyncStorage.setItem('@junubin_purpose', ACCOUNT_PURPOSE);
+      } catch (e) {
+        if (__DEV__) console.warn('[ProfileSetup] mode cache write failed:', e?.message);
+      }
+
       // Verification photo is optional — upload after the profile is
       // committed so a failure here doesn't undo a complete profile.
       if (verificationPhoto) {
@@ -520,7 +530,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       // action and route them back here with a `resumeAt` pointing
       // at the specific missing question — they won't have to redo
       // anything they've already answered.
-      navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      const routeNames = navigation.getState?.()?.routeNames || [];
+      if (routeNames.includes('Main')) {
+        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+      }
     } catch (err) {
       Alert.alert('Error', err.message || 'Failed to save profile. Please try again.');
     } finally {
@@ -610,6 +623,18 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     }
   };
 
+  const toggleOpenTo = (key) => {
+    setSelectedOpenTo((prev) => (
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    ));
+  };
+
+  const toggleLanguage = (lang) => {
+    setSelectedLanguages((prev) => (
+      prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang]
+    ));
+  };
+
   const toggleInterest = (interest) => {
     if (selectedInterests.includes(interest)) {
       setSelectedInterests(selectedInterests.filter((i) => i !== interest));
@@ -664,28 +689,29 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         return null;
       }
       case 'gender':
-        return selectedGender ? null : 'Please select your gender.';
+        // Optional — some people simply don't want to answer, and the
+        // pivot doesn't need this field to connect anyone. Skippable
+        // via the top-right pill and also fine to Continue past empty.
+        return null;
       case 'pronouns':
         return selectedPronouns.length > 0 ? null : 'Please select at least one pronoun.';
-      case 'purpose':
-        return purpose ? null : 'Please choose whether you\'re here to date or socialize.';
-      case 'sexuality':
-        return selectedSexuality ? null : 'Please select your sexuality.';
-      case 'datePref':
-        return selectedDatePref ? null : 'Please select who you want to date.';
-      case 'intention':
-        return selectedIntention ? null : 'Please select what you\'re looking for.';
+      case 'openTo':
+        return selectedOpenTo.length > 0 ? null : 'Pick at least one thing you\'re open to.';
       case 'country':
         return selectedCountry ? null : 'Please choose the country you most identify with.';
+      // Optional steps — the user can bypass them with the Skip pill,
+      // and reaching this validator via Continue saves them as-is.
+      case 'city':
       case 'ethnicity':
-        return selectedEthnicity ? null : 'Please select your background.';
+      case 'languages':
       case 'education':
-        // Optional — user can skip via the top-right Skip pill. If
-        // they reached this validator, they tapped Continue, so the
-        // step is being saved as-is (empty allowed).
+      case 'profession':
         return null;
-      case 'children':
-        return selectedChildren ? null : 'Please select an option.';
+      case 'locationVisibility':
+        // Always valid: 'off' is a legitimate (and the default) answer.
+        // A required choice here would be a dark pattern — it turns a
+        // privacy decision into a toll gate on finishing signup.
+        return null;
       case 'photos': {
         const count = photos.filter(Boolean).length;
         if (count < 3) return `Please add at least 3 photos. You've added ${count}.`;
@@ -717,14 +743,14 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     : step.key === 'birthday' ? birthDate
     : step.key === 'gender' ? selectedGender
     : step.key === 'pronouns' ? selectedPronouns.length
-    : step.key === 'purpose' ? purpose
-    : step.key === 'sexuality' ? selectedSexuality
-    : step.key === 'datePref' ? selectedDatePref
-    : step.key === 'intention' ? selectedIntention
+    : step.key === 'openTo' ? selectedOpenTo.length
     : step.key === 'country' ? selectedCountry
+    : step.key === 'city' ? city
     : step.key === 'ethnicity' ? selectedEthnicity
+    : step.key === 'languages' ? selectedLanguages.length
     : step.key === 'education' ? selectedEducation
-    : step.key === 'children' ? selectedChildren
+    : step.key === 'profession' ? `${profession}${school}`
+    : step.key === 'locationVisibility' ? locationVisibility
     : step.key === 'photos' ? photos.filter(Boolean).length
     : step.key === 'prompts' ? `${selectedPrompt}${promptAnswer}`
     : step.key === 'interests' ? selectedInterests.length
@@ -740,15 +766,22 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   // exit setup with zero photos and no prompt and the eligibility
   // check would never fire for those particular fields.
   //
-  // Legitimately optional today:
-  //   - education  (no profile/eligibility surface requires it)
-  //   - children   (dating-only; validateStep requires it, but only
-  //                 for dating mode — Skip is hidden for dating below)
-  //   - verify     (selfie ID — encouraged but not blocking)
-  const OPTIONAL_STEPS = new Set(['education', 'verify']);
-  // `children` is dating-only and required for dating users by
-  // validateStep. Treat as optional only when the user picked
-  // socialize (in which case the step is hidden anyway).
+  // Legitimately optional today. Every key here returns null from
+  // validateStep, so Skip and Continue do the same thing — Skip just
+  // makes "you may leave this blank" visible instead of implied.
+  //   - gender             (explicitly optional after the pivot)
+  //   - city               (people in transit shouldn't be forced)
+  //   - ethnicity          (sensitive; opt-in)
+  //   - languages          (nice-to-have signal)
+  //   - education          (no profile/eligibility surface requires it)
+  //   - profession         (nice-to-have signal)
+  //   - verify             (selfie ID — encouraged but not blocking)
+  //   - locationVisibility (privacy consent; skipping keeps the 'off'
+  //                         default, which is the safe outcome)
+  const OPTIONAL_STEPS = new Set([
+    'gender', 'city', 'ethnicity', 'languages', 'education', 'profession',
+    'verify', 'locationVisibility',
+  ]);
   const canSkip = OPTIONAL_STEPS.has(step.key);
 
   // ─── Render Helpers ───
@@ -849,25 +882,195 @@ const ProfileSetupScreen = ({ navigation, route }) => {
           </View>
         );
 
-      case 'sexuality':
+      case 'openTo':
         return (
           <View style={styles.stepContent}>
-            {SEXUALITY_OPTIONS.map((opt) => renderRadioOption(opt, selectedSexuality, setSelectedSexuality))}
-            {renderVisibilityToggle('Visible on profile', showSexuality, setShowSexuality)}
+            <Text style={styles.selectHint}>
+              {selectedOpenTo.length === 0
+                ? 'Select at least 1'
+                : `${selectedOpenTo.length} selected`}
+            </Text>
+            <View style={styles.badgeGrid}>
+              {OPEN_TO_OPTIONS.map((opt) => {
+                const isActive = selectedOpenTo.includes(opt.key);
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    testID={`open-to-${opt.key}`}
+                    style={[styles.badge, isActive && styles.badgeActive]}
+                    onPress={() => toggleOpenTo(opt.key)}
+                    activeOpacity={0.7}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: isActive }}
+                    accessibilityLabel={opt.label}
+                  >
+                    <Ionicons
+                      name={opt.icon}
+                      size={15}
+                      color={isActive ? colors.accent : colors.gray500}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.badgeText, isActive && styles.badgeTextActive]}>
+                      {opt.label}
+                    </Text>
+                    {isActive && (
+                      <Ionicons name="checkmark" size={14} color={colors.accent} style={{ marginLeft: 6 }} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.helperText}>
+              You can change these any time in Settings.
+            </Text>
           </View>
         );
 
-      case 'datePref':
+      case 'city':
         return (
           <View style={styles.stepContent}>
-            {DATE_PREF_OPTIONS.map((opt) => renderRadioOption(opt, selectedDatePref, setSelectedDatePref))}
+            <TextInput
+              style={styles.textInput}
+              testID="setup-city"
+              placeholder="e.g. Juba, Nairobi, Omaha"
+              placeholderTextColor={colors.gray400}
+              value={city}
+              onChangeText={(t) => setCity(t.slice(0, 60))}
+              maxLength={60}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+              accessibilityLabel="City"
+            />
+            <Text style={styles.helperText}>
+              Just the city name — never your street or exact address. Leave it
+              blank if you'd rather not say.
+            </Text>
           </View>
         );
 
-      case 'intention':
+      case 'languages':
         return (
           <View style={styles.stepContent}>
-            {INTENTION_OPTIONS.map((opt) => renderRadioOption(opt, selectedIntention, setSelectedIntention))}
+            <Text style={styles.selectHint}>
+              {selectedLanguages.length === 0
+                ? 'Optional'
+                : `${selectedLanguages.length} selected`}
+            </Text>
+            <View style={styles.badgeGrid}>
+              {LANGUAGE_OPTIONS.map((lang) => {
+                const isActive = selectedLanguages.includes(lang);
+                return (
+                  <TouchableOpacity
+                    key={lang}
+                    testID={`language-${lang}`}
+                    style={[styles.badge, isActive && styles.badgeActive]}
+                    onPress={() => toggleLanguage(lang)}
+                    activeOpacity={0.7}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: isActive }}
+                    accessibilityLabel={lang}
+                  >
+                    <Text style={[styles.badgeText, isActive && styles.badgeTextActive]}>
+                      {lang}
+                    </Text>
+                    {isActive && (
+                      <Ionicons name="checkmark" size={14} color={colors.accent} style={{ marginLeft: 6 }} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        );
+
+      case 'profession':
+        return (
+          <View style={styles.stepContent}>
+            <TextInput
+              style={styles.textInput}
+              testID="setup-profession"
+              placeholder="e.g. Nurse, student, driver, engineer"
+              placeholderTextColor={colors.gray400}
+              value={profession}
+              onChangeText={(t) => setProfession(t.slice(0, 80))}
+              maxLength={80}
+              returnKeyType="next"
+              accessibilityLabel="What you do"
+            />
+            <View style={{ height: 12 }} />
+            <TextInput
+              style={styles.textInput}
+              testID="setup-school"
+              placeholder="School or university (optional)"
+              placeholderTextColor={colors.gray400}
+              value={school}
+              onChangeText={(t) => setSchool(t.slice(0, 80))}
+              maxLength={80}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+              accessibilityLabel="School or university"
+            />
+            <Text style={styles.helperText}>
+              Both are optional — they just help people find others doing
+              similar things.
+            </Text>
+          </View>
+        );
+
+      case 'locationVisibility':
+        return (
+          <View style={styles.stepContent}>
+            {/* Plain-language explanation FIRST. Nothing on this screen
+                touches expo-location or triggers an OS dialog — this is
+                purely "what do other people get to see", asked before
+                the app ever asks the system for a position. */}
+            <View style={styles.privacyNote}>
+              <Ionicons name="lock-closed" size={16} color={colors.accent} style={{ marginTop: 2 }} />
+              <Text style={styles.privacyNoteText}>
+                Location sharing is <Text style={styles.privacyNoteStrong}>off by default</Text>.
+                If you turn it on, other members can see roughly where you are so
+                you can find each other. We never show your exact address, we never
+                sell your location, and we never use it for ad targeting.
+              </Text>
+            </View>
+
+            <View style={{ gap: 12 }}>
+              {LOCATION_VISIBILITY_OPTIONS.map((opt) => {
+                const isActive = locationVisibility === opt.key;
+                return (
+                  <TouchableOpacity
+                    key={opt.key}
+                    testID={`location-visibility-${opt.key}`}
+                    style={[styles.choiceCard, isActive && styles.choiceCardActive]}
+                    onPress={() => setLocationVisibility(opt.key)}
+                    activeOpacity={0.8}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isActive }}
+                    accessibilityLabel={`${opt.label}. ${opt.description}`}
+                  >
+                    <View style={[styles.choiceIconCircle, isActive && { backgroundColor: colors.accent }]}>
+                      <Ionicons name={opt.icon} size={22} color={isActive ? '#FFFFFF' : colors.gray500} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.choiceTitle, isActive && styles.choiceTitleActive]}>
+                        {opt.label}
+                        {opt.key === 'off' ? '  ·  Default' : ''}
+                      </Text>
+                      <Text style={[styles.choiceSubtitle, isActive && styles.choiceSubtitleActive]}>
+                        {opt.description}
+                      </Text>
+                    </View>
+                    <View style={[styles.radioCircle, isActive && styles.radioCircleActive]}>
+                      {isActive && <View style={styles.radioCircleInner} />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={styles.helperText}>
+              You can change this any time in Settings → Privacy.
+            </Text>
           </View>
         );
 
@@ -947,13 +1150,6 @@ const ProfileSetupScreen = ({ navigation, route }) => {
           </View>
         );
 
-      case 'children':
-        return (
-          <View style={styles.stepContent}>
-            {CHILDREN_OPTIONS.map((opt) => renderRadioOption(opt, selectedChildren, setSelectedChildren))}
-          </View>
-        );
-
       case 'photos':
         return (
           <View style={styles.stepContent}>
@@ -981,7 +1177,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
               ))}
             </View>
             <Text style={styles.helperText}>
-              Tip: Profiles with 4+ photos get 3x more matches!
+              Tip: profiles with 4+ photos get noticed 3x more often.
             </Text>
           </View>
         );
@@ -1114,42 +1310,6 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
                       {interest}
                     </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        );
-
-      case 'purpose':
-        return (
-          <View style={styles.stepContent}>
-            <View style={{ gap: 14 }}>
-              {PURPOSE_OPTIONS.map((opt) => {
-                const isActive = purpose === opt.key;
-                return (
-                  <TouchableOpacity
-                    key={opt.key}
-                    testID={`purpose-${opt.key}`}
-                    style={[styles.purposeCard, isActive && styles.purposeCardActive]}
-                    onPress={async () => {
-                      setPurpose(opt.key);
-                      const mode = opt.key === 'dating' ? 'Dating' : 'Social';
-                      await AsyncStorage.setItem('@junubin_mode', mode);
-                      await AsyncStorage.setItem('@junubin_purpose', opt.key);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.purposeIconCircle, isActive && { backgroundColor: opt.gradient[0] }]}>
-                      <Ionicons name={opt.icon} size={26} color={isActive ? '#FFFFFF' : colors.gray500} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.purposeTitle, isActive && styles.purposeTitleActive]}>{opt.label}</Text>
-                      <Text style={[styles.purposeSubtitle, isActive && styles.purposeSubtitleActive]}>{opt.description}</Text>
-                    </View>
-                    <View style={[styles.radioCircle, isActive && styles.radioCircleActive]}>
-                      {isActive && <View style={styles.radioCircleInner} />}
-                    </View>
                   </TouchableOpacity>
                 );
               })}
@@ -1643,8 +1803,46 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
   },
 
-  // ─── Purpose Cards ───
-  purposeCard: {
+  // ─── Multi-select Badges (openTo / languages) ───
+  // Same visual language as the interest chips, but with an accent
+  // tint + checkmark instead of a solid fill so a screen full of
+  // selected badges stays readable.
+  badgeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    // 12pt vertical padding + ~20pt line box clears the 44pt minimum
+    // touch target from ACCESSIBILITY_QA_MATRIX.md.
+    paddingVertical: 12,
+    minHeight: 44,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.cardBg,
+  },
+  badgeActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSurface || (isDark ? 'rgba(206,17,38,0.16)' : '#FDE7E1'),
+  },
+  badgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    color: colors.gray500,
+  },
+  badgeTextActive: {
+    color: colors.accent,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+  },
+
+  // ─── Choice Cards (location visibility) ───
+  choiceCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
@@ -1654,11 +1852,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.inputBorder,
   },
-  purposeCardActive: {
+  choiceCardActive: {
     borderColor: colors.accent,
     backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
   },
-  purposeIconCircle: {
+  choiceIconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -1666,23 +1864,47 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  purposeTitle: {
+  choiceTitle: {
     fontSize: 18,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
     color: colors.gray600,
     marginBottom: 2,
   },
-  purposeTitleActive: {
+  choiceTitleActive: {
     color: colors.black,
   },
-  purposeSubtitle: {
+  choiceSubtitle: {
     ...Typography.caption,
     color: colors.gray400,
-    lineHeight: 16,
+    lineHeight: 17,
   },
-  purposeSubtitleActive: {
+  choiceSubtitleActive: {
     color: colors.gray500,
+  },
+
+  // ─── Privacy explainer ───
+  privacyNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 14,
+    marginBottom: 20,
+    borderRadius: 14,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F4F4F6',
+    borderWidth: 1,
+    borderColor: colors.separator,
+  },
+  privacyNoteText: {
+    ...Typography.caption,
+    color: colors.gray600,
+    lineHeight: 18,
+    flex: 1,
+  },
+  privacyNoteStrong: {
+    color: colors.black,
+    fontWeight: '700',
+    fontFamily: FontFamily.bold,
   },
 
   // ─── Footer ───

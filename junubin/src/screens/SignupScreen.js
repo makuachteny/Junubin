@@ -394,7 +394,7 @@ const SignupScreen = ({ navigation, route }) => {
           <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
             {/* Top bar — back chevron + Skip pill, matches Onboarding */}
             <View style={styles.topBar}>
-              {navigation.canGoBack() ? (
+              {navigation?.canGoBack?.() ? (
                 <TouchableOpacity
                   style={styles.backButton}
                   onPress={() => navigation.goBack()}

@@ -1,91 +1,80 @@
 // JuNubin — Entitlement Helpers
-// Pure functions for checking subscription access outside of React components
-// Tiers: free → plus (JuNubin+) → junub (premium)
 //
-// ── FREE-FOR-ALL FLAG ──────────────────────────────────────────────
-// When true every entitlement check short-circuits to `true`,
-// daily-like ceilings are uncapped, and consumable balances are
-// treated as infinite. Used during pre-monetization launches when we
-// want the premium UX visible to everyone without a paywall.
+// ── JUNUBIN IS FREE. THIS FILE GATES NOTHING. ─────────────────────
+// The app has no monetization: no paywall, no upgrade prompt, no
+// locked feature, no daily limit. `ALL_FEATURES_FREE` is permanently
+// true — it is not a launch toggle and there is no planned flip.
 //
-// v1 launch posture: false — payments are live (see
-// `PAYMENTS_ENABLED` in src/payments/comingSoon.js), so we gate
-// premium features behind real subscription tiers and consumable
-// balances. Daily like limits per tier come from
-// `DAILY_LIKE_LIMIT_BY_TIER` below. Search for `ALL_FEATURES_FREE`
-// to find every bypassed gate.
+// Every function below is a shim that returns `true` (or "uncapped").
+// They exist ONLY so that call sites across the app keep working
+// without a coordinated rename; do not add a new gate here, and do
+// not reintroduce a tier check. When the last caller of a shim is
+// migrated, delete the shim.
+//
+// The dating-era helpers (`canSeeWhoLikesYou`, `canUseWhispers`,
+// `hasUnlimitedLikes`, `hasUnlimitedRewinds`, `getDailyLikeLimit`,
+// `DAILY_LIKE_LIMIT_BY_TIER`) describe mechanics the product no longer
+// has. They are kept as deprecated shims for the same
+// don't-break-callers reason and are marked for deletion below.
 
-import { TIER_RANK } from './products';
+export const ALL_FEATURES_FREE = true;
 
-export const ALL_FEATURES_FREE = false;
-
-export function hasTierAccess(currentTier, requiredTier) {
-  if (ALL_FEATURES_FREE) return true;
-  return (TIER_RANK[currentTier] || 0) >= (TIER_RANK[requiredTier] || 0);
+// Everyone has access to everything. Arguments are ignored.
+export function hasTierAccess(_currentTier, _requiredTier) {
+  return true;
 }
 
-// Daily like ceiling per subscription tier. `null` == uncapped.
-// Source of truth for the client; the Edge Function (swipe/index.ts)
-// and SQL RPC (00037_per_tier_swipe_limit.sql) hold the same map on
-// the server. Keep all three in sync — drift surfaces as either a UI
-// lie or a surprise 429.
+// @deprecated Dating mechanic. The app has no like limits — nothing
+// reads this map any more. Kept so a stale import resolves; delete
+// once no caller references it.
 export const DAILY_LIKE_LIMIT_BY_TIER = Object.freeze({
-  free: 20,
-  plus: 50,
+  free: null,
+  plus: null,
   junub: null,
 });
 
-export function getDailyLikeLimit(tier) {
-  if (Object.prototype.hasOwnProperty.call(DAILY_LIKE_LIMIT_BY_TIER, tier)) {
-    return DAILY_LIKE_LIMIT_BY_TIER[tier];
-  }
-  return DAILY_LIKE_LIMIT_BY_TIER.free;
+// @deprecated Dating mechanic. Always uncapped (`null`).
+export function getDailyLikeLimit(_tier) {
+  return null;
 }
 
-// "Unlimited" means the tier has no daily ceiling — currently junub
-// only. Plus moved off the unlimited bench in the per-tier reform
-// (00037) and now has a 50/day cap, so the UI badge needs to render
-// for it too.
-export function hasUnlimitedLikes(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  return getDailyLikeLimit(tier) === null;
+// @deprecated Dating mechanic. Delete once callers are migrated.
+export function hasUnlimitedLikes(_tier) {
+  return true;
 }
 
-export function hasUnlimitedRewinds(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  return hasTierAccess(tier, 'plus');
+// @deprecated Dating mechanic. Delete once callers are migrated.
+export function hasUnlimitedRewinds(_tier) {
+  return true;
 }
 
-export function canUseWhispers(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  return hasTierAccess(tier, 'plus');
+// @deprecated Dating mechanic. Delete once callers are migrated.
+export function canUseWhispers(_tier) {
+  return true;
 }
 
-export function canUseAdvancedFilters(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  return hasTierAccess(tier, 'plus');
+// @deprecated Dating mechanic. Delete once callers are migrated.
+export function canSeeWhoLikesYou(_tier) {
+  return true;
 }
 
-// Junub features
-export function canSeeWhoLikesYou(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  return hasTierAccess(tier, 'junub');
+// Discovery / privacy features. Free for everyone, like everything
+// else — these shims stay because screens still call them.
+export function canUseAdvancedFilters(_tier) {
+  return true;
 }
 
-export function canUseIncognito(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  return hasTierAccess(tier, 'junub');
+export function canUseIncognito(_tier) {
+  return true;
 }
 
-export function canUseDiasporaConnect(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  return hasTierAccess(tier, 'junub');
+export function canUseDiasporaConnect(_tier) {
+  return true;
 }
 
-export function isSubscribed(tier) {
-  if (ALL_FEATURES_FREE) return true;
-  // Explicit allowlist — `tier !== 'free'` is too loose, it returns
-  // true for unauthenticated users (undefined) and for any unknown
-  // string. Subscription state must be one of the defined paid tiers.
-  return tier === 'plus' || tier === 'junub';
+// No subscriptions are sold, so every user is treated as fully
+// entitled. Callers use this to decide whether to show "premium"
+// affordances; with everything free the honest answer is always yes.
+export function isSubscribed(_tier) {
+  return true;
 }

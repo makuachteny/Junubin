@@ -16,7 +16,7 @@
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { Alert } from 'react-native';
-import { checkActionAllowed, REASON_COPY } from '../utils/eligibility';
+import { checkActionAllowed, getProfileRecord, REASON_COPY } from '../utils/eligibility';
 import { useAuth } from '../auth';
 import SurveyNudgeModal from '../components/SurveyNudgeModal';
 
@@ -81,8 +81,8 @@ export function useEligibility() {
   // ok:true cleanly. Mirrors STEP_ORDER in utils/eligibility.js —
   // keep in sync when STEP_ORDER changes.
   useEffect(() => {
-    if (!user?.profile) return;
-    const profile = user.profile;
+    const profile = getProfileRecord(user);
+    if (!profile) return;
     const u = user;
     const isFilled = {
       purpose:          !!profile.accountPurpose,
@@ -114,8 +114,9 @@ export function useEligibility() {
   // the modal sits there stale until the user manually dismisses,
   // even though its premise is gone.
   useEffect(() => {
-    if (!nudgeState.visible || !nudgeState.resumeAt || !user?.profile) return;
-    const profile = user.profile;
+    if (!nudgeState.visible || !nudgeState.resumeAt) return;
+    const profile = getProfileRecord(user);
+    if (!profile) return;
     const u = user;
     const stepId = nudgeState.resumeAt;
     const filled =
@@ -138,7 +139,7 @@ export function useEligibility() {
     // Resolve the viewer's current mode so the destination can adapt
     // its copy and which fields it surfaces. Mirror the resolution
     // useCurrentUser does so a Settings-mode switch is respected here.
-    const profile = user?.profile || {};
+    const profile = getProfileRecord(user) || {};
     const mode = profile.appMode === 'social'
       || profile.accountPurpose === 'socialize'
       || profile.accountPurpose === 'social'

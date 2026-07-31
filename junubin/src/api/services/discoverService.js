@@ -1,6 +1,7 @@
 import { supabase } from '../../config/supabase';
 import { normalizeProfile } from './profileService';
 import { cacheGet, cacheSet } from '../../utils/offlineCache';
+import { ALL_FEATURES_FREE } from '../../payments/entitlements';
 
 const profileCache = new Map();
 const PROFILE_CACHE_TTL = 60_000;
@@ -80,6 +81,10 @@ export async function undoLastSwipe(toUserId) {
 }
 
 export async function getDailyLikeStatus() {
+  if (ALL_FEATURES_FREE) {
+    return { used: 0, limit: Infinity, remaining: Infinity, tier: 'junub', unlimited: true };
+  }
+
   // Check cache
   if (likeStatusCache.data && Date.now() - likeStatusCache.timestamp < LIKE_STATUS_CACHE_TTL) {
     return likeStatusCache.data;

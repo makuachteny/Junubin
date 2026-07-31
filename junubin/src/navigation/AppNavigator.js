@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLinkTo } from '@react-navigation/native';
 import { hapticSelection } from '../utils/haptics';
 import * as pendingDeepLink from '../utils/pendingDeepLink';
+import { getProfileRecord } from '../utils/eligibility';
 import LogoMark from '../components/LogoMark';
 import ErrorBoundary from '../components/ErrorBoundary';
 // Tab-bar screens stay eager — they render immediately when the user lands on
@@ -22,9 +23,8 @@ import ErrorBoundary from '../components/ErrorBoundary';
 // cannot resolve `import()` callbacks; React.lazy on these breaks our snapshot
 // + flow tests. Keeping them eager has minimal cost (parsed once at startup).
 import HomeScreen from '../screens/HomeScreen';
-import LikesScreen from '../screens/LikesScreen';
+import DirectoryScreen from '../screens/DirectoryScreen';
 import MessagesScreen from '../screens/MessagesScreen';
-import CommunityScreen from '../screens/CommunityScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import SignupScreen from '../screens/SignupScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
@@ -43,9 +43,8 @@ function withBoundary(Component, tag) {
   };
 }
 const HomeScreenSafe = withBoundary(HomeScreen, 'home');
-const CommunityScreenSafe = withBoundary(CommunityScreen, 'community');
+const DirectoryScreenSafe = withBoundary(DirectoryScreen, 'directory');
 const MessagesScreenSafe = withBoundary(MessagesScreen, 'messages');
-const LikesScreenSafe = withBoundary(LikesScreen, 'likes');
 
 // Lazy-loaded screens (behind navigation.navigate)
 function LazyFallback() {
@@ -73,29 +72,35 @@ const ProfileDetailScreen = lazify(() => import('../screens/ProfileDetailScreen'
 const ProfileViewScreen = lazify(() => import('../screens/ProfileViewScreen'));
 const SettingsScreen = lazify(() => import('../screens/SettingsScreen'));
 const PreferencesScreen = lazify(() => import('../screens/PreferencesScreen'));
-const BoostScreen = lazify(() => import('../screens/BoostScreen'));
-const EliteScreen = lazify(() => import('../screens/EliteScreen'));
 const ChatScreen = withBoundary(lazify(() => import('../screens/ChatScreen')), 'chat');
-const CreatePostScreen = lazify(() => import('../screens/CreatePostScreen'));
-const PostDetailScreen = withBoundary(lazify(() => import('../screens/PostDetailScreen')), 'post-detail');
-const GroupDetailScreen = lazify(() => import('../screens/GroupDetailScreen'));
+const MessageRequestsScreen = lazify(() => import('../screens/MessageRequestsScreen'));
 const EditProfileScreen = lazify(() => import('../screens/EditProfileScreen'));
 const NotificationsScreen = lazify(() => import('../screens/NotificationsScreen'));
 const SettingsInfoScreen = lazify(() => import('../screens/SettingsInfoScreen'));
 const AccessibilitySurveyScreen = lazify(() => import('../screens/AccessibilitySurveyScreen'));
 const PreferenceSelectScreen = lazify(() => import('../screens/PreferenceSelectScreen'));
-const CallScreen = lazify(() => import('../screens/CallScreen'));
 const PhotoVerificationScreen = lazify(() => import('../screens/PhotoVerificationScreen'));
 const ReferralScreen = lazify(() => import('../screens/ReferralScreen'));
-const StoriesViewScreen = lazify(() => import('../screens/StoriesViewScreen'));
-const VideoReelsScreen = lazify(() => import('../screens/VideoReelsScreen'));
-const CreateStoryScreen = lazify(() => import('../screens/CreateStoryScreen'));
-const CreateGroupScreen = lazify(() => import('../screens/CreateGroupScreen'));
-const InteractivityHubScreen = lazify(() => import('../screens/InteractivityHubScreen'));
-const GameSettingsScreen = lazify(() => import('../screens/GameSettingsScreen'));
 const FollowListScreen = lazify(() => import('../screens/FollowListScreen'));
 const FindFriendsScreen = lazify(() => import('../screens/FindFriendsScreen'));
 const WebViewScreen = lazify(() => import('../screens/WebViewScreen'));
+
+// ─── Routes deliberately NOT registered ───
+// JuNubin is a people-discovery + text-chat app. These screens still
+// exist on disk (some are referenced by tests, and deleting them is a
+// separate cleanup) but they are unreachable, which is the point:
+//
+//   Feed / community : CommunityScreen, CreatePost, PostDetail,
+//                      CreateStory, StoriesView, VideoReels,
+//                      CreateGroup, GroupDetail
+//   Games            : InteractivityHub, GameSettings
+//   Calls            : Call (voice/video), which is why there is no
+//                      `Call` route — chat is text-only
+//   Dating           : LikesScreen (the Likes tab is now Directory)
+//   Payments         : Elite, Boost — the app is free, nothing is sold
+//
+// If you re-register one of these, you are changing the product, not
+// fixing a bug. Talk to product first.
 
 const Tab = createBottomTabNavigator();
 const AuthStack = createStackNavigator();
@@ -104,7 +109,9 @@ const MainStack = createStackNavigator();
 function HomeTabs() {
   const { colors } = useTheme();
   const tabStyles = useMemo(() => getTabStyles(), []);
-  const TAB_NAMES = ['HomeTab', 'CommunityTab', 'LikesTab', 'MessagesTab'];
+  // Three tabs, one job each: find people near me, search for people
+  // anywhere, talk to the people I found.
+  const TAB_NAMES = ['HomeTab', 'DirectoryTab', 'MessagesTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
 
   return (
@@ -119,7 +126,7 @@ function HomeTabs() {
             fontWeight: '600',
             marginTop: -2,
           },
-          tabBarActiveTintColor: route.name === 'LikesTab' ? colors.accent : colors.black,
+          tabBarActiveTintColor: colors.black,
           tabBarInactiveTintColor: colors.tabInactive,
           tabBarStyle: {
             backgroundColor: colors.cream,
@@ -136,23 +143,18 @@ function HomeTabs() {
           tabBarIcon: ({ focused }) => {
             const idx = TAB_NAMES.indexOf(route.name);
             const scaleValue = idx >= 0 ? tabScales[idx] : new Animated.Value(1);
-            const activeColor = route.name === 'LikesTab' ? colors.accent : colors.tabActive;
-            const iconColor = focused ? activeColor : colors.tabInactive;
+            const iconColor = focused ? colors.tabActive : colors.tabInactive;
             const size = 28;
 
             let icon;
             switch (route.name) {
               case 'HomeTab':
-                // cards — three profile cards fanned out, the classic swipe-
-                // deck silhouette (Hinge Discover, Bumble, etc.). MCI ships
-                // both filled + outline variants so focus state still flips.
-                icon = <MaterialCommunityIcons name={focused ? 'cards' : 'cards-outline'} size={size + 2} color={iconColor} />;
+                // map-marker-radius — a pin with a radius ring, which is
+                // literally what the tab shows: people around a point.
+                icon = <MaterialCommunityIcons name={focused ? 'map-marker-radius' : 'map-marker-radius-outline'} size={size + 2} color={iconColor} />;
                 break;
-              case 'CommunityTab':
-                icon = <Ionicons name={focused ? 'earth' : 'earth-outline'} size={size} color={iconColor} />;
-                break;
-              case 'LikesTab':
-                icon = <Ionicons name={focused ? 'heart' : 'heart-outline'} size={size} color={iconColor} />;
+              case 'DirectoryTab':
+                icon = <Ionicons name={focused ? 'search' : 'search-outline'} size={size} color={iconColor} />;
                 break;
               case 'MessagesTab':
                 icon = <Ionicons name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={size} color={iconColor} />;
@@ -185,9 +187,8 @@ function HomeTabs() {
           },
         })}
       >
-        <Tab.Screen name="HomeTab" component={HomeScreenSafe} options={{ tabBarLabel: 'Connect' }} />
-        <Tab.Screen name="CommunityTab" component={CommunityScreenSafe} options={{ tabBarLabel: 'Community' }} />
-        <Tab.Screen name="LikesTab" component={LikesScreenSafe} options={{ tabBarLabel: 'Likes' }} />
+        <Tab.Screen name="HomeTab" component={HomeScreenSafe} options={{ tabBarLabel: 'Nearby' }} />
+        <Tab.Screen name="DirectoryTab" component={DirectoryScreenSafe} options={{ tabBarLabel: 'Directory' }} />
         <Tab.Screen name="MessagesTab" component={MessagesScreenSafe} options={{ tabBarLabel: 'Chats' }} />
       </Tab.Navigator>
   );
@@ -250,26 +251,15 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="ProfileView" component={ProfileViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
       <MainStack.Screen name="Settings" component={SettingsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Preferences" component={PreferencesScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="Boost" component={BoostScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="Elite" component={EliteScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Chat" component={ChatScreen} />
-      <MainStack.Screen name="CreatePost" component={CreatePostScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="PostDetail" component={PostDetailScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
-      <MainStack.Screen name="GroupDetail" component={GroupDetailScreen} />
+      <MainStack.Screen name="MessageRequests" component={MessageRequestsScreen} />
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Notifications" component={NotificationsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="SettingsInfo" component={SettingsInfoScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="AccessibilitySurvey" component={AccessibilitySurveyScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
       <MainStack.Screen name="PreferenceSelect" component={PreferenceSelectScreen} options={{ gestureEnabled: true }} />
-      <MainStack.Screen name="Call" component={CallScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: false }} />
       <MainStack.Screen name="PhotoVerification" component={PhotoVerificationScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Referral" component={ReferralScreen} />
-      <MainStack.Screen name="StoriesView" component={StoriesViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
-      <MainStack.Screen name="VideoReels" component={VideoReelsScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
-      <MainStack.Screen name="CreateStory" component={CreateStoryScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="CreateGroup" component={CreateGroupScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="InteractivityHub" component={InteractivityHubScreen} />
-      <MainStack.Screen name="GameSettings" component={GameSettingsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="FollowList" component={FollowListScreen} />
       <MainStack.Screen name="FindFriends" component={FindFriendsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="WebView" component={WebViewScreen} options={{ presentation: 'modal' }} />
@@ -279,16 +269,17 @@ function MainNavigator({ initialRouteName = 'Main' }) {
 
 export default function AppNavigator() {
   const { isAuthenticated, user, ready } = useAuth();
-  // Default to false — show Onboarding on first launch. AsyncStorage hydrates
-  // in the background and the navigator re-renders if the user has already
-  // completed onboarding. Avoids blocking the navigator on a disk read.
-  const [hasOnboarded, setHasOnboarded] = useState(false);
+  // Load before mounting AuthNavigator. React Navigation only reads
+  // initialRouteName on first mount, so rendering with a temporary
+  // false value can strand returning users on the landing page even
+  // after AsyncStorage later says they already onboarded.
+  const [hasOnboarded, setHasOnboarded] = useState(null);
   const linkTo = useLinkTo();
 
   useEffect(() => {
     AsyncStorage.getItem('@junubin_onboarded').then((val) => {
-      if (val === 'true') setHasOnboarded(true);
-    }).catch(() => {});
+      setHasOnboarded(val === 'true');
+    }).catch(() => setHasOnboarded(false));
   }, []);
 
   // Replay any deep link that was deferred while the user was on the
@@ -298,10 +289,11 @@ export default function AppNavigator() {
   // effect re-fires when `user` updates with the completed profile.
   // Linking errors are swallowed: better to drop a pending tap than
   // to crash the app on a stale URL.
+  const profileForDeepLink = getProfileRecord(user);
   const profileReady = !!(
-    user?.profile?.profileComplete ||
-    user?.profile?.accountPurpose ||
-    user?.profile?.displayName ||
+    profileForDeepLink?.profileComplete ||
+    profileForDeepLink?.accountPurpose ||
+    profileForDeepLink?.displayName ||
     user?.displayName
   );
   useEffect(() => {
@@ -325,10 +317,11 @@ export default function AppNavigator() {
     }
   }, [ready, isAuthenticated]);
 
-  if (!ready) return null;
+  if (!ready || hasOnboarded === null) return <LazyFallback />;
 
   if (!isAuthenticated) {
-    return <AuthNavigator initialRouteName={hasOnboarded ? 'Signup' : 'Onboarding'} />;
+    const initialRouteName = hasOnboarded ? 'Signup' : 'Onboarding';
+    return <AuthNavigator key={`auth-${initialRouteName}`} initialRouteName={initialRouteName} />;
   }
 
   // Authenticated but the API user fetch is still in flight. Without
@@ -338,7 +331,7 @@ export default function AppNavigator() {
   // potential redirect loop. Wait for the user object to land first.
   if (user === null || user === undefined) return <LazyFallback />;
 
-  const profile = user?.profile;
+  const profile = getProfileRecord(user);
   const hasProfile =
     profile?.profileComplete ||
     profile?.accountPurpose ||

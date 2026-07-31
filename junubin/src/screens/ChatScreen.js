@@ -23,13 +23,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useFollow } from '../hooks/useFollow';
-import * as callService from '../api/services/callService';
 import * as chatService from '../api/services/chatService';
 import * as matchesService from '../api/services/matchesService';
 import * as safetyService from '../api/services/safetyService';
+import * as connectionService from '../api/services/connectionService';
 import { detectScamSignal } from '../api/services/safetyServiceExtras';
 import ChatScamBanner from '../components/ChatScamBanner';
 import { trackEvent, AnalyticsEvents } from '../utils/analytics';
@@ -40,21 +39,10 @@ import { mockMessages as demoMockMessages } from '../data/__dev__/mockProfiles';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import OnlinePulseDot from '../components/OnlinePulseDot';
 import ChatImageBubble from '../components/ChatImageBubble';
-import ChatAudioBubble from '../components/ChatAudioBubble';
-import VoiceRecorder from '../components/VoiceRecorder';
 import ChatReactionPicker from '../components/ChatReactionPicker';
-import GiftPicker from '../components/GiftPicker';
-import GiftBubble from '../components/GiftBubble';
-import GiftAnimation from '../components/GiftAnimation';
-import GamePickerSheet from '../components/GamePickerSheet';
-import GameBubble from '../components/GameBubble';
-import GameResultOverlay from '../components/GameResultOverlay';
-import { createGameSession, createSessionFromInvite, processMyAnswer, processTheirAnswer, advanceRound, serializeGameMessage, deserializeGameMessage, isTimedOut, markTimedOut, roundSummaryText, serializeActiveGames, deserializeActiveGames } from '../utils/gameEngine';
-import { hapticMedium, hapticHeavy } from '../utils/haptics';
 import { useScreenshotProtection } from '../utils/useScreenshotProtection';
 
 import { interactiveStore } from '../utils/interactiveStore';
-import CoinPurchaseSheet from '../components/CoinPurchaseSheet';
 import { enqueueAction, processQueue } from '../utils/offlineQueue';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
 import { useAccessibilityPreferences } from '../accessibility';
@@ -72,28 +60,13 @@ const SPRING_ANIM = {
 
 const getIcebreakers = (match, currentUser) => {
   const name = match?.name || 'there';
-  const lines = [
-    `What made you smile today, ${name}?`,
-    'What is your perfect first hang?',
-    'What are you currently into this week?',
+  return [
+    `What have you been up to this week, ${name}?`,
+    'Where are you based right now?',
+    'What brought you to JuNubin?',
   ];
-  if (currentUser?.preferences?.mode === 'Social') {
-    lines.unshift('Want to trade favorite events in town?');
-  }
-  return lines.slice(0, 3);
 };
-const CHAT_STICKERS = ['🔥', '✨', '💫', '🎧', '💌'];
-// MINI_GAME_PROMPT / POLL_PROMPT removed — the inline mini-game and
-// duo-poll widgets they fed were dropped in the v1 chat simplification,
-// leaving the constants orphaned. Whoever brings those features back
-// should source the copy from src/data/games.js or a server-driven
-// catalogue rather than reintroducing the hardcoded strings here.
-const WHEEL_LINES = [
-  'Tell me one thing that made you laugh today.',
-  'What is your comfort movie?',
-  'Where should we go for our first hang?',
-  'Your current playlist mood in one word?',
-];
+const CHAT_STICKERS = ['🔥', '✨', '💫', '🎧', '🙌'];
 
 function TypingDot({ delay: delayMs, color }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -120,25 +93,18 @@ export default function ChatScreen({ navigation, route }) {
   const { colors, isDark } = useTheme();
   const { prefs } = useAccessibilityPreferences();
   const styles = useMemo(() => getStyles(colors, isCompact, prefs), [colors, isCompact, prefs]);
-  const { hasTier, coins, consumeCoins, consumeWhisper } = useSubscription();
-  // Set when ProfileDetail navigates here with `whisperIntent: true`.
-  // The first send consumes one whisper credit; subsequent sends are
-  // free (the conversation is now an ordinary chat).
-  //
-  // Sync with route.params on every change — useState(route.params)
-  // would only read on first mount, so re-entering the screen with a
-  // fresh `whisperIntent: true` would silently keep the old false
-  // state and the user's whisper credit would never debit.
-  const [pendingWhisper, setPendingWhisper] = useState(!!route.params?.whisperIntent);
-  useEffect(() => {
-    setPendingWhisper(!!route.params?.whisperIntent);
-  }, [route.params?.whisperIntent]);
+  // Whispers (pay-to-message-before-matching) are gone with the dating
+  // model and the paid tiers. The `whisperIntent` route param that used
+  // to debit a credit on first send had exactly one caller —
+  // ProfileDetailScreen's whisper button — and that button no longer
+  // exists, so the whole path is removed rather than left dormant.
   const { session, user: currentUser } = useAuth();
   const { isConnected } = useNetworkStatus();
-  // Eligibility gate for call buttons. Survey/restricted/banned win
-  // before the existing JuNubin+ paywall so an empty-profile subscriber
-  // still gets the survey nudge instead of the call screen.
-  const { gate, lastVerdict, nudge: surveyNudge } = useEligibility();
+  // Survey / restricted / banned nudge. The gate() calls that used to
+  // guard the call buttons are gone with the calls themselves — this
+  // screen is text + images only now — but the nudge still renders so a
+  // restricted account is told why the app is limited.
+  const { nudge: surveyNudge } = useEligibility();
 
   // Screenshot protection for private chats
   useScreenshotProtection();
@@ -191,51 +157,22 @@ export default function ChatScreen({ navigation, route }) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [conversationId, resolvedMatch?.id, isDemoChat]);
-  // "You matched" banner is shown only when we arrive directly from the match
-  // celebration overlay (`fromMatch: true`). It dismisses on first scroll,
-  // first message sent, or explicit close.
-  const [showMatchBanner, setShowMatchBanner] = useState(!!route.params?.fromMatch);
-  const dismissMatchBanner = useCallback(() => setShowMatchBanner(false), []);
+  // "You're connected" banner is shown only when we arrive straight from
+  // the moment the connection was made (`fromMatch: true` — the param
+  // name is unchanged so existing callers keep working; the copy is
+  // connection vocabulary). Dismisses on first message sent or on close.
+  const [showConnectionBanner, setShowConnectionBanner] = useState(!!route.params?.fromMatch);
+  const dismissConnectionBanner = useCallback(() => setShowConnectionBanner(false), []);
 
-  // Relationship gates for in-chat features.
-  //
-  // Product rules:
-  //   • Voice / video calls are MATCHES ONLY — a Conversation row only
-  //     exists once two people mutually matched, so `isMatched` is the
-  //     gate. Following someone (e.g. to see their stories) lets you say
-  //     hi and try to match, but not call until you actually match.
-  //   • Games are available to matches OR friends (mutual follow).
-  //   • Plain text isn't gated here — who can open the thread (a match,
-  //     a mutual-follow friend, or a premium whisper) controls that.
+  // Mutual-follow state, kept for the header's "connected" affordance.
+  // Plain text isn't gated here — who can open the thread (a mutual
+  // connection or an accepted message request) controls that upstream.
   const { isFriend } = useFollow(match.id);
-  const isMatched = !!conversationId;
-  const canConnect = isMatched || isFriend; // games
-  const canCall = isMatched;                // voice/video — matches only
 
-  const requireConnection = useCallback((featureName) => {
-    if (canConnect) return true;
-    Alert.alert(
-      'Not connected yet',
-      `${featureName} are available with your matches and friends.`,
-      [{ text: 'OK', style: 'cancel' }]
-    );
-    return false;
-  }, [canConnect]);
-
-  const requireMatch = useCallback((featureName) => {
-    if (canCall) return true;
-    Alert.alert(
-      'Match to call',
-      `${featureName} are available once you and ${match.name || 'this person'} match. Like them or reply to their story to start a connection.`,
-      [{ text: 'OK', style: 'cancel' }]
-    );
-    return false;
-  }, [canCall, match.name]);
-
-  // For real matches: start empty; getMessages + realtime fill in.
-  // For demo matches: pre-fill from mockMessages keyed by the roster
-  // userId so the tester sees the canned history we authored for that
-  // demo user. Real matches still get the empty Match Mission state.
+  // For real conversations: start empty; getMessages + realtime fill in.
+  // For demo conversations: pre-fill from mockMessages keyed by the
+  // roster userId so the tester sees the canned history we authored for
+  // that demo user.
   const [messages, setMessages] = useState(() => {
     if (!isDemoChat || !DEMO_DATA_ENABLED) return [];
     const seed = (demoUserId && demoMockMessages?.[demoUserId]) || [];
@@ -246,24 +183,14 @@ export default function ChatScreen({ navigation, route }) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [reactionPosition, setReactionPosition] = useState(null);
   const [selectedMessageId, setSelectedMessageId] = useState(null);
-  const [showGiftPicker, setShowGiftPicker] = useState(false);
-  const [showCoinSheet, setShowCoinSheet] = useState(false);
-  const [giftAnimation, setGiftAnimation] = useState(null);
   const [missionState, setMissionState] = useState({
     intro: false,
     question: false,
     response: false,
   });
-  const [miniGamePick, setMiniGamePick] = useState(null);
-  const [duoPollVote, setDuoPollVote] = useState(null);
-  const [syncState, setSyncState] = useState('idle');
-  const [voiceIntroPlayed, setVoiceIntroPlayed] = useState(false);
   const [activeSticker, setActiveSticker] = useState(CHAT_STICKERS[0]);
   const [showStickerTray, setShowStickerTray] = useState(false);
   const [showActionRow, setShowActionRow] = useState(false);
-  const [showGamePicker, setShowGamePicker] = useState(route.params?.startGame || false);
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
-  const [voiceUploading, setVoiceUploading] = useState(false);
 
   // ── Scam-detection banner state ──────────────────────────────────
   // verdict: null = not yet fetched / no risk; otherwise the
@@ -277,23 +204,21 @@ export default function ChatScreen({ navigation, route }) {
   const incomingCountRef = useRef(0);
   const SCAM_REFRESH_EVERY_N_INCOMING = 5;
   const [hiddenFeatures, setHiddenFeatures] = useState({});
-  const [activeGames, setActiveGames] = useState(new Map());
-  const [gameResult, setGameResult] = useState(null);
   const [progressToast, setProgressToast] = useState(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const prevProgressRef = useRef(0);
   const flatListRef = useRef(null);
   const sentIdsRef = useRef(new Set());
-  const activeGamesRef = useRef(activeGames);
-  activeGamesRef.current = activeGames;
   const icebreakers = useMemo(() => getIcebreakers(match, currentUser), [match, currentUser]);
   const missionProgress = Object.values(missionState).filter(Boolean).length;
 
-  // ── Hydrate Match Mission state for this conversation ──
-  // The mission state used to reset every time the screen unmounted, so a
-  // user who completed step 1 and came back later saw the intro chip
-  // empty again. Persist per-conversation via interactiveStore so each
-  // thread carries its own progress + dismissed flag.
+  // ── Hydrate conversation-starter state for this conversation ──
+  // The state used to reset every time the screen unmounted, so a user
+  // who completed step 1 and came back later saw the intro chip empty
+  // again. Persist per-conversation via interactiveStore so each thread
+  // carries its own progress + dismissed flag. (The interactiveStore
+  // keys still say "matchMission" — that's storage-internal, not user
+  // facing, and renaming them would orphan everyone's saved progress.)
   useEffect(() => {
     if (!conversationId) return;
     interactiveStore.getMatchMission(conversationId).then((saved) => {
@@ -360,12 +285,6 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [missionProgress, showProgressToast]);
 
-  useEffect(() => {
-    if (gameResult) {
-      showProgressToast('Game complete', 'Nice play — keep it going');
-    }
-  }, [gameResult, showProgressToast]);
-
   const {
     onMessage, onTypingStart, onTypingStop,
     emitTypingStart, emitTypingStop, emitReadReceipt,
@@ -379,7 +298,9 @@ export default function ChatScreen({ navigation, route }) {
     return () => leaveConversation(conversationId);
   }, [conversationId, joinConversation, leaveConversation]);
 
-  // Load message history from API — reconstruct game sessions from saved messages
+  // Load message history from API. Chat is text + images only now, so
+  // the mapping is a straight pass-through — the game-session
+  // reconstruction that used to live here went out with the games.
   useEffect(() => {
     if (!session || !conversationId) return;
     // Demo chats are pre-seeded from mockMessages in the useState
@@ -388,129 +309,19 @@ export default function ChatScreen({ navigation, route }) {
     if (isDemoChat) return;
     chatService.getMessages(conversationId).then((apiMsgs) => {
       if (apiMsgs.length > 0) {
-        const gameSessions = new Map();
-        const renderedGameIds = new Set(); // Only render one bubble per game
-        const mapped = [];
-
-        for (const m of apiMsgs) {
-          const isMe = m.senderId === currentUser?.id;
-          const msgType = m.type || 'text';
-
-          // Reconstruct game sessions from history
-          if (msgType === 'game') {
-            const gameData = deserializeGameMessage(m.text);
-            if (gameData?.gameId) {
-              // Build/update session state from all game messages
-              if (!gameSessions.has(gameData.gameId)) {
-                if (isMe) {
-                  gameSessions.set(gameData.gameId, {
-                    id: gameData.gameId,
-                    type: gameData.type,
-                    name: gameData.name,
-                    emoji: gameData.emoji,
-                    color: gameData.color,
-                    round: gameData.round || 0,
-                    totalRounds: gameData.totalRounds,
-                    questions: gameData.questions || [],
-                    myAnswers: gameData.myAnswers || [],
-                    theirAnswers: [],
-                    status: gameData.status || 'playing',
-                  });
-                } else {
-                  const sess = createSessionFromInvite(gameData);
-                  if (sess) gameSessions.set(gameData.gameId, sess);
-                }
-              } else {
-                // Update existing session with latest answers
-                const existing = gameSessions.get(gameData.gameId);
-                if (isMe) {
-                  existing.myAnswers = gameData.myAnswers || existing.myAnswers;
-                } else {
-                  existing.theirAnswers = gameData.myAnswers || existing.theirAnswers;
-                }
-                existing.round = Math.max(existing.round, gameData.round || 0);
-                existing.status = gameData.status || existing.status;
-              }
-
-              // Only add the first message per game as a renderable bubble
-              if (!renderedGameIds.has(gameData.gameId)) {
-                renderedGameIds.add(gameData.gameId);
-                mapped.push({
-                  id: m.id,
-                  sender: isMe ? 'me' : 'them',
-                  text: m.text,
-                  time: m.time,
-                  type: 'game',
-                  gameId: gameData.gameId,
-                  read: true,
-                });
-              }
-              continue; // Skip adding duplicate game messages
-            }
-          }
-
-          mapped.push({
-            id: m.id,
-            sender: isMe ? 'me' : 'them',
-            text: m.text,
-            time: m.time,
-            type: msgType,
-            read: true,
-          });
-        }
-
-        setMessages(mapped);
-        if (gameSessions.size > 0) {
-          setActiveGames((prev) => {
-            const merged = new Map(prev);
-            for (const [id, sess] of gameSessions) merged.set(id, sess);
-            return merged;
-          });
-        }
+        setMessages(apiMsgs.map((m) => ({
+          id: m.id,
+          sender: m.senderId === currentUser?.id ? 'me' : 'them',
+          text: m.text,
+          time: m.time,
+          type: m.type || 'text',
+          read: true,
+        })));
       }
     }).catch((err) => {
       if (__DEV__) console.warn('Message history load failed:', err);
     });
   }, [session, conversationId]);
-
-  // Helper: schedule auto-advance after reveal state (shared by answer handler & realtime)
-  const scheduleAutoAdvance = useCallback((gameId) => {
-    setTimeout(() => {
-      setActiveGames((p) => {
-        const m = new Map(p);
-        const s = m.get(gameId);
-        if (!s || s.status !== 'revealed') return p;
-
-        // Inject round summary message before advancing
-        const summary = roundSummaryText(s, s.round);
-        const summaryMsg = {
-          id: `summary-${gameId}-r${s.round}`,
-          sender: 'system',
-          type: 'game_summary',
-          text: summary,
-          time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-        };
-        setMessages((msgs) => [...msgs, summaryMsg]);
-
-        const advanced = advanceRound(s);
-        m.set(gameId, advanced);
-        if (advanced.status === 'complete') {
-          hapticHeavy();
-          setGameResult(advanced);
-
-          // Cleanup: remove completed game after 30s
-          setTimeout(() => {
-            setActiveGames((prev) => {
-              const next = new Map(prev);
-              next.delete(gameId);
-              return next;
-            });
-          }, 30000);
-        }
-        return m;
-      });
-    }, 800);
-  }, []);
 
   // Listen for real-time messages
   useEffect(() => {
@@ -522,51 +333,6 @@ export default function ChatScreen({ navigation, route }) {
     const unsub = onMessage(conversationId, (msg) => {
       if (!msg) return;
       if (sentIdsRef.current.has(msg.id)) return;
-
-      // Handle incoming game messages
-      if (msg.type === 'game') {
-        const gameData = deserializeGameMessage(msg.body);
-        if (!gameData?.gameId) return;
-
-        setActiveGames((prev) => {
-          const map = new Map(prev);
-          const existing = map.get(gameData.gameId);
-
-          if (!existing) {
-            // New game invitation from partner — create session on our side
-            const newSession = createSessionFromInvite(gameData);
-            if (!newSession) return prev;
-            map.set(gameData.gameId, newSession);
-
-            // Add game invite as a chat message so the bubble renders
-            const time = new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-            setMessages((msgs) => [...msgs, {
-              id: msg.id,
-              sender: 'them',
-              type: 'game',
-              gameId: gameData.gameId,
-              text: msg.body,
-              time,
-              read: true,
-            }]);
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-          } else {
-            // Existing game — partner sent an answer update
-            // Only apply the answer for the current round to avoid overwriting
-            const theirLatestAnswer = gameData.myAnswers?.[existing.round];
-            if (theirLatestAnswer !== undefined && existing.theirAnswers[existing.round] === undefined) {
-              const updated = processTheirAnswer(existing, theirLatestAnswer);
-              map.set(gameData.gameId, updated);
-              // If their answer triggered revealed state, auto-advance
-              if (updated.status === 'revealed') {
-                scheduleAutoAdvance(gameData.gameId);
-              }
-            }
-          }
-          return map;
-        });
-        return; // Don't add answer updates as separate chat messages
-      }
 
       setMessages((prev) => [...prev, {
         id: msg.id,
@@ -600,7 +366,7 @@ export default function ChatScreen({ navigation, route }) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     });
     return unsub;
-  }, [conversationId, currentUser?.id, scheduleAutoAdvance, isDemoChat]);
+  }, [conversationId, currentUser?.id, isDemoChat]);
 
   // Listen for typing indicators. The hook's onTypingStart /
   // onTypingStop take (conversationId, callback) — previously we were
@@ -674,73 +440,22 @@ export default function ChatScreen({ navigation, route }) {
     }, [session, conversationId]),
   );
 
-  // ── Game timeout check: every 10s, mark waiting games as timed out ──
-  // Surfaces a toast for any game that just transitioned to timed-out so
-  // the user gets feedback instead of the previous silent flip — they
-  // were sending answers into a game that had already ended.
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveGames((prev) => {
-        let changed = false;
-        let timedOutCount = 0;
-        const next = new Map(prev);
-        for (const [id, s] of next) {
-          if (isTimedOut(s)) {
-            next.set(id, markTimedOut(s));
-            changed = true;
-            timedOutCount += 1;
-          }
-        }
-        if (timedOutCount > 0) {
-          const subtitle = timedOutCount === 1
-            ? 'Send a new one to keep playing.'
-            : `${timedOutCount} games ran out of time.`;
-          showProgressToast('Game ended', subtitle);
-        }
-        return changed ? next : prev;
-      });
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [showProgressToast]);
-
-  // ── Game persistence: save activeGames on change, restore on mount ──
-  useEffect(() => {
-    if (!conversationId) return;
-    if (activeGames.size === 0) return;
-    interactiveStore.setActiveGames(conversationId, serializeActiveGames(activeGames));
-  }, [activeGames, conversationId]);
-
-  useEffect(() => {
-    if (!conversationId) return;
-    interactiveStore.getActiveGames(conversationId).then((saved) => {
-      if (saved && saved.length > 0) {
-        setActiveGames((prev) => {
-          // API-loaded sessions take precedence; cached fills gaps
-          const merged = new Map(prev);
-          const cached = deserializeActiveGames(saved);
-          for (const [id, s] of cached) {
-            if (!merged.has(id)) merged.set(id, s);
-          }
-          return merged;
-        });
-      }
-    }).catch(() => {});
-  }, [conversationId]);
-
-  // ── Offline resilience: queue game answers + text sends when offline,
-  // drain on reconnect. Each handler throws on failure so the queue
-  // keeps the action for the next reconnect cycle (see offlineQueue
-  // semantics). For text_message we additionally swap the local
-  // optimistic row over to the server-issued id so the failed bubble
-  // morphs into a normal sent bubble in place — no jarring re-render.
+  // ── Offline resilience: queue text sends when offline, drain on
+  // reconnect. The handler throws on failure so the queue keeps the
+  // action for the next reconnect cycle (see offlineQueue semantics).
+  // We additionally swap the local optimistic row over to the
+  // server-issued id so the failed bubble morphs into a normal sent
+  // bubble in place — no jarring re-render.
+  //
+  // Legacy 'game_answer' actions may still be sitting in a user's
+  // queue from a build that had in-chat games. They're dropped here
+  // rather than replayed — the feature is gone, and replaying would
+  // write an unrenderable message into a live conversation.
   useEffect(() => {
     if (!isConnected || !conversationId) return;
     processQueue(async (action) => {
       if (action.conversationId !== conversationId) return;
-      if (action.type === 'game_answer') {
-        await chatService.sendMessage(action.conversationId, action.body, 'game');
-        return;
-      }
+      if (action.type === 'game_answer') return;
       if (action.type === 'text_message') {
         const result = await chatService.sendMessage(action.conversationId, action.body);
         if (result?.id) {
@@ -806,14 +521,6 @@ export default function ChatScreen({ navigation, route }) {
     if (!inputText.trim()) return;
     const text = inputText.trim();
 
-    // Whisper credit is debited on the FIRST send only — opening the
-    // composer alone shouldn't cost. After this, conversation is an
-    // ordinary chat.
-    if (pendingWhisper) {
-      consumeWhisper();
-      setPendingWhisper(false);
-    }
-
     // Stop typing indicator when sending
     if (conversationId) emitTypingStop(conversationId);
 
@@ -836,14 +543,14 @@ export default function ChatScreen({ navigation, route }) {
       question: prev.question || text.includes('?'),
     }));
     setInputText('');
-    if (showMatchBanner) setShowMatchBanner(false);
+    if (showConnectionBanner) setShowConnectionBanner(false);
 
     if (conversationId) {
       persistTextMessage(optimisticId, text);
     }
 
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [inputText, conversationId, emitTypingStop, pendingWhisper, consumeWhisper, persistTextMessage, showMatchBanner]);
+  }, [inputText, conversationId, emitTypingStop, persistTextMessage, showConnectionBanner]);
 
   // User tapped a failed bubble — flip back to sending and re-attempt.
   // Success swaps in the real id; another failure puts it back into
@@ -914,93 +621,7 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [conversationId]);
 
-  const handleVoiceNote = useCallback(() => {
-    if (!hasTier('plus')) {
-      Alert.alert('JuNubin+ Feature', 'Voice notes require JuNubin+ or higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
-    setShowVoiceRecorder(true);
-  }, [hasTier, navigation]);
-
-  const handlePlayVoiceIntro = useCallback(() => {
-    if (!hasTier('plus')) {
-      Alert.alert('JuNubin+ Feature', 'Voice intros are available on JuNubin+ and higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
-    setVoiceIntroPlayed(true);
-  }, [hasTier, navigation, matchId]);
-
-  const handleVoiceNoteComplete = useCallback(async ({ uri, duration }) => {
-    setShowVoiceRecorder(false);
-    if (!uri || !conversationId) return;
-    setVoiceUploading(true);
-    try {
-      const message = await chatService.sendAudioMessage(conversationId, uri, duration);
-      // Append the saved message to the local list. Realtime subscription will
-      // also drop a copy in for the recipient — for the sender we drop it
-      // directly so the bubble appears instantly without round-tripping.
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: message.id,
-          text: '',
-          time: '',
-          isMe: true,
-          createdAt: message.createdAt,
-          read: true,
-          type: 'audio',
-          uri,
-          duration,
-        },
-      ]);
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    } catch (e) {
-      Alert.alert('Voice note failed', e?.message || 'Could not send your voice note.');
-    } finally {
-      setVoiceUploading(false);
-    }
-  }, [conversationId]);
-
-  const handleMiniGamePick = useCallback((pick) => {
-    setMiniGamePick(pick);
-    setInputText(`Mini-game pick: ${pick}. What did you choose?`);
-  }, [matchId]);
-
-  const handleDuoVote = useCallback((vote) => {
-    setDuoPollVote(vote);
-  }, [matchId]);
-
-  const handleSpinWheel = useCallback(() => {
-    const line = WHEEL_LINES[Math.floor(Math.random() * WHEEL_LINES.length)];
-    setInputText(line);
-  }, [matchId]);
-
-  const handleStartSync = useCallback(() => {
-    if (!hasTier('plus')) {
-      Alert.alert('JuNubin+ Feature', 'Co-watch and co-listen sync requires JuNubin+.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
-    setSyncState('syncing');
-    setTimeout(() => setSyncState('live'), 1200);
-  }, [hasTier, navigation, matchId]);
-
   const handleSendSticker = useCallback(() => {
-    if (!hasTier('junub')) {
-      Alert.alert('Junub Feature', 'Sticker messages are available on Junub and higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
     LayoutAnimation.configureNext(SPRING_ANIM);
     const msg = {
       id: `msg-sticker-${Date.now()}`,
@@ -1014,59 +635,14 @@ export default function ChatScreen({ navigation, route }) {
     setMissionAndPersist((prev) => ({ ...prev, intro: true }));
     setShowStickerTray(false);
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [hasTier, navigation, activeSticker, matchId]);
+  }, [activeSticker]);
 
   const handleToggleStickerTray = useCallback(() => {
-    if (!hasTier('junub')) {
-      Alert.alert('Junub Feature', 'Sticker tray is available on Junub and higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
     setShowStickerTray((v) => !v);
-  }, [hasTier, navigation]);
+  }, []);
 
-  const handleOpenGamePicker = useCallback(() => {
-    if (!requireConnection('Games')) return;
-    if (!hasTier('plus')) {
-      Alert.alert('JuNubin+ Feature', 'In-chat games require JuNubin+ or higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
-    setShowGamePicker(true);
-  }, [hasTier, navigation, requireConnection]);
-
-  // Start an outgoing call: signal the receiver via Supabase Realtime, persist
-  // the attempt to the local call log, then push CallScreen in 'outgoing' state.
-  const startCall = useCallback((callType) => {
-    const callId = callService.newCallId();
-    const caller = {
-      id: currentUser?.id,
-      name: currentUser?.name || currentUser?.displayName,
-      avatar: currentUser?.images?.[0],
-    };
-    if (match.id) {
-      callService.sendInvite(match.id, { callId, callType, caller, conversationId }).catch(() => {});
-    }
-    callService.recordCall({
-      callId,
-      direction: 'outgoing',
-      callType,
-      peer: { id: match.id, name: match.name, avatar: match.images?.[0] },
-      status: 'dialing',
-    });
-    navigation.navigate('Call', {
-      match,
-      callType,
-      callId,
-      direction: 'outgoing',
-    });
-  }, [navigation, match, currentUser, conversationId]);
-
-  // Three-dot menu — Set Alias / Safety / Clear / Unmatch / Report & Block
+  // Three-dot menu — Set Alias / Safety / Clear / Remove connection /
+  // Report & Block. The two safety actions at the bottom are unchanged.
   const handleHeaderMenu = useCallback(() => {
     Alert.alert(match.name || 'Chat', null, [
       {
@@ -1090,28 +666,45 @@ export default function ChatScreen({ navigation, route }) {
         ),
       },
       {
-        text: 'Unmatch',
+        text: 'Remove connection',
         style: 'destructive',
         onPress: () => Alert.alert(
-          `Unmatch ${match.name || 'this person'}?`,
-          'You will both stop seeing each other in matches and chat.',
+          `Remove ${match.name || 'this person'} from your connections?`,
+          'You will stop following each other and this conversation will close. This is not the same as blocking — use Report & Block if they made you feel unsafe.',
           [
             { text: 'Cancel', style: 'cancel' },
             {
-              text: 'Unmatch',
+              text: 'Remove connection',
               style: 'destructive',
               onPress: async () => {
-                // The RPC works on the (me, peer) user pair — only call it
-                // when we have a peer user id and a real conversation
-                // (otherwise we're just on a profile-driven view of someone
-                // we never actually matched with).
+                // Two-step teardown against the (me, peer) user pair:
+                //   1. connectionService.disconnect drops the follow edge.
+                //   2. safetyService.unmatchUser tears down the legacy
+                //      Match/Conversation row so the thread stops
+                //      appearing in either inbox.
+                // Step 2 only runs when there's a real conversation —
+                // otherwise we're on a profile-driven view of someone
+                // we never had a thread with. Neither step is a
+                // moderation action; blocking stays a separate item.
                 const peerId = match.userId || match.id;
-                if (peerId && conversationId) {
+                if (!peerId) {
+                  navigation.goBack();
+                  return;
+                }
+                try {
+                  await connectionService.disconnect(peerId);
+                } catch (e) {
+                  Alert.alert('Could not remove connection', e?.message || 'Try again later.');
+                  return;
+                }
+                if (conversationId) {
                   try {
                     await safetyService.unmatchUser(peerId);
                   } catch (e) {
-                    Alert.alert('Could not unmatch', e?.message || 'Try again later.');
-                    return;
+                    // The follow edge is already gone; a failure here
+                    // just means the old thread lingers. Don't block
+                    // the user on it, but tell them it's partial.
+                    if (__DEV__) console.warn('Conversation teardown failed:', e);
                   }
                 }
                 navigation.goBack();
@@ -1156,42 +749,7 @@ export default function ChatScreen({ navigation, route }) {
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [match.name, navigation]);
-
-  const handleVideoCall = useCallback(() => {
-    if (!requireMatch('Video calls')) return;
-    if (!gate('video_call_match')) {
-      // gate() shows survey/banned/restricted UI itself. For
-      // tier_required it returns false silently — fall through to the
-      // existing JuNubin+ paywall below.
-      const v = lastVerdict();
-      if (v?.reason !== 'tier_required') return;
-    }
-    if (!hasTier('plus')) {
-      Alert.alert('JuNubin+ Feature', 'Video calls require JuNubin+ or higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
-    startCall('video');
-  }, [gate, lastVerdict, hasTier, navigation, requireMatch, startCall]);
-
-  const handleVoiceCall = useCallback(() => {
-    if (!requireMatch('Voice calls')) return;
-    if (!gate('call_match')) {
-      const v = lastVerdict();
-      if (v?.reason !== 'tier_required') return;
-    }
-    if (!hasTier('plus')) {
-      Alert.alert('JuNubin+ Feature', 'Calls require JuNubin+ or higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
-    startCall('voice');
-  }, [gate, lastVerdict, hasTier, navigation, requireMatch, startCall]);
+  }, [match.name, match.userId, match.id, conversationId, navigation]);
 
   const handleLongPressMessage = useCallback((item, event) => {
     if (item?.type !== 'text') return;
@@ -1222,163 +780,12 @@ export default function ChatScreen({ navigation, route }) {
     }
   }, [selectedMessageId]);
 
-  const handleGiftSelect = useCallback((gift) => {
-    if (!consumeCoins(gift.coins)) {
-      setShowCoinSheet(true);
-      return;
-    }
-    setShowGiftPicker(false);
-    setGiftAnimation(gift);
-
-    LayoutAnimation.configureNext(SPRING_ANIM);
-    const msg = {
-      id: `msg-gift-${Date.now()}`,
-      sender: 'me',
-      type: 'gift',
-      gift,
-      time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-      read: false,
-    };
-    setMessages((prev) => [...prev, msg]);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [consumeCoins, navigation, match.userId, match.id]);
-
-  const handleGameSelect = useCallback((game) => {
-    setShowGamePicker(false);
-    if (!requireConnection('Games')) return;
-    if (!hasTier('plus')) {
-      Alert.alert('JuNubin+ Feature', 'In-chat games require JuNubin+ or higher.', [
-        { text: 'Upgrade', onPress: () => navigation.navigate('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
-      return;
-    }
-    const session = createGameSession(game.type);
-    if (!session) return;
-
-    setActiveGames((prev) => new Map(prev).set(session.id, session));
-
-    LayoutAnimation.configureNext(SPRING_ANIM);
-    const msg = {
-      id: `msg-game-${session.id}`,
-      sender: 'me',
-      type: 'game',
-      gameId: session.id,
-      text: serializeGameMessage(session),
-      time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-      read: false,
-    };
-    setMessages((prev) => [...prev, msg]);
-
-    if (conversationId) {
-      chatService.sendMessage(conversationId, serializeGameMessage(session), 'game').then((result) => {
-        if (result?.id) sentIdsRef.current.add(result.id);
-      }).catch((err) => {
-        if (__DEV__) console.warn('Failed to send game message:', err);
-      });
-    }
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [conversationId, hasTier, navigation, requireConnection]);
-
-  const handleGameAnswer = useCallback((gameId, answer) => {
-    hapticMedium();
-
-    // Compute updated session first so we can send it via chat without stale data
-    const currentSession = activeGamesRef.current.get(gameId);
-    if (!currentSession) return;
-
-    let updated = processMyAnswer(currentSession, answer);
-
-    // Simulate partner answer for demo (when no conversationId / mock mode)
-    if (!conversationId) {
-      const simAnswer = typeof answer === 'number'
-        ? Math.floor(Math.random() * (currentSession.questions[currentSession.round].options?.length || 2))
-        : (Math.random() > 0.5 ? 'A' : 'B');
-      updated = processTheirAnswer(updated, simAnswer);
-    }
-
-    setActiveGames((prev) => new Map(prev).set(gameId, updated));
-
-    // Auto-advance after reveal
-    if (updated.status === 'revealed') {
-      scheduleAutoAdvance(gameId);
-    }
-
-    // Send answer via chat (using the freshly computed session, not stale closure)
-    if (conversationId) {
-      const body = serializeGameMessage(updated);
-      if (isConnected) {
-        chatService.sendMessage(conversationId, body, 'game').then((result) => {
-          if (result?.id) sentIdsRef.current.add(result.id);
-        }).catch((err) => {
-          if (__DEV__) console.warn('Failed to send game answer:', err);
-          // Queue for retry on reconnect
-          enqueueAction({ type: 'game_answer', conversationId, body });
-        });
-      } else {
-        // Offline: queue the answer
-        enqueueAction({ type: 'game_answer', conversationId, body });
-      }
-    }
-  }, [conversationId, scheduleAutoAdvance, isConnected]);
-
-  const handleGamePlayAgain = useCallback((gameType) => {
-    setGameResult(null);
-    const game = { type: gameType };
-    handleGameSelect(game);
-  }, [handleGameSelect]);
-
-  useEffect(() => {
-    interactiveStore.getWeeklyChallenges().then((saved) => {
-      if (saved?.mini_game) setMiniGamePick('Done');
-      if (saved?.voice_intro) setVoiceIntroPlayed(true);
-    }).catch(() => {});
-  }, []);
-
   const renderMessage = useCallback(({ item }) => {
     const isMe = item.sender === 'me';
 
     // Image message
     if (item.type === 'image') {
       return <ChatImageBubble uri={item.uri} isMe={isMe} time={item.time} colors={colors} />;
-    }
-
-    // Audio message
-    if (item.type === 'audio') {
-      return <ChatAudioBubble uri={item.uri} duration={item.duration} isMe={isMe} time={item.time} colors={colors} />;
-    }
-
-    // Gift message
-    if (item.type === 'gift') {
-      return <GiftBubble gift={item.gift} isMe={isMe} time={item.time} colors={colors} />;
-    }
-
-    // Game round summary (centered pill)
-    if (item.type === 'game_summary') {
-      return (
-        <View style={styles.gameSummaryWrap}>
-          <View style={styles.gameSummaryPill}>
-            <Text style={styles.gameSummaryText}>{item.text}</Text>
-          </View>
-        </View>
-      );
-    }
-
-    // Game message
-    if (item.type === 'game') {
-      const session = activeGames.get(item.gameId);
-      if (!session) return null;
-      return (
-        <GameBubble
-          session={session}
-          isMe={isMe}
-          time={item.time}
-          matchName={match.name}
-          onAnswer={(ans) => handleGameAnswer(item.gameId, ans)}
-          onPlayAgain={() => handleGamePlayAgain(session.type)}
-          colors={colors}
-        />
-      );
     }
 
     // Text message (default)
@@ -1461,7 +868,7 @@ export default function ChatScreen({ navigation, route }) {
         </View>
       </TouchableOpacity>
     );
-  }, [colors, styles, prefs, handleLongPressMessage, handleRetryFailed, activeGames, handleGameAnswer, handleGamePlayAgain, match.name]);
+  }, [colors, styles, prefs, handleLongPressMessage, handleRetryFailed]);
 
   return (
     <View style={styles.container}>
@@ -1470,7 +877,9 @@ export default function ChatScreen({ navigation, route }) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 10 : 0}
     >
-      {/* Header — original horizontal layout: back · avatar+name · call/video/menu. */}
+      {/* Header — back · avatar+name · overflow menu. The voice and
+          video call buttons that used to sit here were removed: chat is
+          text and images only. */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.black} />
@@ -1501,40 +910,12 @@ export default function ChatScreen({ navigation, route }) {
               )}
             </View>
             <Text style={styles.headerStatus}>
-              {isTyping ? 'typing...' : 'Online'}
+              {isTyping ? 'typing...' : isFriend ? 'Connected' : 'Online'}
             </Text>
           </View>
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity
-            onPress={handleVoiceCall}
-            style={styles.headerIcon}
-            accessibilityRole="button"
-            accessibilityLabel={canCall ? `Voice call ${match.name || ''}`.trim() : 'Voice call — match to unlock'}
-            accessibilityState={{ disabled: !canCall }}
-          >
-            <Ionicons name="call" size={18} color={canCall ? colors.black : colors.gray400} />
-            {!canCall && (
-              <View style={styles.lockBadge}>
-                <Ionicons name="lock-closed" size={8} color="#FFFFFF" />
-              </View>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleVideoCall}
-            style={styles.headerIcon}
-            accessibilityRole="button"
-            accessibilityLabel={canCall ? `Video call ${match.name || ''}`.trim() : 'Video call — match to unlock'}
-            accessibilityState={{ disabled: !canCall }}
-          >
-            <Ionicons name="videocam" size={20} color={canCall ? colors.black : colors.gray400} />
-            {!canCall && (
-              <View style={styles.lockBadge}>
-                <Ionicons name="lock-closed" size={8} color="#FFFFFF" />
-              </View>
-            )}
-          </TouchableOpacity>
           <TouchableOpacity
             onPress={handleHeaderMenu}
             style={styles.headerIcon}
@@ -1560,7 +941,7 @@ export default function ChatScreen({ navigation, route }) {
         onLearnMore={() => {
           // Route to the safety FAQ. SettingsInfoScreen is the umbrella
           // help surface; pass a topic so it scrolls to the right section.
-          navigation.navigate('SettingsInfo', { topic: 'romance-scam-patterns' });
+          navigation.navigate('SettingsInfo', { topic: 'scam-patterns' });
         }}
       />
 
@@ -1578,27 +959,28 @@ export default function ChatScreen({ navigation, route }) {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            {/* ── Match Banner — only on fresh match, dismisses after first view ── */}
-            {showMatchBanner && (
+            {/* ── Connection banner — only on a fresh connection,
+                dismisses after first view or first message sent ── */}
+            {showConnectionBanner && (
               <View style={styles.matchBanner}>
                 <TouchableOpacity
                   style={styles.matchBannerClose}
-                  onPress={dismissMatchBanner}
+                  onPress={dismissConnectionBanner}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   accessibilityRole="button"
-                  accessibilityLabel="Dismiss match banner"
+                  accessibilityLabel="Dismiss connection banner"
                 >
                   <Ionicons name="close" size={16} color={colors.gray500} />
                 </TouchableOpacity>
                 <View style={styles.avatarWrap}>
                   <Image source={imageSource(match.images?.[0])} style={styles.bannerAvatar} />
                 </View>
-                <Text style={styles.bannerText}>You matched with {match.name}!</Text>
-                <Text style={styles.bannerSub}>Say something to break the ice</Text>
+                <Text style={styles.bannerText}>You're connected with {match.name}</Text>
+                <Text style={styles.bannerSub}>Say hello and introduce yourself</Text>
               </View>
             )}
 
-            {/* ── Match Mission — progress card ── */}
+            {/* ── Conversation starter — progress card ── */}
             {!hiddenFeatures.mission && (
             <View style={styles.missionsCard}>
               <TouchableOpacity style={styles.cardDismiss} onPress={() => {
@@ -1611,7 +993,7 @@ export default function ChatScreen({ navigation, route }) {
                 <View style={styles.missionsIconWrap}>
                   <Ionicons name="rocket" size={16} color={colors.accent} />
                 </View>
-                <Text style={styles.missionsTitle}>Match Mission</Text>
+                <Text style={styles.missionsTitle}>Conversation starter</Text>
                 <View style={styles.missionsBadge}>
                   <Text style={styles.missionsBadgeText}>{missionProgress}/3</Text>
                 </View>
@@ -1638,10 +1020,9 @@ export default function ChatScreen({ navigation, route }) {
             </View>
             )}
 
-            {/* Icebreakers / Mini Game / Voice & Vibes / Co-watch cards
-                were removed for v1 — Match Mission alone is the
-                conversation starter. State + handlers for those cards
-                still exist below; they're inert with no UI hooked up. */}
+            {/* Icebreakers, mini-games, voice & vibes and co-watch cards
+                are all gone — chat is text and images only. The
+                conversation-starter card above is the only prompt. */}
           </View>
         }
       />
@@ -1712,25 +1093,19 @@ export default function ChatScreen({ navigation, route }) {
           />
         </View>
 
-        {inputText.trim() ? (
-          <TouchableOpacity
-            accessibilityLabel={prefs?.screenReaderHints ? 'Send message' : 'chat-send'}
-            testID="chat-send"
-            onPress={handleSend}
-            style={styles.sendBtn}
-          >
-            <GraffitiSend size={20} color="#FFFFFF" filled />
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            accessibilityLabel={prefs?.screenReaderHints ? 'Send voice note' : 'chat-mic'}
-            testID="chat-mic"
-            onPress={handleVoiceNote}
-            style={styles.inputIcon}
-          >
-            <Ionicons name="mic" size={24} color={colors.accent} />
-          </TouchableOpacity>
-        )}
+        {/* Send only. The mic / voice-note button that used to occupy
+            this slot when the composer was empty is gone — chat no
+            longer supports audio messages. */}
+        <TouchableOpacity
+          accessibilityLabel={prefs?.screenReaderHints ? 'Send message' : 'chat-send'}
+          accessibilityState={{ disabled: !inputText.trim() }}
+          testID="chat-send"
+          onPress={handleSend}
+          disabled={!inputText.trim()}
+          style={[styles.sendBtn, !inputText.trim() && styles.sendBtnDisabled]}
+        >
+          <GraffitiSend size={20} color="#FFFFFF" filled />
+        </TouchableOpacity>
       </View>
 
       {/* Expandable action row */}
@@ -1749,18 +1124,6 @@ export default function ChatScreen({ navigation, route }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            accessibilityLabel={prefs?.screenReaderHints ? 'Send a gift' : 'chat-gift'}
-            testID="chat-gift"
-            onPress={() => setShowGiftPicker(true)}
-            style={styles.actionIcon}
-          >
-            <View style={styles.actionIconCircle}>
-              <Ionicons name="gift" size={20} color={colors.accent} />
-            </View>
-            <Text style={styles.actionIconLabel}>Gift</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
             accessibilityLabel={prefs?.screenReaderHints ? 'Open sticker tray' : 'chat-sticker'}
             testID="chat-sticker"
             onPress={handleToggleStickerTray}
@@ -1772,17 +1135,6 @@ export default function ChatScreen({ navigation, route }) {
             <Text style={styles.actionIconLabel}>Sticker</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            accessibilityLabel={prefs?.screenReaderHints ? 'Open in-chat games' : 'chat-game'}
-            testID="chat-game"
-            onPress={handleOpenGamePicker}
-            style={styles.actionIcon}
-          >
-            <View style={styles.actionIconCircle}>
-              <Ionicons name="game-controller" size={20} color={colors.accent} />
-            </View>
-            <Text style={styles.actionIconLabel}>Game</Text>
-          </TouchableOpacity>
         </View>
       )}
 
@@ -1795,43 +1147,6 @@ export default function ChatScreen({ navigation, route }) {
         colors={colors}
       />
 
-      {/* Gift picker */}
-      <GiftPicker
-        visible={showGiftPicker}
-        onSelect={handleGiftSelect}
-        onClose={() => setShowGiftPicker(false)}
-        coins={coins}
-        colors={colors}
-      />
-
-      {/* Gift animation overlay */}
-      {giftAnimation && (
-        <GiftAnimation gift={giftAnimation} onComplete={() => setGiftAnimation(null)} />
-      )}
-
-      {/* Game picker */}
-      <GamePickerSheet
-        visible={showGamePicker}
-        onSelect={handleGameSelect}
-        onClose={() => setShowGamePicker(false)}
-        colors={colors}
-      />
-
-      {/* Game result overlay */}
-      <GameResultOverlay
-        visible={!!gameResult}
-        session={gameResult}
-        matchName={match.name}
-        onPlayAgain={() => gameResult && handleGamePlayAgain(gameResult.type)}
-        onClose={() => setGameResult(null)}
-      />
-      <CoinPurchaseSheet visible={showCoinSheet} onClose={() => setShowCoinSheet(false)} />
-
-      <VoiceRecorder
-        visible={showVoiceRecorder}
-        onCancel={() => setShowVoiceRecorder(false)}
-        onComplete={handleVoiceNoteComplete}
-      />
     </KeyboardAvoidingView>
     {surveyNudge}
     </View>
@@ -1900,46 +1215,15 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  // Small lock badge overlaid on call buttons when the thread isn't a
-  // match yet — calls are matches-only, so the affordance shows locked
-  // rather than looking active and erroring on tap.
-  lockBadge: {
-    position: 'absolute',
-    top: 1,
-    right: 1,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.gray500,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   messagesList: {
     paddingHorizontal: isCompact ? 12 : 16,
     paddingBottom: 8,
-  },
-  gameSummaryWrap: {
-    alignItems: 'center',
-    marginVertical: 6,
-  },
-  gameSummaryPill: {
-    backgroundColor: colors.gray100,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  gameSummaryText: {
-    fontSize: 12,
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: colors.gray500,
-    textAlign: 'center',
   },
   listHeader: {
     gap: 14,
     paddingBottom: 6,
   },
-  // ── Match Banner ──
+  // ── Connection Banner ──
   matchBanner: {
     alignItems: 'center',
     paddingTop: 28,
@@ -2362,6 +1646,14 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 5,
+  },
+  // Send is now permanently in the composer (there's no mic to swap
+  // with), so it needs a visibly inert state when there's nothing to
+  // send. Opacity only — the button keeps its full 42pt touch target.
+  sendBtnDisabled: {
+    opacity: 0.4,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   plusBtn: {
     width: prefs?.largerTouchTargets ? 42 : 38,

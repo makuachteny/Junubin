@@ -10,20 +10,25 @@
 // Request body:
 //   center:     { latitude, longitude }   — caller's current pixel-snap
 //   radiusKm:   number                     — distance cap (defaults to 50)
-//   mode:       'dating' | 'social'        — Profile.appMode (or
-//                                            mapped accountPurpose) match
+//   mode:       'dating' | 'social'        — OPTIONAL. Profile.appMode
+//                                            (or mapped accountPurpose)
+//                                            match. Omitted / unknown
+//                                            values mean "show everyone",
+//                                            which is the social-pivot
+//                                            default — the community map
+//                                            is not mode-segmented.
 //   activeOnly: boolean                    — only users active in the
 //                                            last 15 minutes
 //
 // Response:
 //   { users: [{ id, name, age, photos, coords: { latitude, longitude },
-//               activity, verified, ethnicity, mode }] }
+//               activity, verified, ethnicity, mode, city, countryCode }] }
 //
 // Notes:
 //   - We use service_role to bypass RLS for the candidate scan (the
 //     map is a special-case surface that crosses follow/match
-//     boundaries) but enforce filtering ourselves: shareLocation
-//     opt-in, mode match, Block exclusion, self exclusion.
+//     boundaries) but enforce filtering ourselves: location opt-in,
+//     mode match, Block exclusion, self exclusion.
 //   - Distance is filtered in JS (haversine). Postgres has cube +
 //     earthdistance for this if it ever becomes a perf concern; for
 //     v1 with thousands of opted-in users it's fine.
@@ -123,19 +128,23 @@ serve(async (req: Request) => {
 
     // Single query: pull every active opted-in user with usable
     // coords, plus the joins we need to filter mode + render the
-    // marker (photos, ethnicity, lastActiveAt). The shareLocation
-    // filter is the ONLY way a candidate ends up in this set —
-    // anyone with shareLocation=false is invisible regardless of
-    // their other settings.
+    // marker (photos, ethnicity, lastActiveAt). The locationVisibility
+    // filter (00047, superseding the shareLocation boolean from 00032)
+    // is the ONLY way a candidate ends up in this set — anyone at
+    // 'off' is invisible regardless of their other settings.
     const { data: rows, error } = await supabase
       .from("User")
       .select(`
         id, displayName, dateOfBirth, isVerified, latitude, longitude, lastActiveAt,
+        city, countryCode,
         photos:Photo(url, sortOrder),
-        profile:Profile!inner(appMode, accountPurpose, ethnicity, shareLocation, incognito, showMe)
+        profile:Profile!inner(
+          appMode, accountPurpose, ethnicity, incognito, showMe,
+          locationVisibility, locationVisibleUntil
+        )
       `)
       .eq("isActive", true)
-      .eq("profile.shareLocation", true)
+      .neq("profile.locationVisibility", "off")
       .neq("id", callerId)
       .not("latitude", "is", null)
       .not("longitude", "is", null);
@@ -170,9 +179,19 @@ serve(async (req: Request) => {
       const p = row.profile;
       if (!p || p.incognito === true || p.showMe === false) continue;
 
+      // Temporary sharing window (00047). NULL = indefinite; a past
+      // timestamp means the user's "share for the next N hours" has
+      // expired and they drop off the map without needing a cron job
+      // to reset locationVisibility.
+      if (p.locationVisibleUntil) {
+        const until = new Date(p.locationVisibleUntil).getTime();
+        if (!Number.isFinite(until) || until <= Date.now()) continue;
+      }
+
       // Mode match. If the caller specified a mode, the candidate
       // must resolve to the same. If the caller passed no mode we
-      // show everyone (rare — PeopleMap always passes one).
+      // show everyone — the post-pivot community map is not
+      // mode-segmented, so this is now the common path.
       const candidateMode = resolveMode(p.appMode, p.accountPurpose);
       if (mode && candidateMode !== mode) continue;
 
@@ -212,6 +231,16 @@ serve(async (req: Request) => {
         verified: !!row.isVerified,
         ethnicity: p.ethnicity || null,
         mode: candidateMode,
+        // City / country are additive to the existing shape — the
+        // pivot's map callout labels the pin with a place name rather
+        // than a raw distance for users sharing at 'city' granularity.
+        city: row.city || null,
+        countryCode: row.countryCode || null,
+        // The candidate's chosen granularity ('city' | 'coarse'), so
+        // the map can render a city chip instead of a pin for people
+        // who opted into city-level visibility only. The query filter
+        // is `<> 'off'`, so both levels are in this list.
+        locationVisibility: p.locationVisibility || 'off',
         // Distance is useful for the marker label ("0.6 mi"). Client
         // can recompute against center but returning it saves a
         // round-trip of math.

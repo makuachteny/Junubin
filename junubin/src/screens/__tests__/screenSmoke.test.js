@@ -123,15 +123,10 @@ jest.mock('../HomeScreen', () => () => {
   const { Text } = require('react-native');
   return <Text>Home Screen</Text>;
 });
-jest.mock('../LikesScreen', () => () => {
+jest.mock('../DirectoryScreen', () => () => {
   const React = require('react');
   const { Text } = require('react-native');
-  return <Text>Likes Screen</Text>;
-});
-jest.mock('../CommunityScreen', () => () => {
-  const React = require('react');
-  const { Text } = require('react-native');
-  return <Text>Community Screen</Text>;
+  return <Text>Directory Screen</Text>;
 });
 jest.mock('../MessagesScreen', () => () => {
   const React = require('react');
@@ -231,14 +226,15 @@ describe('screen smoke tests', () => {
     const route = {
       params: {
         match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] },
-        // The match banner only renders for a fresh match (fromMatch flag).
+        // The connection banner only renders when we arrive straight
+        // from the moment the connection was made.
         fromMatch: true,
       },
     };
     const { getByText, getByPlaceholderText } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
-    expect(getByText('You matched with Asha!')).toBeTruthy();
+    expect(getByText("You're connected with Asha")).toBeTruthy();
     expect(getByPlaceholderText('Type a message...')).toBeTruthy();
     // ChatScreen kicks off getMessages()/markConversationRead() on mount;
     // flush those promises inside act so their state updates don't warn.

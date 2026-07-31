@@ -1,7 +1,13 @@
 // ChatScamBanner — surfaces a per-conversation safety warning when
-// the detect-scam-signal Edge Function flags romance-scam patterns
-// (off-platform redirects, early money asks, gift-card mentions,
-// crypto solicitations, love-bombing).
+// the detect-scam-signal Edge Function flags a known pressure pattern.
+//
+// The patterns we see in a diaspora community platform are broader
+// than romance scams: money requests dressed up as family emergencies,
+// fake fundraisers and "charity" collections, people impersonating a
+// relative / community leader / organisation, "I'm stranded, send
+// transport money" stories, and pushes to move the conversation
+// off-platform where nothing can be reported. Copy below covers all of
+// those without assuming the two people are dating.
 //
 // Render at the top of ChatScreen above the message list. The
 // component owns its own dismiss state so a user can clear the
@@ -17,20 +23,43 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 
 const SEVERITY_COPY = {
-  high:   { title: 'Possible scam patterns detected', tone: '#B45309' },
-  medium: { title: 'Some patterns to be cautious about', tone: '#D97706' },
-  low:    null,
+  high: {
+    title: 'This looks like a known scam pattern',
+    body: 'Never send money, airtime or gift cards to someone you have not met, no matter who they say they are. Anyone who is genuinely who they claim to be will not mind waiting while you verify.',
+    tone: '#B45309',
+  },
+  medium: {
+    title: 'A few things here worth double-checking',
+    body: 'Take your time. Verify who you are talking to through someone you already trust before sending money or personal details, and keep the conversation on JuNubin so it can be reported.',
+    tone: '#D97706',
+  },
+  low: null,
 };
 
 const SIGNAL_LABEL = {
-  'off-platform-whatsapp': 'WhatsApp move',
-  'off-platform-telegram': 'Telegram move',
-  'off-platform-email':    'Email handoff',
-  'money-gift-card':       'Gift-card request',
-  'money-wire':            'Wire-transfer request',
-  'money-crypto':          'Crypto mention',
-  'love-bombing':          'Love-bombing wording',
-  'emergency-cash':        'Urgent-money story',
+  // Moving the conversation somewhere unreportable
+  'off-platform-whatsapp': 'Wants to move to WhatsApp',
+  'off-platform-telegram': 'Wants to move to Telegram',
+  'off-platform-email':    'Wants to move to email',
+  // Money
+  'money-gift-card':       'Asked for gift cards',
+  'money-wire':            'Asked for a wire transfer',
+  'money-crypto':          'Asked for crypto',
+  'money-airtime':         'Asked for airtime or mobile money',
+  'money-request':         'Asked you for money',
+  'emergency-cash':        'Urgent money story',
+  'stranded-story':        '"I\'m stranded" story',
+  'medical-emergency':     'Family emergency story',
+  // Fundraising / charity
+  'fake-charity':          'Unverified charity ask',
+  'fundraiser-pressure':   'Pressure to donate',
+  // Identity
+  'impersonation':         'May be impersonating someone',
+  'identity-mismatch':     'Story does not add up',
+  'credential-request':    'Asked for account details',
+  // Tone
+  'love-bombing':          'Moving very fast',
+  'urgency-pressure':      'Rushing you to decide',
 };
 
 export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
@@ -70,9 +99,11 @@ export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
 
       {expanded && (
         <View style={styles.detail}>
-          {verdict.message ? (
-            <Text style={styles.message}>{verdict.message}</Text>
-          ) : null}
+          {/* Server-supplied message wins when present — it can be
+              specific to what was actually said. Otherwise fall back to
+              the generic community-safety guidance for this severity so
+              the expanded state is never just a bare chip list. */}
+          <Text style={styles.message}>{verdict.message || meta.body}</Text>
           {labels.length > 0 ? (
             <View style={styles.chips}>
               {labels.map((label) => (
@@ -89,7 +120,7 @@ export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
               activeOpacity={0.75}
             >
               <Ionicons name="information-circle-outline" size={14} color="#FFFFFF" />
-              <Text style={styles.actionText}>Learn the patterns</Text>
+              <Text style={styles.actionText}>How to stay safe</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.actionBtn}

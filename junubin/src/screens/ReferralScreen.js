@@ -8,14 +8,17 @@ import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import Button from '../components/Button';
 import * as referralService from '../utils/referralService';
 import { REFERRALS_BACKEND_READY } from '../utils/referralService';
-import { useSubscription } from '../payments';
 import { reportError } from '../utils/reportError';
 
+// JuNubin is free, so there is nothing to reward anyone WITH — no
+// Super Likes, Spotlights, tiers or Coins exist. Inviting people is
+// its own reward here: a bigger community in your city. Milestones
+// stay as recognition only; none of them grant an entitlement.
 const REWARD_TIERS = [
-  { id: 'superlikes_5', count: 1, reward: '5 Super Likes', icon: 'star', color: '#0047AB' },
-  { id: 'spotlight_1', count: 3, reward: '1 Spotlight', icon: 'flash', color: '#F59E0B' },
-  { id: 'promo_plus_7d', count: 5, reward: '1 Week Plus', icon: 'crown', color: '#CE1126' },
-  { id: 'coins_100', count: 10, reward: '100 Coins', icon: 'logo-bitcoin', color: '#CE1126' },
+  { id: 'invite_1',  count: 1,  reward: 'First invite sent',        icon: 'paper-plane', color: '#0047AB' },
+  { id: 'invite_3',  count: 3,  reward: 'Community builder',        icon: 'people',      color: '#F59E0B' },
+  { id: 'invite_5',  count: 5,  reward: 'Connector',                icon: 'git-network', color: '#CE1126' },
+  { id: 'invite_10', count: 10, reward: 'Diaspora champion',        icon: 'ribbon',      color: '#009739' },
 ];
 
 export default function ReferralScreen({ navigation }) {
@@ -25,31 +28,25 @@ export default function ReferralScreen({ navigation }) {
   const [referralCount, setReferralCount] = useState(0);
   const [referralCode, setReferralCode] = useState('');
   const [claimedRewards, setClaimedRewards] = useState([]);
-  const { addCoins, addSpotlights, addSuperLikes, grantPromoTier } = useSubscription();
-
+  // Milestones are recognition, not entitlements — there is nothing to
+  // grant on a free app, so this only records which ones have been
+  // reached. That also removes the old exploit surface: the count comes
+  // from local AsyncStorage, which any user can edit, and it no longer
+  // buys anything.
   const applyRewards = useCallback(async (stats) => {
-    // Auto-grant is intentionally a no-op while the referral backend
-    // isn't live — the count comes from local AsyncStorage which any
-    // user can edit, so granting Super Likes / Spotlights / Plus
-    // weeks / coins from it would let them mint paid items for free.
-    // Once the server-side ledger lands, the grants below resume.
+    const claimed = Array.isArray(stats.claimedRewards) ? stats.claimedRewards : [];
     if (!REFERRALS_BACKEND_READY) {
-      setClaimedRewards(Array.isArray(stats.claimedRewards) ? stats.claimedRewards : []);
+      setClaimedRewards(claimed);
       return;
     }
-    const claimed = Array.isArray(stats.claimedRewards) ? stats.claimedRewards : [];
     for (const tier of REWARD_TIERS) {
       if (stats.count >= tier.count && !claimed.includes(tier.id)) {
-        if (tier.id === 'superlikes_5') addSuperLikes(5);
-        if (tier.id === 'spotlight_1') addSpotlights(1);
-        if (tier.id === 'promo_plus_7d') grantPromoTier('plus', 7);
-        if (tier.id === 'coins_100') addCoins(100);
         await referralService.markRewardClaimed(tier.id);
         claimed.push(tier.id);
       }
     }
     setClaimedRewards(claimed);
-  }, [addCoins, addSpotlights, addSuperLikes, grantPromoTier]);
+  }, []);
 
   useEffect(() => {
     referralService.getReferralStats().then((stats) => {
@@ -96,7 +93,7 @@ export default function ReferralScreen({ navigation }) {
           <MaterialCommunityIcons name="gift" size={48} color={colors.accent} />
           <Text style={styles.heroTitle}>Share the Love</Text>
           <Text style={styles.heroDesc}>
-            Invite your friends to JuNubin and earn rewards for each person who joins!
+            JuNubin works better the more of us are on it. Invite friends and family — the app is free for everyone.
           </Text>
         </View>
 
@@ -118,13 +115,13 @@ export default function ReferralScreen({ navigation }) {
             <Text style={styles.statLabel}>Friends Invited</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{Math.floor(referralCount / 3)}</Text>
-            <Text style={styles.statLabel}>Rewards Earned</Text>
+            <Text style={styles.statNumber}>{REWARD_TIERS.filter((t) => referralCount >= t.count).length}</Text>
+            <Text style={styles.statLabel}>Milestones</Text>
           </View>
         </View>
 
         {/* Reward Tiers */}
-        <Text style={styles.sectionTitle}>Reward Tiers</Text>
+        <Text style={styles.sectionTitle}>Milestones</Text>
         {REWARD_TIERS.map((tier, i) => {
           const achieved = referralCount >= tier.count;
           const claimed = claimedRewards.includes(tier.id);

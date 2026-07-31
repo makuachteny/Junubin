@@ -38,17 +38,19 @@ import { ALL_TRIBE_KEYS, TRIBES } from '../data/tribes';
 import { GENDER_OPTIONS, toDbGender, toUiGender } from '../data/gender';
 import {
   PRONOUN_OPTIONS,
-  DATE_PREF_OPTIONS,
-  INTENTION_OPTIONS,
   EDUCATION_OPTIONS,
   INTEREST_OPTIONS,
   PROMPT_OPTIONS,
-  SEXUALITY_OPTIONS,
-  CHILDREN_OPTIONS,
+  HERE_FOR_OPTIONS,
+  LOCATION_VISIBILITY_OPTIONS,
+  normalizeLocationVisibility,
 } from '../data/profileOptions';
+import { OPEN_TO_OPTIONS, normalizeOpenTo } from '../data/openTo';
+import { LANGUAGE_OPTIONS, normalizeLanguages } from '../data/languages';
 import { COUNTRY_PICKER_OPTIONS, COUNTRY_BY_CODE } from '../data/worldCountries';
 import { LinearGradient } from 'expo-linear-gradient';
 import { calculateCompleteness } from '../utils/profileCompleteness';
+import { nextIncompleteStep } from '../utils/eligibility';
 
 // Enable LayoutAnimation on Android — iOS has it on by default.
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -61,17 +63,17 @@ const ETHNICITY_PICKER_OPTIONS = TRIBES.map((t) => ({
   value: t.key,
   description: t.region || t.note || undefined,
 }));
-// PRONOUN_OPTIONS, EDUCATION_OPTIONS, INTEREST_OPTIONS, DATE_PREF_OPTIONS,
-// INTENTION_OPTIONS, PROMPT_OPTIONS now come from src/data/profileOptions.js
-// (shared with ProfileSetupScreen so the two screens can't drift).
-// PURPOSE_OPTIONS stays local — it's a UI label triple unique to this
-// screen's identity chips (ProfileSetup uses richer card metadata for
-// the same vocabulary).
-const PURPOSE_OPTIONS = [
-  { key: 'dating',    label: 'Dating' },
-  { key: 'socialize', label: 'Socialize' },
-  { key: 'both',      label: 'Both' },
-];
+// PRONOUN_OPTIONS, EDUCATION_OPTIONS, INTEREST_OPTIONS, PROMPT_OPTIONS,
+// HERE_FOR_OPTIONS and LOCATION_VISIBILITY_OPTIONS come from
+// src/data/profileOptions.js; OPEN_TO_OPTIONS and LANGUAGE_OPTIONS from
+// their own files. All shared with ProfileSetupScreen so the two
+// screens can't drift.
+//
+// The old local PURPOSE_OPTIONS (Dating / Socialize / Both) is gone
+// along with the dating editors — sexuality, "interested in", dating
+// intentions and children. accountPurpose is still persisted, but it's
+// a constant ('socialize') written by onboarding, not a user choice, so
+// there's nothing left for this screen to edit.
 // Height picker options — 140cm to 220cm in 1cm steps, displayed with
 // both metric and imperial so users can find their height either way.
 const HEIGHT_PICKER_OPTIONS = (() => {
@@ -100,18 +102,30 @@ const formReducer = (state, action) => {
   }
 };
 
+// Eligibility / deep-link step id → the field this screen scrolls to.
+// The bottom block maps ids that no longer have an editor (the removed
+// dating fields) onto the nearest surviving section so a stale
+// focusStep scrolls somewhere sensible instead of crashing or silently
+// doing nothing.
 const FOCUS_STEP_ALIAS = {
   displayName:      'name',
   prompts:          'promptAnswer',
-  datingIntentions: 'datingIntentions',
-  intention:        'datingIntentions',
   dob:              'dob',
   gender:           'gender',
-  purpose:          'purpose',
-  interestedIn:     'interestedIn',
+  city:             'city',
+  languages:        'languages',
+  profession:       'job',
+  openTo:           'openTo',
+  locationVisibility: 'locationVisibility',
   height:           null,
-  city:             null,
   verify:           null,
+  // ── legacy / removed ids ──
+  purpose:          'openTo',
+  interestedIn:     'openTo',
+  intention:        'openTo',
+  datingIntentions: 'openTo',
+  sexuality:        'openTo',
+  children:         'openTo',
 };
 
 const FOCUS_STEP_OPEN_SECTION = {
@@ -684,7 +698,7 @@ function ProfilePreviewSheet({ visible, onClose, snapshot, photoUris, completion
               <View style={{ flex: 1 }}>
                 <Text style={{ ...Typography.bodyMedium, fontSize: 14, color: colors.black }}>Profile is {completion}% complete</Text>
                 <Text style={{ ...Typography.caption, fontSize: 12, color: colors.gray500, marginTop: 1 }}>
-                  {completion >= 80 ? 'Looking great!' : 'Add more to attract better matches'}
+                  {completion >= 80 ? 'Looking great!' : 'Add more so people can find you'}
                 </Text>
               </View>
             </View>
@@ -711,7 +725,7 @@ function ProfilePreviewSheet({ visible, onClose, snapshot, photoUris, completion
               {snapshot.education ? <PreviewPill icon="library-outline" label={snapshot.education} colors={colors} /> : null}
               {snapshot.pronouns ? <PreviewPill icon="at-outline" label={snapshot.pronouns} colors={colors} /> : null}
               {snapshot.ethnicity ? <PreviewPill icon="people-outline" label={snapshot.ethnicity} colors={colors} /> : null}
-              {snapshot.lookingFor ? <PreviewPill icon="heart-outline" label={snapshot.lookingFor} colors={colors} /> : null}
+              {snapshot.lookingFor ? <PreviewPill icon="people-outline" label={snapshot.lookingFor} colors={colors} /> : null}
             </View>
 
             {/* Currently into */}
@@ -800,11 +814,9 @@ export default function EditProfileScreen({ navigation, route }) {
   const { currentUser, refreshUser } = useCurrentUser();
   const [saving, setSaving] = useState(false);
 
-  const explicitMode = route?.params?.mode;
-  const viewerMode = explicitMode
-    || (currentUser?.preferences?.mode === 'Social' ? 'socialize' : 'dating');
-  const isDating = viewerMode === 'dating';
-
+  // `mode` used to fork this screen into dating vs social variants.
+  // After the community pivot there is only one variant, so the param
+  // is accepted (callers still pass it) and ignored.
   const rawFocusStep = route?.params?.focusStep || null;
   const focusStep = rawFocusStep
     ? (FOCUS_STEP_ALIAS.hasOwnProperty(rawFocusStep)
@@ -815,23 +827,28 @@ export default function EditProfileScreen({ navigation, route }) {
   const initialForm = useMemo(() => ({
     name: currentUser.name || '',
     bio: currentUser.bio || '',
-    job: currentUser.job || '',
+    // One text field, two columns: `profession` is the canonical column
+    // after the pivot, `job` the pre-existing one that card pills and
+    // the preview sheet already read. Hydrate from whichever is set.
+    job: currentUser.job || currentUser?._raw?.profile?.profession || '',
     school: currentUser.school || '',
-    lookingFor: currentUser?._raw?.profile?.lookingFor
-      || (isDating ? 'Something serious' : 'Friendship'),
+    lookingFor: currentUser?._raw?.profile?.lookingFor || 'Friendship',
     ethnicity:  currentUser?._raw?.profile?.ethnicity  || '',
     education:  currentUser?._raw?.profile?.education  || '',
     pronouns:   currentUser?._raw?.profile?.pronouns   || '',
     interests:  Array.isArray(currentUser?._raw?.profile?.interests)
                   ? currentUser._raw.profile.interests
                   : [],
+    // The three pivot columns. Each normalizer collapses null (an
+    // un-migrated backend) to its safe default — [] / [] / 'off' — so
+    // nothing downstream has to null-check before mapping.
+    openTo:     normalizeOpenTo(currentUser?._raw?.profile?.openTo),
+    languages:  normalizeLanguages(currentUser?._raw?.profile?.languages),
+    locationVisibility: normalizeLocationVisibility(
+      currentUser?._raw?.profile?.locationVisibility
+    ),
     dob:              currentUser?._raw?.dateOfBirth || '',
     gender:           toUiGender(currentUser?._raw?.gender),
-    purpose:          currentUser?._raw?.profile?.accountPurpose || '',
-    interestedIn:     currentUser?._raw?.profile?.lookingForGender || '',
-    datingIntentions: currentUser?._raw?.profile?.datingIntentions || '',
-    sexuality:        currentUser?._raw?.profile?.sexuality || '',
-    children:         currentUser?._raw?.profile?.children || '',
     promptQuestion:   currentUser?._raw?.profile?.promptQuestion || '',
     promptAnswer:     currentUser?._raw?.profile?.promptAnswer || '',
     countryCode:      currentUser?._raw?.countryCode || '',
@@ -900,7 +917,9 @@ export default function EditProfileScreen({ navigation, route }) {
         profileService
           .updateProfile({
             bio: (latest.bio || '').trim(),
+            // `job` and `profession` are the same input — see initialForm.
             job: (latest.job || '').trim(),
+            profession: (latest.job || '').trim(),
             school: (latest.school || '').trim(),
             city: (latest.city || '').trim(),
           })
@@ -930,6 +949,7 @@ export default function EditProfileScreen({ navigation, route }) {
         .updateProfile({
           bio: form.bio.trim(),
           job: form.job.trim(),
+          profession: form.job.trim(),
           school: form.school.trim(),
           city: form.city.trim(),
         })
@@ -1018,7 +1038,9 @@ export default function EditProfileScreen({ navigation, route }) {
         school:             form.school,
         ethnicity:          form.ethnicity,
         interests:          form.interests,
-        datingIntentions:   form.datingIntentions,
+        profession:         form.job,
+        openTo:             form.openTo,
+        languages:          form.languages,
         currentlyInto:      currentlyInto,
         heightCm:           form.heightCm ? Number(form.heightCm) : (currentUser._raw?.profile?.heightCm || null),
       },
@@ -1032,16 +1054,16 @@ export default function EditProfileScreen({ navigation, route }) {
     const snap = snapshotRef.current;
     const NON_TEXT_KEYS = [
       'lookingFor', 'ethnicity', 'education', 'pronouns',
-      'dob', 'gender', 'purpose', 'interestedIn', 'datingIntentions',
-      'sexuality', 'children', 'promptQuestion', 'promptAnswer', 'countryCode',
-      'heightCm',
+      'dob', 'gender', 'promptQuestion', 'promptAnswer', 'countryCode',
+      'heightCm', 'locationVisibility',
     ];
     for (const k of NON_TEXT_KEYS) {
       if ((form[k] || '') !== (snap[k] || '')) return true;
     }
-    const aInt = JSON.stringify(form.interests || []);
-    const bInt = JSON.stringify(snap.interests || []);
-    if (aInt !== bInt) return true;
+    const ARRAY_KEYS = ['interests', 'openTo', 'languages'];
+    for (const k of ARRAY_KEYS) {
+      if (JSON.stringify(form[k] || []) !== JSON.stringify(snap[k] || [])) return true;
+    }
     const aS = JSON.stringify(selectedStickers);
     const bS = JSON.stringify(initialStickersRef.current || []);
     if (aS !== bS) return true;
@@ -1082,10 +1104,11 @@ export default function EditProfileScreen({ navigation, route }) {
     const t = setTimeout(() => {
       const SECTION_BY_FIELD = {
         name: 'basic', bio: 'basic', job: 'basic', school: 'basic',
-        purpose: 'identity', dob: 'identity', gender: 'identity',
-        interestedIn: 'identity', datingIntentions: 'identity',
+        dob: 'identity', gender: 'identity', city: 'identity',
+        openTo: 'openTo', languages: 'languages',
+        locationVisibility: 'locationVisibility',
         promptQuestion: 'prompt', promptAnswer: 'prompt',
-        lookingFor: 'lookingFor',
+        lookingFor: 'openTo',
         currentlyInto: 'currentlyInto',
         photos: 'photos',
         ethnicity: 'more', pronouns: 'more', education: 'more', interests: 'more',
@@ -1100,7 +1123,12 @@ export default function EditProfileScreen({ navigation, route }) {
     return () => clearTimeout(t);
   }, [focusStep]);
 
-  const lookingForOptions = ['Something serious', "Let's see where it goes", 'Marriage-minded', 'Friendship', 'Networking'];
+  const toggleInArray = useCallback((key, value) => {
+    const current = Array.isArray(form[key]) ? form[key] : [];
+    setField(key, current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value]);
+  }, [form, setField]);
 
   const toggleSticker = (index) => {
     setSelectedStickers((prev) => {
@@ -1192,30 +1220,57 @@ export default function EditProfileScreen({ navigation, route }) {
     let saveError = null;
     try {
       const stickers = selectedStickers.map((i) => CULTURAL_STICKERS[i]);
-      savedUser = await profileService.updateProfile({
+      const updates = {
+        displayName: form.name.trim(),
         bio: form.bio.trim(),
         job: form.job.trim(),
+        profession: form.job.trim(),
         school: form.school.trim(),
         lookingFor: form.lookingFor,
         ethnicity: form.ethnicity || null,
         education: form.education || null,
         pronouns: form.pronouns || '',
         interests: form.interests,
+        openTo: form.openTo,
+        languages: form.languages,
+        // Always written, never conditionally omitted: 'off' is a
+        // meaningful value the user may be actively choosing, and a
+        // spread-guard would make "turn it back off" a silent no-op.
+        locationVisibility: normalizeLocationVisibility(form.locationVisibility),
         stickers,
         currentlyInto,
         ...(toDbGender(form.gender) ? { gender: toDbGender(form.gender) } : {}),
         ...(form.dob && !dobLocked ? { dateOfBirth: form.dob } : {}),
-        ...(form.purpose ? { accountPurpose: form.purpose } : {}),
-        ...(form.interestedIn ? { lookingForGender: form.interestedIn } : {}),
-        ...(form.datingIntentions ? { datingIntentions: form.datingIntentions } : {}),
-        ...(form.sexuality ? { sexuality: form.sexuality } : {}),
-        ...(form.children ? { children: form.children } : {}),
         ...(form.promptQuestion ? { promptQuestion: form.promptQuestion } : {}),
         ...(form.promptAnswer ? { promptAnswer: form.promptAnswer.trim() } : {}),
         ...(form.countryCode ? { countryCode: form.countryCode } : {}),
         ...(form.city ? { city: form.city.trim() } : {}),
         ...(form.heightCm ? { heightCm: Number(form.heightCm) } : {}),
-      });
+      };
+
+      const projectedUser = {
+        ...(currentUser._raw || {}),
+        displayName: updates.displayName || form.name || currentUser._raw?.displayName,
+        dateOfBirth: updates.dateOfBirth || form.dob || currentUser._raw?.dateOfBirth,
+        gender: updates.gender || toDbGender(form.gender) || currentUser._raw?.gender,
+        countryCode: updates.countryCode || form.countryCode || currentUser._raw?.countryCode,
+        photos: currentUser._raw?.photos || [],
+        city: updates.city || form.city || currentUser._raw?.city,
+        profile: {
+          ...(currentUser._raw?.profile || {}),
+          ...updates,
+          accountPurpose: currentUser._raw?.profile?.accountPurpose || 'socialize',
+          promptQuestion: updates.promptQuestion || form.promptQuestion || currentUser._raw?.profile?.promptQuestion,
+          promptAnswer: updates.promptAnswer || form.promptAnswer || currentUser._raw?.profile?.promptAnswer,
+          interests: updates.interests || form.interests || currentUser._raw?.profile?.interests,
+        },
+      };
+      // One mode now — a profile is either complete or it isn't.
+      if (nextIncompleteStep(projectedUser.profile, projectedUser) === null) {
+        updates.profileComplete = true;
+      }
+
+      savedUser = await profileService.updateProfile(updates);
       updateUser(savedUser);
       await refreshUser();
       // Refresh snapshot so the save bar dismisses and the autosave
@@ -1411,13 +1466,18 @@ export default function EditProfileScreen({ navigation, route }) {
             showCount
             minLength={10}
           />
+          {/* One input, two columns — `profession` is the canonical
+              column after the pivot, `job` the pre-existing one that
+              the card pills and preview sheet already read. Both are
+              written from this field on save and on autosave. */}
           <FloatingInput
-            label="Job"
+            label="What you do"
             value={form.job}
             onChangeText={(val) => setField('job', val)}
-            placeholder="e.g. Software engineer"
+            placeholder="e.g. Nurse, student, driver, engineer"
             icon="briefcase-outline"
             maxLength={80}
+            testID="edit-profession"
           />
           <FloatingInput
             label="School"
@@ -1430,7 +1490,7 @@ export default function EditProfileScreen({ navigation, route }) {
         </SectionCard>
 
         {/* ── Identity ── */}
-        <SectionCard title="Identity" subtitle="Help us match you with the right people" onLayout={recordOffset('identity')}>
+        <SectionCard title="Identity" subtitle="Where you're from and where you are now" onLayout={recordOffset('identity')}>
           <PickerRow
             label="Country"
             icon="earth-outline"
@@ -1499,69 +1559,25 @@ export default function EditProfileScreen({ navigation, route }) {
             ))}
           </ChipRow>
 
-          <GroupLabel>I'm here to</GroupLabel>
+        </SectionCard>
+
+        {/* ── Languages ── */}
+        <SectionCard
+          title="Languages"
+          subtitle="Which languages do you speak?"
+          onLayout={recordOffset('languages')}
+        >
           <ChipRow>
-            {PURPOSE_OPTIONS.map((option) => (
+            {LANGUAGE_OPTIONS.map((option) => (
               <Chip
-                key={option.key}
-                label={option.label}
-                active={form.purpose === option.key}
-                onPress={() => setField('purpose', form.purpose === option.key ? '' : option.key)}
+                key={option}
+                label={option}
+                multi
+                active={(form.languages || []).includes(option)}
+                onPress={() => toggleInArray('languages', option)}
               />
             ))}
           </ChipRow>
-
-          {isDating && (
-            <>
-              <GroupLabel>Interested in</GroupLabel>
-              <ChipRow>
-                {DATE_PREF_OPTIONS.map((option) => (
-                  <Chip
-                    key={option}
-                    label={option}
-                    active={form.interestedIn === option}
-                    onPress={() => setField('interestedIn', form.interestedIn === option ? '' : option)}
-                  />
-                ))}
-              </ChipRow>
-
-              <GroupLabel>What you're looking for</GroupLabel>
-              <ChipRow>
-                {INTENTION_OPTIONS.map((option) => (
-                  <Chip
-                    key={option}
-                    label={option}
-                    active={form.datingIntentions === option}
-                    onPress={() => setField('datingIntentions', form.datingIntentions === option ? '' : option)}
-                  />
-                ))}
-              </ChipRow>
-
-              <GroupLabel>Sexuality</GroupLabel>
-              <ChipRow>
-                {SEXUALITY_OPTIONS.map((option) => (
-                  <Chip
-                    key={option}
-                    label={option}
-                    active={form.sexuality === option}
-                    onPress={() => setField('sexuality', form.sexuality === option ? '' : option)}
-                  />
-                ))}
-              </ChipRow>
-
-              <GroupLabel>Children</GroupLabel>
-              <ChipRow>
-                {CHILDREN_OPTIONS.map((option) => (
-                  <Chip
-                    key={option}
-                    label={option}
-                    active={form.children === option}
-                    onPress={() => setField('children', form.children === option ? '' : option)}
-                  />
-                ))}
-              </ChipRow>
-            </>
-          )}
         </SectionCard>
 
         {/* ── Your prompt ── */}
@@ -1594,10 +1610,28 @@ export default function EditProfileScreen({ navigation, route }) {
           />
         </SectionCard>
 
-        {/* ── Looking for ── */}
-        <SectionCard title={isDating ? 'Looking For' : 'Here for'} onLayout={recordOffset('lookingFor')}>
+        {/* ── Open to ── */}
+        <SectionCard
+          title="Open to"
+          subtitle="Pick everything that fits — this is how people find their people"
+          onLayout={recordOffset('openTo')}
+        >
           <ChipRow>
-            {lookingForOptions.map((option) => (
+            {OPEN_TO_OPTIONS.map((option) => (
+              <Chip
+                key={option.key}
+                label={option.label}
+                icon={option.icon}
+                multi
+                active={(form.openTo || []).includes(option.key)}
+                onPress={() => toggleInArray('openTo', option.key)}
+              />
+            ))}
+          </ChipRow>
+
+          <GroupLabel>Here for</GroupLabel>
+          <ChipRow>
+            {HERE_FOR_OPTIONS.map((option) => (
               <Chip
                 key={option}
                 label={option}
@@ -1606,6 +1640,72 @@ export default function EditProfileScreen({ navigation, route }) {
               />
             ))}
           </ChipRow>
+        </SectionCard>
+
+        {/* ── Location privacy ──
+            Mirrors the final onboarding step. In-app visibility only —
+            this control never triggers an OS location prompt, and
+            nothing here imports expo-location. */}
+        <SectionCard
+          title="Location privacy"
+          subtitle="You're in control. Location sharing is off unless you turn it on."
+          onLayout={recordOffset('locationVisibility')}
+        >
+          <View style={styles.privacyNote}>
+            <Ionicons name="lock-closed" size={16} color={colors.accent} style={{ marginTop: 2 }} />
+            <Text style={styles.privacyNoteText}>
+              Location is <Text style={styles.privacyNoteStrong}>off by default</Text> and you can
+              change it any time. We never show your exact address, never sell your
+              location, and never use it for ad targeting.
+            </Text>
+          </View>
+          {LOCATION_VISIBILITY_OPTIONS.map((option) => {
+            const isActive = normalizeLocationVisibility(form.locationVisibility) === option.key;
+            return (
+              <Pressable
+                key={option.key}
+                testID={`edit-location-visibility-${option.key}`}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setField('locationVisibility', option.key);
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: isActive }}
+                accessibilityLabel={`${option.label}. ${option.description}`}
+                style={({ pressed }) => [
+                  styles.visibilityOption,
+                  {
+                    borderColor: isActive ? colors.accent : colors.gray200,
+                    backgroundColor: isActive ? colors.accentSurface : colors.cardBg,
+                  },
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <Ionicons
+                  name={option.icon}
+                  size={18}
+                  color={isActive ? colors.accent : colors.gray500}
+                  style={{ marginRight: 12 }}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[
+                    styles.visibilityOptionLabel,
+                    { color: isActive ? colors.accent : colors.black },
+                  ]}>
+                    {option.label}{option.key === 'off' ? '  ·  Default' : ''}
+                  </Text>
+                  <Text style={[styles.visibilityOptionDesc, { color: colors.gray500 }]}>
+                    {option.description}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={isActive ? 'radio-button-on' : 'radio-button-off'}
+                  size={20}
+                  color={isActive ? colors.accent : colors.gray300}
+                />
+              </Pressable>
+            );
+          })}
         </SectionCard>
 
         {/* ── Currently Into ── */}
@@ -1853,6 +1953,54 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surfaceMuted,
+  },
+
+  // ─── Location privacy ───
+  // Mirrors the same block in ProfileSetupScreen so the consent copy
+  // reads identically in onboarding and in Settings.
+  privacyNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 14,
+    marginBottom: 14,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.gray200,
+  },
+  privacyNoteText: {
+    ...Typography.caption,
+    color: colors.gray600,
+    lineHeight: 18,
+    flex: 1,
+  },
+  privacyNoteStrong: {
+    color: colors.black,
+    fontFamily: FontFamily.bold,
+  },
+  visibilityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    // 14pt vertical padding around a two-line block clears the 44pt
+    // minimum touch target from ACCESSIBILITY_QA_MATRIX.md.
+    paddingVertical: 14,
+    minHeight: 44,
+    marginBottom: 10,
+  },
+  visibilityOptionLabel: {
+    ...Typography.bodyMedium,
+    fontSize: 15,
+    fontFamily: FontFamily.semibold,
+    marginBottom: 2,
+  },
+  visibilityOptionDesc: {
+    ...Typography.caption,
+    fontSize: 12,
+    lineHeight: 17,
   },
   headerWrap: {
     position: 'absolute',

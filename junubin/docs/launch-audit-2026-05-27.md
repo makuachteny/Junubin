@@ -1,5 +1,12 @@
 # JuNubin — Global Launch & Money-Flow Audit
 
+> **⚠️ STALE — written for the dating product.** JuNubin has since pivoted to a
+> free South Sudanese social-networking app: no swiping, matching, likes or
+> subscriptions, and no posts/stories/groups/events/games/calls. Category,
+> age rating, privacy labels, screenshots, review notes and IAP sections in
+> this document are all wrong until rewritten. See
+> `docs/social-platform-redesign-plan.md` → "Implementation Status".
+
 **Date:** 2026-05-27
 **Audit scope:** Every piece of the app that has to be true on launch day for (a) the App Store / Play Store to accept the build, (b) real money to move from a user's card to your Stripe / RevenueCat account, and (c) the entitlement they paid for to actually land on their account.
 

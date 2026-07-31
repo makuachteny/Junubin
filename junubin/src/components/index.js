@@ -1,38 +1,39 @@
-// AnaJunubin — Component Barrel
+// JuNubin — Component Barrel
+//
+// Only components that still exist. The swipe-deck, community-feed,
+// stories, games, gifting, calling and voice-note components were
+// deleted in the social pivot; their re-exports went with them.
 export { default as BrandLogo } from './BrandLogo';
+export { default as LogoMark } from './LogoMark';
+export { default as Button } from './Button';
+export { default as EmptyState } from './EmptyState';
+export { default as UnderlineTabs } from './UnderlineTabs';
+
+// ── People discovery ──
+export { default as PeopleMap } from './PeopleMap';
+export { default as PersonCard } from './PersonCard';
+export { default as LocationDisclosure } from './LocationDisclosure';
 export { default as ProfileCard } from './ProfileCard';
 export { default as ActionButtons } from './ActionButtons';
-export { default as PostCard } from './PostCard';
-export { default as Button } from './Button';
-export { default as PurchaseModal } from './PurchaseModal';
-export { default as UnderlineTabs } from './UnderlineTabs';
 export { default as FilterBar } from './FilterBar';
+export { default as VerifiedBadge } from './VerifiedBadge';
+export { default as OnlinePulseDot } from './OnlinePulseDot';
+
+// ── Profile ──
 export { default as CurrentlyIntoSelector } from './CurrentlyIntoSelector';
-export { default as MatchCelebrationOverlay } from './MatchCelebrationOverlay';
-export { default as HeartBurstOverlay } from './HeartBurstOverlay';
-export { default as BoostPulseRing } from './BoostPulseRing';
+export { default as ProfileCompletenessCard } from './ProfileCompletenessCard';
+export { default as ProfilePromptBanner } from './ProfilePromptBanner';
+
+// ── Messaging (text-only) ──
+export { default as ChatImageBubble } from './ChatImageBubble';
+export { default as ChatReactionPicker } from './ChatReactionPicker';
+export { default as ChatScamBanner } from './ChatScamBanner';
+export { default as MessageRequestComposer } from './MessageRequestComposer';
+
+// ── Chrome ──
+export { default as ScreenshotGuard } from './ScreenshotGuard';
+export { default as OfflineBanner } from './OfflineBanner';
 export { default as SkeletonShimmer } from './SkeletonShimmer';
 export { default as CardSkeleton } from './CardSkeleton';
 export { default as MessageListSkeleton } from './MessageListSkeleton';
-export { default as OnlinePulseDot } from './OnlinePulseDot';
 export { default as ThemedRefreshControl } from './ThemedRefreshControl';
-// New components
-export { default as ScreenshotGuard } from './ScreenshotGuard';
-export { default as OfflineBanner } from './OfflineBanner';
-export { default as ChatImageBubble } from './ChatImageBubble';
-export { default as ChatAudioBubble } from './ChatAudioBubble';
-export { default as ChatReactionPicker } from './ChatReactionPicker';
-export { default as IncomingCallOverlay } from './IncomingCallOverlay';
-export { default as GiftPicker } from './GiftPicker';
-export { default as GiftBubble } from './GiftBubble';
-export { default as GiftAnimation } from './GiftAnimation';
-export { default as VerifiedBadge } from './VerifiedBadge';
-export { default as ProfileCompletenessCard } from './ProfileCompletenessCard';
-export { default as ProfilePromptBanner } from './ProfilePromptBanner';
-export { default as StoriesRow } from './StoriesRow';
-export { default as SpotlightCard } from './SpotlightCard';
-export { default as LogoMark } from './LogoMark';
-export { default as GamePickerSheet } from './GamePickerSheet';
-export { default as GameBubble } from './GameBubble';
-export { default as GameResultOverlay } from './GameResultOverlay';
-export { default as EmptyState } from './EmptyState';

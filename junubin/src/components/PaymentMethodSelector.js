@@ -10,9 +10,14 @@
  *   visible - boolean to show/hide
  *   onClose - callback to dismiss
  *   onSelect(method) - callback with selected PAYMENT_METHODS value
- *   countryCode - retained for API compatibility (unused)
+ *   countryCode - ISO country (drives mobile-money availability)
  *   productLabel - what they're buying (e.g. "JuNubin+ Monthly")
  *   priceLabel - formatted price string (e.g. "$9.99")
+ *   allowMobileMoney - default true. Pass false for SUBSCRIPTIONS:
+ *     the Flutterwave mobile-money flow is a one-time charge with no
+ *     auto-renewal or expiry, so recurring products must stay on
+ *     Stripe / IAP. Consumables (coins, spotlights, super likes) keep
+ *     the default.
  */
 
 import React, { useEffect, useMemo, useRef } from 'react';
@@ -43,15 +48,18 @@ export default function PaymentMethodSelector({
   countryCode = 'KE',
   productLabel = '',
   priceLabel = '',
+  allowMobileMoney = true,
 }) {
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
-  const methods = useMemo(
-    () => getAvailableMethods(countryCode, Platform.OS),
-    [countryCode]
-  );
+  const methods = useMemo(() => {
+    const all = getAvailableMethods(countryCode, Platform.OS);
+    return allowMobileMoney
+      ? all
+      : all.filter((m) => m !== PAYMENT_METHODS.MOBILE_MONEY);
+  }, [countryCode, allowMobileMoney]);
 
   // If only one method is available (e.g. iOS where Apple policy
   // forces IAP-only for digital goods), bypass the sheet entirely and
@@ -124,6 +132,11 @@ export default function PaymentMethodSelector({
                     {isAppStore && (
                       <Text style={styles.methodDesc}>
                         {Platform.OS === 'ios' ? 'Apple Pay, cards via App Store' : 'Google Pay, cards via Play Store'}
+                      </Text>
+                    )}
+                    {method === PAYMENT_METHODS.MOBILE_MONEY && (
+                      <Text style={styles.methodDesc}>
+                        M-Pesa, MTN MoMo, Airtel Money — pay in your local currency
                       </Text>
                     )}
                   </View>

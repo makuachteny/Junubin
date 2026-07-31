@@ -1,10 +1,24 @@
-// AnaJunubin — Product Catalog
-// Two paid tiers: JuNubin+ (plus) and Junub (premium)
-// No ads ever. Social mode always free. Community-first.
+// JuNubin — Product Catalog
 //
-// Prices shown here are USD fallbacks used when RevenueCat isn't configured.
-// In production, localized prices come from RevenueCat → App Store / Google Play,
-// so users see their local currency automatically (SSP, KES, GBP, AUD, etc.).
+// ── JUNUBIN IS FREE ────────────────────────────────────────────────
+// JuNubin is a South Sudanese social / community platform and it has
+// no monetization. Nothing in this file is sold: there is no paywall,
+// no upgrade prompt, and no locked feature. `SHOW_PAYMENTS_UI` is
+// permanently false and `ALL_FEATURES_FREE` is permanently true (see
+// comingSoon.js / entitlements.js).
+//
+// This catalog survives for two reasons only:
+//   1. Real products exist under these identifiers in App Store
+//      Connect, Google Play, Stripe and Flutterwave. Renaming or
+//      deleting an id orphans anything already live and makes
+//      historical receipts unresolvable.
+//   2. SubscriptionContext and the payment services still import
+//      PRODUCTS / TIER_RANK / tierFromEntitlements. Keeping the shape
+//      intact avoids breaking imports while the app is free.
+//
+// Dating monetization is gone: Super Likes, spotlight/boost packs and
+// coin packs are no longer part of the sellable catalog. Their ids are
+// preserved in RETIRED_PRODUCT_IDS below.
 
 // RevenueCat entitlement identifiers (configured in RevenueCat dashboard)
 export const ENTITLEMENTS = {
@@ -16,47 +30,62 @@ export const ENTITLEMENTS = {
 export const OFFERING_ID = 'default';
 
 export const PRODUCT_IDS = {
-  // ── JuNubin+ Subscriptions ──
+  // ── Subscription ids — not sold, kept resolvable ──
+  // The store-side products still exist under these identifiers, so
+  // the strings must not change. Nothing in the app offers them.
   PLUS_MONTHLY: 'com.junubin.sub.plus.monthly',
   PLUS_6MONTH: 'com.junubin.sub.plus.6month',
 
-  // ── Junub Subscriptions ──
   JUNUB_MONTHLY: 'com.junubin.sub.junub.monthly',
   JUNUB_6MONTH: 'com.junubin.sub.junub.6month',
+};
 
-  // ── Consumables — Spotlights ──
-  SPOTLIGHT_1: 'com.junubin.spotlight.1',
-  SPOTLIGHT_5: 'com.junubin.spotlight.5',
-  SPOTLIGHT_10: 'com.junubin.spotlight.10',
-
-  // ── Consumables — Super Likes ──
+// Retired consumables. These were the dating monetization: Super Likes,
+// profile spotlights/boosts, and coin packs. They are removed from the
+// catalog and from every purchase surface in the app.
+//
+// The identifiers survive here — and only here — so support tooling and
+// historical receipts can still resolve a purchase to a name, and so
+// the live Stripe / Flutterwave rows (kept, marked deprecated, in
+// supabase/functions/_shared/) stay traceable to something readable.
+// Nothing may move these back into PRODUCT_IDS or PRODUCTS.
+export const RETIRED_PRODUCT_IDS = Object.freeze({
   SUPERLIKE_5: 'com.junubin.superlike.5',
   SUPERLIKE_15: 'com.junubin.superlike.15',
   SUPERLIKE_30: 'com.junubin.superlike.30',
-
-  // ── Consumables — Coins ──
+  SPOTLIGHT_1: 'com.junubin.spotlight.1',
+  SPOTLIGHT_5: 'com.junubin.spotlight.5',
+  SPOTLIGHT_10: 'com.junubin.spotlight.10',
   COINS_100: 'com.junubin.coins.100',
   COINS_500: 'com.junubin.coins.500',
   COINS_1200: 'com.junubin.coins.1200',
-};
+});
 
 // Tier hierarchy: free → plus → junub
+// Retained because tierFromEntitlements and hasTierAccess still read
+// it. Since every entitlement check short-circuits to `true`, the
+// ranking has no user-visible effect.
 export const TIER_RANK = {
   free: 0,
   plus: 1,
   junub: 2,
 };
 
-// Map RevenueCat entitlements to our tier names
+// Map RevenueCat entitlements to our tier names. Still used when
+// restoring a pre-existing subscription so a legacy subscriber isn't
+// reported as `free` — it grants nothing extra, because everything is
+// already free for everyone.
 export function tierFromEntitlements(entitlements) {
   if (entitlements?.[ENTITLEMENTS.JUNUB]?.isActive) return 'junub';
   if (entitlements?.[ENTITLEMENTS.PLUS]?.isActive) return 'plus';
   return 'free';
 }
 
-// Full product catalog with metadata (fallback prices in USD)
+// Metadata for the subscription ids above. Nothing renders these — no
+// screen sells a plan — but SubscriptionContext looks products up by id
+// when reconciling a restored purchase, so the map stays populated.
+// Prices are the historical USD amounts, kept for receipt readability.
 export const PRODUCTS = {
-  // ── JuNubin+ ──
   [PRODUCT_IDS.PLUS_MONTHLY]: {
     id: PRODUCT_IDS.PLUS_MONTHLY,
     type: 'subscription',
@@ -75,8 +104,6 @@ export const PRODUCTS = {
     period: '6 months',
     perMonth: '$6.66/mo',
   },
-
-  // ── Junub ──
   [PRODUCT_IDS.JUNUB_MONTHLY]: {
     id: PRODUCT_IDS.JUNUB_MONTHLY,
     type: 'subscription',
@@ -94,76 +121,5 @@ export const PRODUCTS = {
     price: '$79.99',
     period: '6 months',
     perMonth: '$13.33/mo',
-  },
-
-  // ── Spotlights ──
-  [PRODUCT_IDS.SPOTLIGHT_1]: {
-    id: PRODUCT_IDS.SPOTLIGHT_1,
-    type: 'consumable',
-    category: 'spotlight',
-    quantity: 1,
-    price: '$5.99',
-  },
-  [PRODUCT_IDS.SPOTLIGHT_5]: {
-    id: PRODUCT_IDS.SPOTLIGHT_5,
-    type: 'consumable',
-    category: 'spotlight',
-    quantity: 5,
-    price: '$19.99',
-  },
-  [PRODUCT_IDS.SPOTLIGHT_10]: {
-    id: PRODUCT_IDS.SPOTLIGHT_10,
-    type: 'consumable',
-    category: 'spotlight',
-    quantity: 10,
-    price: '$29.99',
-  },
-
-  // ── Super Likes ──
-  [PRODUCT_IDS.SUPERLIKE_5]: {
-    id: PRODUCT_IDS.SUPERLIKE_5,
-    type: 'consumable',
-    category: 'superlike',
-    quantity: 5,
-    price: '$7.99',
-  },
-  [PRODUCT_IDS.SUPERLIKE_15]: {
-    id: PRODUCT_IDS.SUPERLIKE_15,
-    type: 'consumable',
-    category: 'superlike',
-    quantity: 15,
-    price: '$17.99',
-  },
-  [PRODUCT_IDS.SUPERLIKE_30]: {
-    id: PRODUCT_IDS.SUPERLIKE_30,
-    type: 'consumable',
-    category: 'superlike',
-    quantity: 30,
-    price: '$29.99',
-  },
-
-  // ── Coins ──
-  [PRODUCT_IDS.COINS_100]: {
-    id: PRODUCT_IDS.COINS_100,
-    type: 'consumable',
-    category: 'coins',
-    quantity: 100,
-    price: '$1.99',
-  },
-  [PRODUCT_IDS.COINS_500]: {
-    id: PRODUCT_IDS.COINS_500,
-    type: 'consumable',
-    category: 'coins',
-    quantity: 500,
-    price: '$7.99',
-    badge: 'POPULAR',
-  },
-  [PRODUCT_IDS.COINS_1200]: {
-    id: PRODUCT_IDS.COINS_1200,
-    type: 'consumable',
-    category: 'coins',
-    quantity: 1200,
-    price: '$14.99',
-    badge: 'BEST VALUE',
   },
 };

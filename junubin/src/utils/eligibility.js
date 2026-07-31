@@ -55,6 +55,12 @@ function tierAtLeast(userTier, required) {
   return (TIER_RANK[userTier] ?? 0) >= (TIER_RANK[required] ?? 0);
 }
 
+export function getProfileRecord(userOrProfile) {
+  const value = userOrProfile?.profile !== undefined ? userOrProfile.profile : userOrProfile;
+  if (Array.isArray(value)) return value[0] || null;
+  return value || null;
+}
+
 /**
  * Single eligibility check. Returns:
  *   { ok: true }
@@ -94,7 +100,7 @@ export function checkActionAllowed({ user, action }) {
     // The user only sees the nudge when something is *actually*
     // missing — a previously-completed dating user toggling Social→
     // Dating won't get nudged because their dating fields are filled.
-    const missing = nextIncompleteStep(user.profile, user, { mode: 'dating' });
+    const missing = nextIncompleteStep(getProfileRecord(user), user, { mode: 'dating' });
     if (missing !== null) {
       return {
         ok: false,
@@ -123,11 +129,22 @@ export function checkActionAllowed({ user, action }) {
 // returns a step the screen actually knows how to mount.
 
 const STEP_ORDER = [
-  // Basic identity
-  { id: 'purpose',     test: (p) => !!p?.accountPurpose },
+  // Open to — the multi-select that replaced the Dating/Socialize
+  // purpose cards in the community pivot. ProfileSetup still writes
+  // accountPurpose ('socialize') alongside the openTo array so every
+  // pre-pivot profile stays "complete" here; either satisfies the gate.
+  { id: 'purpose',     test: (p) => !!p?.accountPurpose
+                                     || (Array.isArray(p?.openTo) && p.openTo.length > 0) },
   { id: 'displayName', test: (p, u) => !!u?.displayName },
   { id: 'dob',         test: (p, u) => !!u?.dateOfBirth },
-  { id: 'gender',      test: (p, u) => !!u?.gender },
+  // Gender is explicitly optional/skippable in onboarding now, so it
+  // is NOT gated here — gating a field the survey lets you skip is
+  // what produces a nudge the user can never satisfy.
+  //
+  // Country IS gated: "where are my South Sudanese people near me or
+  // in the city I care about" doesn't work without it, and
+  // ProfileSetup requires it to advance. City stays optional.
+  { id: 'country',     test: (p, u) => !!u?.countryCode },
   // Photos: ProfileSetup tightened to ≥ 3 photos to ship. Keep the
   // gate in lock-step or users finish setup but the eligibility check
   // immediately bounces them right back here. Previous value (≥ 2)
@@ -135,9 +152,6 @@ const STEP_ORDER = [
   // incomplete — a quiet inconsistency that surfaced as the survey
   // popup never going away.
   { id: 'photos',      test: (p, u) => (u?.photos?.length || 0) >= 3 },
-  // Dating qualifiers (only required if mode includes dating)
-  { id: 'interestedIn',     test: (p) => !!p?.lookingForGender,    onlyDating: true },
-  { id: 'datingIntentions', test: (p) => !!p?.datingIntentions,    onlyDating: true },
   // Prompt answer — what ProfileSetup ACTUALLY collects on the
   // "Answer a profile prompt" step. The old `bio` test gated on
   // `Profile.bio`, but ProfileSetup never writes that column (only
@@ -153,8 +167,16 @@ const STEP_ORDER = [
   // crash) gets routed back to the interests step rather than slipping
   // through the eligibility check.
   { id: 'interests', test: (p) => Array.isArray(p?.interests) && p.interests.length >= 3 },
-  // Survey block — accessibility/compatibility questions
-  { id: 'survey', test: (p) => !!p?.surveyCompletedAt, onlyDating: true },
+  // NOTE: the dating-only steps (`interestedIn`, `datingIntentions`,
+  // `survey`) were removed in the community pivot along with the
+  // ProfileSetup steps that collected them. `onlyDating` is still
+  // honoured by the walkers below so re-introducing a mode-scoped step
+  // stays a one-line change — there just aren't any today.
+  //
+  // languages / profession / city / locationVisibility are all
+  // deliberately absent: every one of them is optional-skippable in
+  // ProfileSetup, and gating an optional field here would nudge users
+  // toward a step they're allowed to leave blank.
 ];
 
 /**

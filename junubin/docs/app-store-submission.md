@@ -1,5 +1,12 @@
 # App Store Submission Checklist
 
+> **⚠️ STALE — written for the dating product.** JuNubin has since pivoted to a
+> free South Sudanese social-networking app: no swiping, matching, likes or
+> subscriptions, and no posts/stories/groups/events/games/calls. Category,
+> age rating, privacy labels, screenshots, review notes and IAP sections in
+> this document are all wrong until rewritten. See
+> `docs/social-platform-redesign-plan.md` → "Implementation Status".
+
 Things to gather + paste into App Store Connect when you move from
 TestFlight (where you are now) to the public App Store.
 

@@ -1,3 +1,18 @@
+// ── DEPRECATED / UNUSED: JUNUBIN IS FREE ──────────────────────────
+// The app has no monetization. No client surface can start a Stripe
+// Checkout session (`SHOW_PAYMENTS_UI` and `PAYMENTS_ENABLED` are
+// permanently false), so stripe-create-checkout should never receive a
+// productId in practice and this table should never grant anything new.
+//
+// It is kept — not deleted — because these Stripe products and prices
+// are live and referenced by historical sessions, subscriptions and
+// webhook events. Removing a row would break reconciliation of an
+// already-completed payment (and, for any subscription still active on
+// Stripe's side, its renewal webhook).
+//
+// Retired dating SKUs are marked below. Do not add rows, do not sell
+// any of these, and do not re-point a UI at them.
+//
 // Server-side Stripe price ID mapping. The price IDs are populated by
 // scripts/setup-stripe-products.js and committed via stripeProducts.generated.json
 // — but Edge Functions can't import JSON cleanly, so we mirror the table here.
@@ -18,6 +33,9 @@ export type StripeProductRow = {
 };
 
 export const STRIPE_PRODUCTS: Record<string, StripeProductRow> = {
+  // ── DEPRECATED: no plan is sold. Rows retained because any
+  // subscription still active on Stripe keeps emitting renewal
+  // webhooks that resolve through this map.
   'com.junubin.sub.plus.monthly': {
     stripeProductId: 'prod_USOdXTvacaP7ta',
     stripePriceId: 'price_1TTTqODZ3XofDR4HjvnJ3NSw',
@@ -46,6 +64,8 @@ export const STRIPE_PRODUCTS: Record<string, StripeProductRow> = {
     kind: 'subscription',
     tier: 'junub',
   },
+  // ── DEPRECATED: paid profile boosts. Directory visibility is not
+  // for sale in the free app; kept for historical lookup only.
   'com.junubin.spotlight.1': {
     stripeProductId: 'prod_USOd7bEihkTKWp',
     stripePriceId: 'price_1TTTqTDZ3XofDR4HXYKIxMeQ',
@@ -70,6 +90,8 @@ export const STRIPE_PRODUCTS: Record<string, StripeProductRow> = {
     category: 'spotlight',
     quantity: 10,
   },
+  // ── DEPRECATED: retired dating SKU. The app has no Super Likes.
+  // Never sell these again; kept for historical lookup only.
   'com.junubin.superlike.5': {
     stripeProductId: 'prod_USOdrJlYyuRKwh',
     stripePriceId: 'price_1TTTqXDZ3XofDR4HLKwpldN7',
@@ -94,6 +116,7 @@ export const STRIPE_PRODUCTS: Record<string, StripeProductRow> = {
     category: 'superlike',
     quantity: 30,
   },
+  // ── DEPRECATED: credits are no longer sold and buy nothing.
   'com.junubin.coins.100': {
     stripeProductId: 'prod_USOdkqSzBRtdYd',
     stripePriceId: 'price_1TTTqbDZ3XofDR4HTEIm3rV6',

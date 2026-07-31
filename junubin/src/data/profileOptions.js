@@ -10,15 +10,26 @@
 //   EDUCATION_OPTIONS → Profile.education
 //   INTEREST_OPTIONS  → Profile.interests         (JSONB array)
 //   PROMPT_OPTIONS    → Profile.promptQuestion
-//   DATE_PREF_OPTIONS → Profile.lookingForGender
-//   INTENTION_OPTIONS → Profile.datingIntentions
-//   SEXUALITY_OPTIONS → Profile.sexuality
-//   CHILDREN_OPTIONS  → Profile.children
+//   HERE_FOR_OPTIONS  → Profile.lookingFor
+//   LOCATION_VISIBILITY_OPTIONS → Profile.locationVisibility
 // If you change a value here, also update any seed/mock data that
 // persists the old wording (src/data/__dev__/mockProfiles.js, etc.).
+//
+// See also the two vocabularies that live in their own files because
+// they're long enough to deserve one:
+//   src/data/openTo.js    → Profile.openTo    (JSONB array of keys)
+//   src/data/languages.js → Profile.languages (JSONB array of labels)
 
 export const PRONOUN_OPTIONS = ['she/her/hers', 'he/him/his', 'they/them/theirs', 'ze/zir/zirs'];
 
+// ── DEPRECATED dating vocabularies ───────────────────────────────────
+// JuNubin pivoted from a dating app to a South Sudanese social /
+// community platform. Neither ProfileSetupScreen nor EditProfileScreen
+// collects these any more — the corresponding steps and editors were
+// removed. They're kept as exports (not deleted) purely so the
+// discover/filter surfaces that still read legacy Profile columns can
+// render historical values without a crash. Do NOT add new UI on top
+// of them.
 export const DATE_PREF_OPTIONS = ['Men', 'Women', 'Everyone'];
 
 export const INTENTION_OPTIONS = [
@@ -46,15 +57,69 @@ export const INTEREST_OPTIONS = [
   'Poetry', 'Singing', 'Running', 'Volunteering', 'Food', 'Nature', 'Languages', 'History',
 ];
 
+// Prompts are community-flavoured now. The three dating-only prompts
+// ('The way to my heart is...', "I'm looking for someone who...",
+// 'My love language is...') were dropped in the pivot. A user who saved
+// one of those before the pivot keeps the stored promptQuestion on
+// their profile — it just no longer appears as a selectable chip in
+// EditProfile, so re-picking replaces it with a current option.
 export const PROMPT_OPTIONS = [
-  'The way to my heart is...',
   'A fun fact about me is...',
   'My ideal Sunday looks like...',
-  "I'm looking for someone who...",
+  'The dish that tastes like home is...',
+  'Where I grew up, everyone knows...',
+  "If you're new to my city, I'd tell you...",
+  'A tradition I never want to lose is...',
+  'I get along best with people who...',
   'My most controversial opinion is...',
   'Two truths and a lie...',
-  'I get along best with people who...',
-  'My love language is...',
+];
+
+// Location privacy — the consent step that closes onboarding, mirrored
+// by the Settings control. This is an IN-APP choice about what other
+// people see; it is not, and must never be wired to, an OS location
+// permission prompt. Default is 'off' for everyone.
+export const LOCATION_VISIBILITY_OPTIONS = [
+  {
+    key: 'off',
+    label: 'Off',
+    icon: 'eye-off-outline',
+    description: 'Stay hidden. You can still browse the map.',
+  },
+  {
+    key: 'city',
+    label: 'City only',
+    icon: 'business-outline',
+    description: 'Show my city only. No map pin.',
+  },
+  {
+    key: 'coarse',
+    label: 'Approximate area',
+    icon: 'location-outline',
+    description: 'Show me on the map at an approximate area (~1 km), never my exact address.',
+  },
+];
+
+export const LOCATION_VISIBILITY_KEYS = LOCATION_VISIBILITY_OPTIONS.map((o) => o.key);
+
+/**
+ * Un-migrated backends return null for Profile.locationVisibility.
+ * Everything falls back to the private default rather than guessing.
+ */
+export function normalizeLocationVisibility(value) {
+  return LOCATION_VISIBILITY_KEYS.includes(value) ? value : 'off';
+}
+
+// "Here for" — the neutral replacement for the old dating-flavoured
+// lookingFor chips ('Something serious', 'Marriage-minded', ...).
+// Persists to Profile.lookingFor.
+export const HERE_FOR_OPTIONS = [
+  'Friendship',
+  'Community',
+  'Networking',
+  'Mentorship',
+  'Events & meetups',
+  'Just browsing',
 ];
 
 export const SEXUALITY_OPTIONS = [

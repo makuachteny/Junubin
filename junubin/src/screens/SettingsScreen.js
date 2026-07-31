@@ -12,7 +12,6 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { GraffitiFlame } from '../components/icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
 import BrandLogo from '../components/BrandLogo';
@@ -29,6 +28,7 @@ import {
   getNotificationPermissionStatus,
 } from '../utils/notifications';
 import { promptToOpenSettings } from '../utils/permissionAlert';
+import { LOCATION_VISIBILITY, LOCATION_VISIBILITY_OPTIONS, locationVisibilityLabel } from '../utils/locationConsent';
 import { REFERRALS_BACKEND_READY } from '../utils/referralService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -74,7 +74,6 @@ export default function SettingsScreen({ navigation }) {
   const { colors, isDark, toggleTheme } = useTheme();
   const { logout, session } = useAuth();
   const { currentUser } = useCurrentUser();
-  const mode = currentUser.preferences?.mode || 'Dating';
   const [showMe, setShowMe] = useState(currentUser.preferences?.showMe ?? true);
 
   const handleShowMeToggle = (val) => {
@@ -83,14 +82,14 @@ export default function SettingsScreen({ navigation }) {
       profileService.updateProfile({ showMe: val }).catch(() => {});
     }
   };
-  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, canUseIncognito, restorePurchases, isSubscribed, reset, spotlights, superLikes } = useSubscription();
+  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, restorePurchases, isSubscribed, reset } = useSubscription();
   const [incognito, setIncognitoState] = useState(false);
   const [distanceUnit, setDistanceUnitState] = useState('mi');
-  // Snap-Map opt-in. Source of truth is `Profile.shareLocation` from
-  // the 00032 migration; we hydrate from currentUser and write back
-  // via profileService.updateProfile (which has shareLocation on its
-  // allow-list).
-  const [shareLocation, setShareLocationState] = useState(false);
+  // Location visibility. Source of truth is `Profile.locationVisibility`
+  // (00047) — 'off' | 'city' | 'coarse', defaulting to 'off'. The legacy
+  // `Profile.shareLocation` boolean is kept in sync by a DB trigger, so
+  // we only ever write the new column from here.
+  const [locationVisibility, setLocationVisibilityState] = useState(LOCATION_VISIBILITY.OFF);
 
   // Hydrate persisted toggles on mount. Incognito's source of truth is
   // `Profile.incognito` (so it syncs across devices); AsyncStorage is a
@@ -120,12 +119,24 @@ export default function SettingsScreen({ navigation }) {
     AsyncStorage.setItem(INCOGNITO_KEY, serverFlag ? 'true' : 'false').catch(() => {});
   }, [currentUser?.profile?.incognito]);
 
-  // shareLocation is server-only (no AsyncStorage cache) — the map
-  // surface is only meaningful when authenticated, so the brief flash
-  // of `false` before the server fetch lands is acceptable.
+  // Location visibility is server-only (no AsyncStorage cache) — the
+  // map surface is only meaningful when authenticated, so the brief
+  // flash of 'off' before the server fetch lands is acceptable, and
+  // erring toward hidden is the right way to be wrong. Falls back to
+  // the legacy boolean for a client running against a pre-00047 DB.
   useEffect(() => {
-    setShareLocationState(!!currentUser?.profile?.shareLocation);
-  }, [currentUser?.profile?.shareLocation]);
+    const profile = currentUser?.profile;
+    const stored = profile?.locationVisibility;
+    if (stored === LOCATION_VISIBILITY.CITY || stored === LOCATION_VISIBILITY.COARSE) {
+      setLocationVisibilityState(stored);
+    } else if (stored === LOCATION_VISIBILITY.OFF) {
+      setLocationVisibilityState(LOCATION_VISIBILITY.OFF);
+    } else {
+      setLocationVisibilityState(
+        profile?.shareLocation ? LOCATION_VISIBILITY.COARSE : LOCATION_VISIBILITY.OFF,
+      );
+    }
+  }, [currentUser?.profile?.locationVisibility, currentUser?.profile?.shareLocation]);
 
   // Persist on change. Write to the DB first so other devices can see
   // it; the local cache is best-effort. If the DB write fails (offline),
@@ -149,19 +160,20 @@ export default function SettingsScreen({ navigation }) {
     AsyncStorage.setItem(DISTANCE_UNIT_KEY, value).catch(() => {});
   }, [distanceUnit]);
 
-  // Same revert-on-failure pattern as Incognito. Toggling shareLocation
-  // on/off writes to Profile.shareLocation; the map's "who's visible"
-  // query reads from that column.
-  const setShareLocation = useCallback(async (next) => {
-    setShareLocationState(next);
+  // Same revert-on-failure pattern as Incognito. Writing this column is
+  // what makes someone discoverable, so a failed save must not leave the
+  // UI claiming a visibility level the server never accepted.
+  const setLocationVisibility = useCallback(async (next) => {
+    const previous = locationVisibility;
+    if (next === previous) return;
+    setLocationVisibilityState(next);
     try {
-      await profileService.updateProfile({ shareLocation: next });
+      await profileService.updateProfile({ locationVisibility: next });
     } catch (e) {
-      setShareLocationState(!next);
+      setLocationVisibilityState(previous);
       Alert.alert('Could not update', e?.message || 'Try again when you have a connection.');
     }
-  }, []);
-  const lookingFor = currentUser.preferences?.lookingFor || 'Women';
+  }, [locationVisibility]);
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
   const contentAnim = useRef(new Animated.Value(0)).current;
@@ -238,7 +250,9 @@ export default function SettingsScreen({ navigation }) {
 
   const handleManageSubscription = async () => {
     if (!isSubscribed()) {
-      navigation.navigate('Elite');
+      // Nothing to manage on a free app. Reachable only by a
+      // pre-pivot subscriber whose entitlement has since lapsed.
+      Alert.alert('JuNubin is free', 'There is no subscription to manage.');
       return;
     }
     if (promoActive && tier === 'free') {
@@ -334,19 +348,18 @@ export default function SettingsScreen({ navigation }) {
       : []),
     { label: 'Manage Account', icon: 'person-outline', onPress: handleManageAccount },
   ], [handleInfoPagePress, handleManageAccount, handleManageSubscription, handleRestore, navigation]);
+  // "Looking For" / "Age Range" were dating preferences and no longer
+  // exist. What's left is what actually governs discovery now.
   const surveySnapshot = useMemo(() => [
-    { label: 'Mode', value: mode },
-    { label: 'Looking For', value: lookingFor },
-    { label: 'Distance', value: `${currentUser.preferences?.distance || 50} mi` },
-    { label: 'Age Range', value: `${currentUser.preferences?.ageRange?.[0] || 21}-${currentUser.preferences?.ageRange?.[1] || 30}` },
+    { label: 'City', value: currentUser.city || currentUser.preferences?.location || 'Not set' },
+    { label: 'Search radius', value: `${currentUser.preferences?.distance || 50} mi` },
+    { label: 'Location visibility', value: locationVisibilityLabel(locationVisibility) },
     { label: 'Show Me on JuNubin', value: showMe ? 'On' : 'Off' },
-  ], [mode, lookingFor, showMe]);
+  ], [currentUser.city, currentUser.preferences?.location, currentUser.preferences?.distance, locationVisibility, showMe]);
+  // Spotlight / Super Like balances are gone with monetization.
   const appChanges = useMemo(() => [
     { label: 'Theme', value: isDark ? 'Dark' : 'Light' },
-    { label: 'Membership', value: tierLabel },
-    { label: 'Spotlights', value: `${spotlights}` },
-    { label: 'Super Likes', value: `${superLikes}` },
-  ], [isDark, tierLabel, spotlights, superLikes]);
+  ], [isDark]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -372,56 +385,20 @@ export default function SettingsScreen({ navigation }) {
           ],
         }}
       >
-        {/* Subscription badge */}
-        {isSubscribed() && (
-          <View style={styles.tierBadge}>
-            <MaterialCommunityIcons name="crown" size={18} color={colors.gold} />
-            <Text style={styles.tierBadgeText}>
-              {tierLabel} Member{promoActive && tier === 'free' ? ' (Promo)' : ''}
-            </Text>
-          </View>
-        )}
+        {/* The "<tier> Member" crown badge is gone. `isSubscribed()` is
+            now a shim that returns true for everyone, so the badge would
+            have crowned every user on a free app — worse than useless. */}
 
-        {/* Upgrade buttons — hide based on current tier */}
-        <View style={styles.upgradeSection}>
-          {!hasTier('junub') && (
-            <>
-              <Button
-                title="GO JUNUB"
-                subtitle="See Who Likes You, Diaspora Connect, and more!"
-                variant="primary"
-                size="lg"
-                onPress={() => navigation.navigate('Elite')}
-                textStyle={{ letterSpacing: 1 }}
-              />
-              <View style={{ height: 12 }} />
-            </>
-          )}
-
-          {!hasTier('plus') && (
-            <Button
-              title="GET JUNUBIN+"
-              subtitle="Unlimited Likes and Rewinds"
-              variant="outline"
-              size="md"
-              textStyle={{ letterSpacing: 1 }}
-              onPress={() => navigation.navigate('Elite')}
-            />
-          )}
+        {/* JuNubin is free. There is no tier to upgrade to, no
+            consumable to buy, and no purchase surface to link out to —
+            so this is a statement, not an offer. */}
+        <View style={styles.freeNote}>
+          <Ionicons name="heart-circle-outline" size={20} color={colors.accent} />
+          <Text style={styles.freeNoteText}>
+            JuNubin is free. Every feature is included — finding people, following, and
+            messaging all cost nothing.
+          </Text>
         </View>
-
-        {SHOW_PAYMENTS_UI && (
-          <View style={styles.boostRow}>
-            <TouchableOpacity style={styles.boostCard} onPress={() => navigation.navigate('Boost')}>
-              <GraffitiFlame size={24} color={colors.accent} filled />
-              <Text style={styles.boostCardText}>GET MORE{'\n'}SPOTLIGHTS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.superLikeCard} onPress={() => navigation.navigate('Elite')}>
-              <MaterialCommunityIcons name="crown" size={24} color={colors.gold} />
-              <Text style={styles.boostCardText}>GET MORE{'\n'}SUPER LIKES</Text>
-            </TouchableOpacity>
-          </View>
-        )}
 
         {/* Others */}
         <View style={styles.othersSection}>
@@ -444,14 +421,14 @@ export default function SettingsScreen({ navigation }) {
               if (status === 'granted') {
                 Alert.alert(
                   'Notifications on',
-                  'You\'ll get a heads-up when someone matches with you, sends a message, or likes your post.',
+                  'You\'ll get a heads-up when someone follows you, sends a message, or asks to connect.',
                 );
                 return;
               }
               if (status === 'denied') {
                 promptToOpenSettings({
                   title: 'Notifications turned off',
-                  message: 'Open Settings to let JuNubin send you push notifications about matches, messages, and likes.',
+                  message: 'Open Settings to let JuNubin send you push notifications about new followers, messages, and connection requests.',
                 });
                 return;
               }
@@ -470,16 +447,11 @@ export default function SettingsScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
           </PressableRow>
 
-          <PressableRow style={styles.menuRow} onPress={() => navigation.navigate('GameSettings')}>
-            <Text style={styles.menuLabel}>Game Settings</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </PressableRow>
-
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.menuLabel}>Show me on JuNubin</Text>
               <Text style={styles.switchDesc}>
-                While turned off, you will not be shown in the card stack.
+                While turned off, you will not appear in the directory or on the map.
               </Text>
             </View>
             <Switch
@@ -490,44 +462,60 @@ export default function SettingsScreen({ navigation }) {
             />
           </View>
 
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.menuLabel}>Appear on map</Text>
-              <Text style={styles.switchDesc}>
-                Show me on the Connect map (location rounded to ~110m). Off by default.
-              </Text>
-            </View>
-            <Switch
-              value={shareLocation}
-              onValueChange={setShareLocation}
-              trackColor={{ false: colors.gray300, true: colors.black }}
-              thumbColor="#FFFFFF"
-            />
+          {/* Location visibility — three explicit levels rather than a
+              single on/off switch, so "I want people to know I'm in
+              Nairobi" and "I want a pin on the map" are separate
+              choices. Hidden is the default and stays the default. */}
+          <View style={styles.locationBlock}>
+            <Text style={styles.menuLabel}>Location visibility</Text>
+            <Text style={styles.switchDesc}>
+              Controls what other people can see. Browsing the map and directory is always
+              private, whichever option you pick.
+            </Text>
+            {LOCATION_VISIBILITY_OPTIONS.map((opt) => {
+              const selected = locationVisibility === opt.value;
+              return (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.locationOption, selected && styles.locationOptionActive]}
+                  onPress={() => setLocationVisibility(opt.value)}
+                  activeOpacity={0.85}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${opt.label}. ${opt.description}`}
+                  testID={`location-visibility-${opt.value}`}
+                >
+                  <Ionicons
+                    name={selected ? 'radio-button-on' : 'radio-button-off'}
+                    size={20}
+                    color={selected ? colors.accent : colors.gray400}
+                  />
+                  <View style={styles.locationOptionText}>
+                    <Text style={styles.locationOptionLabel}>{opt.label}</Text>
+                    <Text style={styles.locationOptionDesc}>{opt.description}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            <Text style={styles.locationFootnote}>
+              Your location is never sold, shared with advertisers, or used to target ads, and
+              JuNubin never tracks you in the background.
+            </Text>
           </View>
 
           <View style={styles.switchRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.menuLabel}>Incognito Mode</Text>
               <Text style={styles.switchDesc}>
-                Browse without appearing in others' card stacks. Junub tier required.
+                Browse the directory and map without appearing in other people's results.
               </Text>
             </View>
+            {/* Was gated behind the Junub tier. The app is free, so
+                private browsing is simply available to everyone —
+                paywalling a privacy control was never defensible. */}
             <Switch
               value={incognito}
-              onValueChange={(val) => {
-                if (val && !canUseIncognito()) {
-                  Alert.alert(
-                    'Junub Feature',
-                    'Incognito Mode is available on the Junub tier. Upgrade to browse privately.',
-                    [
-                      { text: 'See Plans', onPress: () => navigation.navigate('Elite') },
-                      { text: 'Cancel', style: 'cancel' },
-                    ]
-                  );
-                  return;
-                }
-                setIncognito(val);
-              }}
+              onValueChange={setIncognito}
               trackColor={{ false: colors.gray300, true: colors.black }}
               thumbColor="#FFFFFF"
             />
@@ -701,63 +689,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 40,
-  },
-  tierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 6,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 12,
-    ...getShadow('sm', isDark),
-  },
-  tierBadgeText: {
-    ...Typography.label,
-    color: colors.black,
-  },
-  upgradeSection: {
-    marginTop: 16,
-  },
-  boostRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  boostCard: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
-    borderRadius: 22,
-    paddingVertical: 22,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
-    ...getShadow('sm', isDark),
-  },
-  superLikeCard: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
-    borderRadius: 22,
-    paddingVertical: 22,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8F8FA',
-    ...getShadow('sm', isDark),
-  },
-  boostCardText: {
-    ...Typography.captionBold,
-    color: colors.black,
-    textAlign: 'center',
-    letterSpacing: 0.5,
-    lineHeight: 16,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
   },
   modeSection: {
     alignItems: 'center',
@@ -953,6 +884,64 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginTop: 4,
     maxWidth: 260,
     fontFamily: FontFamily.regular,
+  },
+  freeNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.accentTint08,
+  },
+  freeNoteText: {
+    flex: 1,
+    fontFamily: FontFamily.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.black,
+    opacity: 0.8,
+  },
+  locationBlock: {
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.separator,
+  },
+  locationOption: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: colors.gray100,
+    marginTop: 8,
+  },
+  locationOptionActive: {
+    backgroundColor: colors.accentTint08,
+  },
+  locationOptionText: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  locationOptionLabel: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 14,
+    color: colors.black,
+  },
+  locationOptionDesc: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.black,
+    opacity: 0.6,
+    marginTop: 2,
+  },
+  locationFootnote: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.black,
+    opacity: 0.5,
+    marginTop: 10,
   },
   unitToggle: {
     paddingHorizontal: 14,

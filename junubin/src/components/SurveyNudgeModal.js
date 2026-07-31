@@ -18,15 +18,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 
+// Keys are eligibility action ids. The dating-era ids (swipe_like,
+// super_like, like_with_whisper, call_match, …) are gone along with the
+// features; anything unmapped falls through to `default`.
 const FROM_COPY = {
-  swipe_like:        "Liking works best when your profile tells people what you're looking for.",
-  super_like:        "Super-likes land harder when there's a profile to land on. One quick step and you're set.",
-  like_with_whisper: "Whispers are read alongside your profile — let's give the other person something to read first.",
-  open_match:        "Opening matches takes about a minute of profile setup. Pick up where you left off any time.",
-  call_match:        "Calls are open to people we've matched. Finish your profile so the matches start coming in.",
-  video_call_match:  "Video calls are open to people we've matched. Finish your profile so the matches start coming in.",
-  spotlight_self:    "Spotlight only helps if your profile is filled in — otherwise we're putting an empty card at the top of the deck.",
-  default:           "Liking and matching work best when we know what you're looking for. It takes about a minute.",
+  follow:          "Following works both ways — people are far more likely to follow back when there's a profile to look at.",
+  message_request: "Message requests get accepted when the other person can see who you are. One quick step and you're set.",
+  send_message:    "Add a little about yourself first, so the person on the other end knows who they're talking to.",
+  directory:       "Fill in your city, background and languages so the right people can find you in the directory.",
+  appear_on_map:   "Before you appear to anyone, finish your profile — an empty pin doesn't help anybody find their people.",
+  default:         "Finding your people works best when they can see who you are. It takes about a minute.",
 };
 
 export default function SurveyNudgeModal({

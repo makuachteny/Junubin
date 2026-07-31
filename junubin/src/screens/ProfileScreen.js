@@ -1,22 +1,18 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  Animated,
-  Easing,
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, Layout } from '../theme';
-import Button from '../components/Button';
 import ProfileCompletenessCard from '../components/ProfileCompletenessCard';
 import { imageSource } from '../utils/imageSource';
-import { useSubscription, SHOW_PAYMENTS_UI } from '../payments';
 import { useCurrentUser } from '../hooks';
 import { useMyFollowCounts } from '../hooks/useFollow';
 import { calculateCompleteness } from '../utils/profileCompleteness';
@@ -26,7 +22,6 @@ export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const { spotlights, superLikes, whispers, hasTier } = useSubscription();
   const { currentUser, refreshUser } = useCurrentUser();
 
   // Re-pull the user from the server every time Profile gains focus so
@@ -41,36 +36,6 @@ export default function ProfileScreen({ navigation }) {
   const displayUser = currentUser;
   const followCounts = useMyFollowCounts(currentUser?.id);
 
-  // Stats counter animation — count up on mount.
-  const statsAnim = useRef(new Animated.Value(0)).current;
-  const [animatedCounts, setAnimatedCounts] = useState({ spotlights: 0, superLikes: 0, whispers: 0 });
-
-  useEffect(() => {
-    const listener = statsAnim.addListener(({ value }) => {
-      setAnimatedCounts({
-        spotlights: Math.round(value * spotlights),
-        superLikes: Math.round(value * superLikes),
-        whispers: Math.round(value * whispers),
-      });
-    });
-    Animated.timing(statsAnim, {
-      toValue: 1,
-      duration: 700,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-    return () => statsAnim.removeListener(listener);
-  }, [spotlights, superLikes, whispers, statsAnim]);
-
-  const statItems = useMemo(() => [
-    { icon: 'flash', iconColor: colors.accent, count: animatedCounts.spotlights, label: 'Spotlights', screen: 'Boost' },
-    { icon: 'star', iconColor: colors.rose, count: animatedCounts.superLikes, label: 'Super Likes', screen: 'Elite' },
-    // Whispers are sold via the Elite paywall — same destination as
-    // Super Likes. Previously `screen: null` made the tile a dead button.
-    { icon: 'send', iconColor: colors.gold, count: animatedCounts.whispers, label: 'Whispers', screen: 'Elite' },
-  ], [animatedCounts, colors.accent, colors.rose, colors.gold]);
-
-  const showJunubCTA = !hasTier('junub');
   const completeness = useMemo(() => calculateCompleteness(displayUser?._raw || displayUser), [displayUser]);
 
   const handleEdit = () => navigation.navigate('EditProfile');
@@ -172,59 +137,6 @@ export default function ProfileScreen({ navigation }) {
             />
           )}
         </View>
-
-        {/* Stats — hidden during v1 launch (SHOW_PAYMENTS_UI). The tile
-            counts read consumable balances which are infinite-but-shown-
-            as-zero while ALL_FEATURES_FREE is on, so surfacing them
-            would confuse users. The features themselves still work. */}
-        {SHOW_PAYMENTS_UI && (
-          <>
-            <Text style={styles.sectionLabel}>Your boosts</Text>
-            <View style={styles.statsRow}>
-              {statItems.map((item) => (
-                <TouchableOpacity
-                  key={item.label}
-                  style={styles.statCard}
-                  onPress={() => item.screen && navigation.navigate(item.screen)}
-                  activeOpacity={0.85}
-                  disabled={!item.screen}
-                >
-                  <View style={[styles.statIconWrap, { backgroundColor: colors.surfaceMuted }]}>
-                    <Ionicons name={item.icon} size={18} color={item.iconColor} />
-                  </View>
-                  <Text style={styles.statCount}>{item.count}</Text>
-                  <Text style={styles.statLabel}>{item.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Match More CTA — inline, properly bounded */}
-        {showJunubCTA && (
-          <View style={styles.matchMore}>
-            <View style={styles.matchMoreHeader}>
-              <View style={[styles.matchMoreIcon, { backgroundColor: colors.surfaceMuted }]}>
-                <Ionicons name="diamond" size={18} color={colors.accent} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.matchMoreTitle}>Match More with Junub</Text>
-                <Text style={styles.matchMoreDesc}>
-                  See who likes you, connect the diaspora, unlock advanced filters.
-                </Text>
-              </View>
-            </View>
-            <Button
-              title="GO JUNUB"
-              variant="primary"
-              size="md"
-              onPress={() => navigation.navigate('Elite')}
-              fullWidth
-              style={{ marginTop: 14 }}
-              textStyle={{ letterSpacing: 1.2, fontSize: 14 }}
-            />
-          </View>
-        )}
 
         <View style={{ height: insets.bottom + 24 }} />
       </ScrollView>
@@ -450,40 +362,4 @@ const getStyles = (colors) => StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  // ── Match More CTA ──
-  matchMore: {
-    backgroundColor: colors.cardBg,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    marginTop: 4,
-  },
-  matchMoreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  matchMoreIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  matchMoreTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
-    color: colors.black,
-    letterSpacing: -0.2,
-  },
-  matchMoreDesc: {
-    fontSize: 13,
-    fontFamily: FontFamily.regular,
-    color: colors.gray500,
-    lineHeight: 18,
-    marginTop: 2,
-  },
 });

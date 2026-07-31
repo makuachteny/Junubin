@@ -7,16 +7,17 @@
 // the swipe deck. Tapping the card (or the explicit CTA) navigates
 // onward to ProfileDetail for the full scroll-through.
 //
-// Mode awareness: when the viewer is in Social mode we hide the
-// Dating action set (Pass / Like / Super-like) and surface a Follow
-// + Say hi affordance instead. Social-mode users shouldn't be nudged
-// into swipe semantics they didn't sign up for.
+// Actions are social only: Follow / Following, Message (direct when
+// we're allowed to, otherwise a short message-request composer), and
+// an overflow carrying Block + Report. The old Pass / Like / Super-like
+// swipe bar went out with the dating model.
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
   Alert,
 } from 'react-native';
@@ -24,12 +25,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, FontFamily, Typography } from '../theme';
 import ProfileCard from '../components/ProfileCard';
-import * as discoverService from '../api/services/discoverService';
+import MessageRequestComposer from '../components/MessageRequestComposer';
 import * as safetyService from '../api/services/safetyService';
-import { useCurrentUser, useEligibility } from '../hooks';
+import * as connectionService from '../api/services/connectionService';
+import * as messageRequestService from '../api/services/messageRequestService';
+import { useAuth } from '../auth';
+import { useEligibility } from '../hooks';
 import { useFollow } from '../hooks/useFollow';
 import { isDemoId } from '../config/demoData';
-import { reportError } from '../utils/reportError';
+import { getCountryByCode } from '../data/countries';
 
 // Visual height of the action bar (button slot 58 + 6 gap + ~18 label).
 // Used by the cardArea and tapCta to reserve space so they don't overlap.
@@ -40,25 +44,61 @@ export default function ProfileViewScreen({ navigation, route }) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const profile = route.params?.profile || {};
-  // The caller may pass an explicit mode — useful when the entry
-  // point already knows it (e.g. PeopleMap is rendered inside a
-  // specific mode context). Otherwise we fall back to the viewer's
-  // current preference.
-  const { currentUser } = useCurrentUser();
-  const explicitMode = route.params?.mode;
-  const viewerMode = explicitMode
-    || (currentUser?.preferences?.mode === 'Social' ? 'social' : 'dating');
-  const isDating = viewerMode === 'dating';
-
-  const { gate, nudge } = useEligibility();
+  const { session } = useAuth();
+  const { nudge } = useEligibility();
   // Demo roster ids (demo_*) aren't backed by real User rows — server
   // RPCs error out on the FK. Pass null so useFollow short-circuits
   // its fetches and recordSwipe / toggleFollow no-op below.
   const isDemoProfile = isDemoId(profile?.id);
-  const { isFollowing, toggleFollow, loading: followLoading } = useFollow(
+  const { isFollowing, isFriend, toggleFollow, loading: followLoading } = useFollow(
     isDemoProfile ? null : profile?.id,
   );
-  const [done, setDone] = useState(false);
+
+  // Details strip content. Everything is optional — a profile written
+  // before the social pivot simply renders fewer chips (or none, in
+  // which case the strip isn't mounted at all).
+  const metaChips = useMemo(() => {
+    const chips = [];
+    const place = [profile.city, getCountryByCode(profile.countryCode)?.name]
+      .filter(Boolean).join(', ');
+    if (place) chips.push({ key: 'place', icon: 'location-outline', label: place });
+    if (profile.profession) chips.push({ key: 'job', icon: 'briefcase-outline', label: profile.profession });
+    (profile.languages || []).forEach((lang, i) => {
+      const label = typeof lang === 'string' ? lang : lang?.label;
+      if (label) chips.push({ key: `lang-${i}`, icon: i === 0 ? 'language-outline' : null, label });
+    });
+    (profile.openTo || []).forEach((item, i) => {
+      const label = typeof item === 'string' ? item : item?.label;
+      if (label) chips.push({ key: `open-${i}`, label, strong: true });
+    });
+    (profile.interests || []).slice(0, 4).forEach((item, i) => {
+      if (item) chips.push({ key: `int-${i}`, label: item });
+    });
+    return chips;
+  }, [profile.city, profile.countryCode, profile.profession, profile.languages, profile.openTo, profile.interests]);
+  // Messaging permission. Pessimistic default — a stranger gets the
+  // request composer, not a chat thread the server would reject their
+  // first message from.
+  const [canMessage, setCanMessage] = useState(false);
+  const [requestStatus, setRequestStatus] = useState('none');
+  const [showComposer, setShowComposer] = useState(false);
+
+  const refreshConnection = useCallback(async () => {
+    if (!session || !profile?.id || isDemoProfile) return;
+    try {
+      const [state, direct] = await Promise.all([
+        connectionService.getConnectionState(profile.id),
+        connectionService.canMessageDirectly(profile.id),
+      ]);
+      setRequestStatus(state?.requestStatus || 'none');
+      setCanMessage(!!direct);
+    } catch (e) {
+      if (__DEV__) console.warn('Connection state failed:', e?.message);
+      setCanMessage(false);
+    }
+  }, [session, profile?.id, isDemoProfile]);
+
+  useEffect(() => { refreshConnection(); }, [refreshConnection]);
 
   // Tap-anywhere-on-card → deep profile. ProfileCard fires onExpand
   // when the user taps the centre band; left/right zones cycle photos.
@@ -66,132 +106,53 @@ export default function ProfileViewScreen({ navigation, route }) {
     navigation.navigate('ProfileDetail', { profile, fromCard: true });
   }, [navigation, profile]);
 
-  const handleSwipeOrAction = useCallback((direction) => {
-    if (done) return;
-    const action = direction === 'right' ? 'swipe_like' : 'swipe_pass';
-    if (action === 'swipe_like' && !gate('swipe_like')) return;
-    setDone(true);
-    // Pass swipes don't need a result — they go back immediately so
-    // the user keeps browsing. Like swipes need the result so we can
-    // surface a Match (route to chat) when one happens. Demo profiles
-    // bypass the network round-trip and just close.
-    if (!profile?.id || isDemoProfile) {
-      navigation.goBack();
-      return;
-    }
-    if (direction !== 'right') {
-      // Fire-and-forget pass — we don't block the navigation on the
-      // round trip because pass swipes don't need a result. Errors get
-      // reported so we can see if pass swipes are dropping silently
-      // (early symptom of an outage in the swipe Edge Function).
-      discoverService
-        .recordSwipe(profile.id, 'pass', { mode: viewerMode })
-        .catch((err) => reportError('ProfileViewScreen.recordSwipe.pass', err, { profileId: profile.id }));
-      navigation.goBack();
-      return;
-    }
-    discoverService
-      .recordSwipe(profile.id, 'like', { mode: viewerMode })
-      .then((result) => {
-        if (result?.match?.conversation?.id) {
-          // Mutual like → route to the brand-new conversation so the
-          // celebration overlay on HomeScreen's next focus and the
-          // chat thread land in one navigation tick. Same UX HomeScreen
-          // gives when the swipe deck produces a match.
-          navigation.navigate('Main', {
-            screen: 'HomeTab',
-            params: { celebrateMatchId: result.match.id, matchedProfile: profile },
-          });
-          return;
-        }
-        navigation.goBack();
-      })
-      .catch((err) => {
-        // Network blip — unlock the buttons so the user can retry
-        // instead of being stuck on a frozen "done" state with no
-        // visible feedback that the network failed.
-        reportError('ProfileViewScreen.recordSwipe.like', err, { profileId: profile.id });
-        setDone(false);
-      });
-  }, [done, gate, profile, isDemoProfile, viewerMode, navigation]);
-
-  const handleSuperLike = useCallback(() => {
-    if (done) return;
-    if (!gate('super_like')) return;
-    setDone(true);
-    if (!profile?.id || isDemoProfile) {
-      navigation.goBack();
-      return;
-    }
-    discoverService
-      .recordSwipe(profile.id, 'super_like', { mode: viewerMode })
-      .then((result) => {
-        if (result?.match?.conversation?.id) {
-          navigation.navigate('Main', {
-            screen: 'HomeTab',
-            params: { celebrateMatchId: result.match.id, matchedProfile: profile },
-          });
-          return;
-        }
-        navigation.goBack();
-      })
-      .catch((err) => {
-        reportError('ProfileViewScreen.recordSwipe.super_like', err, { profileId: profile.id });
-        setDone(false);
-      });
-  }, [done, gate, profile, isDemoProfile, viewerMode, navigation]);
-
-  const handleSayHi = useCallback(() => {
-    if (done) return;
-    // Social-mode equivalent of a like — gate on swipe_like (the
-    // server-side check is identical; Social wave and Dating like
-    // both write a Swipe row and both can produce a Match if
-    // reciprocal). Previously this gated on 'open_match', which
-    // was the wrong action and surfaced the wrong nudge copy.
-    if (!gate('swipe_like')) return;
-    setDone(true);
-    // Persist the wave as a like with mode='social'. The swipe Edge
-    // Function records the row, runs Elo updates, and creates a Match
-    // if the recipient has already waved at the caller (Profile.appMode
-    // = social on either side preserves the social-mode framing on
-    // the resulting conversation). Without this call the previous
-    // "Sent a wave 👋" toast was cosmetic — nothing actually shipped
-    // to the server and the recipient never saw the wave.
-    if (profile?.id && !isDemoProfile) {
-      discoverService
-        .recordSwipe(profile.id, 'like', { mode: 'social' })
-        .then((result) => {
-          if (result?.match) {
-            // Mutual wave → route the user into the new conversation.
-            // Matches the Dating-mode behaviour where a mutual like
-            // takes you to chat. Falls back to a friendly toast if
-            // the server didn't return a conversation id (rare —
-            // would be a transient downstream failure).
-            const convId = result.match?.conversation?.id;
-            if (convId) {
-              navigation.navigate('Chat', { match: profile, conversationId: convId, fromMatch: true });
-              return;
-            }
-          }
-          // No match yet — just confirm the wave landed and head back.
-          // No popup; the Likes/Waves screen is where the recipient
-          // will discover it, and the sender's own send is implicit.
-          navigation.goBack();
-        })
-        .catch(() => {
-          // Network blip — restore the action so the user can retry
-          // rather than being stuck on a stale "done" state.
-          setDone(false);
-        });
-    } else {
-      navigation.goBack();
-    }
-  }, [done, gate, profile, isDemoProfile, navigation]);
-
   const handleClose = useCallback(() => {
     if (navigation.canGoBack?.()) navigation.goBack();
     else navigation.navigate('Main');
   }, [navigation]);
+
+  const handleMessage = useCallback(() => {
+    if (isDemoProfile) {
+      Alert.alert('Demo profile', 'Messaging works with real members.');
+      return;
+    }
+    if (canMessage) {
+      navigation.navigate('Chat', { match: profile });
+      return;
+    }
+    if (requestStatus === 'pending_out') {
+      Alert.alert('Request sent', `${profile.name || 'They'} will see your note. You can chat once they accept.`);
+      return;
+    }
+    if (requestStatus === 'declined') {
+      Alert.alert('Request not accepted', 'You cannot send another request to this person.');
+      return;
+    }
+    setShowComposer(true);
+  }, [isDemoProfile, canMessage, requestStatus, navigation, profile]);
+
+  const handleSendRequest = useCallback(async (text) => {
+    try {
+      const res = await messageRequestService.sendMessageRequest(profile.id, text);
+      setShowComposer(false);
+      setRequestStatus(res?.status === 'accepted' ? 'accepted' : 'pending_out');
+      Alert.alert('Request sent', `${profile.name || 'They'} will see your note and can start the conversation.`);
+    } catch (e) {
+      Alert.alert('Could not send', e?.message || 'Try again in a moment.');
+    }
+  }, [profile.id, profile.name]);
+
+  const handleFollow = useCallback(() => {
+    if (followLoading) return;
+    if (isDemoProfile) {
+      Alert.alert('Demo profile', 'This is a demo card — following works with real members.');
+      return;
+    }
+    toggleFollow();
+    // A follow-back can complete the mutual connection that unlocks
+    // direct messaging, so re-read rather than assume.
+    setTimeout(refreshConnection, 400);
+  }, [followLoading, isDemoProfile, toggleFollow, refreshConnection]);
 
   // Report — opens a short reason prompt then files via safetyService.
   // RLS lets reporters file but not read other reports, so this is
@@ -298,9 +259,7 @@ export default function ProfileViewScreen({ navigation, route }) {
         >
           <Ionicons name="chevron-down" size={26} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={styles.topBarLabel} numberOfLines={1}>
-          {isDating ? 'Preview' : 'Say hi'}
-        </Text>
+        <Text style={styles.topBarLabel} numberOfLines={1}>Profile</Text>
         <TouchableOpacity
           onPress={handleMore}
           style={styles.closeBtn}
@@ -330,7 +289,6 @@ export default function ProfileViewScreen({ navigation, route }) {
         <View style={styles.cardWrap}>
           <ProfileCard
             profile={profile}
-            onSwipe={handleSwipeOrAction}
             onExpand={openDetail}
             style={styles.fullCard}
             // Action bar lives below the card on this screen (not
@@ -351,116 +309,116 @@ export default function ProfileViewScreen({ navigation, route }) {
         </View>
       </View>
 
-      {/* Mode-aware action bar. Each button is wrapped with a small caption
-          underneath — Dating actions follow Tinder convention but Social
-          mode (Close / Follow / Say hi) is less obvious without labels, so
-          we standardise on labelling all three for consistency. The whole
-          group sits inside a soft frosted pill so it reads as a single
-          control dock rather than three free-floating circles. */}
+      {/* Details strip — the facts that matter on a community
+          platform (where they are, what they do, what they speak, what
+          they're open to). Horizontal scroll so a long list degrades
+          into a swipe rather than pushing the action bar off-screen. */}
+      {metaChips.length > 0 && (
+        <View style={[styles.metaWrap, { bottom: insets.bottom + ACTION_BAR_HEIGHT + 26 }]} pointerEvents="box-none">
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.metaRow}
+          >
+            {metaChips.map((chip) => (
+              <View
+                key={chip.key}
+                style={[styles.metaChip, chip.strong && styles.metaChipStrong]}
+              >
+                {chip.icon ? (
+                  <Ionicons
+                    name={chip.icon}
+                    size={12}
+                    color={chip.strong ? '#1A1A1A' : 'rgba(255,255,255,0.85)'}
+                  />
+                ) : null}
+                <Text style={[styles.metaChipText, chip.strong && styles.metaChipTextStrong]}>
+                  {chip.label}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Social action bar: Follow / Following · Message · More.
+          Captions sit under each button — the icons alone aren't
+          self-evident, and this screen is often someone's first
+          encounter with the person. */}
       <View style={[styles.actionBarWrap, { bottom: insets.bottom + 20 }]} pointerEvents="box-none">
         <View style={styles.actionBar}>
-        {isDating ? (
-          <>
-            <View style={styles.actionItem}>
-              <View style={styles.actionBtnSlot}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionPass]}
-                  onPress={() => handleSwipeOrAction('left')}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Pass"
-                >
-                  <Ionicons name="close" size={28} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.actionBtnLabel}>Pass</Text>
+          <View style={styles.actionItem}>
+            <View style={styles.actionBtnSlot}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionFollow, (isFollowing || isFriend) && styles.actionFollowOn]}
+                onPress={handleFollow}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isFollowing || isFriend, disabled: followLoading }}
+                accessibilityLabel={
+                  isFriend ? `Connected with ${profile.name || 'this person'}, tap to unfollow`
+                  : isFollowing ? `Following ${profile.name || 'this person'}, tap to unfollow`
+                  : `Follow ${profile.name || 'this person'}`
+                }
+              >
+                <Ionicons
+                  name={isFriend ? 'people' : isFollowing ? 'checkmark' : 'person-add'}
+                  size={22}
+                  color="#FFFFFF"
+                />
+              </TouchableOpacity>
             </View>
-            <View style={styles.actionItem}>
-              <View style={styles.actionBtnSlot}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionSuper]}
-                  onPress={handleSuperLike}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Super like"
-                >
-                  <Ionicons name="star" size={22} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.actionBtnLabel}>Super</Text>
+            <Text style={styles.actionBtnLabel}>
+              {isFriend ? 'Connected' : isFollowing ? 'Following' : 'Follow'}
+            </Text>
+          </View>
+
+          <View style={styles.actionItem}>
+            <View style={styles.actionBtnSlot}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionMessage]}
+                onPress={handleMessage}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  canMessage
+                    ? `Message ${profile.name || 'this person'}`
+                    : requestStatus === 'pending_out'
+                      ? `Message request already sent to ${profile.name || 'this person'}`
+                      : `Send ${profile.name || 'this person'} a message request`
+                }
+              >
+                <Ionicons name="chatbubble" size={22} color="#1A1A1A" />
+              </TouchableOpacity>
             </View>
-            <View style={styles.actionItem}>
-              <View style={styles.actionBtnSlot}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionLike]}
-                  onPress={() => handleSwipeOrAction('right')}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Like"
-                >
-                  <Ionicons name="heart" size={26} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.actionBtnLabel}>Like</Text>
+            <Text style={styles.actionBtnLabel}>
+              {requestStatus === 'pending_out' && !canMessage ? 'Requested' : 'Message'}
+            </Text>
+          </View>
+
+          <View style={styles.actionItem}>
+            <View style={styles.actionBtnSlot}>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.actionMore]}
+                onPress={handleMore}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="More options, including block and report"
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
-          </>
-        ) : (
-          <>
-            <View style={styles.actionItem}>
-              <View style={styles.actionBtnSlot}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionPass]}
-                  onPress={handleClose}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                >
-                  <Ionicons name="close" size={28} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.actionBtnLabel}>Close</Text>
-            </View>
-            <View style={styles.actionItem}>
-              <View style={styles.actionBtnSlot}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionFollow, isFollowing && styles.actionFollowOn]}
-                  onPress={() => {
-                    if (followLoading) return;
-                    if (isDemoProfile) {
-                      // No real User row for demo entries; show a friendly
-                      // toast instead of pretending the follow landed.
-                      Alert.alert('Demo profile', 'This is a demo card — follow works once you connect with real members.');
-                      return;
-                    }
-                    toggleFollow();
-                  }}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel={isFollowing ? 'Unfollow' : 'Follow'}
-                >
-                  <Ionicons name={isFollowing ? 'person-remove' : 'person-add'} size={22} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.actionBtnLabel}>{isFollowing ? 'Following' : 'Follow'}</Text>
-            </View>
-            <View style={styles.actionItem}>
-              <View style={styles.actionBtnSlot}>
-                <TouchableOpacity
-                  style={[styles.actionBtn, styles.actionSayHi]}
-                  onPress={handleSayHi}
-                  activeOpacity={0.85}
-                  accessibilityRole="button"
-                  accessibilityLabel="Say hi"
-                >
-                  <Ionicons name="hand-left" size={24} color="#1A1A1A" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.actionBtnLabel}>Say hi</Text>
-            </View>
-          </>
-        )}
+            <Text style={styles.actionBtnLabel}>More</Text>
+          </View>
         </View>
       </View>
+
+      <MessageRequestComposer
+        visible={showComposer}
+        name={profile.name}
+        onCancel={() => setShowComposer(false)}
+        onSend={handleSendRequest}
+      />
 
       {nudge}
     </View>
@@ -591,27 +549,57 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
-  actionPass: {
-    backgroundColor: '#262626',
-  },
-  actionSuper: {
-    backgroundColor: '#4DA6FF',
-    width: 50, height: 50, borderRadius: 25,
-  },
-  actionLike: {
+  actionFollow: {
     backgroundColor: colors.accent,
   },
-  actionFollow: {
-    backgroundColor: '#0095F6',
-    width: 50, height: 50, borderRadius: 25,
-  },
+  // Following/Connected is a neutral grey — the filled accent is
+  // reserved for the action that's still available to take.
   actionFollowOn: {
     backgroundColor: '#6A6A6A',
   },
-  // Warm flag-yellow for the social-mode wave. Red (the old style)
-  // reads as a block/stop signal — the very opposite of "say hi".
-  actionSayHi: {
+  // Warm flag-yellow for the primary conversation action.
+  actionMessage: {
     backgroundColor: '#FCCD12',
+  },
+  actionMore: {
+    backgroundColor: '#262626',
+  },
+
+  // ── Details strip ──
+  metaWrap: {
+    position: 'absolute',
+    left: 0, right: 0,
+    zIndex: 20,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.20)',
+  },
+  // "Open to" chips are intent, not trivia — filled so they read first.
+  metaChipStrong: {
+    backgroundColor: '#FCCD12',
+    borderColor: 'transparent',
+  },
+  metaChipText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 12,
+    fontFamily: FontFamily.semibold,
+  },
+  metaChipTextStrong: {
+    color: '#1A1A1A',
   },
   errState: {
     flex: 1,

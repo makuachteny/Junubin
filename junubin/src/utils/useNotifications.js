@@ -52,14 +52,22 @@ export function useNotifications(navigationRef, isAuthenticated = true) {
             nav.navigate('Main', { screen: 'MessagesTab' });
           }
           break;
+        case 'message_request':
+        case 'message_request_accepted':
+          nav.navigate('MessageRequests');
+          break;
+        case 'follow':
+          nav.navigate('Notifications');
+          break;
+        // Legacy push types from the dating build. The Likes and
+        // Community tabs no longer exist, so rather than navigating to
+        // a route that would throw, land these on the inbox — the
+        // nearest surface that still makes sense. Server-side push
+        // templates should stop emitting them.
         case 'like':
-          nav.navigate('Main', { screen: 'LikesTab' });
-          break;
         case 'match':
-          nav.navigate('Main', { screen: 'MessagesTab' });
-          break;
         case 'community':
-          nav.navigate('Main', { screen: 'CommunityTab' });
+          nav.navigate('Main', { screen: 'MessagesTab' });
           break;
         default:
           break;
