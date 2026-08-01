@@ -28,8 +28,8 @@ const INFO_PAGES = {
     title: 'FAQ',
     sections: [
       {
-        heading: 'How does matching work?',
-        body: 'When both people like each other, a match is created and chat is unlocked.',
+        heading: 'How do connections work?',
+        body: 'JuNubin has no matching or swiping. Follow people you find on the map or in the Directory — when someone follows you back you are connected. Anyone else can reach you only through a message request that you accept or decline.',
       },
       {
         heading: 'How do filters work?',
@@ -76,11 +76,11 @@ const INFO_PAGES = {
       },
       {
         heading: '4. Acceptable Use',
-        body: 'You agree not to: (a) harass, threaten, or intimidate other users; (b) post or share illegal, hateful, sexually explicit, or abusive content; (c) impersonate anyone or misrepresent your affiliation; (d) solicit money, run scams, or post commercial spam; (e) use the app to contact minors; (f) reverse-engineer, scrape, or copy any part of the service; (g) use bots, automation, or VPN spoofing to manipulate matching, location, or popularity. Violations may result in immediate suspension or permanent ban.',
+        body: 'You agree not to: (a) harass, threaten, or intimidate other users; (b) post or share illegal, hateful, sexually explicit, or abusive content; (c) impersonate anyone or misrepresent your affiliation; (d) solicit money, run scams, or post commercial spam; (e) use the app to contact minors; (f) reverse-engineer, scrape, or copy any part of the service; (g) use bots, automation, or VPN spoofing to manipulate discovery, location, or popularity. Violations may result in immediate suspension or permanent ban.',
       },
       {
         heading: '5. Content You Share',
-        body: 'You retain ownership of photos, posts, messages, and other content you upload ("Your Content"). By uploading Your Content, you grant JuNubin a worldwide, non-exclusive, royalty-free license to host, display, and transmit Your Content as needed to operate the service. We do not sell Your Content. You can remove Your Content at any time by deleting it in the app or deleting your account.',
+        body: 'You retain ownership of photos, profile content, messages, and other content you upload ("Your Content"). By uploading Your Content, you grant JuNubin a worldwide, non-exclusive, royalty-free license to host, display, and transmit Your Content as needed to operate the service. We do not sell Your Content. You can remove Your Content at any time by deleting it in the app or deleting your account.',
       },
       {
         heading: '6. Subscriptions & Auto-Renewal',
@@ -92,7 +92,7 @@ const INFO_PAGES = {
       },
       {
         heading: '8. Safety & Reporting',
-        body: 'JuNubin is a community, not an introduction agency. We do not run criminal background checks on users. Always meet new people in public, share your plans with someone you trust, and never send money to a match. Use the in-app report and block tools when something feels unsafe. We may share information with law enforcement if required by law.',
+        body: 'JuNubin is a community, not an introduction agency. We do not run criminal background checks on users. Always meet new people in public, share your plans with someone you trust, and never send money to someone you met here. Use the in-app report and block tools when something feels unsafe. We may share information with law enforcement if required by law.',
       },
       {
         heading: '9. No Screenshots or Screen Recording',
@@ -104,7 +104,7 @@ const INFO_PAGES = {
       },
       {
         heading: '11. Disclaimers & Limitation of Liability',
-        body: 'JuNubin is provided "as is" without warranties of any kind. We do not guarantee that you will find a match, that profiles are accurate, or that the service will be uninterrupted. To the maximum extent permitted by law, JuNubin\'s total liability arising out of your use of the service is limited to the greater of (a) the amount you paid us in the twelve months before the claim, or (b) US $50.',
+        body: 'JuNubin is provided "as is" without warranties of any kind. We do not guarantee that you will find the people you are looking for, that profiles are accurate, or that the service will be uninterrupted. To the maximum extent permitted by law, JuNubin\'s total liability arising out of your use of the service is limited to the greater of (a) the amount you paid us in the twelve months before the claim, or (b) US $50.',
       },
       {
         heading: '12. Governing Law',
@@ -130,15 +130,15 @@ const INFO_PAGES = {
       },
       {
         heading: '3. Data Collected Automatically',
-        body: 'Device type, OS version, app version, language, push-notification token, anonymous usage analytics (which screens you visit, errors), and approximate IP-based location. With your explicit permission only: precise device location (used when you tag a post location), camera and microphone (only while you are in a feature that needs them), photo library (only to upload images), contacts (only when you choose Find Friends).',
+        body: 'Device type, OS version, app version, language, push-notification token, anonymous usage analytics (which screens you visit, errors), and approximate IP-based location. With your explicit permission only: camera (only to take profile photos or verify your identity), photo library (only to upload profile photos), contacts (only when you choose Find Friends). JuNubin never asks for microphone access and never reads precise device location — coordinates are coarsened before they are stored or shown.',
       },
       {
         heading: '4. How We Use Your Data',
-        body: 'To create and protect your account; to power matching and discovery; to deliver messages and notifications; to process payments and grant subscriptions/items; to detect fake profiles, fraud, and abuse; to comply with legal obligations; to improve the app through aggregated analytics. We do NOT sell your data to advertisers and we do NOT show third-party ads.',
+        body: 'To create and protect your account; to power people discovery (the map and the Directory); to deliver messages and notifications; to detect fake profiles, fraud, and abuse; to comply with legal obligations; to improve the app through aggregated analytics. We do NOT sell your data to advertisers and we do NOT show third-party ads.',
       },
       {
         heading: '5. Who We Share Data With',
-        body: 'Service providers acting on our behalf: Supabase (database + storage + auth), RevenueCat (iOS/Android subscriptions), Stripe (web payments), Expo (push notifications and over-the-air updates), and Apple/Google (push notification delivery). We share only what each provider needs to perform its function. We may also disclose information when required by law, to protect user safety, or in connection with a merger or acquisition (you would be notified).',
+        body: 'Service providers acting on our behalf: Supabase (database + storage + auth), Expo (push notifications and over-the-air updates), and Apple/Google (push notification delivery). JuNubin is free — no payment processor receives data from the app. (Legacy pre-free-era subscriptions were processed by RevenueCat and Stripe; those providers retain only the records needed for their own legal obligations.) We share only what each provider needs to perform its function. We may also disclose information when required by law, to protect user safety, or in connection with a merger or acquisition (you would be notified).',
       },
       {
         heading: '6. International Transfers',
@@ -146,7 +146,7 @@ const INFO_PAGES = {
       },
       {
         heading: '7. Data Retention',
-        body: 'We keep account data while your account is active. When you delete your account, profile data, photos, and matches are deleted within 30 days; some records (e.g. payment receipts, fraud signals, abuse reports) may be retained for up to seven years to meet legal, accounting, and safety obligations.',
+        body: 'We keep account data while your account is active. When you delete your account, profile data, photos, and conversations are deleted within 30 days; some records (e.g. fraud signals, abuse reports) may be retained for up to seven years to meet legal, accounting, and safety obligations.',
       },
       {
         heading: '8. Your Rights',

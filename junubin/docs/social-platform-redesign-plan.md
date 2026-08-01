@@ -309,10 +309,72 @@ Three separate concepts, deliberately not collapsed: disclosure accepted
 `expo-location` until consent is recorded; `city`-only members never get a map
 pin. Covered by `src/screens/__tests__/discoverySurfaces.test.js`.
 
+### Update 2026-07-31 (later): text-only chat completed
+
+- ChatScreen is text-only end to end: photo sending, stickers, emoji
+  reactions and the plus-button action row are gone (with
+  `ChatImageBubble` / `ChatReactionPicker` deleted, `MessageReaction`
+  realtime subscription removed). Legacy non-text rows render an
+  "Attachment no longer supported" placeholder via
+  `UNSUPPORTED_MESSAGE_TYPE` from chatService.
+- `expo-av` removed from package.json and plugins (nothing records or
+  plays audio). `expo-image-picker` remains for profile photos only,
+  with `microphonePermission: false`.
+- Permission posture locked in by `appConfig.platform.test.js`: no
+  NSMicrophoneUsageDescription, no RECORD_AUDIO, no
+  ACCESS_FINE_LOCATION (coarse only), UIBackgroundModes =
+  `['remote-notification']` only.
+- **Temporary visibility is implemented**: Settings shows
+  "Stay visible for" (1 hour / 8 hours / until I turn it off) whenever
+  visibility isn't Hidden; writes `Profile.locationVisibleUntil`. An
+  expired window is reconciled back to Hidden + null on next visit
+  (matching the server, which already hides expired windows). Covered
+  by `src/screens/__tests__/temporaryVisibility.test.js`.
+- `useRealtime` inbox subscription replaced the `Match` subscription
+  (`onInboxActivity`: Message inserts + MessageRequest insert/update);
+  the deprecated `onMatchCreated` alias is removed and MessagesScreen
+  migrated.
+
+### Update 2026-07-31 (later still): dating-leftover audit swept
+
+A full-source audit against this plan found and fixed:
+
+- **ProfileCard** was still the swipe-deck card — a horizontal flick on
+  ProfileView flung the card off-screen with no way back, and it
+  rendered LIKE/NOPE stamps, a SPOTLIGHT badge and a dating-intent
+  pill. Now a static tap-to-page/tap-to-expand card; pill fallback is
+  `status` → first `openTo` badge. Locked by
+  `src/components/__tests__/ProfileCard.test.js`.
+- **Dating fields off live surfaces**: ProfileDetail's intention /
+  "children" pills, EditProfile's Height picker (+ `heightCm` in the
+  save path), and `datingIntentions`/height in profileCompleteness
+  (weights redistributed to ethnicity/interests/openTo, which people
+  actually search on).
+- **Copy**: FAQ "How does matching work?" → follow/message-request
+  explanation; Terms/Privacy no longer promise posts, microphone,
+  precise location, payments processors or "finding a match";
+  Notifications, PreferenceSelect, FindFriends match-copy reworded.
+- **Chat scam banner** now routes to the Safety page (`pageKey`, not
+  the ignored `topic` param).
+- **Demo data**: roster stripped of `intention`/`lookingForGender`/
+  `children`; "we matched" chat lines reworded; `mockPosts`/
+  `mockComments`/likes-era fields deleted.
+- **Dead code deleted**: FilterBar (the last intact dating filter
+  taxonomy), ActionButtons, CoinPurchaseSheet, UpgradeLimitModal,
+  PaymentMethodSelector, Stripe/Flutterwave checkout components,
+  GraffitiSwipeCard, spotlightScheduler, discoverService's
+  swipe/like-limit exports, eligibility's DATING_ACTIONS/tier/balance
+  gates and their unreachable REASON_COPY, offlineQueue's swipe kind,
+  SWIPE/MATCH analytics events, dating steps in App.js deep-link
+  allow-list.
+
 ### Not done / next
 
-- **Temporary visibility** (`locationVisibleUntil`) — the column and the
-  server-side expiry check exist, but no UI sets it.
+- **Dating/Social mode axis** — a vestigial `mode`/`appMode` axis
+  still threads through PeopleMap (`mode` param), MessagesScreen
+  (mode-aware sort), useCurrentUser and AccessibilitySurveyScreen.
+  No UI sets it any more; collapse to single social mode in one
+  dedicated pass (touches the discover-nearby request contract).
 - **Hide from specific people** — not implemented.
 - **`matchesService` → `conversationService`** rename and decoupling from
   `Match`, then dropping `Swipe`/`Match`.

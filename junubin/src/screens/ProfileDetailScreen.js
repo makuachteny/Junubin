@@ -216,8 +216,8 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const {
     name = 'User', age = 0, distance = 0, verified = false, bio = '', about = '',
     job = '', school = '', images = [], interests = [], stickers = [], height = '',
-    lookingFor = '', ethnicity = '', intention = '', pronouns = '', education = '',
-    children = '', promptQuestion = '', promptAnswer = '', currentlyInto = [],
+    ethnicity = '', pronouns = '', education = '',
+    promptQuestion = '', promptAnswer = '', currentlyInto = [],
     // Social-pivot fields. All optional — a profile written before the
     // pivot simply renders without these rows.
     city = '', countryCode = '', languages = [], openTo = [], profession = '',
@@ -376,16 +376,9 @@ const ProfileDetailScreen = ({ navigation, route }) => {
                   </View>
                 );
               })() : null}
-              {(intention || lookingFor) ? (
-                <View style={[s.factPill, s.factFilled]}>
-                  <Text style={s.factFilledText}>{intention || lookingFor}</Text>
-                </View>
-              ) : null}
-              {children ? (
-                <View style={s.factPill}>
-                  <Text style={s.factText}>{children}</Text>
-                </View>
-              ) : null}
+              {/* The dating-era `intention` / `lookingFor` and
+                  `children` pills are gone — "open to" badges rendered
+                  elsewhere on this sheet cover intent now. */}
               {/* Identity stickers inline (skip ethnicity dupes and hobby stickers) */}
               {stickers.filter(st => {
                 const lbl = st.label.toLowerCase();

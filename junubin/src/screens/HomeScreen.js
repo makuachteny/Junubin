@@ -5,10 +5,13 @@
 // a feed and NOT a swipe deck — there is no like, pass, super-like or
 // match anywhere on this screen.
 //
-// Two surfaces, one dataset:
-//   map  — PeopleMap, pins for people who opted into location visibility
-//   list — the same people as rows, plus a city search for anyone who
-//          denied location permission or simply prefers browsing
+// Industry redesign: the map is FULL-BLEED — it fills the entire tab
+// under the status bar, and all chrome floats on top of it:
+//   row 1 — a Blueprint city pill (city + visible count) and a Map|List
+//           segmented control
+//   row 2 — quick filter chips (Everyone / Verified / Active this week)
+// List mode swaps the map for a full-screen list under the same
+// floating chrome.
 //
 // Privacy contract: this screen never triggers the OS location prompt
 // on its own. PeopleMap owns that, and only after the user has accepted
@@ -34,7 +37,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Typography, FontFamily } from '../theme';
 import PeopleMap from '../components/PeopleMap';
-import PersonCard from '../components/PersonCard';
+import Blueprint from '../components/Blueprint';
 import Button from '../components/Button';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import { useAuth } from '../auth';
@@ -45,6 +48,7 @@ import { imageSource } from '../utils/imageSource';
 import { reportError } from '../utils/reportError';
 import { trackEvent } from '../utils/analytics';
 import { hapticSelection } from '../utils/haptics';
+import { locationVisibilityLabel } from '../utils/locationConsent';
 import {
   getLocationDisclosureAccepted,
   setLocationDisclosureAccepted,
@@ -60,16 +64,32 @@ const QUICK_FILTERS = [
   { key: 'active', label: 'Active this week' },
 ];
 
+// Height of the two floating chrome rows (pill row + chip row + gaps),
+// excluding the safe-area inset and the optional city search row. The
+// list content and PeopleMap's own overlays pad by this so nothing
+// hides under the chrome.
+const CHROME_ROWS_H = 8 + 36 + 9 + 34 + 10;
+const SEARCH_ROW_H = 48;
+
 const isActiveThisWeek = (person) => {
   if (!person?.lastActiveAt) return false;
   const days = (Date.now() - new Date(person.lastActiveAt).getTime()) / 8.64e7;
   return Number.isFinite(days) && days <= 7;
 };
 
+// "distance · profession" meta line for a list row. Directory results
+// don't carry a live distance, so the city stands in for it.
+const personMeta = (person) => {
+  const openTo = Array.isArray(person.openTo) && person.openTo.length > 0
+    ? `Open to ${person.openTo.join(', ')}`
+    : null;
+  return [person.city, person.profession || openTo].filter(Boolean).join(' · ');
+};
+
 const HomeScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const styles = useMemo(() => getStyles(colors, insets, isDark), [colors, insets, isDark]);
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
 
@@ -83,6 +103,7 @@ const HomeScreen = ({ navigation }) => {
   const [viewMode, setViewMode] = useState('map');
   const [viewModeHydrated, setViewModeHydrated] = useState(false);
 
+  const [searchOpen, setSearchOpen] = useState(false);
   const [cityInput, setCityInput] = useState('');
   const [cityQuery, setCityQuery] = useState(null);
   const [quickFilter, setQuickFilter] = useState('all');
@@ -92,6 +113,9 @@ const HomeScreen = ({ navigation }) => {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [followingIds, setFollowingIds] = useState(() => new Set());
+  // Count of pins currently visible on the map, reported by PeopleMap
+  // so the city pill can show "N visible" in both modes.
+  const [mapCount, setMapCount] = useState(0);
   const cursorRef = useRef(null);
 
   // ── Disclosure + persisted view mode ──
@@ -118,8 +142,8 @@ const HomeScreen = ({ navigation }) => {
   }, []);
 
   // ── People list ──
-  // Used by the list view, and by the map's empty state. Sourced from
-  // the directory so it works with or without location permission.
+  // Used by the list view. Sourced from the directory so it works with
+  // or without location permission.
   const loadPeople = useCallback(async ({ append = false } = {}) => {
     if (!session) { setPeople([]); return; }
     if (!append) setLoading(true);
@@ -238,26 +262,75 @@ const HomeScreen = ({ navigation }) => {
 
   // ── Render ──
   const myCity = currentUser?.city || currentUser?._raw?.city;
-  const listTitle = cityQuery
-    ? `People in ${cityQuery}`
-    : myCity ? `People in ${myCity} and beyond` : 'People in the community';
+  const pillCity = cityQuery || myCity || 'Nearby';
+  const visibleCount = viewMode === 'map' ? mapCount : visiblePeople.length;
+  const myVisibility = locationVisibilityLabel(
+    currentUser?.locationVisibility || currentUser?.profile?.locationVisibility,
+  ).toLowerCase();
+
+  const chromeH = insets.top + CHROME_ROWS_H + (searchOpen ? SEARCH_ROW_H : 0);
+
+  const renderRow = ({ item }) => {
+    const following = followingIds.has(item.id);
+    const nameAge = item.age ? `${item.name}, ${item.age}` : item.name;
+    return (
+      <View style={styles.row}>
+        <TouchableOpacity
+          onPress={() => openProfile(item)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.name}'s photo`}
+        >
+          <Image
+            source={imageSource(item.images?.[0] || item.photos?.[0])}
+            style={styles.rowPhoto}
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.rowBody}
+          onPress={() => openProfile(item)}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${item.name}'s profile`}
+        >
+          <View style={styles.rowNameLine}>
+            <Text style={styles.rowName} numberOfLines={1}>{nameAge}</Text>
+            {item.verified ? (
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={14}
+                color={colors.accentDark}
+                accessibilityLabel="Verified"
+              />
+            ) : null}
+          </View>
+          <Text style={styles.rowMeta} numberOfLines={1}>{personMeta(item)}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.followBtn, following && styles.followBtnActive]}
+          onPress={() => handleFollow(item)}
+          activeOpacity={0.85}
+          hitSlop={{ top: 6, bottom: 6 }}
+          accessibilityRole="button"
+          accessibilityLabel={following ? `Unfollow ${item.name}` : `Follow ${item.name}`}
+          accessibilityState={{ selected: following }}
+        >
+          <Text style={[styles.followText, following && styles.followTextActive]}>
+            {following ? 'Following' : 'Follow'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
   const renderList = () => (
     <FlatList
       data={visiblePeople}
       keyExtractor={(item) => String(item.id)}
-      renderItem={({ item }) => (
-        <PersonCard
-          person={item}
-          onPress={openProfile}
-          onFollow={handleFollow}
-          isFollowing={followingIds.has(item.id)}
-        />
-      )}
-      contentContainerStyle={visiblePeople.length === 0 ? styles.listEmptyWrap : styles.listContent}
-      ListHeaderComponent={visiblePeople.length > 0 ? (
-        <Text style={styles.listTitle}>{listTitle}</Text>
-      ) : null}
+      renderItem={renderRow}
+      contentContainerStyle={visiblePeople.length === 0
+        ? [styles.listEmptyWrap, { paddingTop: chromeH }]
+        : [styles.listContent, { paddingTop: chromeH + 4 }]}
       onEndReachedThreshold={0.4}
       onEndReached={() => {
         if (!loading && cursorRef.current) loadPeople({ append: true });
@@ -265,14 +338,29 @@ const HomeScreen = ({ navigation }) => {
       refreshControl={(
         <ThemedRefreshControl
           refreshing={refreshing}
+          progressViewOffset={chromeH}
           onRefresh={() => { setRefreshing(true); cursorRef.current = null; loadPeople(); }}
         />
       )}
+      ListFooterComponent={visiblePeople.length > 0 ? (
+        <TouchableOpacity
+          style={styles.listFooter}
+          onPress={() => navigation?.navigate?.('Settings')}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel={`Your visibility is ${myVisibility}. Open settings to change it.`}
+        >
+          <Text style={styles.listFooterText}>
+            Showing people who chose to be visible ·{' '}
+            <Text style={styles.listFooterLink}>your visibility: {myVisibility}</Text>
+          </Text>
+        </TouchableOpacity>
+      ) : null}
       ListEmptyComponent={loading ? (
         <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
       ) : (
         <View style={styles.empty}>
-          <View style={styles.emptyCircle}>
+          <View style={styles.emptyBox}>
             <Ionicons
               name={loadError ? 'cloud-offline-outline' : 'people-outline'}
               size={30}
@@ -316,38 +404,99 @@ const HomeScreen = ({ navigation }) => {
     <View style={styles.screen}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* ─── HEADER ───
-          Deliberately two short rows, not three tall ones. This screen
-          IS the map; chrome that pushes it below the fold is chrome
-          that defeats the point. The title row doubles as the account
-          bar, and the Map/List toggle rides on the search row as an
-          icon pair rather than a full-width segmented control. */}
-      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>Nearby</Text>
-          <View style={styles.headerRight}>
-            <TouchableOpacity
-              onPress={() => navigation?.navigate?.('Notifications')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel="Notifications"
-            >
-              <Ionicons name="notifications-outline" size={20} color={colors.black} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => navigation?.navigate?.('Profile')}
-              activeOpacity={0.85}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel="Your profile"
-            >
-              <Image source={imageSource(currentUser?.images?.[0])} style={styles.avatar} />
-            </TouchableOpacity>
+      {/* ─── FULL-BLEED BODY ───
+          The map (or the list) owns the whole tab; chrome floats on top.
+          PeopleMap renders the location disclosure itself and only asks
+          the OS once the user has accepted it. `onDecline` drops them
+          into the list so the tab is never a dead end. */}
+      <View style={StyleSheet.absoluteFill}>
+        {!viewModeHydrated || disclosureAccepted === null ? (
+          <ActivityIndicator color={colors.accent} style={{ marginTop: chromeH + 32 }} />
+        ) : viewMode === 'list' ? (
+          renderList()
+        ) : (
+          <PeopleMap
+            topInset={chromeH}
+            quickFilter={quickFilter}
+            onVisibleCountChange={setMapCount}
+            disclosureAccepted={disclosureAccepted && !disclosureDismissed}
+            onDisclosureAccept={acceptDisclosure}
+            onDisclosureDecline={declineDisclosure}
+            onBrowseList={() => changeViewMode('list')}
+            onPersonPress={(person) => navigation?.navigate?.('ProfileView', {
+              profile: { ...person, images: person.photos || person.images || [] },
+            })}
+          />
+        )}
+      </View>
+
+      {/* ─── FLOATING CHROME ─── */}
+      <View
+        style={[styles.chrome, { paddingTop: insets.top + 8 }]}
+        pointerEvents="box-none"
+      >
+        <View style={styles.chromeRow} pointerEvents="box-none">
+          <TouchableOpacity
+            onPress={() => setSearchOpen((v) => !v)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={`${pillCity}, ${visibleCount} visible. Search a different city.`}
+            accessibilityState={{ expanded: searchOpen }}
+            testID="home-city-pill"
+          >
+            <Blueprint style={styles.cityPill}>
+              <Text style={styles.cityPillName} numberOfLines={1}>{pillCity}</Text>
+              <Text style={styles.cityPillCount}>{visibleCount} visible</Text>
+              <Ionicons name="chevron-down" size={14} color={colors.gray500} />
+            </Blueprint>
+          </TouchableOpacity>
+          <View style={{ flex: 1 }} />
+          <View style={styles.segmented}>
+            {['map', 'list'].map((m, i) => (
+              <TouchableOpacity
+                key={m}
+                style={[
+                  styles.segment,
+                  i > 0 && styles.segmentDivider,
+                  viewMode === m && styles.segmentActive,
+                ]}
+                onPress={() => changeViewMode(m)}
+                hitSlop={{ top: 8, bottom: 8 }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: viewMode === m }}
+                accessibilityLabel={m === 'map' ? 'Map view' : 'List view'}
+                testID={`home-view-${m}`}
+              >
+                <Text style={[styles.segmentText, viewMode === m && styles.segmentTextActive]}>
+                  {m === 'map' ? 'Map' : 'List'}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        <View style={styles.controlRow}>
-          {/* City search — the primary way to browse without location. */}
+        <View style={styles.chipRow} pointerEvents="box-none">
+          {QUICK_FILTERS.map((f) => {
+            const selected = quickFilter === f.key;
+            return (
+              <TouchableOpacity
+                key={f.key}
+                style={[styles.chip, selected && styles.chipActive]}
+                onPress={() => setQuickFilter(f.key)}
+                hitSlop={{ top: 8, bottom: 8 }}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Filter: ${f.label}`}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                  {f.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {searchOpen ? (
           <View style={styles.searchRow}>
             <Ionicons name="search" size={15} color={colors.gray500} />
             <TextInput
@@ -359,135 +508,154 @@ const HomeScreen = ({ navigation }) => {
               placeholderTextColor={colors.gray400}
               returnKeyType="search"
               autoCorrect={false}
+              autoFocus
               accessibilityLabel="Search people by city"
               testID="home-city-search"
             />
             {cityInput.length > 0 ? (
-              <TouchableOpacity onPress={clearCity} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <TouchableOpacity
+                onPress={clearCity}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Clear city search"
+              >
                 <Ionicons name="close-circle" size={15} color={colors.gray400} />
               </TouchableOpacity>
             ) : null}
           </View>
-
-          <View style={styles.segmented}>
-            {['map', 'list'].map((m) => (
-              <TouchableOpacity
-                key={m}
-                style={[styles.segment, viewMode === m && styles.segmentActive]}
-                onPress={() => changeViewMode(m)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: viewMode === m }}
-                accessibilityLabel={m === 'map' ? 'Map view' : 'List view'}
-                testID={`home-view-${m}`}
-              >
-                <Ionicons
-                  name={m === 'map' ? 'map-outline' : 'list-outline'}
-                  size={16}
-                  color={viewMode === m ? colors.white : colors.gray600}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Quick filters belong to the list only — the map has its own
-            chip row, and stacking both would put four rows of chrome
-            above the map. */}
-        {viewMode === 'list' ? (
-          <View style={styles.chips}>
-            {QUICK_FILTERS.map((f) => (
-              <TouchableOpacity
-                key={f.key}
-                style={[styles.chip, quickFilter === f.key && styles.chipActive]}
-                onPress={() => setQuickFilter(f.key)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: quickFilter === f.key }}
-              >
-                <Text style={[styles.chipText, quickFilter === f.key && styles.chipTextActive]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
         ) : null}
-      </View>
-
-      {/* ─── BODY ─── */}
-      <View style={styles.body}>
-        {!viewModeHydrated || disclosureAccepted === null ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
-        ) : viewMode === 'list' ? (
-          renderList()
-        ) : (
-          // PeopleMap renders the location disclosure itself and only
-          // asks the OS once the user has accepted it. `onDecline`
-          // drops them into the list so the tab is never a dead end.
-          <PeopleMap
-            topInset={8}
-            disclosureAccepted={disclosureAccepted && !disclosureDismissed}
-            onDisclosureAccept={acceptDisclosure}
-            onDisclosureDecline={declineDisclosure}
-            onBrowseList={() => changeViewMode('list')}
-            onPersonPress={(person) => navigation?.navigate?.('ProfileView', {
-              profile: { ...person, images: person.photos || person.images || [] },
-            })}
-          />
-        )}
       </View>
     </View>
   );
 };
 
-const getStyles = (colors, insets, isDark) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.cream,
   },
-  header: {
+
+  // ─── Floating chrome ───
+  chrome: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     paddingHorizontal: 14,
-    paddingBottom: 8,
-    backgroundColor: colors.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.separator,
+    gap: 9,
   },
-  headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 38,
-  },
-  headerTitle: {
-    fontFamily: FontFamily.semibold,
-    fontSize: 22,
-    letterSpacing: -0.4,
-    color: colors.black,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.gray200,
-  },
-  controlRow: {
+  chromeRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 2,
   },
-  searchRow: {
-    flex: 1,
+  cityPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.inputBg,
-    borderRadius: 10,
-    paddingHorizontal: 10,
+    gap: 8,
+    backgroundColor: colors.cream,
+    paddingVertical: 8,
+    paddingHorizontal: 13,
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.4 : 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  cityPillName: {
+    fontFamily: FontFamily.heading,
+    fontSize: 17,
+    letterSpacing: 0.3,
+    color: colors.black,
+    maxWidth: 140,
+  },
+  cityPillCount: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11.5,
+    color: colors.gray600,
+  },
+  segmented: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: colors.separator,
+    borderRadius: 4,
+    overflow: 'hidden',
+    backgroundColor: colors.cream,
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.3 : 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  segment: {
+    height: 36,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  segmentDivider: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.separator,
+  },
+  segmentActive: {
+    backgroundColor: colors.accent,
+  },
+  segmentText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 13,
+    color: colors.black,
+  },
+  segmentTextActive: {
+    color: colors.cream,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: 7,
+  },
+  // Quick chips over the map: selected is SOLID accent with cream text
+  // (stronger than the standard tinted chip — they sit on a busy map).
+  chip: {
     height: 34,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: colors.cream,
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.3 : 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  chipActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  chipText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12.5,
+    color: colors.black,
+  },
+  chipTextActive: {
+    color: colors.cream,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
+    height: 40,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    borderRadius: 4,
+    backgroundColor: colors.cream,
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.3 : 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
@@ -496,72 +664,102 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     color: colors.black,
     padding: 0,
   },
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: colors.gray100,
-    borderRadius: 10,
-    padding: 2,
-    gap: 2,
-  },
-  segment: {
-    width: 34,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-  },
-  segmentActive: {
-    backgroundColor: colors.black,
-  },
-  chips: {
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 8,
-  },
-  chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    backgroundColor: colors.gray100,
-  },
-  chipActive: {
-    backgroundColor: colors.accentTint15,
-  },
-  chipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 11,
-    color: colors.gray600,
-  },
-  chipTextActive: {
-    color: colors.accent,
-  },
-  body: {
-    flex: 1,
-  },
+
+  // ─── List mode ───
   listContent: {
     paddingBottom: 24,
   },
   listEmptyWrap: {
     flexGrow: 1,
   },
-  listTitle: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
+  },
+  rowPhoto: {
+    width: 56,
+    height: 56,
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: colors.gray200,
+  },
+  rowBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowNameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  rowName: {
+    fontFamily: FontFamily.heading,
+    fontSize: 18,
+    color: colors.black,
+    flexShrink: 1,
+  },
+  rowMeta: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12.5,
+    color: colors.gray600,
+    marginTop: 2,
+  },
+  followBtn: {
+    height: 36,
+    minWidth: 86,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint15,
+  },
+  followBtnActive: {
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
+  },
+  followText: {
     fontFamily: FontFamily.semibold,
     fontSize: 13,
-    color: colors.gray600,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
+    color: colors.accentDark,
   },
+  followTextActive: {
+    color: colors.gray600,
+  },
+  listFooter: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  listFooterText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12.5,
+    color: colors.gray500,
+    textAlign: 'center',
+  },
+  listFooterLink: {
+    color: colors.accentDark,
+    textDecorationLine: 'underline',
+  },
+
+  // ─── Empty / error states ───
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  emptyCircle: {
+  emptyBox: {
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: 0,
     backgroundColor: colors.accentTint10,
     alignItems: 'center',
     justifyContent: 'center',

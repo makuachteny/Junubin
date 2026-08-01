@@ -85,7 +85,7 @@ export default function PreferenceSelectScreen({ navigation, route }) {
           <View style={styles.contextIconWrap}>
             <Ionicons name="options-outline" size={16} color={colors.accent} />
           </View>
-          <Text style={styles.contextText}>Fine-tune your matches</Text>
+          <Text style={styles.contextText}>Fine-tune who you see</Text>
         </View>
         <View style={{ alignItems: 'center', marginBottom: 8 }}>
 

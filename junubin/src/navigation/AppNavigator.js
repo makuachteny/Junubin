@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 import { useAuth } from '../auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -45,6 +45,8 @@ function withBoundary(Component, tag) {
 const HomeScreenSafe = withBoundary(HomeScreen, 'home');
 const DirectoryScreenSafe = withBoundary(DirectoryScreen, 'directory');
 const MessagesScreenSafe = withBoundary(MessagesScreen, 'messages');
+// ProfileTab wraps the same (lazy) ProfileScreen used by the "Profile"
+// stack route — declared below, wrapped after `lazify` runs.
 
 // Lazy-loaded screens (behind navigation.navigate)
 function LazyFallback() {
@@ -68,6 +70,7 @@ function lazify(importFn) {
 }
 
 const ProfileScreen = lazify(() => import('../screens/ProfileScreen'));
+const ProfileTabScreen = withBoundary(ProfileScreen, 'profile');
 const ProfileDetailScreen = lazify(() => import('../screens/ProfileDetailScreen'));
 const ProfileViewScreen = lazify(() => import('../screens/ProfileViewScreen'));
 const SettingsScreen = lazify(() => import('../screens/SettingsScreen'));
@@ -109,55 +112,71 @@ const MainStack = createStackNavigator();
 function HomeTabs() {
   const { colors } = useTheme();
   const tabStyles = useMemo(() => getTabStyles(), []);
-  // Three tabs, one job each: find people near me, search for people
-  // anywhere, talk to the people I found.
-  const TAB_NAMES = ['HomeTab', 'DirectoryTab', 'MessagesTab'];
+  // Four tabs, one job each: find people near me, search for people
+  // anywhere, talk to the people I found, tend my own profile. Chats
+  // is the initial tab — the retention loop is conversations, so the
+  // app opens on them.
+  const TAB_NAMES = ['HomeTab', 'DirectoryTab', 'MessagesTab', 'ProfileTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
 
   return (
       <Tab.Navigator
-        initialRouteName="HomeTab"
+        initialRouteName="MessagesTab"
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarShowLabel: true,
           tabBarLabelStyle: {
-            fontSize: 11,
+            fontSize: 10.5,
             fontFamily: FontFamily.semibold,
             fontWeight: '600',
+            letterSpacing: 0.5,
             marginTop: -2,
           },
-          tabBarActiveTintColor: colors.black,
+          tabBarActiveTintColor: colors.tabActive,
           tabBarInactiveTintColor: colors.tabInactive,
           tabBarStyle: {
             backgroundColor: colors.cream,
-            borderTopWidth: 0,
+            // Industry chrome: hairline ink on top, no floating shadow.
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: colors.separator,
             height: Platform.OS === 'ios' ? 88 : 68,
             paddingBottom: Platform.OS === 'ios' ? 22 : 12,
             paddingTop: Platform.OS === 'ios' ? 10 : 12,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.04,
-            shadowRadius: 8,
-            elevation: 6,
+          },
+          // Chats unread badge (set via navigation.setOptions from
+          // MessagesScreen): small accent pill, bg-colored numeral.
+          tabBarBadgeStyle: {
+            minWidth: 16,
+            height: 16,
+            borderRadius: 8,
+            backgroundColor: colors.accent,
+            color: colors.cream,
+            fontSize: 10,
+            fontFamily: FontFamily.bold,
+            fontWeight: '700',
+            lineHeight: 15,
           },
           tabBarIcon: ({ focused }) => {
             const idx = TAB_NAMES.indexOf(route.name);
             const scaleValue = idx >= 0 ? tabScales[idx] : new Animated.Value(1);
             const iconColor = focused ? colors.tabActive : colors.tabInactive;
-            const size = 28;
+            // Thin-stroke outline icons in both states — the Industry
+            // tab bar signals "active" with color, not a filled glyph.
+            const size = 23;
 
             let icon;
             switch (route.name) {
               case 'HomeTab':
-                // map-marker-radius — a pin with a radius ring, which is
-                // literally what the tab shows: people around a point.
-                icon = <MaterialCommunityIcons name={focused ? 'map-marker-radius' : 'map-marker-radius-outline'} size={size + 2} color={iconColor} />;
+                icon = <Ionicons name="location-outline" size={size} color={iconColor} />;
                 break;
               case 'DirectoryTab':
-                icon = <Ionicons name={focused ? 'search' : 'search-outline'} size={size} color={iconColor} />;
+                icon = <Ionicons name="search-outline" size={size} color={iconColor} />;
                 break;
               case 'MessagesTab':
-                icon = <Ionicons name={focused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline'} size={size} color={iconColor} />;
+                icon = <Ionicons name="chatbubble-outline" size={size} color={iconColor} />;
+                break;
+              case 'ProfileTab':
+                icon = <Ionicons name="person-outline" size={size} color={iconColor} />;
                 break;
               default:
                 icon = null;
@@ -190,6 +209,10 @@ function HomeTabs() {
         <Tab.Screen name="HomeTab" component={HomeScreenSafe} options={{ tabBarLabel: 'Nearby' }} />
         <Tab.Screen name="DirectoryTab" component={DirectoryScreenSafe} options={{ tabBarLabel: 'Directory' }} />
         <Tab.Screen name="MessagesTab" component={MessagesScreenSafe} options={{ tabBarLabel: 'Chats' }} />
+        {/* Same ProfileScreen component as the "Profile" stack route —
+            the tab is just a second door into it. Other screens keep
+            navigating to the stack route; both stay registered. */}
+        <Tab.Screen name="ProfileTab" component={ProfileTabScreen} options={{ tabBarLabel: 'Profile' }} />
       </Tab.Navigator>
   );
 }

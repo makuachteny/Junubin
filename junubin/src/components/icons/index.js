@@ -19,4 +19,3 @@ export { default as GraffitiBookmark } from './GraffitiBookmark';
 export { default as GraffitiRepost } from './GraffitiRepost';
 export { default as GraffitiShare } from './GraffitiShare';
 export { default as GraffitiWave } from './GraffitiWave';
-export { default as GraffitiSwipeCard } from './GraffitiSwipeCard';

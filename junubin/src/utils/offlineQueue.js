@@ -22,19 +22,16 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — dating actions stale fast
 // Build a stable identity key for an action so we can dedupe on
 // enqueue + on replay. Each `kind` has its own natural key:
 //
-//   - swipe       → ('swipe', fromUserId?, toUserId, type)
-//   - voiceNote   → ('voiceNote', conversationId, uri)
-//   - chatImage   → ('chatImage', conversationId, uri)
 //   - text        → ('text', conversationId, tempId)
 //
 // Anything that doesn't match a known shape gets a fallback identity
-// based on the JSON of the action; same shape = same key.
+// based on the JSON of the action; same shape = same key. (The
+// dating-era 'swipe' / 'voiceNote' / 'chatImage' kinds are gone —
+// stale entries from an older build fall through to the default
+// branch and are dropped by the replay handler.)
 function actionIdentity(a) {
   if (!a || typeof a !== 'object') return JSON.stringify(a);
   switch (a.kind) {
-    case 'swipe':     return `swipe:${a.toUserId || ''}:${a.type || ''}`;
-    case 'voiceNote': return `voiceNote:${a.conversationId || ''}:${a.uri || ''}`;
-    case 'chatImage': return `chatImage:${a.conversationId || ''}:${a.uri || ''}`;
     case 'text':      return `text:${a.conversationId || ''}:${a.tempId || a.body || ''}`;
     default:          return `${a.kind || 'unknown'}:${JSON.stringify(a)}`;
   }

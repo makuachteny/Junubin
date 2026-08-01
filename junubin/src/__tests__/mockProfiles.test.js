@@ -1,11 +1,11 @@
 // Sanity tests on the demo roster + downstream mock surfaces. These
-// guarantee identity stays consistent across mockProfiles, mockMatches,
-// mockLikes and mockMessages — the property
-// we promised the user when re-introducing demo data.
+// guarantee identity stays consistent across mockMatches, mockLikes
+// and mockMessages — the property we promised the user when
+// re-introducing demo data.
 
 import { DEMO_ROSTER, DEMO_BY_ID } from '../data/__dev__/demoRoster';
 import {
-  mockProfiles, mockMatches, mockLikes, mockMessages, mockPosts, mockComments,
+  mockMatches, mockLikes, mockMessages,
 } from '../data/__dev__/mockProfiles';
 import { isDemoId, DEMO_DATA_ENABLED, DEMO_ID_PREFIX } from '../config/demoData';
 
@@ -74,20 +74,9 @@ describe('Photo consistency — primary image is the same across surfaces', () =
     });
   });
 
-
-  it('mockPosts user.avatar equals the linked user\'s primary photo', () => {
-    mockPosts.forEach((p) => {
-      const user = DEMO_BY_ID[p.authorId];
-      expect(p.user.avatar).toBe(user.photos[0]);
-    });
-  });
 });
 
 describe('Cross-surface consistency', () => {
-  it('mockProfiles IS the roster', () => {
-    expect(mockProfiles).toBe(DEMO_ROSTER);
-  });
-
   it('every mockMatches.userId points at a real roster member', () => {
     mockMatches.forEach((m) => {
       expect(isDemoId(m.userId)).toBe(true);
@@ -116,21 +105,6 @@ describe('Cross-surface consistency', () => {
     });
   });
 
-  it('every mockPosts.authorId points at a real roster member', () => {
-    mockPosts.forEach((p) => {
-      expect(isDemoId(p.authorId)).toBe(true);
-      expect(DEMO_BY_ID[p.authorId]).toBeTruthy();
-    });
-  });
-
-  it('every mockComments key maps to a real mock post', () => {
-    const postIds = new Set(mockPosts.map((p) => p.id));
-    Object.keys(mockComments).forEach((k) => expect(postIds.has(k)).toBe(true));
-  });
-
-
-  // Demo stories MUST use `avatar` (storyService's field name), not
-  // `userImage`. Catches the regression we just fixed.
 });
 
 describe('Demo flag plumbing', () => {

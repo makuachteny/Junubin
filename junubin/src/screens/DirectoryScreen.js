@@ -11,6 +11,9 @@
 // is true and their account is active and unmoderated — the `directory`
 // Edge Function enforces that server-side along with block filtering,
 // so the client never has to be trusted with it.
+//
+// Visual language: Industry redesign — square Blueprint person cards,
+// hairline borders, condensed display type. Tokens only, no hex.
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
@@ -24,11 +27,12 @@ import {
   Modal,
   ScrollView,
   Pressable,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, Layout } from '../theme';
-import PersonCard from '../components/PersonCard';
+import { useTheme, Typography, FontFamily } from '../theme';
+import Blueprint from '../components/Blueprint';
 import Button from '../components/Button';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import { useAuth } from '../auth';
@@ -36,7 +40,8 @@ import * as directoryService from '../api/services/directoryService';
 import * as followService from '../api/services/followService';
 import { POPULAR_TRIBE_KEYS } from '../data/tribes';
 import { LANGUAGE_OPTIONS } from '../data/languages';
-import { OPEN_TO_OPTIONS } from '../data/openTo';
+import { OPEN_TO_OPTIONS, OPEN_TO_BY_KEY, normalizeOpenTo } from '../data/openTo';
+import { imageSource } from '../utils/imageSource';
 import { reportError } from '../utils/reportError';
 import { trackEvent } from '../utils/analytics';
 import { hapticSelection } from '../utils/haptics';
@@ -72,6 +77,97 @@ const emptyFilters = {
 
 const countActive = (f) =>
   (f.ethnicity ? 1 : 0) + (f.language ? 1 : 0) + (f.openTo ? 1 : 0) + (f.verifiedOnly ? 1 : 0);
+
+// "City, Country · profession" — one line per the mock. Falls back
+// through job → school so the line still says something useful.
+const cityLine = (person) => {
+  const place = [person?.city, person?.country || person?.countryCode].filter(Boolean).join(', ');
+  const work = person?.profession || person?.job || person?.school;
+  return [place, work].filter(Boolean).join(' · ') || null;
+};
+
+// One directory result — the mock's Blueprint person card: square
+// 72×88 photo, condensed name, openTo tags, Follow + Profile actions.
+function DirectoryPersonCard({ person, onOpen, onFollow, isFollowing, styles, colors }) {
+  const nameAge = person.age ? `${person.name}, ${person.age}` : person.name;
+  const line = cityLine(person);
+  const tags = normalizeOpenTo(person.openTo)
+    .slice(0, 3)
+    .map((key) => ({ key, label: OPEN_TO_BY_KEY[key]?.label || key }));
+
+  return (
+    <Blueprint style={styles.personCard}>
+      <TouchableOpacity
+        style={styles.personPhotoWrap}
+        onPress={() => onOpen(person)}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${person.name || 'profile'}`}
+        testID={`person-card-${person.id}`}
+      >
+        <Image source={imageSource(person.images?.[0] || person.photos?.[0])} style={styles.personPhoto} />
+      </TouchableOpacity>
+
+      <View style={styles.personBody}>
+        <TouchableOpacity
+          onPress={() => onOpen(person)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${person.name || 'profile'}`}
+        >
+          <View style={styles.personNameRow}>
+            <Text style={styles.personName} numberOfLines={1}>{nameAge || 'JuNubin member'}</Text>
+            {person.verified ? (
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={14}
+                color={colors.accentDark}
+                accessibilityLabel="Verified"
+              />
+            ) : null}
+          </View>
+          {line ? <Text style={styles.personCity} numberOfLines={1}>{line}</Text> : null}
+        </TouchableOpacity>
+
+        {tags.length > 0 ? (
+          <View style={styles.personTags}>
+            {tags.map((t) => (
+              <View key={t.key} style={styles.personTag}>
+                <Text style={styles.personTagText} numberOfLines={1}>{t.label}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+
+        <View style={styles.personActions}>
+          <TouchableOpacity
+            style={[styles.followBtn, isFollowing && styles.followBtnFollowing]}
+            onPress={() => onFollow(person)}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={isFollowing ? `Unfollow ${person.name}` : `Follow ${person.name}`}
+            testID={`person-follow-${person.id}`}
+          >
+            <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextFollowing]}>
+              {isFollowing ? 'Following' : 'Follow'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.profileBtn}
+            onPress={() => onOpen(person)}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${person.name}'s profile`}
+          >
+            <Text style={styles.profileBtnText}>Profile</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Blueprint>
+  );
+}
 
 const DirectoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -160,6 +256,16 @@ const DirectoryScreen = ({ navigation }) => {
     }));
   }, []);
 
+  // Quick chips in the header row toggle the SAME filter state the
+  // sheet edits — one source of truth, two entry points.
+  const toggleQuickFilter = useCallback((key, value) => {
+    hapticSelection();
+    setFilters((prev) => {
+      if (key === 'verifiedOnly') return { ...prev, verifiedOnly: !prev.verifiedOnly };
+      return { ...prev, [key]: prev[key] === value ? null : value };
+    });
+  }, []);
+
   const handleFollow = useCallback(async (person) => {
     if (!person?.id) return;
     const already = followingIds.has(person.id);
@@ -212,57 +318,96 @@ const DirectoryScreen = ({ navigation }) => {
     </View>
   );
 
+  // "8 PEOPLE IN THE DIASPORA DIRECTORY" / "3 PEOPLE MATCHING "JUBA""
+  const countLine = query
+    ? `${people.length} PEOPLE MATCHING "${query.toUpperCase()}"`
+    : `${people.length} PEOPLE IN THE DIASPORA DIRECTORY`;
+
   return (
     <View style={styles.screen}>
       {/* ─── HEADER ─── */}
-      <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
-        <View style={styles.headerTop}>
-          <Text style={styles.headerTitle}>Directory</Text>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        <Text style={styles.headerTitle}>Directory</Text>
+
+        <View style={styles.searchField}>
+          <Ionicons name="search" size={18} color={colors.gray500} />
+          <TextInput
+            style={styles.searchInput}
+            value={queryInput}
+            onChangeText={setQueryInput}
+            onSubmitEditing={submitQuery}
+            placeholder="Name, city, profession, school…"
+            placeholderTextColor={colors.gray400}
+            returnKeyType="search"
+            autoCorrect={false}
+            accessibilityLabel="Search the directory"
+            testID="directory-search"
+          />
+          {queryInput.length > 0 ? (
+            <TouchableOpacity
+              onPress={() => { setQueryInput(''); setQuery(''); }}
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Clear search"
+            >
+              <Ionicons name="close-circle" size={16} color={colors.gray400} />
+            </TouchableOpacity>
+          ) : null}
         </View>
-        <Text style={styles.headerSub}>
-          Find South Sudanese people by city, background, language or what they are open to.
-        </Text>
 
-        <View style={styles.searchRow}>
-          <View style={styles.searchField}>
-            <Ionicons name="search" size={16} color={colors.gray500} />
-            <TextInput
-              style={styles.searchInput}
-              value={queryInput}
-              onChangeText={setQueryInput}
-              onSubmitEditing={submitQuery}
-              placeholder="Name, city, school or work"
-              placeholderTextColor={colors.gray400}
-              returnKeyType="search"
-              autoCorrect={false}
-              accessibilityLabel="Search the directory"
-              testID="directory-search"
-            />
-            {queryInput.length > 0 ? (
-              <TouchableOpacity
-                onPress={() => { setQueryInput(''); setQuery(''); }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close-circle" size={16} color={colors.gray400} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsScroll}
+          contentContainerStyle={styles.chipsRow}
+        >
           <TouchableOpacity
-            style={[styles.filterBtn, activeCount > 0 && styles.filterBtnActive]}
+            style={[styles.chip, activeCount > 0 && styles.chipSelected]}
             onPress={openFilters}
             accessibilityRole="button"
-            accessibilityLabel="Filters"
+            accessibilityLabel={activeCount > 0 ? `Filters, ${activeCount} active` : 'Filters'}
             testID="directory-filters"
           >
             <Ionicons
               name="options-outline"
-              size={18}
-              color={activeCount > 0 ? colors.white : colors.black}
+              size={15}
+              color={activeCount > 0 ? colors.accentDark : colors.black}
             />
-            {activeCount > 0 ? <Text style={styles.filterBtnCount}>{activeCount}</Text> : null}
+            <Text style={[styles.chipText, activeCount > 0 && styles.chipTextSelected]}>
+              {activeCount > 0 ? `Filters · ${activeCount}` : 'Filters'}
+            </Text>
           </TouchableOpacity>
-        </View>
+
+          <TouchableOpacity
+            style={[styles.chip, filters.verifiedOnly && styles.chipSelected]}
+            onPress={() => toggleQuickFilter('verifiedOnly')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: filters.verifiedOnly }}
+            accessibilityLabel="Verified only"
+          >
+            <Text style={[styles.chipText, filters.verifiedOnly && styles.chipTextSelected]}>
+              Verified only
+            </Text>
+          </TouchableOpacity>
+
+          {OPEN_TO_CHIPS.map((chip) => {
+            const selected = filters.openTo === chip.value;
+            return (
+              <TouchableOpacity
+                key={chip.value}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => toggleQuickFilter('openTo', chip.value)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`Open to ${chip.label}`}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                  {chip.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* ─── RESULTS ─── */}
@@ -270,13 +415,18 @@ const DirectoryScreen = ({ navigation }) => {
         data={people}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item }) => (
-          <PersonCard
+          <DirectoryPersonCard
             person={item}
-            onPress={openProfile}
+            onOpen={openProfile}
             onFollow={handleFollow}
             isFollowing={followingIds.has(item.id)}
+            styles={styles}
+            colors={colors}
           />
         )}
+        ListHeaderComponent={!loading && people.length > 0 ? (
+          <Text style={styles.countLine} accessibilityRole="text">{countLine}</Text>
+        ) : null}
         contentContainerStyle={people.length === 0 ? styles.emptyWrap : styles.listContent}
         onEndReachedThreshold={0.4}
         onEndReached={() => {
@@ -295,7 +445,7 @@ const DirectoryScreen = ({ navigation }) => {
           <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
         ) : (
           <View style={styles.empty}>
-            <View style={styles.emptyCircle}>
+            <View style={styles.emptyBadge}>
               <Ionicons
                 name={loadError ? 'cloud-offline-outline' : 'search-outline'}
                 size={30}
@@ -380,72 +530,193 @@ const DirectoryScreen = ({ navigation }) => {
 const getStyles = (colors, insets, isDark) => StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.cream,
   },
   header: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingBottom: 12,
-    backgroundColor: colors.surface,
+    gap: 12,
+    backgroundColor: colors.cream,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
   },
-  headerTop: {
-    height: Layout.headerHeight - 12,
-    justifyContent: 'center',
-  },
   headerTitle: {
-    ...Typography.tabTitle,
+    fontFamily: FontFamily.heading,
+    fontSize: 28,
     color: colors.black,
   },
-  headerSub: {
-    fontFamily: FontFamily.regular,
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.gray600,
-    marginBottom: 12,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+
+  // ── Search box — 46px, hairline, muted surface, square-ish r4 ──
   searchField: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.inputBg,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 40,
-    gap: 8,
+    height: 46,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 4,
+    paddingHorizontal: 13,
+    gap: 9,
   },
   searchInput: {
     flex: 1,
     fontFamily: FontFamily.regular,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.black,
     padding: 0,
   },
-  filterBtn: {
+
+  // ── Quick filter chips ──
+  chipsScroll: {
+    marginHorizontal: -18,
+  },
+  chipsRow: {
+    paddingHorizontal: 18,
+    gap: 8,
+    alignItems: 'center',
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: colors.gray100,
+    gap: 5,
+    height: 36,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
+    borderRadius: 4,
   },
-  filterBtnActive: {
-    backgroundColor: colors.accent,
+  chipSelected: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint15,
   },
-  filterBtnCount: {
-    fontFamily: FontFamily.semibold,
+  chipText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    color: colors.black,
+  },
+  chipTextSelected: {
+    color: colors.accentDark,
+  },
+
+  // ── Results ──
+  countLine: {
+    fontFamily: FontFamily.medium,
     fontSize: 12,
-    color: colors.white,
+    color: colors.gray400,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 14,
   },
   listContent: {
-    paddingBottom: 24,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: insets.bottom + 24,
+    gap: 14,
   },
+
+  // ── Person card (Blueprint) ──
+  personCard: {
+    flexDirection: 'row',
+    gap: 13,
+    padding: 14,
+    backgroundColor: colors.cream,
+  },
+  personPhotoWrap: {
+    width: 72,
+    height: 88,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    backgroundColor: colors.surfaceMuted,
+  },
+  personPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  personBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 5,
+  },
+  personNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  personName: {
+    fontFamily: FontFamily.heading,
+    fontSize: 19,
+    color: colors.black,
+    flexShrink: 1,
+  },
+  personCity: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12.5,
+    color: colors.gray600,
+    marginTop: 2,
+  },
+  personTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  personTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: colors.accentTint15,
+    borderRadius: 2,
+  },
+  personTagText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 11,
+    letterSpacing: 0.4,
+    color: colors.accentDark,
+  },
+  personActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 3,
+  },
+  followBtn: {
+    height: 34,
+    minWidth: 82,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint15,
+    borderRadius: 4,
+  },
+  followBtnFollowing: {
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
+  },
+  followBtnText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 12.5,
+    color: colors.accentDark,
+  },
+  followBtnTextFollowing: {
+    color: colors.gray600,
+  },
+  profileBtn: {
+    height: 34,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
+    borderRadius: 4,
+  },
+  profileBtnText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 12.5,
+    color: colors.black,
+  },
+
+  // ── Empty / error ──
   emptyWrap: {
     flexGrow: 1,
   },
@@ -455,17 +726,19 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  emptyCircle: {
+  emptyBadge: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.accentTint10,
+    backgroundColor: colors.accentTint08,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
   },
   emptyTitle: {
     ...Typography.h3,
+    fontFamily: FontFamily.heading,
     color: colors.black,
     textAlign: 'center',
   },
@@ -493,9 +766,9 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     right: 0,
     bottom: 0,
     maxHeight: '78%',
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.cream,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
     paddingTop: 8,
   },
   sheetHandle: {
@@ -514,7 +787,8 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     paddingBottom: 8,
   },
   sheetTitle: {
-    ...Typography.h3,
+    fontFamily: FontFamily.heading,
+    fontSize: 22,
     color: colors.black,
   },
   sheetReset: {
@@ -536,8 +810,10 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   filterGroupTitle: {
     fontFamily: FontFamily.semibold,
-    fontSize: 13,
-    color: colors.gray700,
+    fontSize: 12,
+    color: colors.gray600,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
     marginBottom: 8,
   },
   filterChips: {
@@ -547,20 +823,23 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   filterChip: {
     paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-    backgroundColor: colors.gray100,
+    paddingVertical: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
   },
   filterChipActive: {
+    borderColor: colors.accent,
     backgroundColor: colors.accentTint15,
   },
   filterChipText: {
     fontFamily: FontFamily.medium,
     fontSize: 12,
-    color: colors.gray700,
+    color: colors.black,
   },
   filterChipTextActive: {
-    color: colors.accent,
+    color: colors.accentDark,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -568,10 +847,13 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: colors.gray100,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
   },
   toggleRowActive: {
+    borderColor: colors.accent,
     backgroundColor: colors.accentTint08,
   },
   toggleLabel: {

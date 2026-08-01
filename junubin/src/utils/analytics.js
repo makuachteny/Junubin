@@ -204,8 +204,6 @@ export const AnalyticsEvents = {
   SIGNUP_COMPLETE: 'signup_complete',
   PROFILE_SETUP_STEP: 'profile_setup_step',
   PROFILE_SETUP_COMPLETE: 'profile_setup_complete',
-  SWIPE: 'swipe',
-  MATCH: 'match',
   MESSAGE_SENT: 'message_sent',
   PROFILE_VIEW: 'profile_view',
 };

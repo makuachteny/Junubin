@@ -1,22 +1,34 @@
+// JuNubin — Chats (the app's home tab).
+//
+// Two segments in one surface:
+//   Messages — the conversation inbox (accepted connections).
+//   Requests — pending incoming message requests, rendered inline as
+//              Blueprint cards with Accept / Decline. This replaces
+//              the old "navigate away to MessageRequests" flow for the
+//              common case; the MessageRequests route stays registered
+//              for deep links and the Sent tab.
+//
+// Accept reuses the same service flow as MessageRequestsScreen
+// (acceptMessageRequest → open the Chat). Declining is silent.
+
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   FlatList,
   TouchableOpacity,
   Image,
   Alert,
   Animated,
-  TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GraffitiChat } from '../components/icons';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import { useTheme, Typography, FontFamily, Layout } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
@@ -27,140 +39,123 @@ import * as messageRequestService from '../api/services/messageRequestService';
 import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import Blueprint from '../components/Blueprint';
+import { hapticLight, hapticMedium } from '../utils/haptics';
 import { useAccessibilityPreferences } from '../accessibility';
 
-export default function MessagesScreen({ navigation, route }) {
+// Demo-mode fallback. When DEMO_DATA_ENABLED is true (TestFlight
+// launch period), the inbox is seeded with mock data so testers have
+// something to interact with before real users sign up. Flip the flag
+// off in src/config/demoData.js before App Review submission.
+// Module-scope so the arrays are referentially stable — they sit in
+// fetchInbox's dependency chain.
+const DEMO_MATCHES = DEMO_DATA_ENABLED ? mockMatches : [];
+const DEMO_REQUEST_NOTES = [
+  'Hey! We keep crossing paths in the community — would love to chat.',
+  'Saw we speak the same languages. Coffee sometime?',
+  'Your profile came up in the directory — can I say hi?',
+];
+const DEMO_REQUESTS = DEMO_DATA_ENABLED
+  ? mockLikes.slice(0, 3).map((person, i) => ({
+      id: `demo_req_${person.id}`,
+      status: 'pending',
+      from: person,
+      message: DEMO_REQUEST_NOTES[i % DEMO_REQUEST_NOTES.length],
+      createdAt: person.likedAt,
+      __demo: true,
+    }))
+  : [];
+
+export default function MessagesScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { prefs } = useAccessibilityPreferences();
-  const [matches, setMatches] = useState([]);
-  const [likes, setLikes] = useState([]);
   const styles = useMemo(() => getStyles(colors, isDark, prefs), [colors, isDark, prefs]);
-  const [searchQuery, setSearchQuery] = useState('');
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
-  const { onMatchCreated } = useRealtime(currentUser?.id);
+  const { onInboxActivity } = useRealtime(currentUser?.id);
   const contentAnim = useRef(new Animated.Value(0)).current;
   const rowAnimsRef = useRef([]);
   const hasAnimatedRef = useRef(false);
+  const loadingTimeoutRef = useRef(null);
+
+  const [segment, setSegment] = useState('messages');
+  const [matches, setMatches] = useState([]);
+  // Pending incoming message requests, full request shape
+  // ({ id, from, message, createdAt }) — same rows the MessageRequests
+  // screen renders, shown inline here as the second segment.
+  const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('All');
-  // Mode is read from the authoritative source — `useCurrentUser`
-  // resolves it from Profile.appMode → accountPurpose → AsyncStorage
-  // → 'Social' default. Reading it directly here keeps the inbox
-  // labels in sync whenever Settings flips the toggle, with no
-  // remount required (the old AsyncStorage-only read would lag a
-  // navigation cycle behind).
-  const mode = currentUser?.preferences?.mode || 'Social';
-  // Lowercase form for Match/Swipe row comparisons; the DB stores
-  // 'dating' / 'social', not the capitalized client-side labels.
-  const modeKey = mode === 'Social' ? 'social' : 'dating';
-  const loadingTimeoutRef = useRef(null);
-  const [seenConnections, setSeenConnections] = useState(new Set());
-  // Pending incoming message requests. Fetched alongside the inbox and
-  // refreshed on focus so accepting one elsewhere clears the badge.
-  const [requestCount, setRequestCount] = useState(0);
+  // Ids currently mid-accept / mid-decline, so a double-tap can't fire
+  // two accepts (same guard as MessageRequestsScreen).
+  const [busyIds, setBusyIds] = useState(() => new Set());
 
-  // Hydrate seen-connections from AsyncStorage. Mode is no longer read
-  // here — `currentUser.preferences.mode` is the source of truth and is
-  // resolved upstream by useCurrentUser (00025 / appMode column).
-  useEffect(() => {
-    AsyncStorage.getItem('@junubin_seen_connections').then((value) => {
-      if (!value) return;
-      try {
-        const ids = JSON.parse(value);
-        if (Array.isArray(ids)) setSeenConnections(new Set(ids));
-      } catch {
-        // ignore corrupt cache
-      }
-    }).catch(() => {});
+  const setBusy = useCallback((id, on) => {
+    setBusyIds((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
   }, []);
 
-  // Demo-mode fallback. When DEMO_DATA_ENABLED is true (TestFlight
-  // launch period), the inbox is seeded with mockMatches/mockLikes
-  // so testers have something to interact with before real users
-  // sign up. Flip the flag off in src/config/demoData.js before App
-  // Review submission — they don't like fake-looking populations.
-  const demoMatches = DEMO_DATA_ENABLED ? mockMatches : [];
-  const demoLikes   = DEMO_DATA_ENABLED ? mockLikes   : [];
-
-  const fetchMatches = useCallback(() => {
+  const fetchInbox = useCallback(() => {
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     loadingTimeoutRef.current = setTimeout(() => {
-      setMatches((prev) => (prev.length ? prev : demoMatches));
-      setLikes((prev) => (prev.length ? prev : demoLikes));
+      setMatches((prev) => (prev.length ? prev : DEMO_MATCHES));
+      setRequests((prev) => (prev.length ? prev : DEMO_REQUESTS));
       setIsLoading(false);
     }, 600);
 
     if (!session) {
-      setMatches(demoMatches);
-      setLikes(demoLikes);
+      setMatches(DEMO_MATCHES);
+      setRequests(DEMO_REQUESTS);
       setIsLoading(false);
       return Promise.resolve();
     }
     return Promise.all([
       matchesService.getMatches().then((apiMatches) => {
-        setMatches(apiMatches.length > 0 ? apiMatches : demoMatches);
+        setMatches(apiMatches.length > 0 ? apiMatches : DEMO_MATCHES);
       }),
-      // "Invites" used to be received likes. Likes are gone; the
-      // equivalent signal is now a pending message request. Flatten the
-      // sender onto the row so it renders with the same shape the
-      // invite list already expects.
-      messageRequestService.getIncomingRequests().then((requests) => {
-        const invites = (requests || [])
-          .filter((r) => r.status === 'pending' && r.from)
-          .map((r) => ({
-            ...r.from,
-            requestId: r.id,
-            requestMessage: r.message,
-            likedAt: r.createdAt,
-          }));
-        setLikes(invites.length > 0 ? invites : demoLikes);
+      messageRequestService.getIncomingRequests().then((rows) => {
+        const pending = (rows || []).filter((r) => r.status === 'pending' && r.from);
+        setRequests(pending.length > 0 ? pending : DEMO_REQUESTS);
       }),
-      // Pending message requests. getIncomingRequestCount already
-      // swallows its own errors and resolves 0, so it can't reject the
-      // Promise.all and blank the inbox behind it.
-      messageRequestService.getIncomingRequestCount().then(setRequestCount),
     ]).catch((err) => {
-      if (__DEV__) console.warn('Messages fetch failed:', err);
-      setMatches(demoMatches);
-      setLikes(demoLikes);
+      if (__DEV__) console.warn('Chats fetch failed:', err);
+      setMatches(DEMO_MATCHES);
+      setRequests(DEMO_REQUESTS);
     }).finally(() => {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
       setIsLoading(false);
     });
-  }, [session, demoMatches, demoLikes]);
+  }, [session]);
 
-  useEffect(() => { fetchMatches(); }, [fetchMatches]);
+  useEffect(() => { fetchInbox(); }, [fetchInbox]);
 
-  // Re-fetch on tab focus too. Handles the "another device unmatched
-  // / blocked while this screen was backgrounded" case where the
-  // realtime sub may have missed the event (Realtime occasionally
-  // drops postgres_changes during disconnects).
+  // Re-fetch on tab focus too. Handles the "another device accepted /
+  // blocked while this screen was backgrounded" case where the
+  // realtime sub may have missed the event.
   useFocusEffect(
     useCallback(() => {
-      if (session) fetchMatches();
-    }, [session, fetchMatches]),
+      if (session) fetchInbox();
+    }, [session, fetchInbox]),
   );
 
-  // Realtime: INSERT (new match) and DELETE (unmatch from any device)
-  // both refetch the list. The hook now passes `eventType` as the
-  // second arg; we don't need to branch here since both events should
-  // trigger the same refresh.
+  // Realtime: any inbox activity — a new Message row or a
+  // MessageRequest insert/update — refetches both segments.
   useEffect(() => {
     if (!session) return;
-    const unsub = onMatchCreated(() => {
-      fetchMatches();
+    const unsub = onInboxActivity(() => {
+      fetchInbox();
     });
     return unsub;
-  }, [session, onMatchCreated, fetchMatches]);
+  }, [session, onInboxActivity, fetchInbox]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchMatches().finally(() => setRefreshing(false));
-  }, [fetchMatches]);
+    fetchInbox().finally(() => setRefreshing(false));
+  }, [fetchInbox]);
 
   useEffect(() => {
     Animated.timing(contentAnim, {
@@ -170,61 +165,101 @@ export default function MessagesScreen({ navigation, route }) {
     }).start();
   }, [contentAnim]);
 
+  const requestCount = requests.length;
+  const unreadTotal = useMemo(
+    () => matches.reduce(
+      (acc, m) => acc + (typeof m.unreadCount === 'number' ? m.unreadCount : (m.unread ? 1 : 0)),
+      0,
+    ),
+    [matches],
+  );
+
+  // Tab-bar badge on the Chats tab: unread messages + pending requests.
+  // tabBarBadgeStyle (accent pill) lives in AppNavigator's screenOptions.
+  useEffect(() => {
+    const total = unreadTotal + requestCount;
+    navigation.setOptions?.({
+      tabBarBadge: total > 0 ? (total > 99 ? '99+' : total) : undefined,
+    });
+  }, [navigation, unreadTotal, requestCount]);
+
   const handleMatchPress = (match) => {
     navigation.navigate('Chat', { match });
   };
 
-  const handleLikePress = (like) => {
-    // An invite is someone who sent a message request. Accepting or
-    // declining belongs on the requests screen, which owns that flow.
-    if (like?.requestId) {
-      navigation.navigate('MessageRequests', { initialTab: 'received' });
+  const openProfile = useCallback((profile) => {
+    if (!profile) return;
+    navigation.navigate('ProfileDetail', { profile });
+  }, [navigation]);
+
+  // Accept — same flow as MessageRequestsScreen: accept_message_request
+  // RPC, then straight into the new conversation. Demo rows have no
+  // server request, so they just convert locally.
+  const handleAccept = useCallback(async (request) => {
+    if (busyIds.has(request.id)) return;
+    hapticMedium();
+    if (request.__demo) {
+      setRequests((prev) => prev.filter((r) => r.id !== request.id));
+      navigation.navigate('Chat', { match: request.from });
       return;
     }
-    // Demo rows (and any legacy invite) have no request to act on and
-    // no conversation thread, so opening Chat would load nothing.
-    // Route to the profile, where the user can follow back.
-    if (!like?.conversationId) {
-      navigation.navigate('ProfileDetail', { profile: like });
-      return;
+    setBusy(request.id, true);
+    try {
+      const { conversationId } = await messageRequestService.acceptMessageRequest(request.id);
+      // Drop the row locally so the list is correct even if the
+      // focus-refetch hasn't landed by the time the user comes back.
+      setRequests((prev) => prev.filter((r) => r.id !== request.id));
+      navigation.navigate('Chat', {
+        conversationId,
+        match: { ...request.from, conversationId },
+      });
+    } catch (e) {
+      Alert.alert('Could not accept', e?.message || 'Try again in a moment.');
+    } finally {
+      setBusy(request.id, false);
     }
-    navigation.navigate('Chat', {
-      conversationId: like.conversationId,
-      match: like,
-    });
-  };
+  }, [busyIds, navigation, setBusy]);
 
-  // Build combined conversation list with category + search filtering,
-  // then sort so the current mode's items float to the top while the
-  // other mode stays below (rather than disappearing — the user can
-  // still see they have other-mode conversations without flipping the
-  // toggle). Within each bucket, sort by recency.
-  //
-  // A conversation's `mode` field comes from the DB (Match.mode /
-  // Swipe.mode, set when the swipe was recorded). Legacy rows that
-  // pre-date the 00025 migration default to 'dating' at the service
-  // layer, so an unmigrated install still produces a stable order.
-  const conversationData = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
-    const likeItems = likes.map((like) => ({ ...like, type: 'like' }));
-    const matchItems = matches.map((match) => ({ ...match, type: 'match' }));
-    let all = [...likeItems, ...matchItems];
-    if (activeCategory === 'Conversations') all = matchItems;
-    else if (activeCategory === 'Invites') all = likeItems;
-    if (q) all = all.filter((item) => item.name?.toLowerCase().includes(q));
+  const handleDecline = useCallback((request) => {
+    if (busyIds.has(request.id)) return;
+    const name = request.from?.name || 'this person';
+    Alert.alert(
+      `Decline ${name}?`,
+      "They won't be told, and they won't be able to send you another request. You can still block or report them from their profile.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Decline',
+          style: 'destructive',
+          onPress: async () => {
+            hapticLight();
+            if (request.__demo) {
+              setRequests((prev) => prev.filter((r) => r.id !== request.id));
+              return;
+            }
+            setBusy(request.id, true);
+            try {
+              await messageRequestService.declineMessageRequest(request.id);
+              setRequests((prev) => prev.filter((r) => r.id !== request.id));
+            } catch (e) {
+              Alert.alert('Could not decline', e?.message || 'Try again in a moment.');
+            } finally {
+              setBusy(request.id, false);
+            }
+          },
+        },
+      ],
+    );
+  }, [busyIds, setBusy]);
 
-    const sortKey = (item) => {
-      // Likes use `likedAt`, matches use `updatedAt` (last message) →
-      // fall back through both so the comparator is stable for either.
-      return new Date(item.updatedAt || item.likedAt || 0).getTime();
-    };
-    return all.slice().sort((a, b) => {
-      const aMatchesMode = (a.mode || 'dating') === modeKey;
-      const bMatchesMode = (b.mode || 'dating') === modeKey;
-      if (aMatchesMode !== bMatchesMode) return aMatchesMode ? -1 : 1;
-      return sortKey(b) - sortKey(a);
-    });
-  }, [likes, matches, searchQuery, activeCategory, modeKey]);
+  // Conversations sort by recency. (The old mode-aware 'dating'/'social'
+  // float-to-top sort is dead post-pivot — the app has one mode now.)
+  const conversationData = useMemo(
+    () => matches.slice().sort(
+      (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime(),
+    ),
+    [matches],
+  );
 
   // Build row animation values when conversation data changes (only first render)
   useEffect(() => {
@@ -243,7 +278,8 @@ export default function MessagesScreen({ navigation, route }) {
     Animated.stagger(0, staggered).start();
   }, [conversationData]);
 
-  const renderConversation = ({ item, index }) => {
+  // ─── Messages segment row ───
+  const renderConversation = useCallback(({ item, index }) => {
     const rowAnim = rowAnimsRef.current[index];
     const animStyle = rowAnim ? {
       opacity: rowAnim,
@@ -255,70 +291,13 @@ export default function MessagesScreen({ navigation, route }) {
       }],
     } : {};
 
-    if (item.type === 'like') {
-      const isNew = !seenConnections.has(item.id);
-      return (
-        <Animated.View style={animStyle}>
-          <TouchableOpacity
-            style={[styles.messageRow, isNew && styles.likeRowNew]}
-            onPress={() => {
-              if (isNew) {
-                setSeenConnections((prev) => {
-                  const next = new Set(prev);
-                  next.add(item.id);
-                  AsyncStorage.setItem('@junubin_seen_connections', JSON.stringify([...next])).catch(() => {});
-                  return next;
-                });
-              }
-              handleLikePress(item);
-            }}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, wants to connect with you` : item.name}
-          >
-            <TouchableOpacity
-              style={styles.avatarContainer}
-              onPress={(e) => {
-                e.stopPropagation?.();
-                navigation.navigate('ProfileDetail', { profile: item });
-              }}
-              activeOpacity={0.8}
-            >
-              {/* Like rows mirror the story-row visual language: a solid
-                  accent ring on "new" items signals "actionable content".
-                  Once seen, the ring drops to neutral gray. */}
-              <View style={[styles.likeAvatarRing, !isNew && styles.likeAvatarRingSeen]}>
-                <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
-              </View>
-            </TouchableOpacity>
-            <View style={styles.msgInfo}>
-              <View style={styles.likeNameRow}>
-                <Text style={[styles.msgName, isNew && styles.msgNameBold]}>{item.name}</Text>
-                {isNew && (
-                  <View style={styles.likeBadge}>
-                    <Text style={styles.likeBadgeText}>New</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.likePreviewPrimary, isNew && styles.likePreviewNew]} numberOfLines={1}>
-                Wants to connect
-              </Text>
-            </View>
-            <View style={styles.rowRight}>
-              <Text style={styles.rowTimeHint}>Just now</Text>
-            </View>
-          </TouchableOpacity>
-        </Animated.View>
-      );
-    }
-
-    // Source of truth on initial paint and on tab-focus refetch is the
-    // server-derived `unreadCount` (matchesService computes it from
-    // Message.readAt). Local-state `unread` boolean stays as a
-    // fallback for any code path that hasn't been migrated yet.
+    // Source of truth is the server-derived `unreadCount`
+    // (matchesService computes it from Message.readAt). The local
+    // `unread` boolean stays as a fallback for unmigrated paths.
     const unreadCount = typeof item.unreadCount === 'number' ? item.unreadCount : (item.unread ? 1 : 0);
     const isUnread = unreadCount > 0 || !!item.unread;
     const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
+    const isOnline = !!(item.online || item.isOnline);
 
     return (
       <Animated.View style={animStyle}>
@@ -330,43 +309,33 @@ export default function MessagesScreen({ navigation, route }) {
           accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${isUnread ? `${unreadCount || 1} unread message${(unreadCount || 1) === 1 ? '' : 's'}` : 'conversation'}` : item.name}
         >
           <TouchableOpacity
-            style={styles.avatarContainer}
+            style={styles.avatarWrap}
             onPress={(e) => {
               e.stopPropagation?.();
               // Avatar tap opens the full profile rather than the thread,
               // so users can review who they're about to talk to.
-              navigation.navigate('ProfileDetail', { profile: item });
+              openProfile(item);
             }}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${item.name}'s profile`}
           >
-            {/* Match rows: clean photo, no story ring. The colored ring is
-                reserved for stories + likes (actionable content). Unread
-                state is signalled exclusively by the count badge in the
-                right column + a bolder name. */}
-            <View style={styles.matchAvatarFrame}>
-              <Image source={imageSource(item.images?.[0])} style={styles.msgAvatar} />
-            </View>
-            <View style={styles.onlineDot} />
+            <Image source={imageSource(item.images?.[0])} style={styles.avatar} />
+            {isOnline && <View style={styles.onlineDot} />}
           </TouchableOpacity>
           <View style={styles.msgInfo}>
-            <View style={styles.msgNameRow}>
-              <Text style={[styles.msgName, isUnread && styles.msgNameBold]}>{item.name}</Text>
-              {isUnread && prefs?.nonColorCues && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>New</Text>
-                </View>
-              )}
+            <View style={styles.msgTopRow}>
+              <Text style={styles.msgName} numberOfLines={1}>{item.name}</Text>
+              {item.timestamp ? (
+                <Text style={styles.msgTime}>{item.timestamp}</Text>
+              ) : null}
             </View>
             <Text
               style={[
                 styles.msgPreview,
-                isUnread && styles.msgUnread,
+                isUnread && styles.msgPreviewUnread,
                 // Italicize the placeholder so it's visually distinct
-                // from a real last-message preview. Without this, a
-                // brand-new match would look indistinguishable from a
-                // match where the other person said the literal words
-                // "Say hi" — which is the exact confusion users hit
-                // with the old hardcoded mock previews.
+                // from a real last-message preview.
                 !item.lastMessage && styles.msgPreviewPlaceholder,
               ]}
               numberOfLines={1}
@@ -374,193 +343,100 @@ export default function MessagesScreen({ navigation, route }) {
               {item.lastMessage || 'Say hi 👋'}
             </Text>
           </View>
-          <View style={styles.rowRight}>
-            {item.timestamp ? (
-              <Text style={styles.msgTime}>{item.timestamp}</Text>
-            ) : null}
-            {unreadCount > 0 && <View style={styles.unreadCountDot}><Text style={styles.unreadCountText}>{badgeText}</Text></View>}
-          </View>
+          {unreadCount > 0 && (
+            <View style={styles.unreadPill}>
+              <Text style={styles.unreadPillText}>{badgeText}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </Animated.View>
     );
-  };
+  }, [styles, prefs, openProfile]);
 
-  const unreadMatchCount = useMemo(() => matches.filter((m) => (m.unreadCount > 0) || m.unread).length, [matches]);
-  const likesCount = likes.length;
-  // Chip labels are connection vocabulary. The underlying buckets are
-  // unchanged (conversation rows vs. message-request rows) — this pass
-  // is copy, not a data migration.
-  const CATEGORIES = [
-    { label: 'All', badge: unreadMatchCount + likesCount },
-    { label: 'Conversations', badge: unreadMatchCount },
-    { label: 'Invites', badge: likesCount },
-  ];
-
-  // Message requests entry — sits at the very top of the inbox. Always
-  // rendered (not only when there are pending ones) so people can find
-  // the surface, with the count badge carrying the "act on this" signal.
-  const renderRequestsEntry = useCallback(() => (
-    <TouchableOpacity
-      style={styles.requestsRow}
-      onPress={() => navigation.navigate('MessageRequests')}
-      activeOpacity={0.75}
-      accessibilityRole="button"
-      accessibilityLabel={
-        requestCount > 0
-          ? `Message requests, ${requestCount} waiting`
-          : 'Message requests'
-      }
-    >
-      <View style={styles.requestsIcon}>
-        <Ionicons name="mail-outline" size={20} color={colors.accent} />
-      </View>
-      <View style={styles.msgInfo}>
-        <Text style={styles.requestsTitle}>Message requests</Text>
-        <Text style={styles.requestsSub} numberOfLines={1}>
-          {requestCount > 0
-            ? `${requestCount} ${requestCount === 1 ? 'person wants' : 'people want'} to start a conversation`
-            : 'From people you are not connected with'}
-        </Text>
-      </View>
-      {requestCount > 0 && (
-        <View style={styles.unreadCountDot}>
-          <Text style={styles.unreadCountText}>{requestCount > 99 ? '99+' : requestCount}</Text>
+  // ─── Requests segment card ───
+  const renderRequest = useCallback(({ item }) => {
+    const person = item.from || {};
+    const busy = busyIds.has(item.id);
+    const nameLine = person.age ? `${person.name}, ${person.age}` : (person.name || 'Someone');
+    const meta = [person.city || person.country, person.profession].filter(Boolean).join(' · ');
+    return (
+      <Blueprint style={styles.requestCard}>
+        <View style={styles.requestHead}>
+          <TouchableOpacity
+            onPress={() => openProfile(person)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${person.name || 'profile'}`}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Image source={imageSource(person.images?.[0])} style={styles.requestAvatar} />
+          </TouchableOpacity>
+          <View style={styles.requestHeadText}>
+            <Text style={styles.requestName} numberOfLines={1}>{nameLine}</Text>
+            {meta ? <Text style={styles.requestMeta} numberOfLines={1}>{meta}</Text> : null}
+          </View>
         </View>
-      )}
-      <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
-    </TouchableOpacity>
-  ), [styles, colors, navigation, requestCount]);
 
-  // Banners slot, scrolling BELOW the sticky filters. Both entries that used to live here were paywall
-  // upsells pointing at the (now unregistered) purchase screen, and the
-  // "who wants to connect" card blurred faces to sell an unlock. What's
-  // left is an unblurred, free summary that scrolls to the invites
-  // filter — the same information without the tollbooth. The wrapper
-  // View stays so the sticky-header index math is unchanged.
-  const renderBanners = useCallback(() => (
-    <View>
-      {likesCount > 0 && activeCategory !== 'Invites' && (
-        <TouchableOpacity
-          style={styles.upsellCard}
-          onPress={() => setActiveCategory('Invites')}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={`${likesCount} ${likesCount === 1 ? 'person wants' : 'people want'} to connect. Show invites.`}
-        >
-          <View style={styles.upsellAvatarStack}>
-            {likes.slice(0, 4).map((like, i) => (
-              <Image
-                key={like.id}
-                source={imageSource(like.images?.[0])}
-                style={[styles.upsellStackAvatar, { marginLeft: i === 0 ? 0 : -10, zIndex: 4 - i }]}
-              />
-            ))}
-            {likesCount > 4 && (
-              <View style={[styles.upsellStackAvatar, styles.upsellStackMore, { marginLeft: -10, zIndex: 0 }]}>
-                <Text style={styles.upsellStackMoreText}>+{likesCount - 4}</Text>
-              </View>
+        {item.message ? (
+          <Text style={styles.requestNote} numberOfLines={4}>&ldquo;{item.message}&rdquo;</Text>
+        ) : null}
+
+        <View style={styles.requestActions}>
+          <TouchableOpacity
+            style={[styles.acceptBtn, busy && styles.btnBusy]}
+            onPress={() => handleAccept(item)}
+            disabled={busy}
+            activeOpacity={0.85}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Accept request from ${person.name || 'this person'}`}
+            accessibilityState={{ disabled: busy }}
+          >
+            {busy ? (
+              <ActivityIndicator size="small" color={colors.cream} />
+            ) : (
+              <Text style={styles.acceptText}>Accept</Text>
             )}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.upsellTitle}>
-              {likesCount} {likesCount === 1 ? 'person wants' : 'people want'} to connect
-            </Text>
-            <Text style={styles.upsellDesc}>Tap to see who</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.gray400} />
-        </TouchableOpacity>
-      )}
-    </View>
-  ), [colors, likes, likesCount, activeCategory, styles]);
-
-  const filtersPanel = useCallback(() => (
-    <View style={styles.filtersPanel}>
-      <View style={styles.categoryRow}>
-        <View style={styles.categoryChips}>
-          {CATEGORIES.map((cat) => {
-            const isActive = activeCategory === cat.label;
-            const isLikes = cat.label === 'Invites';
-            const countText = cat.badge > 0 ? `${cat.badge > 99 ? '99+' : cat.badge}` : '';
-            return (
-              <TouchableOpacity
-                key={cat.label}
-                style={[
-                  styles.categoryChip,
-                  isActive && (isLikes ? styles.categoryChipLikes : styles.categoryChipActive),
-                ]}
-                onPress={() => setActiveCategory(cat.label)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={cat.badge > 0 ? `${cat.label}, ${cat.badge}` : cat.label}
-              >
-                <Text style={[styles.categoryChipText, isActive && styles.categoryChipTextActive]}>
-                  {cat.label}
-                </Text>
-                {countText !== '' && (
-                  <Text style={[styles.categoryChipCount, isActive && styles.categoryChipCountActive]}>
-                    {countText}
-                  </Text>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.declineBtn, busy && styles.btnBusy]}
+            onPress={() => handleDecline(item)}
+            disabled={busy}
+            activeOpacity={0.8}
+            hitSlop={{ top: 4, bottom: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Decline request from ${person.name || 'this person'}`}
+            accessibilityState={{ disabled: busy }}
+          >
+            <Text style={styles.declineText}>Decline</Text>
+          </TouchableOpacity>
         </View>
-      </View>
+      </Blueprint>
+    );
+  }, [styles, colors, busyIds, handleAccept, handleDecline, openProfile]);
 
-      <View style={styles.searchWrap}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={colors.gray400} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search conversations..."
-            placeholderTextColor={colors.gray400}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={19} color={colors.gray400} />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </View>
-  ), [CATEGORIES, activeCategory, searchQuery, colors, styles]);
+  const footerHint = (
+    <Text style={styles.footerHint}>
+      Start a chat from anyone's profile —{' '}
+      <Text
+        style={styles.footerHintLink}
+        onPress={() => navigation.navigate('DirectoryTab')}
+        accessibilityRole="link"
+        accessibilityLabel="Browse the Directory"
+      >
+        browse the Directory
+      </Text>
+    </Text>
+  );
 
-  // Unified data for the FlatList. Keeping a fixed prefix (requests,
-  // filters, banners) means stickyHeaderIndices=[1] always points at
-  // the filters strip. `__type` is read by the dispatcher below.
-  const listData = useMemo(() => {
-    const head = [
-      { __type: 'requests', id: '__requests' },
-      { __type: 'filters', id: '__filters' },
-      { __type: 'banners', id: '__banners' },
-    ];
-    // Tag each conversation with its position in conversationData so
-    // renderConversation can look up the right row-animation value
-    // (the FlatList index is offset by the head items above).
-    const convs = conversationData.map((c, i) => ({ ...c, __convIndex: i }));
-    return [...head, ...convs];
-  }, [conversationData]);
-
-  const renderListItem = useCallback(({ item }) => {
-    switch (item.__type) {
-      case 'requests': return renderRequestsEntry();
-      case 'filters': return filtersPanel();
-      case 'banners': return renderBanners();
-      default: return renderConversation({ item, index: item.__convIndex });
-    }
-  }, [renderRequestsEntry, filtersPanel, renderBanners]);
+  const hasNotifDot = requestCount > 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* ─── Header ─── */}
       <Animated.View
         style={[
-          styles.header,
+          styles.headerBlock,
           {
             opacity: contentAnim,
             transform: [{
@@ -572,65 +448,62 @@ export default function MessagesScreen({ navigation, route }) {
           },
         ]}
       >
-        <Text style={styles.headerTitle}>Messages</Text>
-        <View style={styles.headerRight}>
-          {/* Bell sits to the LEFT of the avatar — opens the in-app
-              Notifications screen (already wired in AppNavigator). */}
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Chats</Text>
           <TouchableOpacity
+            style={styles.bellBtn}
             onPress={() => navigation.navigate('Notifications')}
             activeOpacity={0.75}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityRole="button"
-            accessibilityLabel="Notifications"
+            accessibilityLabel={hasNotifDot ? 'Notifications, new activity' : 'Notifications'}
           >
-            <Ionicons name="notifications-outline" size={22} color={colors.gray500} />
+            <Ionicons name="notifications-outline" size={22} color={colors.black} />
+            {hasNotifDot && <View style={styles.bellDot} />}
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Your profile">
-            <Image source={imageSource(currentUser?.images?.[0])} style={styles.headerAvatar} />
+        </View>
+
+        {/* ─── Messages | Requests segmented control ─── */}
+        <View style={styles.segmentWrap} accessibilityRole="tablist">
+          <TouchableOpacity
+            style={[styles.segmentBtn, segment === 'messages' && styles.segmentBtnActive]}
+            onPress={() => setSegment('messages')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: segment === 'messages' }}
+            accessibilityLabel="Messages"
+          >
+            <Text style={[styles.segmentText, segment === 'messages' && styles.segmentTextActive]}>
+              Messages
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.segmentBtn, styles.segmentBtnRight, segment === 'requests' && styles.segmentBtnActive]}
+            onPress={() => setSegment('requests')}
+            activeOpacity={0.8}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: segment === 'requests' }}
+            accessibilityLabel={requestCount > 0 ? `Requests, ${requestCount} pending` : 'Requests'}
+          >
+            <Text style={[styles.segmentText, segment === 'requests' && styles.segmentTextActive]}>
+              {requestCount > 0 ? `Requests (${requestCount > 99 ? '99+' : requestCount})` : 'Requests'}
+            </Text>
           </TouchableOpacity>
         </View>
       </Animated.View>
 
-      {/* ─── Everything scrolls together ───
-          Layout contract:
-            - index 0 (message requests) scrolls up and off-screen
-            - index 1 (filters + search) sticks to the top once it
-              reaches it; everything below it scrolls underneath
-            - index 2 (banners/ads/upsell) and beyond scroll normally
-      */}
+      {/* ─── Body ─── */}
       {isLoading ? (
-        <ScrollView
-          stickyHeaderIndices={[1]}
-          showsVerticalScrollIndicator={false}
-        >
-          {renderRequestsEntry()}
-          {filtersPanel()}
-          {renderBanners()}
+        <View style={styles.listTopBorder}>
           <MessageListSkeleton />
-        </ScrollView>
-      ) : conversationData.length === 0 && !searchQuery ? (
-        <ScrollView
-          stickyHeaderIndices={[1]}
-          showsVerticalScrollIndicator={false}
-        >
-          {renderRequestsEntry()}
-          {filtersPanel()}
-          {renderBanners()}
-          <View style={styles.emptyMessages}>
-            <GraffitiChat size={50} color={colors.gray400} />
-            <Text style={styles.emptyText}>No conversations yet</Text>
-            <Text style={styles.emptySubtext}>Find people in the community and say hello.</Text>
-          </View>
-        </ScrollView>
-      ) : (
+        </View>
+      ) : segment === 'messages' ? (
         <FlatList
-          data={listData}
+          style={styles.listTopBorder}
+          data={conversationData}
           keyExtractor={(item) => item.id}
-          renderItem={renderListItem}
-          stickyHeaderIndices={[1]}
+          renderItem={renderConversation}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="handled"
           initialNumToRender={10}
           maxToRenderPerBatch={8}
           windowSize={5}
@@ -639,9 +512,39 @@ export default function MessagesScreen({ navigation, route }) {
           refreshControl={
             <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
+          ListEmptyComponent={
+            <View style={styles.emptyMessages}>
+              <GraffitiChat size={50} color={colors.gray400} />
+              <Text style={styles.emptyText}>No conversations yet</Text>
+              <Text style={styles.emptySubtext}>Find people in the community and say hello.</Text>
+            </View>
+          }
+          ListFooterComponent={footerHint}
+        />
+      ) : (
+        <FlatList
+          style={styles.listTopBorder}
+          data={requests}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRequest}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.requestsContent}
+          ItemSeparatorComponent={() => <View style={styles.requestGap} />}
+          refreshControl={
+            <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          ListHeaderComponent={
+            <Text style={styles.requestsIntro}>
+              People you're not connected to yet. Accepting starts a chat; declining is silent.
+            </Text>
+          }
+          ListEmptyComponent={
+            <Text style={styles.requestsEmpty}>
+              No pending requests.{'\n'}Requests from strangers land here — never straight in your inbox.
+            </Text>
+          }
         />
       )}
-
     </View>
   );
 }
@@ -649,107 +552,161 @@ export default function MessagesScreen({ navigation, route }) {
 const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.cream,
   },
 
   // ─── Header ───
-  header: {
-    width: '100%',
-    height: Layout.headerHeight,
+  headerBlock: {
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    backgroundColor: 'transparent',
-    marginBottom: 0,
   },
   headerTitle: {
-    ...Typography.tabTitle,
+    flex: 1,
+    fontFamily: FontFamily.heading,
+    fontSize: 28,
+    fontWeight: '600',
     color: colors.black,
   },
-  headerRight: {
+  bellBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 9,
+    right: 9,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
+  },
+
+  // ─── Segmented control ───
+  segmentWrap: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: colors.separator,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  segmentBtn: {
+    flex: 1,
+    height: prefs?.largerTouchTargets ? 44 : 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  segmentBtnRight: {
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.separator,
+  },
+  segmentBtnActive: {
+    backgroundColor: colors.accent,
+  },
+  segmentText: {
+    fontSize: 13.5,
+    fontFamily: FontFamily.semibold,
+    fontWeight: '600',
+    color: colors.black,
+  },
+  segmentTextActive: {
+    color: colors.cream,
+  },
+
+  // ─── Lists ───
+  listTopBorder: {
+    flex: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
+  },
+  listContent: {
+    paddingBottom: 20,
+    flexGrow: 1,
+  },
+
+  // ─── Conversation rows ───
+  messageRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  headerAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: colors.gray300,
-    backgroundColor: colors.gray300,
-  },
-
-  filtersPanel: {
-    // Opaque background — this strip is sticky-pinned, so content
-    // scrolling underneath must not bleed through.
-    backgroundColor: colors.surfaceMuted,
-    paddingTop: 2,
-    // Hairline divider on the bottom (was top) — when pinned, the
-    // separation that matters is between the strip and the list below.
+    paddingHorizontal: 18,
+    paddingVertical: prefs?.largerTouchTargets ? 16 : 13,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+    borderBottomColor: colors.separator,
   },
-
-  // ─── New Matches horizontal row ───
-  newMatchesSection: {
-    paddingBottom: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
-    marginBottom: 4,
+  avatarWrap: {
+    position: 'relative',
   },
-  newMatchesScroll: {
-    paddingHorizontal: 16,
-    gap: 16,
-    paddingBottom: 8,
-  },
-  newMatchItem: {
-    alignItems: 'center',
-    width: 64,
-  },
-  newMatchRing: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2.5,
-  },
-  newMatchAvatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+  // Square 52px photo — the Industry language uses square frames with a
+  // hairline border, never circles.
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 0,
     backgroundColor: colors.gray300,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+  },
+  onlineDot: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+    backgroundColor: colors.accentDark,
     borderWidth: 2,
-    borderColor: colors.cardBg,
+    borderColor: colors.cream,
   },
-  newMatchName: {
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
-    color: colors.black,
-    marginTop: 5,
-    textAlign: 'center',
-    maxWidth: 64,
+  msgInfo: {
+    flex: 1,
+    minWidth: 0,
   },
-
-  // ─── Section labels ───
-  sectionHeaderRow: {
+  msgTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
     gap: 8,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 6,
   },
-  sectionLabel: {
-    fontSize: 14,
-    fontFamily: FontFamily.bold,
-    fontWeight: '700',
+  msgName: {
+    flexShrink: 1,
+    fontFamily: FontFamily.heading,
+    fontSize: 17.5,
+    fontWeight: '600',
     color: colors.black,
-    letterSpacing: 0.2,
   },
-  sectionBadge: {
+  msgTime: {
+    fontSize: 11.5,
+    fontFamily: FontFamily.regular,
+    color: prefs?.highContrast ? colors.gray600 : colors.gray400,
+    textAlign: 'right',
+  },
+  msgPreview: {
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    color: prefs?.highContrast ? colors.gray700 : colors.gray600,
+    marginTop: 2,
+  },
+  msgPreviewUnread: {
+    color: colors.black,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+  },
+  // Italic + muted so the "Say hi" CTA reads as a placeholder, not a
+  // real message from the other person.
+  msgPreviewPlaceholder: {
+    fontStyle: 'italic',
+    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
+  },
+  unreadPill: {
     minWidth: 20,
     height: 20,
     borderRadius: 10,
@@ -758,344 +715,137 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 6,
   },
-  sectionBadgeText: {
-    fontSize: 11,
-    fontFamily: FontFamily.bold,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-
-  // ─── Category Chips ───
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 8,
-    gap: 8,
-  },
-  categoryChips: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  categoryChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
-  },
-  categoryChipActive: {
-    backgroundColor: colors.black,
-    borderColor: colors.black,
-  },
-  categoryChipLikes: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  categoryChipText: {
-    ...Typography.label,
-    fontSize: 13,
-    color: isDark ? 'rgba(255,255,255,0.6)' : colors.gray500,
-  },
-  categoryChipTextActive: {
-    color: colors.cardBg,
-    fontWeight: '700',
-  },
-  categoryChipCount: {
-    fontSize: 11,
+  unreadPillText: {
+    fontSize: 11.5,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: isDark ? 'rgba(255,255,255,0.4)' : colors.gray400,
-    marginLeft: 4,
-  },
-  categoryChipCountActive: {
-    color: isDark ? 'rgba(26,26,26,0.45)' : 'rgba(255,255,255,0.65)',
+    color: colors.cream,
   },
 
-  // ─── Search Bar ───
-  searchWrap: {
-    paddingHorizontal: 16,
-    paddingBottom: 6,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 40,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    ...Typography.caption,
-    fontSize: 14,
-    color: colors.black,
-    paddingVertical: 0,
-  },
-  // ─── New Connections ───
-  // ─── Messages Header ───
-  messagesHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.separator,
-    marginTop: 2,
-  },
-  messagesTitle: {
-    ...Typography.sectionTitle,
-    color: colors.black,
-  },
-
-  // ─── Conversations list ───
-  listContent: {
-    paddingBottom: 20,
-  },
-  messageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: prefs?.largerTouchTargets ? 14 : 11,
-    marginHorizontal: 8,
-    marginVertical: 2,
-    borderRadius: 14,
-    backgroundColor: 'transparent',
-  },
-  // Like rows are the only "actionable" inbox state — keep a barely-
-  // there tint so the row reads as different without competing with the
-  // ring + badge that already carry the signal.
-  likeRowNew: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(206,17,38,0.025)',
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  // Plain frame for match rows — clean photo, hairline border for crispness
-  matchAvatarFrame: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    overflow: 'hidden',
-    backgroundColor: colors.gray300,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.06)',
-  },
-  // Like rows mirror the story ring — solid theme accent for "new"
-  likeAvatarRing: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2.5,
-    backgroundColor: colors.accent,
-  },
-  likeAvatarRingSeen: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)',
-  },
-  msgAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 999,
-    backgroundColor: colors.gray300,
-  },
-  likeEmojiDot: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.cardBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: isDark ? '#2A2A2A' : '#F0F0F0',
-  },
-  likeEmojiText: {
-    fontSize: 12,
-  },
-  onlineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#22C55E',
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    borderWidth: 2.5,
-    borderColor: colors.cardBg,
-  },
-  msgInfo: {
-    flex: 1,
-  },
-  msgNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginBottom: 4,
-  },
-  msgName: {
-    ...Typography.bodySmallMedium,
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    color: colors.black,
-  },
-  msgNameBold: {
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-  },
-  rowRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 6,
-    marginLeft: 8,
-  },
-  rowTimeHint: {
-    fontSize: 11,
+  // ─── Footer hint ───
+  footerHint: {
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    textAlign: 'center',
+    fontSize: 12.5,
     fontFamily: FontFamily.regular,
-    color: prefs?.highContrast ? colors.gray700 : colors.gray500,
-  },
-  msgTime: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: prefs?.highContrast ? colors.gray700 : colors.gray500,
-  },
-  unreadCountDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unreadCountText: {
-    fontSize: 11,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
-    color: '#FFFFFF',
-  },
-  msgPreview: {
-    ...Typography.caption,
-    color: prefs?.highContrast ? colors.gray700 : colors.gray600,
-    marginTop: 2,
-  },
-  // Used when there's no last-message preview yet (brand-new match).
-  // Italic + muted so it reads as a CTA rather than a real message.
-  msgPreviewPlaceholder: {
-    fontStyle: 'italic',
     color: prefs?.highContrast ? colors.gray600 : colors.gray500,
   },
-  likePreviewPrimary: {
-    ...Typography.caption,
-    color: prefs?.highContrast ? colors.gray700 : colors.gray500,
-    marginTop: 2,
-    fontWeight: '600',
+  footerHintLink: {
+    color: colors.accentDark,
     fontFamily: FontFamily.semibold,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
-  likePreviewSecondary: {
-    ...Typography.caption,
-    color: prefs?.highContrast ? colors.gray700 : colors.gray600,
-    marginTop: 2,
+
+  // ─── Requests segment ───
+  requestsContent: {
+    padding: 18,
+    paddingBottom: 40,
+    flexGrow: 1,
   },
-  likeNameRow: {
+  requestsIntro: {
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontFamily: FontFamily.regular,
+    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
+    marginBottom: 14,
+  },
+  requestGap: {
+    height: 14,
+  },
+  requestCard: {
+    backgroundColor: colors.cream,
+    padding: 14,
+    gap: 10,
+  },
+  requestHead: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 11,
+  },
+  requestAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 0,
+    backgroundColor: colors.gray300,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+  },
+  requestHeadText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  requestName: {
+    fontFamily: FontFamily.heading,
+    fontSize: 17,
+    fontWeight: '600',
+    color: colors.black,
+  },
+  requestMeta: {
+    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    color: colors.gray600,
+    marginTop: 1,
+  },
+  requestNote: {
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontFamily: FontFamily.regular,
+    color: colors.black,
+    backgroundColor: colors.surfaceMuted,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 2,
+  },
+  requestActions: {
+    flexDirection: 'row',
     gap: 8,
   },
-  likeBadge: {
-    flexDirection: 'row',
+  acceptBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 4,
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 999,
+    justifyContent: 'center',
     backgroundColor: colors.accent,
   },
-  likeBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  likePreviewNew: {
-    color: isDark ? 'rgba(206,17,38,0.8)' : '#CE1126',
+  acceptText: {
+    fontSize: 13.5,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
+    color: colors.cream,
   },
-  unreadBadge: {
-    marginLeft: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
+  declineBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: colors.gray300,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted,
+    borderColor: colors.separator,
   },
-  unreadBadgeText: {
-    ...Typography.captionBold,
-    color: colors.black,
-    fontSize: 11,
-    letterSpacing: 0.2,
-  },
-  msgUnread: {
+  declineText: {
+    fontSize: 13.5,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
     color: colors.black,
   },
-  likesYouRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    marginLeft: 8,
+  btnBusy: {
+    opacity: 0.6,
+  },
+  requestsEmpty: {
+    textAlign: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    fontSize: 13.5,
+    lineHeight: 20,
+    fontFamily: FontFamily.regular,
+    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
   },
 
-  // ─── Message requests entry ───
-  requestsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    // Comfortably over the 44pt minimum even before the accessibility
-    // preference bumps it — this is the first row in the inbox and gets
-    // tapped a lot.
-    paddingVertical: prefs?.largerTouchTargets ? 16 : 13,
-    marginHorizontal: 8,
-    marginTop: 4,
-    borderRadius: 14,
-  },
-  requestsIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.04)',
-  },
-  requestsTitle: {
-    ...Typography.bodySmallMedium,
-    fontSize: 16,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    color: colors.black,
-  },
-  requestsSub: {
-    ...Typography.caption,
-    color: prefs?.highContrast ? colors.gray700 : colors.gray500,
-    marginTop: 2,
-  },
-
-  // ─── Empty state ───
+  // ─── Empty conversations ───
   emptyMessages: {
     flex: 1,
     alignItems: 'center',
@@ -1103,61 +853,16 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     paddingVertical: 60,
   },
   emptyText: {
-    ...Typography.h4,
+    fontFamily: FontFamily.heading,
+    fontSize: 20,
+    fontWeight: '600',
     color: colors.black,
     marginTop: 16,
   },
   emptySubtext: {
-    ...Typography.bodySmall,
-    color: colors.gray500,
-    marginTop: 8,
-  },
-
-  // ─── Upsell Card ───
-  upsellCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: 14,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-    gap: 12,
-  },
-  upsellAvatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  upsellStackAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: isDark ? colors.gray200 : colors.white,
-    backgroundColor: colors.gray300,
-  },
-  upsellStackMore: {
-    backgroundColor: colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  upsellStackMoreText: {
-    fontSize: 11,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
-    color: '#FFFFFF',
-  },
-  upsellTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: colors.black,
-    marginBottom: 1,
-  },
-  upsellDesc: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontFamily: FontFamily.regular,
     color: colors.gray500,
+    marginTop: 8,
   },
 });

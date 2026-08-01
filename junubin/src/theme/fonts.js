@@ -1,17 +1,30 @@
-// JuNubin — Professional DM Sans Font System
-// Uses bundled DM Sans files for deterministic typography and weights.
-
+// JuNubin — Industry font system (claude.ai/design "JuNubin Redesign").
+// Body: Barlow. Display/headings: Barlow Condensed.
+//
+// The FontFamily KEY NAMES are the app-wide contract — every screen
+// styles with FontFamily.bold etc., so the redesign lands by remapping
+// the values here. The display roles (extrabold/black) intentionally
+// map to Barlow Condensed: in the Industry language, big names and
+// screen titles are condensed while running text stays Barlow.
 export const FontFamily = {
-  regular: 'DMSans-Regular',
-  medium: 'DMSans-Medium',
-  semibold: 'DMSans-SemiBold',
-  bold: 'DMSans-Bold',
-  extrabold: 'DMSans-ExtraBold',
-  black: 'DMSans-Black',
-  italic: 'DMSans-Italic',
-  mediumItalic: 'DMSans-MediumItalic',
-  boldItalic: 'DMSans-BoldItalic',
-  script: 'DancingScript-Bold',
+  regular: 'Barlow-Regular',
+  medium: 'Barlow-Medium',
+  semibold: 'Barlow-SemiBold',
+  bold: 'Barlow-Bold',
+  // Display roles — condensed. Used by screen titles and card names.
+  extrabold: 'BarlowCondensed-SemiBold',
+  black: 'BarlowCondensed-Bold',
+  italic: 'Barlow-Italic',
+  mediumItalic: 'Barlow-MediumItalic',
+  boldItalic: 'Barlow-BoldItalic',
+  // The script accent (was Dancing Script) is retired with the
+  // redesign — the brand voice is condensed caps, not cursive.
+  script: 'BarlowCondensed-SemiBold',
+  // Explicit heading keys for new-code clarity (same faces as the
+  // display roles above).
+  heading: 'BarlowCondensed-SemiBold',
+  headingMedium: 'BarlowCondensed-Medium',
+  headingBold: 'BarlowCondensed-Bold',
 };
 
 // Helper: given a numeric fontWeight string, return the correct fontFamily
@@ -30,14 +43,14 @@ export function fontForWeight(weight = '400') {
 
 // Bundled font assets loaded at app startup.
 export const fontAssets = {
-  'DMSans-Regular': require('../../assets/fonts/DMSans-Regular.ttf'),
-  'DMSans-Medium': require('../../assets/fonts/DMSans-Medium.ttf'),
-  'DMSans-SemiBold': require('../../assets/fonts/DMSans-SemiBold.ttf'),
-  'DMSans-Bold': require('../../assets/fonts/DMSans-Bold.ttf'),
-  'DMSans-ExtraBold': require('../../assets/fonts/DMSans-ExtraBold.ttf'),
-  'DMSans-Black': require('../../assets/fonts/DMSans-Black.ttf'),
-  'DMSans-Italic': require('../../assets/fonts/DMSans-Italic.ttf'),
-  'DMSans-MediumItalic': require('../../assets/fonts/DMSans-MediumItalic.ttf'),
-  'DMSans-BoldItalic': require('../../assets/fonts/DMSans-BoldItalic.ttf'),
-  'DancingScript-Bold': require('../../assets/fonts/DancingScript-Bold.ttf'),
+  'Barlow-Regular': require('../../assets/fonts/Barlow-Regular.ttf'),
+  'Barlow-Medium': require('../../assets/fonts/Barlow-Medium.ttf'),
+  'Barlow-SemiBold': require('../../assets/fonts/Barlow-SemiBold.ttf'),
+  'Barlow-Bold': require('../../assets/fonts/Barlow-Bold.ttf'),
+  'Barlow-Italic': require('../../assets/fonts/Barlow-Italic.ttf'),
+  'Barlow-MediumItalic': require('../../assets/fonts/Barlow-MediumItalic.ttf'),
+  'Barlow-BoldItalic': require('../../assets/fonts/Barlow-BoldItalic.ttf'),
+  'BarlowCondensed-Medium': require('../../assets/fonts/BarlowCondensed-Medium.ttf'),
+  'BarlowCondensed-SemiBold': require('../../assets/fonts/BarlowCondensed-SemiBold.ttf'),
+  'BarlowCondensed-Bold': require('../../assets/fonts/BarlowCondensed-Bold.ttf'),
 };

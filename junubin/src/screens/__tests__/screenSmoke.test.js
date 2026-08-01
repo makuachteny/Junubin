@@ -93,31 +93,6 @@ jest.mock('react-native-safe-area-context', () => ({
   })(),
 }));
 
-jest.mock('expo-av', () => ({
-  Audio: {
-    Sound: {
-      createAsync: jest.fn(async () => ({
-        sound: {
-          pauseAsync: jest.fn(),
-          playAsync: jest.fn(),
-        },
-      })),
-    },
-    requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
-    setAudioModeAsync: jest.fn(async () => {}),
-    Recording: {
-      createAsync: jest.fn(async () => ({
-        recording: {
-          stopAndUnloadAsync: jest.fn(async () => {}),
-          getURI: jest.fn(() => 'file://mock-audio.m4a'),
-          getStatusAsync: jest.fn(async () => ({ durationMillis: 1000 })),
-        },
-      })),
-      RecordingOptionsPresets: { HIGH_QUALITY: {} },
-    },
-  },
-}));
-
 jest.mock('../HomeScreen', () => () => {
   const React = require('react');
   const { Text } = require('react-native');
@@ -150,7 +125,10 @@ describe('screen smoke tests', () => {
         gray400: '#A0A0A0',
         gray600: '#666666',
         accent: '#F56040',
+        accentDark: '#B84730',
+        accentTint08: '#FDEDE8',
         accentTint10: '#FDE7E1',
+        accentTint15: '#FCE0D8',
         tabActive: '#111111',
         tabInactive: '#9A9A9A',
         surface: '#FFFFFF',
@@ -218,7 +196,8 @@ describe('screen smoke tests', () => {
   it('renders Onboarding screen', () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() };
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('Get Started')).toBeTruthy();
+    expect(getByText('GET STARTED')).toBeTruthy();
+    expect(getByText('Find your South Sudanese people.')).toBeTruthy();
   });
 
   it('renders Chat screen', async () => {
@@ -245,7 +224,10 @@ describe('screen smoke tests', () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn(), dispatch: jest.fn() };
     const { getByText } = render(<SettingsScreen navigation={navigation} />);
     expect(getByText('Settings')).toBeTruthy();
-    expect(getByText('Others')).toBeTruthy();
+    expect(getByText('LOCATION VISIBILITY')).toBeTruthy();
+    expect(getByText('APPEARANCE')).toBeTruthy();
+    expect(getByText('ACCOUNT & SAFETY')).toBeTruthy();
+    expect(getByText('DISCOVERY')).toBeTruthy();
   });
 
   it('renders Main app navigator for authenticated users', async () => {

@@ -102,8 +102,7 @@ const DEEP_LINK_PREFIX = Linking.createURL('/');
 // we extend later. Keep this in sync with RESUME_KEY_BY_ELIGIBILITY_ID
 // in ProfileSetupScreen.js.
 const ALLOWED_SURVEY_STEPS = new Set([
-  'purpose', 'displayName', 'dob', 'gender', 'photos',
-  'interestedIn', 'datingIntentions', 'bio',
+  'purpose', 'displayName', 'dob', 'gender', 'photos', 'bio',
 ]);
 const sanitizeSurveyStep = (s) => {
   if (typeof s !== 'string') return undefined;

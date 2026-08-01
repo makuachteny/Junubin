@@ -204,7 +204,7 @@ const FindFriendsScreen = ({ navigation }) => {
             See which of your contacts are already on JuNubin and invite friends who haven't joined yet.
           </Text>
           <Text style={styles.permissionNote}>
-            We only use your contacts to find matches. Your contact list is never stored on our servers.
+            We only use your contacts to find people you already know. Your contact list is never stored on our servers.
           </Text>
           <TouchableOpacity style={[styles.permissionBtn, { backgroundColor: colors.accent }]} onPress={requestContacts} activeOpacity={0.85}>
             <Ionicons name="phone-portrait-outline" size={18} color="#FFFFFF" />

@@ -27,8 +27,6 @@
   },
   "dependencies": {
     "@aws-amplify/ui-react-native": "^2.7.4",
-    "@daily-co/react-native-daily-js": "^0.84.1",
-    "@daily-co/react-native-webrtc": "^124.0.6-daily.1",
     "@expo-google-fonts/dancing-script": "^0.4.2",
     "@expo-google-fonts/dm-sans": "^0.4.2",
     "@expo-google-fonts/nunito": "^0.4.2",
@@ -43,7 +41,6 @@
     "babel-preset-expo": "~54.0.10",
     "expo": "~54.0.36",
     "expo-asset": "~12.0.13",
-    "expo-av": "~16.0.8",
     "expo-blur": "~15.0.8",
     "expo-camera": "~17.0.10",
     "expo-clipboard": "~8.0.8",
@@ -102,8 +99,6 @@
     "doctor": {
       "reactNativeDirectoryCheck": {
         "exclude": [
-          "@daily-co/react-native-daily-js",
-          "@daily-co/react-native-webrtc",
           "react-native-background-timer"
         ]
       }

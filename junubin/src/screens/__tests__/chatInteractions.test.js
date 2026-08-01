@@ -1,11 +1,10 @@
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
-import { Alert } from 'react-native';
 import ChatScreen from '../ChatScreen';
 
 const mockUseTheme = jest.fn();
-const mockUseSubscription = jest.fn();
 const mockUseAuth = jest.fn();
+const mockGetMessages = jest.fn(async () => []);
 
 jest.mock('../../theme', () => {
   const actual = jest.requireActual('../../theme');
@@ -14,10 +13,6 @@ jest.mock('../../theme', () => {
     useTheme: () => mockUseTheme(),
   };
 });
-
-jest.mock('../../payments', () => ({
-  useSubscription: () => mockUseSubscription(),
-}));
 
 jest.mock('../../auth', () => ({
   useAuth: () => mockUseAuth(),
@@ -29,9 +24,9 @@ jest.mock('../../hooks', () => ({
   useEligibility: () => ({ gate: () => true, lastVerdict: () => null, nudge: null }),
 }));
 
-// Chat is text + images only. connectionService is reached from the
-// overflow menu's "Remove connection" action; stub it so the screen
-// renders without a Supabase client.
+// connectionService is reached from the overflow menu's "Remove
+// connection" action; stub it so the screen renders without a
+// Supabase client.
 jest.mock('../../api/services/connectionService', () => ({
   disconnect: jest.fn(async () => ({ success: true })),
   getConnectionState: jest.fn(async () => ({
@@ -60,12 +55,13 @@ jest.mock('../../api/hooks/useRealtime', () => ({
   }),
 }));
 
+// Text is the only message kind chatService still supports — the mock
+// surface mirrors the real module's exports exactly, so a test (or the
+// screen) reaching for sendImageMessage/toggleReaction fails loudly.
 jest.mock('../../api/services/chatService', () => ({
-  getMessages: jest.fn(async () => []),
+  UNSUPPORTED_MESSAGE_TYPE: 'unsupported',
+  getMessages: (...args) => mockGetMessages(...args),
   sendMessage: jest.fn(async () => ({ id: 'sent-1' })),
-  sendImageMessage: jest.fn(async () => ({ id: 'img-1', url: 'https://example.com/i.jpg' })),
-  toggleReaction: jest.fn(async () => ({ added: true })),
-  getReactions: jest.fn(async () => ({})),
   markConversationRead: jest.fn(async () => 0),
 }));
 
@@ -95,37 +91,10 @@ jest.mock('react-native-safe-area-context', () => ({
   })(),
 }));
 
-jest.mock('expo-av', () => ({
-  Audio: {
-    Sound: {
-      createAsync: jest.fn(async () => ({
-        sound: {
-          pauseAsync: jest.fn(),
-          playAsync: jest.fn(),
-        },
-      })),
-    },
-    requestPermissionsAsync: jest.fn(async () => ({ granted: true })),
-    setAudioModeAsync: jest.fn(async () => {}),
-    Recording: {
-      createAsync: jest.fn(async () => ({
-        recording: {
-          stopAndUnloadAsync: jest.fn(async () => {}),
-          getURI: jest.fn(() => 'file://mock-audio.m4a'),
-          getStatusAsync: jest.fn(async () => ({ durationMillis: 1000 })),
-        },
-      })),
-      RecordingOptionsPresets: { HIGH_QUALITY: {} },
-    },
-  },
-}));
-
 describe('Chat interactive actions', () => {
-  let alertSpy;
-
   beforeEach(() => {
     jest.useFakeTimers();
-    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    mockGetMessages.mockImplementation(async () => []);
     mockUseTheme.mockReturnValue({
       colors: {
         cream: '#F7F2EA',
@@ -141,22 +110,6 @@ describe('Chat interactive actions', () => {
         accentTint10: '#FCE7E1',
       },
     });
-    mockUseSubscription.mockReturnValue({
-      hasTier: () => true,
-      effectiveTier: 'plus',
-      promoTier: null,
-      promoEndsAt: null,
-      coins: 200,
-      adsEnabled: true,
-      consumeCoins: () => true,
-      consumeWhisper: jest.fn(),
-      addCoins: jest.fn(),
-      addSpotlights: jest.fn(),
-      addSuperLikes: jest.fn(),
-      addWhispers: jest.fn(),
-      setAdsEnabled: jest.fn(),
-      grantPromoTier: jest.fn(),
-    });
     mockUseAuth.mockReturnValue({
       session: null,
       user: { id: 'u1', name: 'Me' },
@@ -164,73 +117,35 @@ describe('Chat interactive actions', () => {
   });
 
   afterEach(() => {
-    alertSpy.mockRestore();
     jest.clearAllTimers();
     jest.useRealTimers();
   });
 
-  // Mini Game (Quick Pick) and Co-watch / Co-listen UI removed in v1 strip; tests deleted.
-
-  // Chat is text + images only. These two cases lock that in: the
-  // composer must not offer voice, and the action row must not offer
-  // gifts or games. If someone re-adds a mic or a call button, the
-  // queries below start finding it and these fail.
-  it('composer offers no voice note or call affordance', async () => {
+  // Chat is text-only. This locks the composer down: no mic, no call
+  // button, no plus-button action row (photo / sticker / gift / game
+  // all shipped through it once). If someone re-adds any of those
+  // affordances, these queries start finding them and the test fails.
+  it('composer offers text input and send only', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const match = { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] };
     const route = { params: { match } };
-    const { queryByTestId } = render(
+    const { queryByTestId, getByTestId, getByPlaceholderText } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
 
+    expect(getByPlaceholderText('Type a message...')).toBeTruthy();
+    expect(getByTestId('chat-send')).toBeTruthy();
     expect(queryByTestId('chat-mic')).toBeNull();
-    expect(queryByTestId('chat-send')).toBeTruthy();
+    expect(queryByTestId('chat-plus')).toBeNull();
+    expect(queryByTestId('chat-photo')).toBeNull();
+    expect(queryByTestId('chat-sticker')).toBeNull();
     expect(navigation.navigate).not.toHaveBeenCalledWith('Call', expect.anything());
 
     // Flush mount-time getMessages()/markConversationRead() promises.
     await act(async () => {});
   });
 
-  it('action row offers photo and stickers only, with no upgrade prompt', async () => {
-    mockUseSubscription.mockReturnValue({
-      hasTier: () => false,
-      effectiveTier: 'free',
-      promoTier: null,
-      promoEndsAt: null,
-      coins: 0,
-      adsEnabled: true,
-      consumeCoins: () => true,
-      consumeWhisper: jest.fn(),
-      addCoins: jest.fn(),
-      addSpotlights: jest.fn(),
-      addSuperLikes: jest.fn(),
-      addWhispers: jest.fn(),
-      setAdsEnabled: jest.fn(),
-      grantPromoTier: jest.fn(),
-    });
-    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
-    const { getByTestId, queryByTestId } = render(
-      <ChatScreen navigation={navigation} route={route} />
-    );
-
-    fireEvent.press(getByTestId('chat-plus'));
-
-    expect(getByTestId('chat-photo')).toBeTruthy();
-    expect(getByTestId('chat-sticker')).toBeTruthy();
-    expect(queryByTestId('chat-gift')).toBeNull();
-    expect(queryByTestId('chat-game')).toBeNull();
-
-    // Stickers are free now — there is no tier to upgrade to, so
-    // tapping must open the tray rather than raise a paywall alert.
-    fireEvent.press(getByTestId('chat-sticker'));
-    expect(alertSpy).not.toHaveBeenCalled();
-    expect(navigation.navigate).not.toHaveBeenCalledWith('Elite');
-
-    await act(async () => {});
-  });
-
-  it('long press text message can add emoji reaction', async () => {
+  it('sends a plain text message from the composer', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
     const { getByPlaceholderText, getByTestId, getByText } = render(
@@ -242,11 +157,38 @@ describe('Chat interactive actions', () => {
       fireEvent.press(getByTestId('chat-send'));
     });
 
-    fireEvent(getByText('Hello there'), 'longPress', { nativeEvent: { pageX: 190, pageY: 320 } });
-    await act(async () => {
-      fireEvent.press(getByTestId('reaction-heart'));
-    });
+    expect(getByText('Hello there')).toBeTruthy();
+  });
 
-    expect(getByText('❤️')).toBeTruthy();
+  // Legacy rows (image / audio / gift / game) written by older builds
+  // are normalised by chatService to UNSUPPORTED_MESSAGE_TYPE with an
+  // empty body. The screen must render a neutral placeholder for them —
+  // not an empty bubble, not a crash.
+  it('renders a placeholder for legacy non-text messages', async () => {
+    mockUseAuth.mockReturnValue({
+      session: { user: { id: 'auth-1' } },
+      user: { id: 'me', name: 'Me' },
+    });
+    mockGetMessages.mockImplementation(async () => [
+      { id: 'old-1', senderId: 'them', text: '', time: '9:00 AM', type: 'unsupported' },
+      { id: 'new-1', senderId: 'them', text: 'still here', time: '9:01 AM', type: 'text' },
+    ]);
+
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = {
+      params: {
+        match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] },
+        conversationId: 'conv-1',
+      },
+    };
+    const { getByText } = render(
+      <ChatScreen navigation={navigation} route={route} />
+    );
+
+    // Flush the mount-time getMessages() promise.
+    await act(async () => {});
+
+    expect(getByText('Attachment no longer supported')).toBeTruthy();
+    expect(getByText('still here')).toBeTruthy();
   });
 });

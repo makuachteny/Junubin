@@ -16,9 +16,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { GraffitiSend } from '../components/icons';
-import { promptToOpenSettings } from '../utils/permissionAlert';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, Typography, FontFamily } from '../theme';
@@ -33,13 +31,10 @@ import { detectScamSignal } from '../api/services/safetyServiceExtras';
 import ChatScamBanner from '../components/ChatScamBanner';
 import { trackEvent, AnalyticsEvents } from '../utils/analytics';
 import { useEligibility } from '../hooks';
-import { supabase } from '../config/supabase';
 import { useRealtime } from '../api/hooks/useRealtime';
 import { mockMessages as demoMockMessages } from '../data/__dev__/mockProfiles';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import OnlinePulseDot from '../components/OnlinePulseDot';
-import ChatImageBubble from '../components/ChatImageBubble';
-import ChatReactionPicker from '../components/ChatReactionPicker';
 import { useScreenshotProtection } from '../utils/useScreenshotProtection';
 
 import { interactiveStore } from '../utils/interactiveStore';
@@ -66,7 +61,6 @@ const getIcebreakers = (match, currentUser) => {
     'What brought you to JuNubin?',
   ];
 };
-const CHAT_STICKERS = ['🔥', '✨', '💫', '🎧', '🙌'];
 
 function TypingDot({ delay: delayMs, color }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -102,7 +96,7 @@ export default function ChatScreen({ navigation, route }) {
   const { isConnected } = useNetworkStatus();
   // Survey / restricted / banned nudge. The gate() calls that used to
   // guard the call buttons are gone with the calls themselves — this
-  // screen is text + images only now — but the nudge still renders so a
+  // screen is text only now — but the nudge still renders so a
   // restricted account is told why the app is limited.
   const { nudge: surveyNudge } = useEligibility();
 
@@ -180,17 +174,11 @@ export default function ChatScreen({ navigation, route }) {
   });
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [showReactionPicker, setShowReactionPicker] = useState(false);
-  const [reactionPosition, setReactionPosition] = useState(null);
-  const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [missionState, setMissionState] = useState({
     intro: false,
     question: false,
     response: false,
   });
-  const [activeSticker, setActiveSticker] = useState(CHAT_STICKERS[0]);
-  const [showStickerTray, setShowStickerTray] = useState(false);
-  const [showActionRow, setShowActionRow] = useState(false);
 
   // ── Scam-detection banner state ──────────────────────────────────
   // verdict: null = not yet fetched / no risk; otherwise the
@@ -298,7 +286,7 @@ export default function ChatScreen({ navigation, route }) {
     return () => leaveConversation(conversationId);
   }, [conversationId, joinConversation, leaveConversation]);
 
-  // Load message history from API. Chat is text + images only now, so
+  // Load message history from API. Chat is text-only now, so
   // the mapping is a straight pass-through — the game-session
   // reconstruction that used to live here went out with the games.
   useEffect(() => {
@@ -385,39 +373,6 @@ export default function ChatScreen({ navigation, route }) {
     });
     return () => { unsubStart(); unsubStop(); };
   }, [conversationId, onTypingStart, onTypingStop]);
-
-  // Subscribe to MessageReaction inserts/deletes for this conversation
-  // so a reaction added on another device pops up here in real time.
-  // Filtered Postgres CDC via Supabase Realtime — only fires for rows
-  // belonging to messages in the active conversation, so the listener
-  // is cheap.
-  useEffect(() => {
-    if (!conversationId) return undefined;
-    const channel = supabase.channel(`reactions:${conversationId}`);
-    const applyDelta = (payload) => {
-      const r = payload.new || payload.old;
-      if (!r?.messageId) return;
-      setMessages((prev) => prev.map((m) => {
-        if (m.id !== r.messageId) return m;
-        const list = Array.isArray(m.reactions) ? m.reactions : [];
-        if (payload.eventType === 'INSERT') {
-          if (list.find((x) => x.id === r.id)) return m;
-          return { ...m, reactions: [...list, r] };
-        }
-        if (payload.eventType === 'DELETE') {
-          return { ...m, reactions: list.filter((x) => x.id !== r.id) };
-        }
-        return m;
-      }));
-    };
-    channel
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'MessageReaction' }, applyDelta)
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'MessageReaction' }, applyDelta)
-      .subscribe();
-    return () => {
-      try { channel.unsubscribe(); supabase.removeChannel(channel); } catch {}
-    };
-  }, [conversationId]);
 
   // Emit read receipt when chat opens
   useEffect(() => {
@@ -564,83 +519,6 @@ export default function ChatScreen({ navigation, route }) {
     persistTextMessage(messageId, target.text);
   }, [messages, persistTextMessage]);
 
-  const handlePhoto = useCallback(async () => {
-    // Permission gate. iOS denials are permanent (canAskAgain === false)
-    // — push the user to Settings instead of silently failing.
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (perm.status !== 'granted') {
-      if (perm.canAskAgain === false) {
-        promptToOpenSettings({
-          title: 'Photo access needed',
-          message: 'JuNubin needs photo access to send pictures in chat. Open Settings to enable it.',
-        });
-      }
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    const uri = asset.uri;
-    if (!conversationId) return;
-
-    // Optimistic insert — drop the bubble with status: 'sending' so the
-    // sender sees it instantly. Realtime won't echo it back to us (we
-    // append the saved row ourselves on success), so de-dupe is by id.
-    const optimisticId = `msg-img-${Date.now()}`;
-    LayoutAnimation.configureNext(SPRING_ANIM);
-    const optimisticMsg = {
-      id: optimisticId,
-      sender: 'me',
-      isMe: true,
-      type: 'image',
-      uri,
-      time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-      read: false,
-      status: 'sending',
-    };
-    setMessages((prev) => [...prev, optimisticMsg]);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-
-    try {
-      const message = await chatService.sendImageMessage(conversationId, uri);
-      setMessages((prev) => prev.map((m) => (
-        m.id === optimisticId
-          ? { ...m, id: message.id, uri: message.url || uri, status: 'sent', createdAt: message.createdAt }
-          : m
-      )));
-    } catch (e) {
-      setMessages((prev) => prev.map((m) => (
-        m.id === optimisticId ? { ...m, status: 'failed' } : m
-      )));
-      Alert.alert('Photo failed', e?.message || 'Could not send your photo.');
-    }
-  }, [conversationId]);
-
-  const handleSendSticker = useCallback(() => {
-    LayoutAnimation.configureNext(SPRING_ANIM);
-    const msg = {
-      id: `msg-sticker-${Date.now()}`,
-      sender: 'me',
-      text: activeSticker,
-      type: 'sticker',
-      time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
-      read: false,
-    };
-    setMessages((prev) => [...prev, msg]);
-    setMissionAndPersist((prev) => ({ ...prev, intro: true }));
-    setShowStickerTray(false);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-  }, [activeSticker]);
-
-  const handleToggleStickerTray = useCallback(() => {
-    setShowStickerTray((v) => !v);
-  }, []);
-
   // Three-dot menu — Set Alias / Safety / Clear / Remove connection /
   // Report & Block. The two safety actions at the bottom are unchanged.
   const handleHeaderMenu = useCallback(() => {
@@ -751,48 +629,21 @@ export default function ChatScreen({ navigation, route }) {
     ]);
   }, [match.name, match.userId, match.id, conversationId, navigation]);
 
-  const handleLongPressMessage = useCallback((item, event) => {
-    if (item?.type !== 'text') return;
-    const pageX = event?.nativeEvent?.pageX ?? 180;
-    const pageY = event?.nativeEvent?.pageY ?? 260;
-    setSelectedMessageId(item.id);
-    setReactionPosition({ x: pageX, y: pageY });
-    setShowReactionPicker(true);
-  }, []);
-
-  const handleReaction = useCallback(async (reaction) => {
-    if (!selectedMessageId) return;
-    // Optimistic flip — single-user reaction shown inline on the bubble.
-    // Multi-user reaction stacks live below the bubble (rendered from
-    // `reactions` state populated via Realtime).
-    setMessages((prev) => prev.map((m) =>
-      m.id === selectedMessageId ? { ...m, reaction: reaction.emoji } : m
-    ));
-    setShowReactionPicker(false);
-    try {
-      await chatService.toggleReaction(selectedMessageId, reaction.emoji);
-    } catch (err) {
-      // Roll back the inline marker on failure.
-      setMessages((prev) => prev.map((m) =>
-        m.id === selectedMessageId ? { ...m, reaction: undefined } : m
-      ));
-      if (__DEV__) console.warn('Reaction persist failed:', err?.message);
-    }
-  }, [selectedMessageId]);
-
   const renderMessage = useCallback(({ item }) => {
     const isMe = item.sender === 'me';
 
-    // Image message
-    if (item.type === 'image') {
-      return <ChatImageBubble uri={item.uri} isMe={isMe} time={item.time} colors={colors} />;
-    }
-
-    // Text message (default)
-    if (item.type === 'sticker') {
+    // Anything that isn't plain text is a legacy attachment (image /
+    // audio / gift / game / sticker rows written by older builds).
+    // chatService normalises those to UNSUPPORTED_MESSAGE_TYPE with an
+    // empty body — render a neutral, non-actionable placeholder rather
+    // than an empty bubble, so old threads still make visual sense.
+    if (item.type && item.type !== 'text') {
       return (
         <View style={[styles.messageBubbleWrap, isMe ? styles.myMessage : styles.theirMessage]}>
-          <Text style={styles.stickerBubble}>{item.text}</Text>
+          <View style={[styles.bubble, styles.unsupportedBubble]}>
+            <Ionicons name="document-outline" size={14} color={colors.gray400} style={{ marginRight: 6 }} />
+            <Text style={styles.unsupportedText}>Attachment no longer supported</Text>
+          </View>
           <View style={[styles.timeRow, isMe && { justifyContent: 'flex-end' }]}>
             <Text style={styles.timeText}>{item.time}</Text>
           </View>
@@ -800,16 +651,13 @@ export default function ChatScreen({ navigation, route }) {
       );
     }
 
-    // Text message (default)
     const isFailed  = isMe && item.status === 'failed';
     const isSending = isMe && item.status === 'sending';
     return (
       <TouchableOpacity
         style={[styles.messageBubbleWrap, isMe ? styles.myMessage : styles.theirMessage]}
-        onLongPress={(e) => handleLongPressMessage(item, e)}
         onPress={isFailed ? () => handleRetryFailed(item.id) : undefined}
         activeOpacity={0.8}
-        delayLongPress={300}
         accessibilityHint={isFailed ? 'Tap to retry sending this message' : undefined}
       >
         <View style={[
@@ -822,7 +670,6 @@ export default function ChatScreen({ navigation, route }) {
           </Text>
         </View>
         <View style={[styles.timeRow, isMe && { justifyContent: 'flex-end' }]}>
-          {item.reaction && <Text style={styles.reactionEmoji}>{item.reaction}</Text>}
           {isFailed ? (
             <>
               <Ionicons
@@ -868,7 +715,7 @@ export default function ChatScreen({ navigation, route }) {
         </View>
       </TouchableOpacity>
     );
-  }, [colors, styles, prefs, handleLongPressMessage, handleRetryFailed]);
+  }, [colors, styles, prefs, handleRetryFailed]);
 
   return (
     <View style={styles.container}>
@@ -879,7 +726,7 @@ export default function ChatScreen({ navigation, route }) {
     >
       {/* Header — back · avatar+name · overflow menu. The voice and
           video call buttons that used to sit here were removed: chat is
-          text and images only. */}
+          text only. */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={22} color={colors.black} />
@@ -939,9 +786,10 @@ export default function ChatScreen({ navigation, route }) {
           setScamVerdict(null);
         }}
         onLearnMore={() => {
-          // Route to the safety FAQ. SettingsInfoScreen is the umbrella
-          // help surface; pass a topic so it scrolls to the right section.
-          navigation.navigate('SettingsInfo', { topic: 'scam-patterns' });
+          // Route to the Safety Center page. SettingsInfoScreen keys
+          // its content off `pageKey` — a wrong param silently falls
+          // back to the generic FAQ.
+          navigation.navigate('SettingsInfo', { pageKey: 'safety' });
         }}
       />
 
@@ -959,6 +807,18 @@ export default function ChatScreen({ navigation, route }) {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         ListHeaderComponent={
           <View style={styles.listHeader}>
+            {/* Industry redesign: state the text-only contract up front,
+                with a path to the safety page. */}
+            <Text style={styles.textOnlyNote}>
+              Chats are text-only by design.{' '}
+              <Text
+                style={styles.textOnlyLink}
+                onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'safety' })}
+                accessibilityRole="link"
+              >
+                Safety tips
+              </Text>
+            </Text>
             {/* ── Connection banner — only on a fresh connection,
                 dismisses after first view or first message sent ── */}
             {showConnectionBanner && (
@@ -1021,7 +881,7 @@ export default function ChatScreen({ navigation, route }) {
             )}
 
             {/* Icebreakers, mini-games, voice & vibes and co-watch cards
-                are all gone — chat is text and images only. The
+                are all gone — chat is text only. The
                 conversation-starter card above is the only prompt. */}
           </View>
         }
@@ -1039,40 +899,10 @@ export default function ChatScreen({ navigation, route }) {
         </View>
       )}
 
-      {/* Sticker popup (floats above input bar) */}
-      {showStickerTray && (
-        <View style={[styles.stickerPopup, { bottom: insets.bottom + 62 }]}>
-          {CHAT_STICKERS.map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={[styles.stickerChoice, activeSticker === emoji && styles.stickerChoiceActive]}
-              onPress={() => setActiveSticker(emoji)}
-              accessibilityLabel={`Sticker ${emoji}`}
-              accessibilityRole="button"
-            >
-              <Text style={styles.stickerChoiceText}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={styles.stickerSend} onPress={handleSendSticker}>
-            <Text style={styles.stickerSendText}>Send</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Input bar */}
+      {/* Input bar — text in, send out. The plus button / action row
+          (photo, stickers) went out with the text-only pivot; the
+          composer is just the field and the send button now. */}
       <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TouchableOpacity
-          accessibilityLabel={prefs?.screenReaderHints ? 'More actions' : 'chat-plus'}
-          testID="chat-plus"
-          onPress={() => {
-            LayoutAnimation.configureNext(SPRING_ANIM);
-            setShowActionRow((v) => !v);
-          }}
-          style={styles.plusBtn}
-        >
-          <Ionicons name={showActionRow ? 'close' : 'add'} size={22} color={colors.accent} />
-        </TouchableOpacity>
-
         <View style={styles.inputWrap}>
           <TextInput
             style={styles.textInput}
@@ -1108,45 +938,6 @@ export default function ChatScreen({ navigation, route }) {
         </TouchableOpacity>
       </View>
 
-      {/* Expandable action row */}
-      {showActionRow && (
-        <View style={[styles.actionRow, { paddingBottom: insets.bottom > 0 ? 4 : 8 }]}>
-          <TouchableOpacity
-            accessibilityLabel={prefs?.screenReaderHints ? 'Attach a photo' : 'chat-photo'}
-            testID="chat-photo"
-            onPress={handlePhoto}
-            style={styles.actionIcon}
-          >
-            <View style={styles.actionIconCircle}>
-              <Ionicons name="image" size={22} color={colors.accent} />
-            </View>
-            <Text style={styles.actionIconLabel}>Photo</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            accessibilityLabel={prefs?.screenReaderHints ? 'Open sticker tray' : 'chat-sticker'}
-            testID="chat-sticker"
-            onPress={handleToggleStickerTray}
-            style={styles.actionIcon}
-          >
-            <View style={styles.actionIconCircle}>
-              <Ionicons name="sparkles" size={20} color={colors.accent} />
-            </View>
-            <Text style={styles.actionIconLabel}>Sticker</Text>
-          </TouchableOpacity>
-
-        </View>
-      )}
-
-      {/* Reaction picker */}
-      <ChatReactionPicker
-        visible={showReactionPicker}
-        position={reactionPosition}
-        onSelect={handleReaction}
-        onClose={() => setShowReactionPicker(false)}
-        colors={colors}
-      />
-
     </KeyboardAvoidingView>
     {surveyNudge}
     </View>
@@ -1181,10 +972,14 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  // Industry language: photos are square tiles with a hairline border,
+  // never circles.
   headerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
     backgroundColor: colors.gray300,
   },
   headerOnlineDot: {
@@ -1222,6 +1017,17 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   listHeader: {
     gap: 14,
     paddingBottom: 6,
+  },
+  textOnlyNote: {
+    ...Typography.caption,
+    fontSize: 11.5,
+    color: colors.gray400,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  textOnlyLink: {
+    color: colors.accentDark,
+    fontFamily: FontFamily.medium,
   },
   // ── Connection Banner ──
   matchBanner: {
@@ -1504,29 +1310,19 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   theirMessage: {
     alignSelf: 'flex-start',
   },
+  // Industry bubbles — tight radius-4 blocks, no drop shadows: mine is
+  // solid accent, theirs is the tinted surface with a hairline border.
   bubble: {
-    paddingHorizontal: 16,
-    paddingVertical: 11,
-    borderRadius: 20,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 4,
   },
   myBubble: {
     backgroundColor: colors.accent,
-    borderBottomRightRadius: 6,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
   },
   theirBubble: {
-    backgroundColor: colors.cardBg,
-    borderBottomLeftRadius: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    borderWidth: 1,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
   },
   bubbleText: {
@@ -1571,15 +1367,19 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     fontWeight: '500',
     fontFamily: FontFamily.medium,
   },
-  reactionEmoji: {
-    fontSize: 14,
-    marginRight: 4,
+  // Legacy attachment placeholder — muted, bordered, deliberately not
+  // styled like a live message so it can't be mistaken for new content.
+  unsupportedBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
   },
-  stickerBubble: {
-    fontSize: 34,
-    lineHeight: 38,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  unsupportedText: {
+    ...Typography.caption,
+    color: colors.gray400,
+    fontStyle: 'italic',
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -1617,9 +1417,9 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
   },
   inputWrap: {
     flex: 1,
-    backgroundColor: colors.cardBg,
-    borderRadius: 24,
-    paddingHorizontal: isCompact ? 14 : 18,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 4,
+    paddingHorizontal: isCompact ? 12 : 14,
     paddingVertical: isCompact ? 9 : 10,
     maxHeight: 100,
     borderWidth: 1,
@@ -1633,114 +1433,20 @@ const getStyles = (colors, isCompact, prefs = {}) => StyleSheet.create({
     paddingTop: 0,
     paddingBottom: 0,
   },
+  // Industry: square radius-4 send block, no glow shadow.
   sendBtn: {
-    width: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 38 : 42),
-    height: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 38 : 42),
-    borderRadius: prefs?.largerTouchTargets ? (isCompact ? 20 : 22) : (isCompact ? 19 : 21),
+    width: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 38 : 44),
+    height: prefs?.largerTouchTargets ? (isCompact ? 40 : 44) : (isCompact ? 38 : 44),
+    borderRadius: 4,
     backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 2,
-    shadowColor: colors.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
   },
   // Send is now permanently in the composer (there's no mic to swap
   // with), so it needs a visibly inert state when there's nothing to
-  // send. Opacity only — the button keeps its full 42pt touch target.
+  // send. Opacity only — the button keeps its full touch target.
   sendBtnDisabled: {
     opacity: 0.4,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  plusBtn: {
-    width: prefs?.largerTouchTargets ? 42 : 38,
-    height: prefs?.largerTouchTargets ? 42 : 38,
-    borderRadius: prefs?.largerTouchTargets ? 21 : 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-    marginBottom: 2,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-evenly',
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    backgroundColor: colors.cardBg,
-  },
-  actionIcon: {
-    alignItems: 'center',
-    gap: 4,
-    minWidth: 60,
-  },
-  actionIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  actionIconLabel: {
-    ...Typography.caption,
-    fontSize: 12,
-    color: colors.gray500,
-  },
-  stickerPopup: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: isCompact ? 8 : 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: colors.cardBg,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.gray200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 50,
-  },
-  stickerChoice: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.gray300,
-    backgroundColor: colors.cardBg,
-  },
-  stickerChoiceActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.separator,
-  },
-  stickerChoiceText: {
-    fontSize: 20,
-  },
-  stickerSend: {
-    marginLeft: 'auto',
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: colors.accent,
-  },
-  stickerSendText: {
-    ...Typography.captionBold,
-    color: '#FFF',
   },
 });

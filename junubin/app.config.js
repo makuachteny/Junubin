@@ -73,11 +73,13 @@ export default {
       infoPlist: {
         // Required permission strings — App Review rejects builds that prompt
         // for a permission without an explanation here.
-        NSCameraUsageDescription: 'JuNubin needs camera access to take profile photos, verify your identity, and post stories.',
-        NSMicrophoneUsageDescription: 'JuNubin needs microphone access to send voice notes and place voice/video calls.',
-        NSPhotoLibraryUsageDescription: 'JuNubin needs photo library access to upload profile photos and share images in chat and stories.',
-        NSPhotoLibraryAddUsageDescription: 'JuNubin saves images you create (e.g. event posters or shared memes) to your photo library only when you tap save.',
-        NSLocationWhenInUseUsageDescription: 'JuNubin uses your location to show people nearby and let you tag posts with where they were taken. Location is only collected while you are using the app.',
+        NSCameraUsageDescription: 'JuNubin needs camera access to take your profile photos and to verify your identity with a selfie.',
+        // NSMicrophoneUsageDescription intentionally OMITTED — JuNubin is
+        // text-only. Voice notes and voice/video calls were removed, so
+        // declaring a microphone purpose string would be claiming a
+        // capability the app never exercises.
+        NSPhotoLibraryUsageDescription: 'JuNubin needs photo library access to upload your profile photos.',
+        NSLocationWhenInUseUsageDescription: 'JuNubin uses your approximate location to show South Sudanese people near you. Your location is only read while you are using the app, is rounded before anyone sees it, and you stay hidden on the map unless you turn visibility on yourself.',
         NSContactsUsageDescription: 'JuNubin can scan your contacts to find friends who already have an account. Contact data is only used for this lookup and is never shown to other users.',
         // NSFaceIDUsageDescription intentionally OMITTED. Face ID unlock
         // is not implemented — `expo-local-authentication` isn't a
@@ -96,11 +98,11 @@ export default {
         // Encryption export-compliance flag — set in addition to ios.config so
         // older Expo SDK versions still see it.
         ITSAppUsesNonExemptEncryption: false,
-        // `audio` background mode keeps WebRTC audio streams alive when the
-        // app is sent to the background mid-call. `voip` was already there
-        // for the call-signaling layer and lets PushKit-style VoIP push
-        // wake the app for incoming calls. Daily.co's RN SDK requires both.
-        UIBackgroundModes: ['remote-notification', 'voip', 'audio'],
+        // Only `remote-notification`, for push. The `voip` and `audio`
+        // modes were there for Daily.co call signalling and WebRTC audio;
+        // JuNubin is text-only now, so declaring them would be claiming a
+        // capability the app doesn't use — which App Review does check.
+        UIBackgroundModes: ['remote-notification'],
       },
       // Privacy policy + support URL surfaced in App Store Connect metadata.
       // App Review will follow these URLs — make sure they are reachable
@@ -145,12 +147,22 @@ export default {
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '',
         },
       },
+      // RECORD_AUDIO and ACCESS_FINE_LOCATION were both dropped in the
+      // social pivot:
+      //   RECORD_AUDIO       — nothing records audio any more (voice
+      //                        notes and calls are gone).
+      //   ACCESS_FINE_LOCATION — the app coarsens every coordinate to
+      //                        ~110 m before it is stored or shown, and
+      //                        tells users it never collects precise
+      //                        location. Requesting the precise
+      //                        permission would contradict that and
+      //                        force a "precise location" entry in the
+      //                        Play Data Safety form. COARSE is enough
+      //                        for the accuracy we actually use.
       permissions: [
         'android.permission.CAMERA',
-        'android.permission.RECORD_AUDIO',
         'android.permission.POST_NOTIFICATIONS',
         'android.permission.ACCESS_COARSE_LOCATION',
-        'android.permission.ACCESS_FINE_LOCATION',
         'android.permission.READ_CONTACTS',
         'android.permission.READ_MEDIA_IMAGES',
       ],
@@ -190,16 +202,17 @@ export default {
       [
         'expo-image-picker',
         {
-          photosPermission: 'JuNubin needs photo library access to share photos in chat and stories.',
-          cameraPermission: 'JuNubin needs camera access for photo verification and stories.',
+          photosPermission: 'JuNubin needs photo library access to upload your profile photos.',
+          cameraPermission: 'JuNubin needs camera access to take your profile photos and to verify your identity with a selfie.',
+          // No microphonePermission — nothing in the app records audio,
+          // and the picker is only ever launched for still images.
+          microphonePermission: false,
         },
       ],
-      [
-        'expo-av',
-        {
-          microphonePermission: 'Allow JuNubin to access your microphone for voice notes.',
-        },
-      ],
+      // expo-av was removed with voice notes / calls — keeping the
+      // plugin would re-inject NSMicrophoneUsageDescription and
+      // RECORD_AUDIO at prebuild, undoing the text-only permission
+      // cleanup above.
     ],
     extra: {
       eas: {

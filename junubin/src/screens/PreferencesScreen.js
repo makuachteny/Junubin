@@ -1,6 +1,15 @@
-// AnaJunubin — Dating Preferences
-// BLK-style layout: Member Preferences + Subscriber Preferences (locked)
-// Each row navigates to a selection screen
+// JuNubin — Discovery preferences
+//
+// The controls that shape WHO YOU SEE on the Nearby map and in the
+// Directory. JuNubin is a free people-discovery + chat app:
+//   - There is no paid tier, so there is no `lockable` gating, no lock
+//     icons, no "subscriber preferences" split and no upgrade prompt.
+//     Every preference below is available to every member.
+//   - There is no Dating/Social mode. One mode, one list.
+//
+// Single-select rows (distance, background) push into
+// PreferenceSelectScreen. The multi-selects (languages, open to) are
+// rendered inline as chips, matching EditProfileScreen's idiom.
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
@@ -9,108 +18,110 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   Animated,
-  LayoutAnimation,
-  Platform,
-  UIManager,
   Alert,
 } from 'react-native';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, Typography, FontFamily, getShadow } from '../theme';
-import { GraffitiSparkles } from '../components/icons';
-import Button from '../components/Button';
-import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
-import { interactiveStore } from '../utils/interactiveStore';
 import { TRIBES } from '../data/tribes';
+import { LANGUAGE_OPTIONS, normalizeLanguages } from '../data/languages';
+import { OPEN_TO_OPTIONS, normalizeOpenTo } from '../data/openTo';
 
-// ── Member preferences ──────────────────────────────────────
-// `lockable: true` on rows that are actual *filters* (narrow who the
-// user sees). Free users see a lock icon + the row routes to the
-// upgrade prompt on tap. Rows without `lockable` are core identity /
-// location settings that everyone must be able to edit (locking
-// "I'm interested in" or "My neighborhood" would break basic discovery).
-const MEMBER_PREFS = [
-  { key: 'interestedIn', label: "I'm interested in", value: 'Women', icon: 'heart-outline', tint: 'accent' },
-  { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline', tint: 'warm' },
-  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm', lockable: true },
-  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral', lockable: true },
-  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold', lockable: true },
-  { key: 'religion', label: 'Religion', value: 'Open to all', icon: 'book-outline', tint: 'gold', lockable: true },
-  { key: 'relationshipType', label: 'Relationship Type', value: 'Monogamy', icon: 'people-outline', tint: 'accent', lockable: true },
+// Sentinel for "no filter on this field". Persisted as '' so the
+// backend stores an absent preference rather than the literal string.
+const OPEN_TO_ALL = 'Open to all';
+const DEFAULT_DISTANCE = '25 miles';
+
+// "Verified members only" is a client-side discovery filter (the same
+// one DirectoryScreen and PeopleMap apply locally) — there is no
+// Profile column for it, so it persists to AsyncStorage rather than
+// riding along with the profile write.
+const VERIFIED_ONLY_KEY = '@junubin_pref_verified_only';
+
+// ── Single-select rows ──────────────────────────────────────
+// Each navigates to PreferenceSelectScreen with PREF_OPTIONS[key].
+const DISCOVERY_PREFS = [
+  { key: 'distance', label: 'Maximum distance', value: DEFAULT_DISTANCE, icon: 'navigate-outline' },
+  { key: 'ethnicity', label: 'Background', value: OPEN_TO_ALL, icon: 'flag-outline' },
 ];
 
-// ── Subscriber preferences ──────────────────────────────────
-const SUBSCRIBER_PREFS = [
-  { key: 'height', label: 'Height', icon: 'resize-outline', tint: 'neutral' },
-  { key: 'datingIntentions', label: 'Dating Intentions', icon: 'search-outline', tint: 'accent' },
-  { key: 'children', label: 'Children', icon: 'happy-outline', tint: 'warm' },
-  { key: 'familyPlans', label: 'Family Plans', icon: 'home-outline', tint: 'warm' },
-  { key: 'drugs', label: 'Drugs', icon: 'medical-outline', tint: 'neutral' },
-  { key: 'smoking', label: 'Smoking', icon: 'flame-outline', tint: 'neutral' },
-  { key: 'marijuana', label: 'Marijuana', icon: 'leaf-outline', tint: 'neutral' },
-  { key: 'drinking', label: 'Drinking', icon: 'wine-outline', tint: 'neutral' },
-  { key: 'politics', label: 'Politics', icon: 'business-outline', tint: 'neutral' },
-  { key: 'educationLevel', label: 'Education Level', icon: 'school-outline', tint: 'gold' },
-];
+// ── Options for each single-select preference ───────────────
+const PREF_OPTIONS = {
+  distance: [
+    { label: '5 miles', value: '5 miles', description: 'Very close by' },
+    { label: '10 miles', value: '10 miles', description: 'Nearby' },
+    { label: '25 miles', value: '25 miles', description: 'Within your area' },
+    { label: '50 miles', value: '50 miles', description: 'Extended range' },
+    { label: '100 miles', value: '100 miles', description: 'Wide search' },
+  ],
+  ethnicity: [
+    { label: OPEN_TO_ALL, value: OPEN_TO_ALL, icon: 'globe-outline' },
+    ...TRIBES.filter((t) => t.key !== 'Other').map((t) => ({
+      label: t.key,
+      value: t.key,
+      icon: 'flag-outline',
+      description: t.note || t.region || undefined,
+    })),
+  ],
+};
 
-// ── Social preferences ──────────────────────────────────────
-// Same lockable rule as MEMBER_PREFS — narrowing filters are gated,
-// "My neighborhood" stays free since it's location setup, not a filter.
-const SOCIAL_PREFS = [
-  { key: 'activityType', label: 'Activity type', value: 'Open to all', icon: 'sparkles-outline', tint: 'accent', lockable: true },
-  { key: 'hangoutSize', label: 'Group size', value: 'Any size', icon: 'people-outline', tint: 'warm', lockable: true },
-  { key: 'neighborhood', label: 'My neighborhood', value: 'Set your location', icon: 'location-outline', tint: 'warm' },
-  { key: 'distance', label: 'Maximum distance', value: '25 miles', icon: 'navigate-outline', tint: 'warm', lockable: true },
-  { key: 'ageRange', label: 'Age range', value: '21 – 35', icon: 'calendar-outline', tint: 'neutral', lockable: true },
-  { key: 'ethnicity', label: 'Ethnicity', value: 'Open to all', icon: 'flag-outline', tint: 'gold', lockable: true },
-  { key: 'vibe', label: 'Vibe', value: 'Open to all', icon: 'musical-notes-outline', tint: 'accent', lockable: true },
-];
-
-// Icon tint colors — all rows now use the same neutral treatment so
-// nothing screams red. The previous per-tint palette (accent/warm/
-// gold/neutral) is kept as a key so the data files (MEMBER_PREFS etc.)
-// don't need to change, but every entry resolves to the same neutral
-// chip + text-coloured glyph.
-const NEUTRAL_TINT = {
+// Icon chips are deliberately neutral — nothing on this screen should
+// read as an alert or a paywall.
+const ICON_CHIP = {
   light: '#F4F4F6',
   dark: 'rgba(255,255,255,0.06)',
   iconLight: '#1A1A1A',
   iconDark: '#F5F3F0',
 };
-const ICON_TINTS = {
-  accent: NEUTRAL_TINT,
-  warm: NEUTRAL_TINT,
-  gold: NEUTRAL_TINT,
-  neutral: NEUTRAL_TINT,
-};
 
-// Check if a value is a "default" / unset value
-const isDefaultValue = (val) => !val || val === 'Open to all' || val === 'Set your location' || val === 'Any size';
+// A value is "default" when it isn't narrowing anything.
+const isDefaultValue = (val) => !val || val === OPEN_TO_ALL;
+
+// currentUser.preferences.distance is miles rounded from maxDistanceKm,
+// so it rarely lands exactly on one of our option values. Snap to the
+// closest option instead of silently resetting the user to the default.
+const nearestDistanceLabel = (miles) => {
+  if (!Number.isFinite(miles)) return DEFAULT_DISTANCE;
+  let best = DEFAULT_DISTANCE;
+  let bestDelta = Infinity;
+  for (const option of PREF_OPTIONS.distance) {
+    const delta = Math.abs(Number(String(option.value).split(' ')[0]) - miles);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = option.value;
+    }
+  }
+  return best;
+};
 
 // Maps a caller-supplied `returnTo` hint onto the bottom-tab the user
 // should land on when they finish with the filters. Anything not in
 // this map is treated as a direct stack-screen name (see routeAfterDone).
+// `Likes` and `Community` are kept as aliases onto surviving tabs, not
+// removed: a stale `returnTo` from a deep link or an older build would
+// otherwise fall through to routeAfterDone and try to navigate to a tab
+// that no longer exists.
 const RETURN_TAB = {
   Discover: 'HomeTab',
   Home: 'HomeTab',
   Connect: 'HomeTab',
-  Likes: 'LikesTab',
-  Community: 'CommunityTab',
+  Nearby: 'HomeTab',
+  Directory: 'DirectoryTab',
   Messages: 'MessagesTab',
+  Likes: 'MessagesTab',
+  Community: 'HomeTab',
 };
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-function PressablePrefRow({ style, onPress, activeOpacity, children }) {
+function PressablePrefRow({ style, onPress, activeOpacity, children, ...a11yProps }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
@@ -135,278 +146,125 @@ function PressablePrefRow({ style, onPress, activeOpacity, children }) {
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       activeOpacity={activeOpacity || 0.6}
+      {...a11yProps}
     >
       {children}
     </AnimatedTouchable>
   );
 }
 
-// ── Options for each preference ─────────────────────────────
-const PREF_OPTIONS = {
-  interestedIn: [
-    { label: 'Women', value: 'Women', icon: 'woman-outline' },
-    { label: 'Men', value: 'Men', icon: 'man-outline' },
-    { label: 'Everyone', value: 'Everyone', icon: 'people-outline' },
-  ],
-  neighborhood: [
-    { label: 'Set your location', value: 'Set your location', icon: 'location-outline', description: 'Manually set your neighborhood' },
-    { label: 'Near me', value: 'Near me', icon: 'navigate-outline', description: 'Use your current location' },
-    { label: 'Within my city', value: 'Within my city', icon: 'business-outline', description: 'Match with anyone in your city' },
-  ],
-  distance: [
-    { label: '5 miles', value: '5 miles', description: 'Very close by' },
-    { label: '10 miles', value: '10 miles', description: 'Nearby' },
-    { label: '25 miles', value: '25 miles', description: 'Within your area' },
-    { label: '50 miles', value: '50 miles', description: 'Extended range' },
-    { label: '100 miles', value: '100 miles', description: 'Wide search' },
-  ],
-  ageRange: [
-    { label: '18 – 24', value: '18 – 24' },
-    { label: '21 – 30', value: '21 – 30' },
-    { label: '21 – 35', value: '21 – 35' },
-    { label: '23 – 32', value: '23 – 32' },
-    { label: '25 – 35', value: '25 – 35' },
-    { label: '25 – 40', value: '25 – 40' },
-    { label: '30 – 45', value: '30 – 45' },
-    { label: '35 – 50', value: '35 – 50' },
-  ],
-  ethnicity: [
-    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
-    ...TRIBES.filter((t) => t.key !== 'Other').map((t) => ({
-      label: t.key,
-      value: t.key,
-      icon: 'flag-outline',
-      description: t.note || t.region || undefined,
-    })),
-  ],
-  religion: [
-    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
-    { label: 'Christian', value: 'Christian', icon: 'book-outline' },
-    { label: 'Muslim', value: 'Muslim', icon: 'moon-outline' },
-    { label: 'Traditional', value: 'Traditional', icon: 'leaf-outline' },
-  ],
-  relationshipType: [
-    { label: 'Monogamy', value: 'Monogamy', icon: 'heart-outline', description: 'One committed partner' },
-    { label: 'Long-term', value: 'Long-term', icon: 'time-outline', description: 'Looking for something lasting' },
-    { label: 'Short-term', value: 'Short-term', icon: 'flash-outline', description: 'Keeping it casual for now' },
-    { label: 'Still figuring out', value: 'Still figuring out', icon: 'help-circle-outline', description: 'Open to seeing what happens' },
-  ],
-  height: [
-    { label: "Under 5'0\"", value: "Under 5'0\"" },
-    { label: "5'0\" – 5'4\"", value: "5'0\" – 5'4\"" },
-    { label: "5'5\" – 5'7\"", value: "5'5\" – 5'7\"" },
-    { label: "5'8\" – 5'10\"", value: "5'8\" – 5'10\"" },
-    { label: "5'11\" – 6'1\"", value: "5'11\" – 6'1\"" },
-    { label: "6'2\"+", value: "6'2\"+" },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  datingIntentions: [
-    { label: 'Serious relationship', value: 'Serious relationship', icon: 'heart-outline' },
-    { label: 'Marriage', value: 'Marriage', icon: 'diamond-outline' },
-    { label: 'Casual dating', value: 'Casual dating', icon: 'cafe-outline' },
-    { label: 'Still figuring out', value: 'Still figuring out', icon: 'help-circle-outline' },
-    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
-  ],
-  children: [
-    { label: 'Want children', value: 'Want children', icon: 'happy-outline' },
-    { label: 'Don\'t want children', value: 'Don\'t want children', icon: 'close-circle-outline' },
-    { label: 'Have children', value: 'Have children', icon: 'people-outline' },
-    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
-  ],
-  familyPlans: [
-    { label: 'Want to start a family', value: 'Want to start a family' },
-    { label: 'Not sure yet', value: 'Not sure yet' },
-    { label: 'Don\'t want a family', value: 'Don\'t want a family' },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  drugs: [
-    { label: 'Never', value: 'Never' },
-    { label: 'Sometimes', value: 'Sometimes' },
-    { label: 'Prefer not to say', value: 'Prefer not to say' },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  smoking: [
-    { label: 'Never', value: 'Never' },
-    { label: 'Socially', value: 'Socially' },
-    { label: 'Regularly', value: 'Regularly' },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  marijuana: [
-    { label: 'Never', value: 'Never' },
-    { label: 'Sometimes', value: 'Sometimes' },
-    { label: 'Regularly', value: 'Regularly' },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  drinking: [
-    { label: 'Never', value: 'Never' },
-    { label: 'Socially', value: 'Socially' },
-    { label: 'Regularly', value: 'Regularly' },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  politics: [
-    { label: 'Liberal', value: 'Liberal' },
-    { label: 'Moderate', value: 'Moderate' },
-    { label: 'Conservative', value: 'Conservative' },
-    { label: 'Not political', value: 'Not political' },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  educationLevel: [
-    { label: 'High school', value: 'High school' },
-    { label: 'Some college', value: 'Some college' },
-    { label: 'Bachelor\'s degree', value: 'Bachelor\'s degree' },
-    { label: 'Master\'s degree', value: 'Master\'s degree' },
-    { label: 'Doctorate', value: 'Doctorate' },
-    { label: 'Open to all', value: 'Open to all' },
-  ],
-  activityType: [
-    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
-    { label: 'Coffee & conversation', value: 'Coffee & conversation', icon: 'cafe-outline' },
-    { label: 'Sports & fitness', value: 'Sports & fitness', icon: 'fitness-outline' },
-    { label: 'Cultural events', value: 'Cultural events', icon: 'color-palette-outline' },
-    { label: 'Food & dining', value: 'Food & dining', icon: 'restaurant-outline' },
-    { label: 'Outdoors & nature', value: 'Outdoors & nature', icon: 'leaf-outline' },
-  ],
-  hangoutSize: [
-    { label: 'Any size', value: 'Any size', icon: 'globe-outline' },
-    { label: 'One-on-one', value: 'One-on-one', icon: 'person-outline' },
-    { label: 'Small group (3-5)', value: 'Small group (3-5)', icon: 'people-outline' },
-    { label: 'Larger group', value: 'Larger group', icon: 'people-circle-outline' },
-  ],
-  vibe: [
-    { label: 'Open to all', value: 'Open to all', icon: 'globe-outline' },
-    { label: 'Chill & lowkey', value: 'Chill & lowkey', icon: 'cafe-outline' },
-    { label: 'Adventurous', value: 'Adventurous', icon: 'compass-outline' },
-    { label: 'Intellectual', value: 'Intellectual', icon: 'book-outline' },
-    { label: 'Party & nightlife', value: 'Party & nightlife', icon: 'musical-notes-outline' },
-  ],
-};
+// Multi-select chip. Same press/scale feel as PressablePrefRow so the
+// screen animates consistently.
+function PrefChip({ label, icon, active, onPress, styles, colors }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  return (
+    <AnimatedTouchable
+      style={[styles.chip, active && styles.chipActive, { transform: [{ scale }] }]}
+      activeOpacity={0.75}
+      onPress={onPress}
+      onPressIn={() => Animated.spring(scale, { toValue: 0.94, useNativeDriver: true, speed: 50, bounciness: 8 }).start()}
+      onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 10 }).start()}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: !!active }}
+      accessibilityLabel={label}
+    >
+      {icon ? (
+        <Ionicons
+          name={icon}
+          size={14}
+          color={active ? colors.black : colors.gray500}
+          style={{ marginRight: 6 }}
+        />
+      ) : null}
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+      {active && (
+        <Ionicons name="checkmark" size={14} color={colors.black} style={{ marginLeft: 6 }} />
+      )}
+    </AnimatedTouchable>
+  );
+}
 
 export default function PreferencesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const [mode, setMode] = useState('Dating');
-  const slideAnim = useRef(new Animated.Value(0)).current; // 0 = Dating, 1 = Social
-  const [segmentWidth, setSegmentWidth] = useState(0);
-  const [memberPrefValues, setMemberPrefValues] = useState(() =>
-    MEMBER_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: pref.value }), {})
-  );
-  const [subscriberPrefValues, setSubscriberPrefValues] = useState(() =>
-    SUBSCRIBER_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: 'Open to all' }), {})
-  );
-  const [socialPrefValues, setSocialPrefValues] = useState(() =>
-    SOCIAL_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: pref.value }), {})
-  );
-  const [friendLayerEnabled, setFriendLayerEnabled] = useState(true);
-  const [seasonMode, setSeasonMode] = useState('Festival');
-  const [questAnswers] = useState({
-    weekend: 'Adventure',
-    chat: 'Playful',
-  });
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const { hasTier } = useSubscription();
-  const isSubscriber = hasTier('plus');
-
-  // Upgrade prompt fired when a free user taps a lockable filter row.
-  // Same copy as the FilterBar paywall so the experience is consistent
-  // whether they hit a lock from Connect/Likes or from Preferences.
-  const showFiltersUpgrade = useCallback(() => {
-    Alert.alert(
-      'JuNubin+ Filters',
-      'Upgrade to JuNubin+ to use filters and meet exactly the people you\'re looking for.',
-      [
-        { text: 'Upgrade', onPress: () => navigation?.navigate?.('Elite') },
-        { text: 'Cancel', style: 'cancel' },
-      ],
-    );
-  }, [navigation]);
-
-  // Mode is the canonical app state — currentUser.preferences.mode is
-  // resolved upstream from Profile.appMode (with the AsyncStorage
-  // @junubin_mode fallback baked in), so we read it directly here rather
-  // than re-reading storage. Seeding + syncing from it means opening
-  // Preferences always reflects the mode set anywhere else, and toggling
-  // it here (handleModeToggle → appMode + refreshUser) flips the rest of
-  // the app via the same source.
-  useEffect(() => {
-    const apiMode = currentUser?.preferences?.mode;
-    if (apiMode === 'Social' || apiMode === 'Dating') {
-      setMode(apiMode);
-      slideAnim.setValue(apiMode === 'Social' ? 1 : 0);
-    }
-  }, [currentUser?.preferences?.mode, slideAnim]);
-
-  // Read persisted interactive prefs on mount.
-  useEffect(() => {
-    interactiveStore.getFriendLayer().then((enabled) => setFriendLayerEnabled(!!enabled)).catch(() => {});
-    interactiveStore.getSeasonMode().then((saved) => {
-      if (saved) setSeasonMode(saved);
-    }).catch(() => {});
-  }, []);
-
-  const handleModeToggle = useCallback((newMode) => {
-    const toValue = newMode === 'Social' ? 1 : 0;
-    Animated.spring(slideAnim, {
-      toValue,
-      useNativeDriver: false,
-      tension: 68,
-      friction: 12,
-    }).start();
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setMode(newMode);
-    AsyncStorage.setItem('@junubin_mode', newMode);
-    // Persist to Profile.appMode (cross-device source of truth) and
-    // refresh AuthContext so the rest of the app (MessagesScreen sort,
-    // HomeScreen deck) reacts to the change without a remount. The
-    // refreshUser hook here is wired through useCurrentUser, which
-    // re-reads the User row via AuthContext.
-    profileService
-      .updateProfile({ appMode: newMode === 'Social' ? 'social' : 'dating' })
-      .then(() => { try { refreshUser?.(); } catch {} })
-      .catch(() => {});
-  }, [slideAnim, refreshUser]);
-
-  // Listen for returned selection from PreferenceSelectScreen
-  useEffect(() => {
-    const updated = route.params?.updatedPref;
-    if (!updated) return;
-
-    if (updated.type === 'subscriber') {
-      setSubscriberPrefValues((prev) => ({ ...prev, [updated.key]: updated.value }));
-    } else if (updated.type === 'social') {
-      setSocialPrefValues((prev) => ({ ...prev, [updated.key]: updated.value }));
-    } else {
-      setMemberPrefValues((prev) => ({ ...prev, [updated.key]: updated.value }));
-    }
-
-    // Clear the param so it doesn't re-fire
-    navigation.setParams({ updatedPref: undefined });
-  }, [route.params?.updatedPref, navigation]);
-
   const { session } = useAuth();
   const { currentUser, refreshUser } = useCurrentUser();
 
-  const handleSeasonMode = useCallback((nextMode) => {
-    setSeasonMode(nextMode);
-    interactiveStore.setSeasonMode(nextMode);
+  const [prefValues, setPrefValues] = useState(() =>
+    DISCOVERY_PREFS.reduce((acc, pref) => ({ ...acc, [pref.key]: pref.value }), {})
+  );
+  const [city, setCity] = useState('');
+  const [languages, setLanguages] = useState([]);
+  const [openTo, setOpenTo] = useState([]);
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Seed the form from the profile exactly once, and only once a real
+  // User row has landed — re-seeding on every currentUser identity change
+  // would clobber whatever the user is currently typing into the city
+  // field. Every field is normalized so a profile from an un-migrated
+  // backend (languages/openTo === null, no city, no ethnicity) renders
+  // as empty rather than throwing.
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (seededRef.current || !currentUser?.id) return;
+    seededRef.current = true;
+    setCity(typeof currentUser.city === 'string' ? currentUser.city : '');
+    setLanguages(normalizeLanguages(currentUser.languages));
+    setOpenTo(normalizeOpenTo(currentUser.openTo));
+    setPrefValues((prev) => ({
+      ...prev,
+      distance: nearestDistanceLabel(Number(currentUser?.preferences?.distance)),
+      ethnicity:
+        typeof currentUser.ethnicity === 'string' && currentUser.ethnicity.trim()
+          ? currentUser.ethnicity
+          : OPEN_TO_ALL,
+    }));
+  }, [currentUser]);
+
+  // Verified-only is local-device state, so it hydrates from storage
+  // rather than the profile.
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(VERIFIED_ONLY_KEY)
+      .then((raw) => {
+        if (!cancelled && raw != null) setVerifiedOnly(raw === 'true');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const toggleFriendLayer = useCallback(() => {
-    if (!isSubscriber) {
-      navigation?.navigate?.('Elite');
-      return;
-    }
-    setFriendLayerEnabled((prev) => {
+  // Listen for a returned selection from PreferenceSelectScreen.
+  useEffect(() => {
+    const updated = route?.params?.updatedPref;
+    if (!updated) return;
+    setPrefValues((prev) => ({ ...prev, [updated.key]: updated.value }));
+    // Clear the param so it doesn't re-fire
+    navigation.setParams({ updatedPref: undefined });
+  }, [route?.params?.updatedPref, navigation]);
+
+  const toggleInArray = useCallback((setter, value) => {
+    try { Haptics.selectionAsync(); } catch {}
+    setter((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+  }, []);
+
+  const toggleVerifiedOnly = useCallback(() => {
+    try { Haptics.selectionAsync(); } catch {}
+    setVerifiedOnly((prev) => {
       const next = !prev;
-      interactiveStore.setFriendLayer(next);
+      AsyncStorage.setItem(VERIFIED_ONLY_KEY, next ? 'true' : 'false').catch(() => {});
       return next;
     });
-  }, [isSubscriber, navigation]);
+  }, []);
 
   // Where to land when the user finishes with the filters. Honors an
   // explicit `returnTo` (the screen/tab that opened the filters) so Done
   // always routes to the correct place — even after drilling into a
   // PreferenceSelect sub-screen, which threads returnTo back to us. Falls
-  // back to goBack(), then to the Connect tab so we never dead-end.
+  // back to goBack(), then to the Home tab so we never dead-end.
   const returnTo = route?.params?.returnTo;
   const routeAfterDone = useCallback(() => {
     const tab = RETURN_TAB[returnTo];
@@ -426,21 +284,23 @@ export default function PreferencesScreen({ navigation, route }) {
   }, [navigation, returnTo]);
 
   const handleDone = async () => {
-    const prefSource = mode === 'Social' ? socialPrefValues : memberPrefValues;
-    const [minAge, maxAge] = (prefSource.ageRange || '21 – 35')
-      .split('–')
-      .map((n) => Number(String(n).trim()));
-    const parsedDistance = Number((prefSource.distance || '25 miles').split(' ')[0]);
-
     // Persist via API. If the network call fails, surface it so the user
     // knows their changes didn't land — and stay on the screen so they can
     // retry without losing the form state.
     if (session) {
-      const updates = {};
-      if (!Number.isNaN(minAge)) updates.minPreferredAge = minAge;
-      if (!Number.isNaN(maxAge)) updates.maxPreferredAge = maxAge;
-      if (!Number.isNaN(parsedDistance)) updates.maxDistanceKm = Math.round(parsedDistance * 1.6);
-      if (mode === 'Dating' && memberPrefValues.interestedIn) updates.lookingForGender = memberPrefValues.interestedIn;
+      const miles = Number(String(prefValues.distance || DEFAULT_DISTANCE).split(' ')[0]);
+      const ethnicity = prefValues.ethnicity;
+      const updates = {
+        // User.city — free text, same contract as ProfileSetup.
+        city: city.trim(),
+        languages,
+        openTo,
+        // '' means "no background filter"; never persist the sentinel.
+        ethnicity: isDefaultValue(ethnicity) ? '' : ethnicity,
+      };
+      if (!Number.isNaN(miles)) updates.maxDistanceKm = Math.round(miles * 1.6);
+
+      setSaving(true);
       try {
         await profileService.updateProfile(updates);
         await refreshUser();
@@ -450,100 +310,67 @@ export default function PreferencesScreen({ navigation, route }) {
           err?.message || 'Check your connection and try again.',
         );
         return;
+      } finally {
+        setSaving(false);
       }
     }
 
     routeAfterDone();
   };
 
-  const openMemberPref = (pref) => {
+  const openPref = (pref) => {
     const options = PREF_OPTIONS[pref.key];
     if (!options) return;
     navigation.navigate('PreferenceSelect', {
       prefKey: pref.key,
       title: pref.label,
       options,
-      currentValue: memberPrefValues[pref.key] || pref.value,
-      prefType: 'member',
+      currentValue: prefValues[pref.key] || pref.value,
+      prefType: 'discovery',
       returnTo,
     });
   };
 
-  const openSubscriberPref = (pref) => {
-    if (!isSubscriber) {
-      navigation?.navigate?.('Elite');
-      return;
-    }
-    const options = PREF_OPTIONS[pref.key];
-    if (!options) return;
-    navigation.navigate('PreferenceSelect', {
-      prefKey: pref.key,
-      title: pref.label,
-      options,
-      currentValue: subscriberPrefValues[pref.key] || 'Open to all',
-      prefType: 'subscriber',
-      returnTo,
-    });
-  };
+  const activeCount = useMemo(() => {
+    let count = DISCOVERY_PREFS.filter(
+      (p) => !isDefaultValue(prefValues[p.key] || p.value)
+    ).length;
+    if (city.trim()) count += 1;
+    if (languages.length) count += 1;
+    if (openTo.length) count += 1;
+    if (verifiedOnly) count += 1;
+    return count;
+  }, [prefValues, city, languages, openTo, verifiedOnly]);
 
-  const openSocialPref = (pref) => {
-    const options = PREF_OPTIONS[pref.key];
-    if (!options) return;
-    navigation.navigate('PreferenceSelect', {
-      prefKey: pref.key,
-      title: pref.label,
-      options,
-      currentValue: socialPrefValues[pref.key] || pref.value,
-      prefType: 'social',
-      returnTo,
-    });
-  };
-
-  const isSocial = mode === 'Social';
-  const activeCoreCount = useMemo(() => {
-    const source = isSocial ? socialPrefValues : memberPrefValues;
-    return Object.values(source).filter((val) => !isDefaultValue(val)).length;
-  }, [isSocial, socialPrefValues, memberPrefValues]);
-  const activeSubscriberCount = useMemo(
-    () => Object.values(subscriberPrefValues).filter((val) => !isDefaultValue(val)).length,
-    [subscriberPrefValues]
-  );
-
-  const renderPrefRow = (pref, index, total, value, onPress, locked = false) => {
-    const tint = ICON_TINTS[pref.tint || 'neutral'];
-    const iconBg = isDark ? tint.dark : tint.light;
-    const iconColor = locked ? colors.gray400 : (isDark ? tint.iconDark : tint.iconLight);
-    const val = value || 'Open to all';
+  const renderPrefRow = (pref, index, total) => {
+    const iconBg = isDark ? ICON_CHIP.dark : ICON_CHIP.light;
+    const iconColor = isDark ? ICON_CHIP.iconDark : ICON_CHIP.iconLight;
+    const val = prefValues[pref.key] || pref.value;
     const isSet = !isDefaultValue(val);
-    // Locked rows route to the upgrade prompt instead of opening the
-    // selection screen — this guarantees the value can't be edited even
-    // if a future caller forgets to gate the onPress.
-    const effectivePress = locked ? showFiltersUpgrade : onPress;
 
     return (
       <PressablePrefRow
         key={pref.key}
-        style={[styles.prefRow, index < total - 1 && styles.prefRowBorder, locked && styles.prefRowLocked]}
+        style={[styles.prefRow, index < total - 1 && styles.prefRowBorder]}
         activeOpacity={0.6}
-        onPress={effectivePress}
+        onPress={() => openPref(pref)}
+        accessibilityRole="button"
+        accessibilityLabel={`${pref.label}, ${val}`}
+        accessibilityHint="Opens a list of options"
       >
         <View style={styles.prefLeft}>
-          <View style={[styles.prefIconWrap, { backgroundColor: locked ? colors.gray200 : iconBg }]}>
+          <View style={[styles.prefIconWrap, { backgroundColor: iconBg }]}>
             <Ionicons name={pref.icon} size={18} color={iconColor} />
           </View>
-          <Text style={[styles.prefLabel, locked && styles.prefLabelLocked]}>{pref.label}</Text>
+          <Text style={styles.prefLabel}>{pref.label}</Text>
         </View>
         <View style={styles.prefRight}>
-          {locked ? (
-            <Ionicons name="lock-closed" size={14} color={colors.gray400} />
-          ) : (
-            <>
-              <View style={[styles.prefValuePill, isSet && styles.prefValuePillSet]}>
-                <Text style={[styles.prefValue, isSet && styles.prefValueSet]}>{val}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={isSet ? colors.black : colors.gray400} />
-            </>
-          )}
+          <View style={[styles.prefValuePill, isSet && styles.prefValuePillSet]}>
+            <Text style={[styles.prefValue, isSet && styles.prefValueSet]} numberOfLines={1}>
+              {val}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={isSet ? colors.black : colors.gray400} />
         </View>
       </PressablePrefRow>
     );
@@ -556,254 +383,153 @@ export default function PreferencesScreen({ navigation, route }) {
         <TouchableOpacity
           onPress={handleDone}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Save and go back"
         >
           <Ionicons name="chevron-back" size={24} color={colors.black} />
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>
-            {isSocial ? 'Socializing' : 'Dating'}
-          </Text>
-
+          <Text style={styles.headerTitle}>Discovery</Text>
         </View>
-        <TouchableOpacity onPress={handleDone} style={styles.doneBtn}>
+        <TouchableOpacity
+          onPress={handleDone}
+          style={styles.doneBtn}
+          disabled={saving}
+          accessibilityRole="button"
+          accessibilityLabel="Save preferences"
+          accessibilityState={{ disabled: saving }}
+        >
           <Text style={styles.doneText} numberOfLines={1}>Done</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* ── MODE SEGMENTED CONTROL ── */}
-        <View
-          style={styles.segmentedContainer}
-          onLayout={(e) => setSegmentWidth(e.nativeEvent.layout.width - 6)}
-        >
-          {segmentWidth > 0 && (
-            <Animated.View
-              style={[
-                styles.segmentPill,
-                {
-                  width: segmentWidth / 2,
-                  transform: [{
-                    translateX: slideAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, segmentWidth / 2],
-                    }),
-                  }],
-                },
-              ]}
-            />
-          )}
-          {[{ label: 'Date', value: 'Dating' }, { label: 'Socialize', value: 'Social' }].map((seg) => (
-            <TouchableOpacity
-              key={seg.value}
-              style={styles.segmentButton}
-              activeOpacity={0.7}
-              onPress={() => handleModeToggle(seg.value)}
-            >
-              <Animated.Text
-                style={[
-                  styles.segmentText,
-                  {
-                    color: slideAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: seg.value === 'Dating'
-                        ? [isDark ? '#1A1A1A' : '#FFFFFF', colors.gray600]
-                        : [colors.gray600, isDark ? '#1A1A1A' : '#FFFFFF'],
-                    }),
-                  },
-                ]}
-              >
-                {seg.label}
-              </Animated.Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.summaryCard}>
           <View style={styles.summaryIconWrap}>
-            <Ionicons name={isSocial ? 'people-circle-outline' : 'heart-circle-outline'} size={20} color={colors.black} />
+            <Ionicons name="compass-outline" size={20} color={colors.black} />
           </View>
           <View style={styles.summaryTextWrap}>
-            <Text style={styles.summaryTitle}>{isSocial ? 'Social Match Setup' : 'Dating Match Setup'}</Text>
+            <Text style={styles.summaryTitle}>Who you see</Text>
             <Text style={styles.summaryMeta}>
-              {activeCoreCount} active filters{!isSocial ? ` • ${activeSubscriberCount} advanced` : ''}
-            </Text>
-          </View>
-          <View style={[styles.summaryBadge, { backgroundColor: isSubscriber ? colors.gold : colors.gray300 }]}>
-            <Text style={[styles.summaryBadgeText, { color: isSubscriber ? '#1A1A1A' : colors.gray700 }]}>
-              {isSubscriber ? 'Plus' : 'Free'}
+              Shapes the Nearby map and the Directory • {activeCount} active
             </Text>
           </View>
         </View>
 
-        {isSocial ? (
-          <>
-            {/* ── SOCIAL PREFERENCES ── */}
-            <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeader}>Socializing Preferences</Text>
-              <View style={styles.sectionCountPill}>
-                <Text style={styles.sectionCountText}>{activeCoreCount}</Text>
-              </View>
-            </View>
-            <View style={styles.card}>
-              {SOCIAL_PREFS.map((pref, index) =>
-                renderPrefRow(
-                  pref, index, SOCIAL_PREFS.length,
-                  socialPrefValues[pref.key] || pref.value,
-                  () => openSocialPref(pref),
-                  !!pref.lockable && !isSubscriber,
-                )
-              )}
-            </View>
-          </>
-        ) : (
-          <>
-            {/* ── MEMBER PREFERENCES — core identity/location only ──
-                Everything that's a *filter* (distance/age/ethnicity/
-                religion/relationship type) has moved into the
-                Subscriber section below so the paywall surface is one
-                visible block, not two scattered ones. */}
-            {(() => {
-              const coreMember = MEMBER_PREFS.filter((p) => !p.lockable);
-              return (
-                <>
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionHeader}>Member Preferences</Text>
-                    <View style={styles.sectionCountPill}>
-                      <Text style={styles.sectionCountText}>
-                        {coreMember.filter((p) => !isDefaultValue(memberPrefValues[p.key] || p.value)).length}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.card}>
-                    {coreMember.map((pref, index) =>
-                      renderPrefRow(
-                        pref, index, coreMember.length,
-                        memberPrefValues[pref.key] || pref.value,
-                        () => openMemberPref(pref),
-                        false,
-                      )
-                    )}
-                  </View>
-                </>
-              );
-            })()}
-
-            {/* ── SUBSCRIBER PREFERENCES — every paywalled filter ── */}
-            {(() => {
-              const lockableMember = MEMBER_PREFS.filter((p) => p.lockable);
-              const combined = [...lockableMember, ...SUBSCRIBER_PREFS];
-              const activeCombined = lockableMember.filter((p) => !isDefaultValue(memberPrefValues[p.key] || p.value)).length
-                + activeSubscriberCount;
-              return (
-                <>
-                  <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
-                    <Text style={styles.sectionHeader}>Subscriber Preferences</Text>
-                    <View style={[styles.sectionCountPill, styles.sectionCountPillGold]}>
-                      <Text style={[styles.sectionCountText, styles.sectionCountTextGold]}>{activeCombined}</Text>
-                    </View>
-                    {!isSubscriber && (
-                      <View style={styles.lockBadge}>
-                        <Ionicons name="lock-closed" size={10} color="#FFFFFF" />
-                      </View>
-                    )}
-                  </View>
-
-                  {!isSubscriber && (
-                    <View style={styles.unlockBanner}>
-                      <View style={styles.unlockIconRow}>
-                        <GraffitiSparkles size={20} color={colors.gold} filled />
-                      </View>
-                      <Text style={styles.unlockTitle}>Unlock Advanced Filters</Text>
-                      <Text style={styles.unlockText}>
-                        Fine-tune who you see by distance, age, ethnicity, height, lifestyle, and more
-                      </Text>
-                      <Button
-                        title="Upgrade to Plus"
-                        variant="primary"
-                        size="sm"
-                        fullWidth={false}
-                        onPress={() => navigation?.navigate?.('Elite')}
-                        style={{ marginTop: 14, paddingHorizontal: 36, alignSelf: 'center' }}
-                      />
-                    </View>
-                  )}
-
-                  <View style={styles.card}>
-                    {combined.map((pref, index) => {
-                      // Lockable MEMBER_PREFS keep their member-side state +
-                      // open handler so their persisted values still flow to
-                      // the right column on save. SUBSCRIBER_PREFS keep theirs.
-                      const isFromMember = !!pref.lockable;
-                      const value = isFromMember
-                        ? (memberPrefValues[pref.key] || pref.value)
-                        : subscriberPrefValues[pref.key];
-                      const onPress = isFromMember
-                        ? () => openMemberPref(pref)
-                        : () => openSubscriberPref(pref);
-                      return renderPrefRow(pref, index, combined.length, value, onPress, !isSubscriber);
-                    })}
-                  </View>
-                </>
-              );
-            })()}
-          </>
-        )}
-
-        <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
-          <Text style={styles.sectionHeader}>Interactive Experience</Text>
+        {/* ── LOCATION ── */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionHeader}>Location</Text>
         </View>
         <View style={styles.card}>
-          <PressablePrefRow
-            style={[styles.prefRow, styles.prefRowBorder]}
-            onPress={toggleFriendLayer}
-            activeOpacity={0.75}
-          >
-            <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
-                <Ionicons name="people-circle-outline" size={18} color={colors.black} />
-              </View>
-              <Text style={styles.prefLabel}>Friend-of-friend layer</Text>
-            </View>
-            <View style={styles.prefRight}>
-              <Text style={[styles.prefValue, friendLayerEnabled && styles.prefValueSet]}>
-                {friendLayerEnabled ? 'Enabled' : 'Disabled'}
-              </Text>
-            </View>
-          </PressablePrefRow>
-
           <View style={[styles.prefRow, styles.prefRowBorder]}>
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
-                <Ionicons name="sparkles-outline" size={18} color={colors.black} />
+              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? ICON_CHIP.dark : ICON_CHIP.light }]}>
+                <Ionicons name="location-outline" size={18} color={isDark ? ICON_CHIP.iconDark : ICON_CHIP.iconLight} />
               </View>
-              <Text style={styles.prefLabel}>Seasonal mode</Text>
+              <Text style={styles.prefLabel}>My city</Text>
             </View>
-            <View style={styles.seasonChips}>
-              {['Festival', 'Travel', 'Summer'].map((modeLabel) => (
-                <TouchableOpacity
-                  key={modeLabel}
-                  style={[styles.seasonChip, seasonMode === modeLabel && styles.seasonChipActive]}
-                  onPress={() => handleSeasonMode(modeLabel)}
-                >
-                  <Text style={[styles.seasonChipText, seasonMode === modeLabel && styles.seasonChipTextActive]}>
-                    {modeLabel}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <TextInput
+              style={styles.cityInput}
+              value={city}
+              onChangeText={setCity}
+              placeholder="Add your city"
+              placeholderTextColor={colors.gray400}
+              autoCorrect={false}
+              autoCapitalize="words"
+              returnKeyType="done"
+              maxLength={80}
+              accessibilityLabel="My city"
+              accessibilityHint="Type the city you want to be discovered in"
+            />
           </View>
+          {renderPrefRow(DISCOVERY_PREFS[0], 0, 1)}
+        </View>
+        <Text style={styles.sectionHint}>
+          Whether you appear on the map is a separate privacy setting — manage it in Settings.
+        </Text>
 
-          <View style={styles.prefRow}>
+        {/* ── PEOPLE ── */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+          <Text style={styles.sectionHeader}>People</Text>
+        </View>
+        <View style={styles.card}>
+          {renderPrefRow(DISCOVERY_PREFS[1], 0, 2)}
+          <PressablePrefRow
+            style={styles.prefRow}
+            activeOpacity={0.75}
+            onPress={toggleVerifiedOnly}
+            accessibilityRole="switch"
+            accessibilityLabel="Verified members only"
+            accessibilityState={{ checked: verifiedOnly }}
+          >
             <View style={styles.prefLeft}>
-              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6' }]}>
-                <Ionicons name="planet-outline" size={18} color={colors.black} />
+              <View style={[styles.prefIconWrap, { backgroundColor: isDark ? ICON_CHIP.dark : ICON_CHIP.light }]}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={18}
+                  color={isDark ? ICON_CHIP.iconDark : ICON_CHIP.iconLight}
+                />
               </View>
-              <Text style={styles.prefLabel}>Personality quest</Text>
+              <Text style={styles.prefLabel}>Verified members only</Text>
             </View>
-            <View style={styles.questMeta}>
-              <Text style={styles.prefValue}>Weekend: {questAnswers.weekend}</Text>
-              <Text style={styles.prefValue}>Chat: {questAnswers.chat}</Text>
+            <View style={styles.prefRight}>
+              <Ionicons
+                name={verifiedOnly ? 'checkbox' : 'square-outline'}
+                size={22}
+                color={verifiedOnly ? colors.black : colors.gray400}
+              />
             </View>
+          </PressablePrefRow>
+        </View>
+
+        {/* ── LANGUAGES ── */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+          <Text style={styles.sectionHeader}>Languages</Text>
+          <View style={styles.sectionCountPill}>
+            <Text style={styles.sectionCountText}>{languages.length}</Text>
+          </View>
+        </View>
+        <View style={styles.chipCard}>
+          <Text style={styles.chipCardHint}>Find people who speak what you speak.</Text>
+          <View style={styles.chipRow}>
+            {LANGUAGE_OPTIONS.map((option) => (
+              <PrefChip
+                key={option}
+                label={option}
+                active={languages.includes(option)}
+                onPress={() => toggleInArray(setLanguages, option)}
+                styles={styles}
+                colors={colors}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* ── OPEN TO ── */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 28 }]}>
+          <Text style={styles.sectionHeader}>Open to</Text>
+          <View style={styles.sectionCountPill}>
+            <Text style={styles.sectionCountText}>{openTo.length}</Text>
+          </View>
+        </View>
+        <View style={styles.chipCard}>
+          <Text style={styles.chipCardHint}>Pick everything that fits — this is how people find their people.</Text>
+          <View style={styles.chipRow}>
+            {OPEN_TO_OPTIONS.map((option) => (
+              <PrefChip
+                key={option.key}
+                label={option.label}
+                icon={option.icon}
+                active={openTo.includes(option.key)}
+                onPress={() => toggleInArray(setOpenTo, option.key)}
+                styles={styles}
+                colors={colors}
+              />
+            ))}
           </View>
         </View>
 
@@ -840,6 +566,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   doneBtn: {
     minWidth: 64,
+    minHeight: 44,
+    justifyContent: 'center',
     alignItems: 'flex-end',
   },
   content: {
@@ -855,7 +583,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F7F7F9',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 18,
+    marginBottom: 24,
   },
   summaryIconWrap: {
     width: 38,
@@ -882,50 +610,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontWeight: '500',
     color: colors.gray600,
   },
-  summaryBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  summaryBadgeText: {
-    fontSize: 11,
-    fontFamily: FontFamily.bold,
-    fontWeight: '700',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-
-  // Segmented control
-  segmentedContainer: {
-    flexDirection: 'row',
-    backgroundColor: isDark ? colors.gray200 : colors.gray100,
-    borderRadius: 14,
-    padding: 3,
-    marginBottom: 28,
-    position: 'relative',
-  },
-  segmentPill: {
-    position: 'absolute',
-    top: 3,
-    left: 3,
-    bottom: 3,
-    borderRadius: 12,
-    backgroundColor: colors.black,
-    ...getShadow('sm', isDark),
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
-  },
-  segmentText: {
-    fontSize: 15,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-  },
 
   // Section headers
   sectionHeaderRow: {
@@ -943,6 +627,15 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  sectionHint: {
+    marginTop: 10,
+    marginLeft: 4,
+    fontSize: 12,
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
+    color: colors.gray500,
+    lineHeight: 17,
+  },
   sectionCountPill: {
     borderWidth: 1,
     borderColor: isDark ? 'rgba(255,255,255,0.12)' : '#E0E0E4',
@@ -958,58 +651,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontWeight: '700',
     color: colors.black,
-  },
-  sectionCountPillGold: {
-    borderColor: isDark ? 'rgba(255, 213, 79, 0.28)' : 'rgba(249, 168, 37, 0.32)',
-    backgroundColor: isDark ? 'rgba(255, 213, 79, 0.14)' : 'rgba(249, 168, 37, 0.10)',
-  },
-  sectionCountTextGold: {
-    color: colors.gold,
-  },
-  lockBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.gold,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 2,
-  },
-
-  // Unlock banner
-  unlockBanner: {
-    backgroundColor: isDark ? 'rgba(255, 213, 79, 0.06)' : 'rgba(249, 168, 37, 0.05)',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 213, 79, 0.15)' : 'rgba(249, 168, 37, 0.2)',
-  },
-  unlockIconRow: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: isDark ? 'rgba(255, 213, 79, 0.12)' : 'rgba(249, 168, 37, 0.10)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  unlockTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: colors.black,
-    marginBottom: 4,
-  },
-  unlockText: {
-    fontSize: 13,
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: colors.gray600,
-    textAlign: 'center',
-    lineHeight: 19,
   },
 
   // Preference card
@@ -1029,13 +670,11 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
+    minHeight: 56,
   },
   prefRowBorder: {
     borderBottomWidth: 0.5,
     borderBottomColor: colors.separator,
-  },
-  prefRowLocked: {
-    opacity: 0.45,
   },
   prefLeft: {
     flexDirection: 'row',
@@ -1055,9 +694,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
     color: colors.black,
-  },
-  prefLabelLocked: {
-    color: colors.gray500,
+    flexShrink: 1,
   },
   prefRight: {
     flexDirection: 'row',
@@ -1072,6 +709,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderColor: isDark ? 'rgba(255,255,255,0.14)' : colors.gray200,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    flexShrink: 1,
   },
   prefValuePillSet: {
     backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#E8E8EC',
@@ -1088,36 +726,62 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
-  seasonChips: {
+  cityInput: {
+    ...Typography.body,
+    color: colors.black,
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 12,
+    paddingVertical: 6,
+    minHeight: 44,
+  },
+
+  // Multi-select chips
+  chipCard: {
+    backgroundColor: isDark ? colors.surface : colors.gray100,
+    borderRadius: 18,
+    borderWidth: 0.5,
+    borderColor: isDark ? colors.cardBorder : colors.separator,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    ...getShadow('sm', isDark),
+  },
+  chipCardHint: {
+    fontSize: 12,
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
+    color: colors.gray500,
+    marginBottom: 12,
+    lineHeight: 17,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    gap: 6,
-    maxWidth: '56%',
-  },
-  seasonChip: {
     borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.gray200,
     backgroundColor: colors.cardBg,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 14,
+    minHeight: 44,
   },
-  seasonChipActive: {
+  chipActive: {
     borderColor: colors.black,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F4F4F6',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#E8E8EC',
   },
-  seasonChipText: {
-    ...Typography.caption,
+  chipText: {
+    fontSize: 13,
+    fontFamily: FontFamily.medium,
+    fontWeight: '500',
     color: colors.gray600,
-    fontSize: 11,
   },
-  seasonChipTextActive: {
+  chipTextActive: {
     color: colors.black,
-  },
-  questMeta: {
-    alignItems: 'flex-end',
-    maxWidth: '56%',
+    fontFamily: FontFamily.semibold,
+    fontWeight: '600',
   },
 });

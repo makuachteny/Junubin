@@ -1,69 +1,78 @@
 import { LightPalette, DarkPalette } from '../theme/palettes';
+import { FontFamily, fontAssets } from '../theme/fonts';
 
-describe('South Sudan Theme Palette', () => {
+// Industry palette (claude.ai/design "JuNubin Redesign"): steel-blue
+// accent on paper white / graphite, hairline ink dividers, Barlow +
+// Barlow Condensed type. These tests lock the redesign's foundation —
+// if someone reverts a token to the dating-era flag palette, this is
+// what catches it.
+describe('Industry Theme Palette', () => {
   describe('LightPalette', () => {
-    it('has flag red as primary accent', () => {
-      expect(LightPalette.accent).toBe('#CE1126');
+    it('has steel blue as primary accent', () => {
+      expect(LightPalette.accent).toBe('#2E7FD0');
     });
 
-    it('has vibrant pink as rose', () => {
-      expect(LightPalette.rose).toBe('#E84393');
+    it('legacy rose tokens resolve into the accent ramp (nothing is pink)', () => {
+      expect(LightPalette.rose).toBe(LightPalette.accent);
+      expect(LightPalette.roseTint12).toContain('46, 127, 208');
     });
 
-    it('has flag green', () => {
-      expect(LightPalette.green).toBe('#009739');
+    it('has paper-white background', () => {
+      expect(LightPalette.cream).toBe('#FFFFFF');
+      expect(LightPalette.surfaceMuted).toBe('#EDF4FB');
     });
 
-    it('has flag blue as royal', () => {
-      expect(LightPalette.royal).toBe('#0047AB');
+    it('has hairline ink separators', () => {
+      expect(LightPalette.separator).toBe('rgba(29, 31, 32, 0.16)');
+      expect(LightPalette.cardBorder).toBe(LightPalette.separator);
     });
 
-    it('has gold star color', () => {
-      expect(LightPalette.gold).toBe('#FCCD12');
+    it('has accent tints derived from steel blue', () => {
+      expect(LightPalette.accentTint08).toContain('46, 127, 208');
+      expect(LightPalette.accentTint15).toContain('46, 127, 208');
     });
 
-    it('has flag red as error', () => {
-      expect(LightPalette.error).toBe('#CE1126');
-    });
-
-    it('has warm-tinted cream surface', () => {
-      expect(LightPalette.cream).toBe('#FFFAF7');
-    });
-
-    it('has visible roseLight pink', () => {
-      expect(LightPalette.roseLight).toBe('#F9A8D4');
-    });
-
-    it('has all accent tints derived from flag red', () => {
-      expect(LightPalette.accentTint08).toContain('206, 17, 38');
-      expect(LightPalette.accentTint15).toContain('206, 17, 38');
-    });
-
-    it('has all rose tints derived from pink', () => {
-      expect(LightPalette.roseTint12).toContain('232, 67, 147');
+    it('uses a muted error red (not flag red)', () => {
+      expect(LightPalette.error).toBe('#B4544C');
     });
   });
 
   describe('DarkPalette', () => {
-    it('has brightened flag red accent for dark mode', () => {
-      expect(DarkPalette.accent).toBe('#F04C55');
+    it('has brightened steel blue accent for dark mode', () => {
+      expect(DarkPalette.accent).toBe('#5B9DE6');
     });
 
-    it('has brightened pink rose for dark mode', () => {
-      expect(DarkPalette.rose).toBe('#F05AA5');
-    });
-
-    it('has clean near-black surface', () => {
-      expect(DarkPalette.cream).toBe('#0C0C0E');
+    it('has graphite background and surface', () => {
+      expect(DarkPalette.cream).toBe('#1A1C1E');
+      expect(DarkPalette.surface).toBe('#232528');
     });
 
     it('has inverted gray scale', () => {
-      expect(DarkPalette.gray100).toBe('#0C0C0E');
-      expect(DarkPalette.gray900).toBe('#F5F3F0');
+      expect(DarkPalette.gray100).toBe('#1A1C1E');
+      expect(DarkPalette.gray900).toBe('#ECEEF1');
     });
 
-    it('has brightened flag green', () => {
-      expect(DarkPalette.green).toBe('#2CB750');
+    it('has hairline light-ink separators', () => {
+      expect(DarkPalette.separator).toBe('rgba(236, 238, 241, 0.18)');
+    });
+  });
+
+  describe('Industry fonts', () => {
+    it('body roles are Barlow', () => {
+      expect(FontFamily.regular).toBe('Barlow-Regular');
+      expect(FontFamily.bold).toBe('Barlow-Bold');
+    });
+
+    it('display roles are Barlow Condensed', () => {
+      expect(FontFamily.black).toBe('BarlowCondensed-Bold');
+      expect(FontFamily.extrabold).toBe('BarlowCondensed-SemiBold');
+      expect(FontFamily.heading).toBe('BarlowCondensed-SemiBold');
+    });
+
+    it('every FontFamily value has a bundled asset', () => {
+      Object.values(FontFamily).forEach((face) => {
+        expect(fontAssets[face]).toBeDefined();
+      });
     });
   });
 });

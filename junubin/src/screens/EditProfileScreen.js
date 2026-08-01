@@ -74,22 +74,10 @@ const ETHNICITY_PICKER_OPTIONS = TRIBES.map((t) => ({
 // intentions and children. accountPurpose is still persisted, but it's
 // a constant ('socialize') written by onboarding, not a user choice, so
 // there's nothing left for this screen to edit.
-// Height picker options — 140cm to 220cm in 1cm steps, displayed with
-// both metric and imperial so users can find their height either way.
-const HEIGHT_PICKER_OPTIONS = (() => {
-  const out = [];
-  for (let cm = 140; cm <= 220; cm++) {
-    const totalIn = Math.round(cm / 2.54);
-    const ft = Math.floor(totalIn / 12);
-    const inch = totalIn % 12;
-    out.push({
-      label: `${ft}'${inch}"`,
-      value: cm,
-      description: `${cm} cm`,
-    });
-  }
-  return out;
-})();
+// Height was a dating-era profile attribute (Profile.heightCm). The
+// picker row is gone with the pivot — nothing in discovery or the
+// directory filters on it, so asking for it read as dating chrome.
+// Existing DB values are simply no longer edited or shown here.
 
 // PROMPT_OPTIONS now imported from src/data/profileOptions.js (shared).
 
@@ -854,9 +842,6 @@ export default function EditProfileScreen({ navigation, route }) {
     countryCode:      currentUser?._raw?.countryCode || '',
     // City lives on User.city (free-text). Autosaves like bio/job/school.
     city:             currentUser?._raw?.city || '',
-    // Height lives on Profile.heightCm. Numeric — uses the searchable
-    // height picker below; '' when unset.
-    heightCm:         currentUser?._raw?.profile?.heightCm || '',
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), []);
 
@@ -1006,7 +991,6 @@ export default function EditProfileScreen({ navigation, route }) {
   const [openSection, setOpenSection] = useState(null);
   const [ethnicityPickerOpen, setEthnicityPickerOpen] = useState(false);
   const [countryPickerOpen, setCountryPickerOpen] = useState(false);
-  const [heightPickerOpen, setHeightPickerOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -1042,7 +1026,6 @@ export default function EditProfileScreen({ navigation, route }) {
         openTo:             form.openTo,
         languages:          form.languages,
         currentlyInto:      currentlyInto,
-        heightCm:           form.heightCm ? Number(form.heightCm) : (currentUser._raw?.profile?.heightCm || null),
       },
     };
     return calculateCompleteness(liveUser);
@@ -1055,7 +1038,7 @@ export default function EditProfileScreen({ navigation, route }) {
     const NON_TEXT_KEYS = [
       'lookingFor', 'ethnicity', 'education', 'pronouns',
       'dob', 'gender', 'promptQuestion', 'promptAnswer', 'countryCode',
-      'heightCm', 'locationVisibility',
+      'locationVisibility',
     ];
     for (const k of NON_TEXT_KEYS) {
       if ((form[k] || '') !== (snap[k] || '')) return true;
@@ -1245,7 +1228,6 @@ export default function EditProfileScreen({ navigation, route }) {
         ...(form.promptAnswer ? { promptAnswer: form.promptAnswer.trim() } : {}),
         ...(form.countryCode ? { countryCode: form.countryCode } : {}),
         ...(form.city ? { city: form.city.trim() } : {}),
-        ...(form.heightCm ? { heightCm: Number(form.heightCm) } : {}),
       };
 
       const projectedUser = {
@@ -1508,22 +1490,6 @@ export default function EditProfileScreen({ navigation, route }) {
             placeholder="e.g. Juba"
             icon="location-outline"
             maxLength={60}
-          />
-          <PickerRow
-            label="Height"
-            icon="resize-outline"
-            value={form.heightCm ? String(form.heightCm) : ''}
-            displayValue={(() => {
-              if (!form.heightCm) return null;
-              const cm = Number(form.heightCm);
-              const totalIn = Math.round(cm / 2.54);
-              const ft = Math.floor(totalIn / 12);
-              const inch = totalIn % 12;
-              return `${ft}'${inch}"  ·  ${cm} cm`;
-            })()}
-            placeholder="Tap to choose your height"
-            onPress={() => setHeightPickerOpen(true)}
-            testID="edit-height-row"
           />
           {dobLocked ? (
             <LockedRow
@@ -1903,15 +1869,6 @@ export default function EditProfileScreen({ navigation, route }) {
         options={COUNTRY_PICKER_OPTIONS}
         selectedValue={form.countryCode}
         onSelect={(value) => setField('countryCode', value)}
-      />
-      <SearchablePicker
-        visible={heightPickerOpen}
-        onClose={() => setHeightPickerOpen(false)}
-        title="Your height"
-        searchPlaceholder="Search (e.g. 5'8 or 173)…"
-        options={HEIGHT_PICKER_OPTIONS}
-        selectedValue={form.heightCm ? Number(form.heightCm) : null}
-        onSelect={(value) => setField('heightCm', value)}
       />
       <ProfilePreviewSheet
         visible={previewOpen}

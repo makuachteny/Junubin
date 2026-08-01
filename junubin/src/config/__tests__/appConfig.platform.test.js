@@ -33,8 +33,26 @@ describe('Expo platform config', () => {
   it('has required iOS usage descriptions for feature permissions', () => {
     const infoPlist = config?.ios?.infoPlist || {};
     expect(infoPlist.NSCameraUsageDescription).toBeTruthy();
-    expect(infoPlist.NSMicrophoneUsageDescription).toBeTruthy();
     expect(infoPlist.NSPhotoLibraryUsageDescription).toBeTruthy();
+    expect(infoPlist.NSLocationWhenInUseUsageDescription).toBeTruthy();
+  });
+
+  // JuNubin is text-only: nothing records audio, so declaring a
+  // microphone purpose string would claim a capability the app never
+  // exercises. This locks the pivot in — if a plugin (expo-av,
+  // expo-image-picker's microphonePermission) or a config edit
+  // re-injects it, this fails.
+  it('does not declare a microphone usage description', () => {
+    const infoPlist = config?.ios?.infoPlist || {};
+    expect(infoPlist.NSMicrophoneUsageDescription).toBeUndefined();
+  });
+
+  // Only remote-notification. `voip`/`audio` belonged to the removed
+  // Daily.co call stack — App Review checks declared background modes
+  // against actual behavior.
+  it('declares only the remote-notification background mode', () => {
+    const modes = config?.ios?.infoPlist?.UIBackgroundModes || [];
+    expect(modes).toEqual(['remote-notification']);
   });
 
   it('has required Android runtime permissions for core features', () => {
@@ -42,16 +60,27 @@ describe('Expo platform config', () => {
     expect(permissions).toEqual(
       expect.arrayContaining([
         'android.permission.CAMERA',
-        'android.permission.RECORD_AUDIO',
         'android.permission.POST_NOTIFICATIONS',
+        'android.permission.ACCESS_COARSE_LOCATION',
       ])
     );
   });
 
-  it('includes plugins needed for notifications, media picker, and audio', () => {
+  // The app coarsens every coordinate before storage and tells users it
+  // never collects precise location; requesting FINE would contradict
+  // that and force a "precise location" Play Data Safety entry.
+  // RECORD_AUDIO went out with voice notes and calls.
+  it('does not request fine location or audio recording permissions', () => {
+    const permissions = config?.android?.permissions || [];
+    expect(permissions).not.toContain('android.permission.ACCESS_FINE_LOCATION');
+    expect(permissions).not.toContain('android.permission.RECORD_AUDIO');
+  });
+
+  it('includes plugins needed for notifications and the profile-photo picker', () => {
     const plugins = config.plugins || [];
     expect(hasPlugin(plugins, 'expo-notifications')).toBe(true);
     expect(hasPlugin(plugins, 'expo-image-picker')).toBe(true);
-    expect(hasPlugin(plugins, 'expo-av')).toBe(true);
+    // expo-av must stay gone — it re-injects mic permissions at prebuild.
+    expect(hasPlugin(plugins, 'expo-av')).toBe(false);
   });
 });

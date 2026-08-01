@@ -3,15 +3,14 @@
 //
 //   const { gate, nudge } = useEligibility();
 //   ...
-//   if (!gate('swipe_like')) return;     // shows nudge automatically
-//   recordSwipe(...);
+//   if (!gate('send_message')) return;   // shows alert automatically
 //   ...
 //   {nudge}    // <-- render at the bottom of the screen JSX
 //
 // The hook owns the modal state so individual screens don't have to.
-// Other failure reasons (tier_required, balance_required, etc.) bubble
-// back via the gate() return value as null, with the verdict on the ref
-// for callers that want to render their own paywall/coin sheet.
+// Post-pivot only 'banned' and 'restricted' can block an action — the
+// dating-era reasons (survey/tier/balance/rate-limit) are gone with
+// swiping, calls and paid consumables.
 
 import React, { useCallback, useState, useRef, useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
@@ -171,16 +170,6 @@ export function useEligibility() {
     if (opts.silent) return false;
 
     switch (verdict.reason) {
-      case 'survey_required':
-        // Only surface the nudge the first time the user encounters
-        // this specific missing step in the current session. Repeated
-        // taps after they dismiss silently no-op so the popup isn't a
-        // pop-up-on-every-tap nag. The action itself is still blocked
-        // server-side, so suppression is purely a UX concession.
-        if (!dismissedSteps.has(verdict.resumeAt)) {
-          setNudgeState({ visible: true, from: action, resumeAt: verdict.resumeAt });
-        }
-        break;
       case 'banned':
         Alert.alert(REASON_COPY.banned.title, REASON_COPY.banned.body, [
           { text: 'Sign out', onPress: () => logout?.() },
@@ -188,11 +177,6 @@ export function useEligibility() {
         break;
       case 'restricted':
         Alert.alert(REASON_COPY.restricted.title, REASON_COPY.restricted.body);
-        break;
-      case 'tier_required':
-        // Caller usually owns the paywall UI — just surface the reason
-        // so they can route to Elite. This branch is silent so the
-        // existing paywall flow still wins.
         break;
       default:
         break;

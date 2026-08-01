@@ -29,7 +29,7 @@ export default function NotificationsScreen({ navigation }) {
       <EmptyState
         icon="notifications-outline"
         title="No new notifications"
-        subtitle="We'll let you know when something happens. Push notifications cover matches, messages and likes — in-app feed lands in v1.1."
+        subtitle="We'll let you know when something happens. Push notifications cover new messages, message requests and follows — in-app feed lands in v1.1."
       />
     </View>
   );

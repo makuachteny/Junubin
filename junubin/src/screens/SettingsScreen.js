@@ -3,21 +3,16 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Switch,
   Alert,
   Animated,
-  Linking,
-  Platform,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, getShadow } from '../theme';
+import { useTheme, Typography, FontFamily } from '../theme';
 import BrandLogo from '../components/BrandLogo';
-import Button from '../components/Button';
-import PurchaseModal from '../components/PurchaseModal';
-import { useSubscription, SHOW_PAYMENTS_UI, StripeService } from '../payments';
+import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
@@ -28,46 +23,12 @@ import {
   getNotificationPermissionStatus,
 } from '../utils/notifications';
 import { promptToOpenSettings } from '../utils/permissionAlert';
-import { LOCATION_VISIBILITY, LOCATION_VISIBILITY_OPTIONS, locationVisibilityLabel } from '../utils/locationConsent';
+import { LOCATION_VISIBILITY, LOCATION_VISIBILITY_OPTIONS } from '../utils/locationConsent';
 import { REFERRALS_BACKEND_READY } from '../utils/referralService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TIER_LABELS = { free: 'Free', plus: 'JuNubin+', junub: 'Junub' };
 const INCOGNITO_KEY = '@junubin_incognito';
 const DISTANCE_UNIT_KEY = '@junubin_distance_unit';
-
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
-
-function PressableRow({ style, onPress, children }) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      tension: 68,
-      friction: 10,
-      useNativeDriver: true,
-    }).start();
-  };
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      tension: 68,
-      friction: 10,
-      useNativeDriver: true,
-    }).start();
-  };
-  return (
-    <AnimatedTouchable
-      style={[style, { transform: [{ scale: scaleAnim }] }]}
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      activeOpacity={0.7}
-    >
-      {children}
-    </AnimatedTouchable>
-  );
-}
 
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -82,7 +43,10 @@ export default function SettingsScreen({ navigation }) {
       profileService.updateProfile({ showMe: val }).catch(() => {});
     }
   };
-  const { tier, effectiveTier, promoTier, promoEndsAt, hasTier, restorePurchases, isSubscribed, reset } = useSubscription();
+  // Payments UI is permanently off — the only thing we still need from
+  // the subscription context is `reset()` so logout/delete clear any
+  // cached entitlement state.
+  const { reset } = useSubscription();
   const [incognito, setIncognitoState] = useState(false);
   const [distanceUnit, setDistanceUnitState] = useState('mi');
   // Location visibility. Source of truth is `Profile.locationVisibility`
@@ -90,6 +54,11 @@ export default function SettingsScreen({ navigation }) {
   // `Profile.shareLocation` boolean is kept in sync by a DB trigger, so
   // we only ever write the new column from here.
   const [locationVisibility, setLocationVisibilityState] = useState(LOCATION_VISIBILITY.OFF);
+  // Temporary sharing window (`Profile.locationVisibleUntil`, 00047).
+  // null = visible until manually disabled; a future ISO timestamp
+  // means "visible until then", after which discover-nearby hides the
+  // user server-side with no cron needed.
+  const [visibleUntil, setVisibleUntilState] = useState(null);
 
   // Hydrate persisted toggles on mount. Incognito's source of truth is
   // `Profile.incognito` (so it syncs across devices); AsyncStorage is a
@@ -127,6 +96,25 @@ export default function SettingsScreen({ navigation }) {
   useEffect(() => {
     const profile = currentUser?.profile;
     const stored = profile?.locationVisibility;
+
+    // An expired temporary window means the server already treats this
+    // user as hidden. Reconcile the stored state to match ("visible for
+    // 1 hour" ending IS turning visibility off) so the radio group
+    // doesn't claim a visibility level nobody can see. Fire-and-forget:
+    // the server ignores expired windows either way.
+    const until = profile?.locationVisibleUntil || null;
+    const expired = until && new Date(until).getTime() <= Date.now();
+    if (expired && stored !== LOCATION_VISIBILITY.OFF) {
+      setLocationVisibilityState(LOCATION_VISIBILITY.OFF);
+      setVisibleUntilState(null);
+      profileService.updateProfile({
+        locationVisibility: LOCATION_VISIBILITY.OFF,
+        locationVisibleUntil: null,
+      }).catch(() => {});
+      return;
+    }
+    setVisibleUntilState(expired ? null : until);
+
     if (stored === LOCATION_VISIBILITY.CITY || stored === LOCATION_VISIBILITY.COARSE) {
       setLocationVisibilityState(stored);
     } else if (stored === LOCATION_VISIBILITY.OFF) {
@@ -136,7 +124,7 @@ export default function SettingsScreen({ navigation }) {
         profile?.shareLocation ? LOCATION_VISIBILITY.COARSE : LOCATION_VISIBILITY.OFF,
       );
     }
-  }, [currentUser?.profile?.locationVisibility, currentUser?.profile?.shareLocation]);
+  }, [currentUser?.profile?.locationVisibility, currentUser?.profile?.shareLocation, currentUser?.profile?.locationVisibleUntil]);
 
   // Persist on change. Write to the DB first so other devices can see
   // it; the local cache is best-effort. If the DB write fails (offline),
@@ -167,18 +155,37 @@ export default function SettingsScreen({ navigation }) {
     const previous = locationVisibility;
     if (next === previous) return;
     setLocationVisibilityState(next);
+    // Changing level always resets the temporary window: turning off
+    // clears it by definition, and turning on starts from "until I
+    // turn it off" so a stale window from a previous session can't
+    // silently hide someone who believes they just became visible.
+    const previousUntil = visibleUntil;
+    setVisibleUntilState(null);
     try {
-      await profileService.updateProfile({ locationVisibility: next });
+      await profileService.updateProfile({ locationVisibility: next, locationVisibleUntil: null });
     } catch (e) {
       setLocationVisibilityState(previous);
+      setVisibleUntilState(previousUntil);
       Alert.alert('Could not update', e?.message || 'Try again when you have a connection.');
     }
-  }, [locationVisibility]);
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const [modal, setModal] = useState({ visible: false, type: 'loading', title: '', message: '' });
+  }, [locationVisibility, visibleUntil]);
+
+  // Temporary-visibility window. `hours` = 1 | 8 | null (no limit).
+  // Same revert-on-failure pattern — a window the server never accepted
+  // must not be shown as active.
+  const setTemporaryWindow = useCallback(async (hours) => {
+    const previous = visibleUntil;
+    const next = hours ? new Date(Date.now() + hours * 3600_000).toISOString() : null;
+    setVisibleUntilState(next);
+    try {
+      await profileService.updateProfile({ locationVisibleUntil: next });
+    } catch (e) {
+      setVisibleUntilState(previous);
+      Alert.alert('Could not update', e?.message || 'Try again when you have a connection.');
+    }
+  }, [visibleUntil]);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const contentAnim = useRef(new Animated.Value(0)).current;
-  const promoActive = promoTier && promoEndsAt && new Date(promoEndsAt).getTime() > Date.now();
-  const tierLabel = TIER_LABELS[effectiveTier] || TIER_LABELS[tier];
 
   useEffect(() => {
     Animated.timing(contentAnim, {
@@ -238,57 +245,6 @@ export default function SettingsScreen({ navigation }) {
     }
   }, []);
 
-  const handleRestore = async () => {
-    setModal({ visible: true, type: 'loading', title: 'Restoring...', message: 'Checking previous purchases' });
-    const result = await restorePurchases();
-    if (result.success) {
-      setModal({ visible: true, type: 'success', title: 'Restored!', message: `Your current tier: ${tierLabel}` });
-    } else {
-      setModal({ visible: true, type: 'error', title: 'Restore Failed', message: result.error || 'Please try again.' });
-    }
-  };
-
-  const handleManageSubscription = async () => {
-    if (!isSubscribed()) {
-      // Nothing to manage on a free app. Reachable only by a
-      // pre-pivot subscriber whose entitlement has since lapsed.
-      Alert.alert('JuNubin is free', 'There is no subscription to manage.');
-      return;
-    }
-    if (promoActive && tier === 'free') {
-      Alert.alert('Promo Plan', 'Your membership is a time-limited promo. Manage paid subscriptions in the app store.');
-      return;
-    }
-
-    // Stripe subscribers (web + Android purchases) go to the Stripe
-    // Billing Portal — they can cancel, switch plan, update card, and
-    // download invoices there. IAP subscribers fall through to the
-    // store-account URL because Apple/Google own the cancellation
-    // surface for purchases that went through them.
-    const portal = await StripeService.openBillingPortal({ returnUrl: 'junubin://account' });
-    if (portal.available && portal.url) {
-      try {
-        const supported = await Linking.canOpenURL(portal.url);
-        if (!supported) throw new Error('unsupported');
-        await Linking.openURL(portal.url);
-        return;
-      } catch {
-        // Fall through to store URL.
-      }
-    }
-
-    const iosUrl = 'https://apps.apple.com/account/subscriptions';
-    const androidUrl = 'https://play.google.com/store/account/subscriptions?package=com.junubin.app';
-    const target = Platform.OS === 'ios' ? iosUrl : androidUrl;
-    try {
-      const supported = await Linking.canOpenURL(target);
-      if (!supported) throw new Error('unsupported');
-      await Linking.openURL(target);
-    } catch {
-      Alert.alert('Manage Subscription', 'Unable to open subscription management. Please visit your app store account subscriptions.');
-    }
-  };
-
   const handleLogout = () => {
     Alert.alert(
       'Log Out',
@@ -307,6 +263,85 @@ export default function SettingsScreen({ navigation }) {
     );
   };
 
+  const handleDeleteAccount = useCallback(() => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure? This will permanently delete your account and all your data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            // Hard delete via the account-delete Edge Function:
+            // tears down storage objects, the User row (FK
+            // cascades the rest), and the auth.users row. App
+            // Store guideline 5.1.1.v requires "real" deletion;
+            // soft-deletes leave the account discoverable and
+            // matchable, which violates that guideline.
+            let serverDeleted = false;
+            try {
+              if (session?.access_token) {
+                const { error } = await supabase.functions.invoke('account-delete', {
+                  method: 'POST',
+                });
+                if (!error) serverDeleted = true;
+              }
+            } catch (e) {
+              if (__DEV__) console.warn('account-delete failed:', e);
+            }
+            // If the Edge Function isn't deployed yet (early dev)
+            // fall back to the soft-delete flag so the in-app
+            // sign-out still happens. The flag isn't filtered on
+            // reads anywhere — surfaced here only so the prior
+            // behavior is preserved during deploy.
+            if (!serverDeleted) {
+              try {
+                if (session) {
+                  await profileService.updateProfile({ deletedAt: new Date().toISOString() });
+                }
+              } catch {}
+            }
+            await logout();
+            await reset();
+          },
+        },
+      ]
+    );
+  }, [session, logout, reset]);
+
+  // Push notifications — distinct from the (deferred) in-app
+  // notification feed. The OS-level permission powers the real
+  // push pipeline (00013 triggers → push-send). Tapping this
+  // row either prompts the user the first time, or opens the
+  // system Settings if they've already denied.
+  const handleNotifications = useCallback(async () => {
+    const status = await getNotificationPermissionStatus();
+    if (status === 'granted') {
+      Alert.alert(
+        'Notifications on',
+        'You\'ll get a heads-up when someone follows you, sends a message, or asks to connect.',
+      );
+      return;
+    }
+    if (status === 'denied') {
+      promptToOpenSettings({
+        title: 'Notifications turned off',
+        message: 'Open Settings to let JuNubin send you push notifications about new followers, messages, and connection requests.',
+      });
+      return;
+    }
+    const token = await promptForPushPermission();
+    if (token) {
+      Alert.alert('Notifications on', 'You\'re all set.');
+    } else {
+      promptToOpenSettings({
+        title: 'Notifications still off',
+        message: 'You can enable JuNubin notifications in Settings whenever you change your mind.',
+      });
+    }
+  }, []);
+
   const handleInfoPagePress = useCallback((pageKey) => {
     navigation.navigate('SettingsInfo', { pageKey });
   }, [navigation]);
@@ -315,60 +350,64 @@ export default function SettingsScreen({ navigation }) {
     navigation.navigate('EditProfile');
   }, [navigation]);
 
-  const menuItems = useMemo(() => [
-    // Invite Friends hides until REFERRALS_BACKEND_READY flips true —
-    // the reward grants are local-only today and would let a user
-    // generate free Plus weeks / Super Likes / coins client-side.
-    ...(REFERRALS_BACKEND_READY
-      ? [{ label: 'Invite Friends', icon: 'gift-outline', onPress: () => navigation.navigate('Referral') }]
-      : []),
-    { label: 'Find Friends', icon: 'people-circle-outline', onPress: () => navigation.navigate('FindFriends') },
-    { label: 'Verify Your Photo', icon: 'camera-outline', onPress: () => navigation.navigate('PhotoVerification') },
+  const isVerified = !!(currentUser?.verified || currentUser?.profile?.isVerified);
+
+  // ACCOUNT & SAFETY — flat rows, mock order. Everything reuses the
+  // pre-existing handlers verbatim; only the presentation changed.
+  const accountRows = useMemo(() => [
+    {
+      label: isVerified ? 'Verify your photo — done ✓' : 'Verify your photo',
+      onPress: () => navigation.navigate('PhotoVerification'),
+    },
+    { label: 'Blocked people', onPress: handleViewBlocked },
+    { label: 'Notifications', onPress: handleNotifications },
+    // The info pages stay individual rows (SettingsInfo renders one
+    // pageKey at a time — there is no index page to drill into yet).
+    { label: 'FAQ', onPress: () => handleInfoPagePress('faq') },
+    { label: 'Contact us', onPress: () => handleInfoPagePress('contact') },
+    { label: 'Terms of use', onPress: () => handleInfoPagePress('terms') },
+    { label: 'Privacy policy', onPress: () => handleInfoPagePress('privacy') },
+    { label: 'Community guidelines', onPress: () => handleInfoPagePress('guidelines') },
+    { label: 'Safety tips', onPress: () => handleInfoPagePress('safety') },
     // Accessibility prefs are a one-time onboarding step but the
     // screen is reusable for tuning later — exposing it here gives
     // a user who skipped it (or who developed new needs) a way back
     // in without flipping accountPurpose.
-    { label: 'Accessibility Preferences', icon: 'accessibility-outline', onPress: () => navigation.navigate('AccessibilitySurvey', { returnTo: 'back' }) },
-    { label: 'FAQ', icon: 'help-circle-outline', onPress: () => handleInfoPagePress('faq') },
-    { label: 'Contact Us', icon: 'mail-outline', onPress: () => handleInfoPagePress('contact') },
-    { label: 'Terms of Use', icon: 'document-text-outline', onPress: () => handleInfoPagePress('terms') },
-    { label: 'Privacy Policy', icon: 'shield-outline', onPress: () => handleInfoPagePress('privacy') },
-    { label: 'Community Guidelines', icon: 'people-outline', onPress: () => handleInfoPagePress('guidelines') },
-    { label: 'Safety Tips', icon: 'warning-outline', onPress: () => handleInfoPagePress('safety') },
-    // Manage Subscription + Restore Purchases are gated on
-    // SHOW_PAYMENTS_UI (src/payments/comingSoon.js). With payments
-    // live they render unconditionally; the flag stays as a kill
-    // switch in case we need to hide monetization UI for a future
-    // App Review re-submission.
-    ...(SHOW_PAYMENTS_UI
-      ? [
-          { label: 'Manage Subscription', icon: 'card-outline', onPress: handleManageSubscription },
-          { label: 'Restore Purchases', icon: 'refresh-outline', onPress: handleRestore },
-        ]
-      : []),
-    { label: 'Manage Account', icon: 'person-outline', onPress: handleManageAccount },
-  ], [handleInfoPagePress, handleManageAccount, handleManageSubscription, handleRestore, navigation]);
-  // "Looking For" / "Age Range" were dating preferences and no longer
-  // exist. What's left is what actually governs discovery now.
-  const surveySnapshot = useMemo(() => [
-    { label: 'City', value: currentUser.city || currentUser.preferences?.location || 'Not set' },
-    { label: 'Search radius', value: `${currentUser.preferences?.distance || 50} mi` },
-    { label: 'Location visibility', value: locationVisibilityLabel(locationVisibility) },
-    { label: 'Show Me on JuNubin', value: showMe ? 'On' : 'Off' },
-  ], [currentUser.city, currentUser.preferences?.location, currentUser.preferences?.distance, locationVisibility, showMe]);
-  // Spotlight / Super Like balances are gone with monetization.
-  const appChanges = useMemo(() => [
-    { label: 'Theme', value: isDark ? 'Dark' : 'Light' },
-  ], [isDark]);
+    { label: 'Accessibility preferences', onPress: () => navigation.navigate('AccessibilitySurvey', { returnTo: 'back' }) },
+    { label: 'Manage account', onPress: handleManageAccount },
+    { label: 'Log out', onPress: handleLogout },
+    { label: 'Delete account', destructive: true, onPress: handleDeleteAccount },
+  ], [isVerified, handleViewBlocked, handleNotifications, handleInfoPagePress, handleManageAccount, handleDeleteAccount, navigation]);
+
+  const renderRow = (row) => (
+    <TouchableOpacity
+      key={row.label}
+      style={styles.flatRow}
+      onPress={row.onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={row.label}
+    >
+      <Text style={[styles.flatRowLabel, row.destructive && { color: colors.error }]}>
+        {row.label}
+      </Text>
+      <Ionicons name="chevron-forward" size={16} color={colors.gray400} />
+    </TouchableOpacity>
+  );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.doneText}>Done</Text>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.black} />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
       <Animated.ScrollView
@@ -385,161 +424,150 @@ export default function SettingsScreen({ navigation }) {
           ],
         }}
       >
-        {/* The "<tier> Member" crown badge is gone. `isSubscribed()` is
-            now a shim that returns true for everyone, so the badge would
-            have crowned every user on a free app — worse than useless. */}
+        {/* ── LOCATION VISIBILITY ── */}
+        {/* Three explicit levels rather than a single on/off switch, so
+            "I want people to know I'm in Nairobi" and "I want a pin on
+            the map" are separate choices. Hidden is the default and
+            stays the default. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>LOCATION VISIBILITY</Text>
+          {LOCATION_VISIBILITY_OPTIONS.map((opt) => {
+            const selected = locationVisibility === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.visOption, selected && styles.visOptionActive]}
+                onPress={() => setLocationVisibility(opt.value)}
+                activeOpacity={0.85}
+                accessibilityRole="radio"
+                accessibilityState={{ selected }}
+                accessibilityLabel={`${opt.label}. ${opt.description}`}
+                testID={`location-visibility-${opt.value}`}
+              >
+                <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
+                  {selected && <View style={styles.radioInner} />}
+                </View>
+                <View style={styles.visOptionText}>
+                  <Text style={styles.visOptionLabel}>{opt.label}</Text>
+                  <Text style={styles.visOptionDesc}>{opt.description}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
 
-        {/* JuNubin is free. There is no tier to upgrade to, no
-            consumable to buy, and no purchase surface to link out to —
-            so this is a statement, not an offer. */}
-        <View style={styles.freeNote}>
-          <Ionicons name="heart-circle-outline" size={20} color={colors.accent} />
-          <Text style={styles.freeNoteText}>
-            JuNubin is free. Every feature is included — finding people, following, and
-            messaging all cost nothing.
+          {/* Temporary visibility — only meaningful when the user is
+              visible at all. "1 hour" / "8 hours" write a future
+              locationVisibleUntil; discover-nearby drops the user the
+              moment it passes, and the hydrate effect above flips the
+              radio back to Hidden on the next visit. */}
+          {locationVisibility !== LOCATION_VISIBILITY.OFF && (
+            <View style={styles.visibleForBlock}>
+              <Text style={styles.visibleForLabel}>Stay visible for</Text>
+              <View style={styles.visibleForRow}>
+                {[
+                  { hours: 1, label: '1 hour' },
+                  { hours: 8, label: '8 hours' },
+                  { hours: null, label: 'Until I turn it off' },
+                ].map((opt) => {
+                  const selected = opt.hours === null ? !visibleUntil : false;
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      style={[styles.visibleForChip, selected && styles.visibleForChipActive]}
+                      onPress={() => setTemporaryWindow(opt.hours)}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Stay visible for ${opt.label}`}
+                      testID={`visible-for-${opt.hours ?? 'unlimited'}`}
+                    >
+                      <Text style={[styles.visibleForChipText, selected && styles.visibleForChipTextActive]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {visibleUntil && (
+                <Text style={styles.visibleForUntil}>
+                  Visible until {new Date(visibleUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                  {' — after that you go back to Hidden automatically.'}
+                </Text>
+              )}
+            </View>
+          )}
+          <Text style={styles.footnote}>
+            Your location is never sold, shared with advertisers, or used to target ads, and
+            JuNubin never tracks you in the background.
           </Text>
         </View>
 
-        {/* Others */}
-        <View style={styles.othersSection}>
-          <Text style={styles.othersTitle}>Others</Text>
+        {/* ── APPEARANCE ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>APPEARANCE</Text>
+          <View style={styles.borderedRow}>
+            <Text style={styles.rowLabel}>Dark mode</Text>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: colors.gray300, true: colors.accent }}
+              thumbColor="#FFFFFF"
+              accessibilityLabel="Dark mode"
+            />
+          </View>
+        </View>
 
-          <PressableRow style={styles.menuRow} onPress={() => handleInfoPagePress('contact')}>
-            <Text style={styles.menuLabel}>Email</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </PressableRow>
+        {/* ── ACCOUNT & SAFETY ── */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ACCOUNT & SAFETY</Text>
+          {accountRows.map(renderRow)}
+        </View>
 
-          {/* Push notifications — distinct from the (deferred) in-app
-              notification feed. The OS-level permission powers the real
-              push pipeline (00013 triggers → push-send). Tapping this
-              row either prompts the user the first time, or opens the
-              system Settings if they've already denied. */}
-          <PressableRow
-            style={styles.menuRow}
-            onPress={async () => {
-              const status = await getNotificationPermissionStatus();
-              if (status === 'granted') {
-                Alert.alert(
-                  'Notifications on',
-                  'You\'ll get a heads-up when someone follows you, sends a message, or asks to connect.',
-                );
-                return;
-              }
-              if (status === 'denied') {
-                promptToOpenSettings({
-                  title: 'Notifications turned off',
-                  message: 'Open Settings to let JuNubin send you push notifications about new followers, messages, and connection requests.',
-                });
-                return;
-              }
-              const token = await promptForPushPermission();
-              if (token) {
-                Alert.alert('Notifications on', 'You\'re all set.');
-              } else {
-                promptToOpenSettings({
-                  title: 'Notifications still off',
-                  message: 'You can enable JuNubin notifications in Settings whenever you change your mind.',
-                });
-              }
-            }}
-          >
-            <Text style={styles.menuLabel}>Push Notifications</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </PressableRow>
+        {/* ── DISCOVERY ── */}
+        {/* Toggles that govern whether/how this user shows up in other
+            people's results. Same wiring as before, new clothes. */}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>DISCOVERY</Text>
 
           <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.menuLabel}>Show me on JuNubin</Text>
-              <Text style={styles.switchDesc}>
+            <View style={styles.switchRowText}>
+              <Text style={styles.rowLabel}>Show me on JuNubin</Text>
+              <Text style={styles.rowDesc}>
                 While turned off, you will not appear in the directory or on the map.
               </Text>
             </View>
             <Switch
               value={showMe}
               onValueChange={handleShowMeToggle}
-              trackColor={{ false: colors.gray300, true: colors.black }}
+              trackColor={{ false: colors.gray300, true: colors.accent }}
               thumbColor="#FFFFFF"
+              accessibilityLabel="Show me on JuNubin"
             />
           </View>
 
-          {/* Location visibility — three explicit levels rather than a
-              single on/off switch, so "I want people to know I'm in
-              Nairobi" and "I want a pin on the map" are separate
-              choices. Hidden is the default and stays the default. */}
-          <View style={styles.locationBlock}>
-            <Text style={styles.menuLabel}>Location visibility</Text>
-            <Text style={styles.switchDesc}>
-              Controls what other people can see. Browsing the map and directory is always
-              private, whichever option you pick.
-            </Text>
-            {LOCATION_VISIBILITY_OPTIONS.map((opt) => {
-              const selected = locationVisibility === opt.value;
-              return (
-                <TouchableOpacity
-                  key={opt.value}
-                  style={[styles.locationOption, selected && styles.locationOptionActive]}
-                  onPress={() => setLocationVisibility(opt.value)}
-                  activeOpacity={0.85}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`${opt.label}. ${opt.description}`}
-                  testID={`location-visibility-${opt.value}`}
-                >
-                  <Ionicons
-                    name={selected ? 'radio-button-on' : 'radio-button-off'}
-                    size={20}
-                    color={selected ? colors.accent : colors.gray400}
-                  />
-                  <View style={styles.locationOptionText}>
-                    <Text style={styles.locationOptionLabel}>{opt.label}</Text>
-                    <Text style={styles.locationOptionDesc}>{opt.description}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
-            <Text style={styles.locationFootnote}>
-              Your location is never sold, shared with advertisers, or used to target ads, and
-              JuNubin never tracks you in the background.
-            </Text>
-          </View>
-
+          {/* Was gated behind the Junub tier. The app is free, so
+              private browsing is simply available to everyone —
+              paywalling a privacy control was never defensible. */}
           <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.menuLabel}>Incognito Mode</Text>
-              <Text style={styles.switchDesc}>
+            <View style={styles.switchRowText}>
+              <Text style={styles.rowLabel}>Incognito mode</Text>
+              <Text style={styles.rowDesc}>
                 Browse the directory and map without appearing in other people's results.
               </Text>
             </View>
-            {/* Was gated behind the Junub tier. The app is free, so
-                private browsing is simply available to everyone —
-                paywalling a privacy control was never defensible. */}
             <Switch
               value={incognito}
               onValueChange={setIncognito}
-              trackColor={{ false: colors.gray300, true: colors.black }}
+              trackColor={{ false: colors.gray300, true: colors.accent }}
               thumbColor="#FFFFFF"
+              accessibilityLabel="Incognito mode"
             />
           </View>
 
           <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.menuLabel}>Dark Mode</Text>
-              <Text style={styles.switchDesc}>
-                Switch between light and dark appearance.
-              </Text>
-            </View>
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ false: colors.gray300, true: colors.black }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
-
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.menuLabel}>Distance Unit</Text>
-              <Text style={styles.switchDesc}>
+            <View style={styles.switchRowText}>
+              <Text style={styles.rowLabel}>Distance unit</Text>
+              <Text style={styles.rowDesc}>
                 {distanceUnit === 'mi' ? 'Miles' : 'Kilometers'}
               </Text>
             </View>
@@ -547,101 +575,20 @@ export default function SettingsScreen({ navigation }) {
               style={styles.unitToggle}
               onPress={() => setDistanceUnit(u => u === 'mi' ? 'km' : 'mi')}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Distance unit: ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}. Tap to switch.`}
             >
               <Text style={styles.unitToggleText}>{distanceUnit.toUpperCase()}</Text>
             </TouchableOpacity>
           </View>
 
-          <PressableRow style={styles.menuRow} onPress={handleViewBlocked}>
-            <Text style={styles.menuLabel}>Blocked Users</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </PressableRow>
+          {renderRow({ label: 'Find friends', onPress: () => navigation.navigate('FindFriends') })}
+          {/* Invite Friends hides until REFERRALS_BACKEND_READY flips
+              true — the reward grants are local-only today and would let
+              a user generate free rewards client-side. */}
+          {REFERRALS_BACKEND_READY &&
+            renderRow({ label: 'Invite friends', onPress: () => navigation.navigate('Referral') })}
         </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.cardTitle}>Survey Snapshot</Text>
-          {surveySnapshot.map((item) => (
-            <View key={item.label} style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{item.label}</Text>
-              <Text style={styles.infoValue}>{item.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.cardTitle}>App Changes</Text>
-          {appChanges.map((item) => (
-            <View key={item.label} style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{item.label}</Text>
-              <Text style={styles.infoValue}>{item.value}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Menu items */}
-        {menuItems.map((item, idx) => (
-          <PressableRow key={idx} style={styles.menuRow} onPress={item.onPress}>
-            <Text style={styles.menuLabel}>{item.label}</Text>
-            <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-          </PressableRow>
-        ))}
-
-        {/* Delete account */}
-        <PressableRow style={styles.menuRow} onPress={() => {
-          Alert.alert(
-            'Delete Account',
-            'Are you sure? This will permanently delete your account and all your data. This action cannot be undone.',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Delete Account',
-                style: 'destructive',
-                onPress: async () => {
-                  // Hard delete via the account-delete Edge Function:
-                  // tears down storage objects, the User row (FK
-                  // cascades the rest), and the auth.users row. App
-                  // Store guideline 5.1.1.v requires "real" deletion;
-                  // soft-deletes leave the account discoverable and
-                  // matchable, which violates that guideline.
-                  let serverDeleted = false;
-                  try {
-                    if (session?.access_token) {
-                      const { error } = await supabase.functions.invoke('account-delete', {
-                        method: 'POST',
-                      });
-                      if (!error) serverDeleted = true;
-                    }
-                  } catch (e) {
-                    if (__DEV__) console.warn('account-delete failed:', e);
-                  }
-                  // If the Edge Function isn't deployed yet (early dev)
-                  // fall back to the soft-delete flag so the in-app
-                  // sign-out still happens. The flag isn't filtered on
-                  // reads anywhere — surfaced here only so the prior
-                  // behavior is preserved during deploy.
-                  if (!serverDeleted) {
-                    try {
-                      if (session) {
-                        await profileService.updateProfile({ deletedAt: new Date().toISOString() });
-                      }
-                    } catch {}
-                  }
-                  await logout();
-                        await reset();
-                },
-              },
-            ]
-          );
-        }}>
-          <Text style={[styles.menuLabel, { color: colors.error }]}>Delete Account</Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-        </PressableRow>
-
-        {/* Logout */}
-        <PressableRow style={styles.menuRow} onPress={handleLogout}>
-          <Text style={[styles.menuLabel, { color: colors.error }]}>Logout</Text>
-          <Ionicons name="chevron-forward" size={20} color={colors.gray400} />
-        </PressableRow>
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -649,322 +596,233 @@ export default function SettingsScreen({ navigation }) {
           <Text style={styles.footerVersion}>Version 1.0.0 (build: 1)</Text>
         </View>
       </Animated.ScrollView>
-
-      <PurchaseModal
-        visible={modal.visible}
-        type={modal.type}
-        title={modal.title}
-        message={modal.message}
-        onDismiss={() => setModal((m) => ({ ...m, visible: false }))}
-      />
     </View>
   );
 }
 
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.cream,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    height: 56,
-    borderBottomWidth: 0,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: colors.black,
-    flex: 1,
-    textAlign: 'center',
-  },
-  doneText: {
-    ...Typography.bodySemibold,
+    fontFamily: FontFamily.heading,
+    fontSize: 24,
     color: colors.black,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
+    paddingHorizontal: 18,
+    paddingTop: 6,
+    paddingBottom: 30,
+    gap: 22,
   },
-  modeSection: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    marginTop: 20,
-  },
-  modeDesc: {
-    ...Typography.bodySmall,
-    color: colors.black,
-    textAlign: 'center',
-    marginTop: 12,
-    opacity: 0.7,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.separator,
-    marginTop: 20,
-    width: '100%',
-  },
-  section: {
-    paddingVertical: 18,
-    borderTopWidth: 1,
-    borderTopColor: colors.separator,
-  },
-  sectionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+
+  // ── Sections ──
+  section: {},
   sectionLabel: {
-    ...Typography.sectionLabel,
-    color: colors.black,
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: FontFamily.semibold,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.gray600,
+    marginBottom: 9,
   },
-  sectionValue: {
-    ...Typography.bodySemibold,
-    color: colors.gray500,
-  },
-  sliderPlaceholder: {
-    marginTop: 16,
-  },
-  sliderTrack: {
-    height: 6,
-    backgroundColor: colors.gray300,
-    borderRadius: 3,
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  sliderFill: {
-    position: 'absolute',
-    height: 6,
-    backgroundColor: colors.black,
-    borderRadius: 3,
-    width: '100%',
-  },
-  sliderThumb: {
-    position: 'absolute',
-    right: 0,
-    top: -5,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.black,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sliderLabels: {
+
+  // ── Location visibility radio rows ──
+  visOption: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 10,
-  },
-  sliderLabel: {
-    ...Typography.caption,
-    color: colors.black,
-    opacity: 0.6,
-    fontFamily: FontFamily.regular,
-  },
-  helperText: {
-    ...Typography.label,
-    color: colors.black,
-    opacity: 0.6,
-    marginTop: 12,
-    lineHeight: 18,
-    fontWeight: '400',
-    fontFamily: FontFamily.regular,
-  },
-  radioRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
+    alignItems: 'flex-start',
     gap: 12,
-  },
-  radio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.gray400,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radioActive: {
-    borderColor: colors.black,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#F4F4F6',
-  },
-  radioInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: colors.black,
-  },
-  radioLabel: {
-    ...Typography.body,
-    color: colors.black,
-    opacity: 0.85,
-  },
-  othersSection: {
-    borderTopWidth: 1,
-    borderTopColor: colors.separator,
-    paddingTop: 16,
-    marginTop: 10,
-  },
-  othersTitle: {
-    ...Typography.sectionLabel,
-    color: colors.gray500,
-    marginBottom: 12,
-  },
-  sectionCard: {
-    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: colors.separator,
-    borderRadius: 14,
-    backgroundColor: colors.cardBg,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    ...getShadow('sm', isDark),
+    borderRadius: 4,
+    backgroundColor: 'transparent',
+    marginBottom: 8,
   },
-  cardTitle: {
-    ...Typography.sectionLabel,
-    color: colors.gray500,
-    marginVertical: 8,
+  visOptionActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint08,
   },
-  infoRow: {
-    flexDirection: 'row',
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: colors.gray400,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: colors.separator,
-    paddingVertical: 10,
-    gap: 12,
+    justifyContent: 'center',
+    marginTop: 1,
   },
-  infoLabel: {
-    ...Typography.bodySmall,
+  radioOuterActive: {
+    borderColor: colors.accent,
+  },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: colors.accent,
+  },
+  visOptionText: { flex: 1 },
+  visOptionLabel: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 14.5,
     color: colors.black,
-    opacity: 0.75,
+  },
+  visOptionDesc: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.gray600,
+    marginTop: 2,
+  },
+
+  // ── Temporary visibility chips ──
+  visibleForBlock: {
+    marginTop: 6,
+  },
+  visibleForLabel: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 13,
+    color: colors.black,
+  },
+  visibleForRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  visibleForChip: {
+    height: 36,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
+  },
+  visibleForChipActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint15,
+  },
+  visibleForChipText: {
     fontFamily: FontFamily.medium,
-    flex: 1,
-  },
-  infoValue: {
-    ...Typography.bodySemibold,
+    fontSize: 13,
     color: colors.black,
-    textAlign: 'right',
-    fontFamily: FontFamily.bold,
-    maxWidth: '55%',
   },
-  menuRow: {
+  visibleForChipTextActive: {
+    color: colors.accentDark,
+  },
+  visibleForUntil: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.gray600,
+    marginTop: 8,
+  },
+  footnote: {
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.gray600,
+    marginTop: 10,
+  },
+
+  // ── Appearance / bordered toggle row ──
+  borderedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.separator,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    borderRadius: 4,
   },
-  menuLabel: {
-    ...Typography.body,
+  rowLabel: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 14.5,
     color: colors.black,
-    opacity: 0.85,
   },
+  rowDesc: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.gray600,
+    marginTop: 2,
+  },
+
+  // ── Flat chevron rows ──
+  flatRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: 50,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
+    paddingHorizontal: 2,
+  },
+  flatRowLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 14.5,
+    color: colors.black,
+  },
+
+  // ── Discovery switch rows ──
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
+    gap: 12,
+    paddingVertical: 13,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
+    paddingHorizontal: 2,
   },
-  switchDesc: {
-    ...Typography.caption,
-    color: colors.black,
-    opacity: 0.6,
-    marginTop: 4,
-    maxWidth: 260,
-    fontFamily: FontFamily.regular,
-  },
-  freeNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 14,
-    borderRadius: 14,
-    backgroundColor: colors.accentTint08,
-  },
-  freeNoteText: {
-    flex: 1,
-    fontFamily: FontFamily.regular,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.black,
-    opacity: 0.8,
-  },
-  locationBlock: {
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.separator,
-  },
-  locationOption: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: colors.gray100,
-    marginTop: 8,
-  },
-  locationOptionActive: {
-    backgroundColor: colors.accentTint08,
-  },
-  locationOptionText: {
-    flex: 1,
-    marginLeft: 10,
-  },
-  locationOptionLabel: {
-    fontFamily: FontFamily.semibold,
-    fontSize: 14,
-    color: colors.black,
-  },
-  locationOptionDesc: {
-    fontFamily: FontFamily.regular,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.black,
-    opacity: 0.6,
-    marginTop: 2,
-  },
-  locationFootnote: {
-    fontFamily: FontFamily.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    color: colors.black,
-    opacity: 0.5,
-    marginTop: 10,
-  },
+  switchRowText: { flex: 1 },
   unitToggle: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 14,
-    backgroundColor: colors.black,
+    minWidth: 44,
+    height: 32,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentTint15,
   },
   unitToggleText: {
     fontSize: 12,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.cardBg,
+    color: colors.accentDark,
     letterSpacing: 0.5,
   },
+
+  // ── Footer ──
   footer: {
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 24,
     gap: 8,
   },
   footerVersion: {
     ...Typography.caption,
-    color: colors.black,
-    opacity: 0.5,
+    color: colors.gray600,
     fontFamily: FontFamily.regular,
   },
 });

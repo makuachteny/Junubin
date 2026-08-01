@@ -105,7 +105,25 @@ describe('PreferencesScreen navigation', () => {
     expect(navigation.goBack).not.toHaveBeenCalled();
   });
 
-  it('routes to the Likes tab when returnTo=Likes and Done is pressed', async () => {
+  it('routes to the Directory tab when returnTo=Directory and Done is pressed', async () => {
+    const navigation = makeNav();
+    const route = { params: { returnTo: 'Directory' } };
+
+    const { getByText } = render(
+      <PreferencesScreen navigation={navigation} route={route} />
+    );
+
+    fireEvent.press(getByText('Done'));
+
+    await waitFor(() => {
+      expect(navigation.navigate).toHaveBeenCalledWith('Main', { screen: 'DirectoryTab' });
+    });
+  });
+
+  it('maps a stale returnTo=Likes onto a tab that still exists', async () => {
+    // The Likes tab is gone. A deep link or an older build can still
+    // send `returnTo: 'Likes'`, and that must not navigate to an
+    // unregistered route — it lands on the inbox instead.
     const navigation = makeNav();
     const route = { params: { returnTo: 'Likes' } };
 
@@ -116,7 +134,7 @@ describe('PreferencesScreen navigation', () => {
     fireEvent.press(getByText('Done'));
 
     await waitFor(() => {
-      expect(navigation.navigate).toHaveBeenCalledWith('Main', { screen: 'LikesTab' });
+      expect(navigation.navigate).toHaveBeenCalledWith('Main', { screen: 'MessagesTab' });
     });
   });
 

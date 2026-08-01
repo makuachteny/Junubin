@@ -10,10 +10,12 @@ const FIELDS = [
   { key: 'photos',       weight: 18, label: 'Photos (at least 3)', step: 'photos', check: (v) => Array.isArray(v) ? v.length >= 3 : !!v },
   { key: 'job',          weight: 8,  label: 'Job title',     step: 'job' },
   { key: 'school',       weight: 5,  label: 'School',        step: 'school' },
-  { key: 'heightCm',     weight: 5,  label: 'Height',        step: 'height' },
-  { key: 'ethnicity',    weight: 7,  label: 'Tribe / heritage', step: 'ethnicity' },
-  { key: 'interests',    weight: 10, label: 'Interests',     step: 'interests', check: (v) => Array.isArray(v) && v.length >= 3 },
-  { key: 'datingIntentions', weight: 5, label: 'Dating intentions', step: 'datingIntentions' },
+  // Height and dating intentions were completeness fields in the
+  // dating era. Neither exists post-pivot — "open to" covers intent —
+  // so their weight moved to the fields people actually search on.
+  { key: 'ethnicity',    weight: 9,  label: 'Tribe / heritage', step: 'ethnicity' },
+  { key: 'interests',    weight: 12, label: 'Interests',     step: 'interests', check: (v) => Array.isArray(v) && v.length >= 3 },
+  { key: 'openTo',       weight: 6,  label: 'Open to',       step: 'openTo', check: (v) => Array.isArray(v) && v.length >= 1 },
   { key: 'currentlyInto', weight: 5, label: 'Currently Into', step: 'currentlyInto', check: (v) => Array.isArray(v) && v.length >= 1 },
   { key: 'city',         weight: 8,  label: 'Location',      step: 'city' },
   { key: 'verified',     weight: 5,  label: 'Photo verification', step: 'verify', check: (v) => v === true },
@@ -40,7 +42,7 @@ export function calculateCompleteness(user) {
       totalCount: FIELDS.length,
       missing: FIELDS.map((f) => ({ key: f.key, label: f.label, step: f.step })),
       nextField: FIELDS[0],
-      suggestion: 'Add a photo and bio to start matching',
+      suggestion: 'Add a photo and bio so people can find you',
       tier: TIER.low,
     };
   }
@@ -71,7 +73,7 @@ export function calculateCompleteness(user) {
   if (!nextField) {
     suggestion = "You're all set — your profile is complete.";
   } else if (score < 40) {
-    suggestion = `Add your ${nextField.label.toLowerCase()} to start matching`;
+    suggestion = `Add your ${nextField.label.toLowerCase()} so people can find you`;
   } else if (score < 75) {
     suggestion = `Add ${nextField.label.toLowerCase()} — ${missing.length} steps to a complete profile`;
   } else {

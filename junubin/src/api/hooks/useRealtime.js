@@ -3,12 +3,13 @@ import { supabase } from '../../config/supabase';
 
 /**
  * Supabase Realtime hook — replaces Socket.io useSocket.
- * Provides live messages, match notifications, typing indicators, and read receipts.
+ * Provides live messages, inbox activity (new messages + message
+ * requests), typing indicators, and read receipts.
  */
 export function useRealtime(userId) {
   const channelsRef = useRef({});
   const messageCallbackRef = useRef(null);
-  const matchSubscriptionRef = useRef(null);
+  const inboxSubscriptionRef = useRef(null);
   const typingTimerRef = useRef(null);
   // Per-conversation callback registries for broadcast events. Keyed
   // by conversationId so multiple open conversations don't trample
@@ -28,8 +29,8 @@ export function useRealtime(userId) {
         supabase.removeChannel(channel);
       }
       channelsRef.current = {};
-      if (matchSubscriptionRef.current) {
-        supabase.removeChannel(matchSubscriptionRef.current);
+      if (inboxSubscriptionRef.current) {
+        supabase.removeChannel(inboxSubscriptionRef.current);
       }
       if (typingTimerRef.current) {
         clearTimeout(typingTimerRef.current);
@@ -111,48 +112,61 @@ export function useRealtime(userId) {
   }, [joinConversation]);
 
   /**
-   * Listen for new matches AND match teardowns. The unmatch RPC issued
-   * from another device deletes a Match row; without listening for
-   * DELETE, the local matches list keeps showing a peer the user has
-   * already broken up with. The same callback fires for both events;
-   * the second arg distinguishes:
+   * Listen for anything that should refresh the inbox. The dating-era
+   * `Match` subscription is gone — there are no matches — so the two
+   * events that actually change what the Messages tab shows are:
    *
-   *   onMatchCreated((match, eventType) => { ... })
+   *   • a new `Message` row (a thread moves to the top / goes unread)
+   *   • a `MessageRequest` INSERT or UPDATE (a stranger asked to talk,
+   *     or one of our own requests was accepted/declined)
    *
-   * `eventType` is 'INSERT' or 'DELETE'. Existing callers that ignore
-   * the second arg keep working — they just get a refetch trigger on
-   * either event, which is the most common shape they want anyway.
+   * The callback keeps the old shape — `(row, eventType)` — so callers
+   * that just refetch on any event need no changes:
+   *
+   *   onInboxActivity((row, eventType, table) => { ... })
+   *
+   * `table` is the third arg ('Message' | 'MessageRequest') for callers
+   * that want to branch; ignoring it is fine.
+   *
+   * `Message` rows are already scoped by RLS to conversations this user
+   * belongs to, so no client-side filter is needed there.
+   * `MessageRequest` can't be filtered server-side on a single column
+   * (we care about both sides of the row), so the handler does it.
    */
-  const onMatchCreated = useCallback((callback) => {
+  const onInboxActivity = useCallback((callback) => {
     if (!userId) return () => {};
 
-    if (matchSubscriptionRef.current) {
-      supabase.removeChannel(matchSubscriptionRef.current);
+    if (inboxSubscriptionRef.current) {
+      supabase.removeChannel(inboxSubscriptionRef.current);
     }
 
-    // INSERT and DELETE go through the same channel + callback. We
-    // can't filter server-side on userId for INSERT (the row's
-    // userAId/userBId is dynamic), so the handler does it client-side.
-    const handle = (payload) => {
+    const handleMessage = (payload) => {
       const row = payload.new || payload.old;
       if (!row) return;
-      if (row.userAId === userId || row.userBId === userId) {
-        callback(row, payload.eventType);
+      callback(row, payload.eventType, 'Message');
+    };
+
+    const handleRequest = (payload) => {
+      const row = payload.new || payload.old;
+      if (!row) return;
+      if (row.fromUserId === userId || row.toUserId === userId) {
+        callback(row, payload.eventType, 'MessageRequest');
       }
     };
 
     const channel = supabase
-      .channel(`matches:${userId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Match' }, handle)
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'Match' }, handle)
+      .channel(`inbox:${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Message' }, handleMessage)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'MessageRequest' }, handleRequest)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'MessageRequest' }, handleRequest)
       .subscribe();
 
-    matchSubscriptionRef.current = channel;
+    inboxSubscriptionRef.current = channel;
 
     return () => {
       supabase.removeChannel(channel);
-      if (matchSubscriptionRef.current === channel) {
-        matchSubscriptionRef.current = null;
+      if (inboxSubscriptionRef.current === channel) {
+        inboxSubscriptionRef.current = null;
       }
     };
   }, [userId]);
@@ -249,7 +263,7 @@ export function useRealtime(userId) {
     joinConversation,
     leaveConversation,
     onMessage,
-    onMatchCreated,
+    onInboxActivity,
     emitTypingStart,
     emitTypingStop,
     onTypingStart,

@@ -123,33 +123,6 @@ jest.mock('expo-linear-gradient', () => {
   };
 });
 
-// expo-av's native module isn't loadable in the jest environment.
-// PostCard imports `Video` for video posts; we render it as a stub
-// View so any layout assertions still resolve. The forwardRef handles
-// callers that grab a ref to drive play/pause/setLocalAudio.
-jest.mock('expo-av', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  const Video = React.forwardRef((props, ref) => {
-    React.useImperativeHandle(ref, () => ({
-      playAsync: jest.fn().mockResolvedValue(undefined),
-      pauseAsync: jest.fn().mockResolvedValue(undefined),
-      stopAsync: jest.fn().mockResolvedValue(undefined),
-      setLocalAudio: jest.fn(),
-      setIsMutedAsync: jest.fn().mockResolvedValue(undefined),
-    }));
-    return React.createElement(View, props, props.children);
-  });
-  return {
-    __esModule: true,
-    Video,
-    Audio: { Sound: { createAsync: jest.fn() } },
-    ResizeMode: { COVER: 'cover', CONTAIN: 'contain', STRETCH: 'stretch' },
-    InterruptionModeIOS: {},
-    InterruptionModeAndroid: {},
-  };
-});
-
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');
   const { Text } = require('react-native');

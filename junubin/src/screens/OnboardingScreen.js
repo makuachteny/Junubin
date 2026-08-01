@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════
-// JuNubin — Landing
-// Single-page invitation. Background image + diaspora cities + CTA.
+// JuNubin — Welcome / Landing ("Industry" redesign)
+// Full-bleed photo under a dark scrim, bottom-anchored wordmark +
+// headline + Blueprint-framed CTA. Hands off to the Signup screen.
 // ═══════════════════════════════════════════════════════════
 
 import React, { useCallback } from 'react';
@@ -9,14 +10,13 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FontFamily } from '../theme';
+import { FontFamily, useTheme } from '../theme';
+import Blueprint from '../components/Blueprint';
 import { reportError } from '../utils/reportError';
 
 const ONBOARDED_KEY = '@junubin_onboarded';
@@ -24,25 +24,28 @@ const markOnboarded = () =>
   AsyncStorage.setItem(ONBOARDED_KEY, 'true')
     .catch((err) => reportError('OnboardingScreen.markOnboarded', err));
 
-const { width: W, height: H } = Dimensions.get('window');
 const LANDING_IMAGE = require('../assets/landing.jpeg');
-// Warm earth-tone palette — same as SignupScreen so the landing → signup
-// transition is visually continuous (honey gold, burnt orange, warm brown).
-const WARM = {
-  highlight: '#FFD56B',   // bright honey for italic accent words
-  primary:   '#F5B741',   // honey gold
-  mid:       '#E27D2C',   // burnt orange
-  deep:      '#8E5524',   // warm brown ochre
+
+// This screen is fixed-dark regardless of theme (photo + scrim), so the
+// text colors are deliberate literals from the mock rather than theme
+// tokens that flip in light mode.
+const INK = {
+  wordmark: '#D6EBFF',
+  headline: '#FFFFFF',
+  sub: 'rgba(236,242,248,0.85)',
+  caption: 'rgba(236,242,248,0.6)',
+  ctaLabel: '#0D2038',
+  frame: 'rgba(236,242,248,0.4)',
 };
-const ACCENT = WARM.primary;
 
 const OnboardingScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   // "Get Started" hands off to the Signup screen, which handles both
-  // first-time sign-up and existing-account sign-in (phone/email +
-  // verification). Skipping straight into the app via dev-bypass is
-  // gone now that the auth flow is the entry point.
+  // first-time sign-up and existing-account sign-in (email + one-time
+  // code). Skipping straight into the app via dev-bypass is gone now
+  // that the auth flow is the entry point.
   const handleGetStarted = useCallback(() => {
     markOnboarded();
     navigation.navigate('Signup');
@@ -51,57 +54,63 @@ const OnboardingScreen = ({ navigation }) => {
   return (
     <View style={s.root}>
       {/* ── Background image ── */}
-      <View style={s.bgWrap}>
-        <Image source={LANDING_IMAGE} style={s.bgImage} resizeMode="cover" />
-      </View>
+      <Image
+        source={LANDING_IMAGE}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+      />
 
-      {/* ── Gradient overlay ── */}
+      {/* ── Dark gradient scrim ── */}
       <LinearGradient
         colors={[
-          'rgba(0, 0, 0, 0)',
-          'rgba(0, 0, 0, 0.10)',
-          'rgba(0, 0, 0, 0.50)',
-          'rgba(0, 0, 0, 0.88)',
-          'rgba(0, 0, 0, 0.97)',
+          'rgba(29,45,61,0.2)',
+          'rgba(29,45,61,0.5)',
+          'rgba(18,26,36,0.97)',
         ]}
-        locations={[0, 0.25, 0.5, 0.72, 0.9]}
+        locations={[0, 0.45, 0.82]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* ── Invitation content ── */}
-      <View style={s.pg}>
-        <View style={s.inviteWrap}>
-          <Text style={s.eyebrow}>EVERYWHERE</Text>
-          <View style={s.rule} />
-          <Text style={s.bodyText}>
-            Doesn't matter where you are —{'\n'}
-            if you're one of us, you're already{' '}
-            <Text style={s.homeAccent}>home</Text>.
-          </Text>
-        </View>
-      </View>
+      {/* ── Bottom-anchored stack ── */}
+      <View style={[s.stack, { paddingBottom: insets.bottom + 28 }]}>
+        <Text style={s.wordmark} accessibilityRole="header">JUNUBIN</Text>
+        <Text style={s.headline}>Find your South Sudanese people.</Text>
+        <Text style={s.sub}>
+          Near you, or in the city you care about. Free — and not a dating app.
+        </Text>
 
-      {/* ── Bottom CTA ── */}
-      <View style={[s.bottom, { paddingBottom: insets.bottom + 16 }]}>
-        <TouchableOpacity style={s.ctaWrap} onPress={handleGetStarted} activeOpacity={0.9}>
-          <LinearGradient
-            colors={[WARM.primary, WARM.mid, WARM.deep]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={s.ctaGradient}
+        <Blueprint style={s.ctaFrame} borderColor={INK.frame} markColor={INK.frame}>
+          <TouchableOpacity
+            style={[s.cta, { backgroundColor: colors.accent }]}
+            onPress={handleGetStarted}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel="Get started"
           >
-            <Text style={s.ctaText}>Get Started</Text>
-            <View style={s.ctaArrow}>
-              <Ionicons name="arrow-forward" size={18} color="#FFF" />
-            </View>
-          </LinearGradient>
-        </TouchableOpacity>
+            <Text style={s.ctaText}>GET STARTED</Text>
+          </TouchableOpacity>
+        </Blueprint>
+
+        <Text style={s.caption}>Sign in with a one-time email code. No passwords, ever.</Text>
 
         <Text style={s.terms}>
           By continuing, you agree to our{' '}
-          <Text style={s.termsLink} onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'terms' })}>Terms</Text> &{' '}
-          <Text style={s.termsLink} onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'privacy' })}>Privacy Policy</Text>.{' '}
-          Screenshots and screen recording are blocked everywhere in JuNubin — content stays in the app.
+          <Text
+            style={s.termsLink}
+            accessibilityRole="link"
+            onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'terms' })}
+          >
+            Terms
+          </Text>
+          {' '}&{' '}
+          <Text
+            style={s.termsLink}
+            accessibilityRole="link"
+            onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'privacy' })}
+          >
+            Privacy Policy
+          </Text>
+          . Screenshots and screen recording are blocked everywhere in JuNubin — content stays in the app.
         </Text>
       </View>
     </View>
@@ -110,77 +119,69 @@ const OnboardingScreen = ({ navigation }) => {
 
 // ═══════════════════════════════════════════════════════════
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000000' },
+  root: { flex: 1, backgroundColor: '#121A24' },
 
-  // ── Background ──
-  bgWrap: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
+  // ── Bottom stack ──
+  stack: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 24,
+    gap: 14,
   },
-  bgImage: {
-    width: W * 1.4,
-    height: H * 1.1,
-    marginLeft: -(W * 0.2),
-    marginTop: -(H * 0.05),
+  wordmark: {
+    fontFamily: FontFamily.heading,
+    fontSize: 15,
+    letterSpacing: 6,
+    color: INK.wordmark,
   },
-
-  // ── Page base ──
-  // The bottom CTA + terms block is absolutely positioned, so this padding
-  // is what lifts the invite text above it. Sized to clear the CTA pill
-  // (~76px) + terms (~63px) + bottom-inset breathing room with a margin
-  // of comfort — undersizing causes the body copy to overlap the button.
-  pg: { flex: 1, justifyContent: 'flex-end', paddingBottom: 230 },
-
-  // ══ Shared text styles ══
-  eyebrow: {
-    fontSize: 11, fontWeight: '700', fontFamily: FontFamily.bold,
-    color: ACCENT, letterSpacing: 3.5, marginBottom: 10,
+  headline: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 46,
+    lineHeight: 47,
+    color: INK.headline,
   },
-  bodyText: {
-    fontSize: 16, fontWeight: '400', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.55)', lineHeight: 26, letterSpacing: 0.1,
-  },
-  rule: {
-    width: 28, height: 2.5, borderRadius: 2,
-    backgroundColor: ACCENT, marginBottom: 18, opacity: 0.6,
+  sub: {
+    fontFamily: FontFamily.regular,
+    fontSize: 16,
+    lineHeight: 24,
+    color: INK.sub,
+    maxWidth: 300,
+    marginBottom: 8,
   },
 
-  // ══ Invitation ══
-  inviteWrap: { paddingHorizontal: 32 },
-  homeAccent: {
-    color: ACCENT, fontWeight: '700', fontFamily: FontFamily.bold,
-  },
-
-  // ── Bottom ──
-  bottom: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 24, zIndex: 20,
-  },
-
-  // CTA
-  ctaWrap: {
-    borderRadius: 28, overflow: 'hidden', marginBottom: 14,
-    shadowColor: ACCENT, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 24, elevation: 14,
-  },
-  ctaGradient: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 12, paddingVertical: 17,
+  // ── CTA ──
+  ctaFrame: { marginHorizontal: 6 },
+  cta: {
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   ctaText: {
-    fontSize: 17, fontWeight: '700', fontFamily: FontFamily.bold,
-    color: '#FFF', letterSpacing: 0.3,
+    fontFamily: FontFamily.heading,
+    fontSize: 19,
+    letterSpacing: 1,
+    color: INK.ctaLabel,
   },
-  ctaArrow: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center',
+  caption: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12.5,
+    color: INK.caption,
+    textAlign: 'center',
   },
 
-  // Terms
+  // ── Terms ──
   terms: {
-    fontSize: 11, fontWeight: '400', fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.2)', textAlign: 'center', marginTop: 12, lineHeight: 17,
+    fontFamily: FontFamily.regular,
+    fontSize: 11,
+    lineHeight: 16,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
   },
-  termsLink: { color: 'rgba(255,255,255,0.35)', fontWeight: '600', fontFamily: FontFamily.semibold },
+  termsLink: {
+    fontFamily: FontFamily.semibold,
+    color: 'rgba(255,255,255,0.6)',
+    textDecorationLine: 'underline',
+  },
 });
 
 export default OnboardingScreen;

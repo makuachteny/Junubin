@@ -1,173 +1,177 @@
 // ═══════════════════════════════════════════════════════════
-// JuNubin — South Sudan Palette
-// True flag colors tuned for UI: Red (#CE1126), Green (#009739),
-// Blue (#0047AB), Gold (#FCCD12), Black, White.
-// Vibrant flag red as primary accent. Clean near-black dark mode
-// lets every flag color breathe. Rose pink for Likes page.
+// JuNubin — Industry palette (claude.ai/design "JuNubin Redesign").
+// Steel-blue accent on paper white / near-black, hairline dividers,
+// square blueprint chrome. The TOKEN NAMES are the app-wide contract
+// (every screen reads colors.accent / colors.cream / colors.gray400…),
+// so the redesign lands by remapping the values here — legacy names
+// like `cream`, `rose` and `gold` keep existing but now resolve into
+// the Industry ramps.
+//
+// Light:  bg #ffffff · surface #edf4fb · text #1d1f20 · accent #2e7fd0
+// Dark:   bg #1a1c1e · surface #232528 · text #eceef1 · accent #5b9de6
 // ═══════════════════════════════════════════════════════════
 
 export const LightPalette = {
   // ── Text ──
-  primary: '#1A1A1A',
+  primary: '#1D1F20',
 
-  // ── Surfaces ──
-  cream: '#FFFAF7',
-  creamDark: '#FFF5F0',
+  // ── Surfaces (legacy "cream" names — now paper white) ──
+  cream: '#FFFFFF',
+  creamDark: '#EDF4FB',
   creamLight: '#FFFFFF',
 
-  // ── Accent — South Sudan Flag Red ──
-  accent: '#CE1126',
-  accentDark: '#A80E1F',
-  accentLight: '#FDE8EB',
+  // ── Accent — Industry steel blue ──
+  accent: '#2E7FD0',
+  accentDark: '#175A9E',
+  accentLight: '#D6EBFF',
 
-  // ── Rose — Vibrant Pink (Likes page) ──
-  rose: '#E84393',
-  roseDark: '#C7357D',
-  roseLight: '#F9A8D4',
+  // ── Rose (legacy) — resolves to the accent ramp; nothing in the
+  //    redesign is pink ──
+  rose: '#2E7FD0',
+  roseDark: '#2465A8',
+  roseLight: '#B5D9FD',
 
-  // ── Flag Green ──
-  green: '#009739',
-  greenDark: '#007A2E',
-  greenLight: '#E0F5E8',
+  // ── Green — kept for success only, tuned to the neutral system ──
+  green: '#2F8A52',
+  greenDark: '#256E42',
+  greenLight: '#E2F2E8',
 
   // ── Functional ──
-  success: '#009739',
-  warning: '#FCCD12',
-  error: '#CE1126',
-  info: '#0047AB',
+  success: '#2F8A52',
+  warning: '#C08A1A',
+  error: '#B4544C',
+  info: '#2E7FD0',
 
   // ── Core neutrals ──
   white: '#FFFFFF',
-  black: '#1A1A1A',
+  black: '#1D1F20',
 
-  // ── Neutral grays (warm-tinted) ──
-  gray: '#8A8580',
-  gray100: '#F7F5F3',
-  gray200: '#EDEAE7',
-  gray300: '#DDD8D4',
-  gray400: '#8A8580',
-  gray500: '#6B6560',
-  gray600: '#4D4844',
-  gray700: '#2D2926',
-  gray800: '#1C1917',
-  gray900: '#0F0D0C',
+  // ── Neutral grays (Industry cool ramp) ──
+  gray: '#98989B',
+  gray100: '#F5F5F8',
+  gray200: '#E7E7EA',
+  gray300: '#D4D4D7',
+  gray400: '#98989B',
+  gray500: '#7A7A7D',
+  gray600: '#5D5D60',
+  gray700: '#424244',
+  gray800: '#2B2B2D',
+  gray900: '#1D1F20',
 
   // ── Overlay ──
-  overlay: 'rgba(0, 0, 0, 0.65)',
+  overlay: 'rgba(29, 31, 32, 0.65)',
 
-  // ── Cards ──
+  // ── Cards — white with a hairline ink divider ──
   cardBg: '#FFFFFF',
-  cardBorder: '#DDD8D4',
+  cardBorder: 'rgba(29, 31, 32, 0.16)',
 
   // ── Tab bar ──
-  tabActive: '#1A1A1A',
-  // tabInactive must pass WCAG AA (4.5:1) on cream bg (#FFFAF7)
-  tabInactive: '#5F5A55',
+  tabActive: '#175A9E',
+  tabInactive: '#7A7A7D',
 
-  // ── Gold — South Sudan Star Gold ──
-  gold: '#FCCD12',
-  goldDark: '#D4A800',
+  // ── Gold (legacy) — verified badges keep a warm mark ──
+  gold: '#C08A1A',
+  goldDark: '#9A6E12',
 
-  // ── Royal — South Sudan Flag Blue ──
-  royal: '#0047AB',
-  royalLight: '#A3C4F3',
+  // ── Royal (legacy) — folds into the accent ramp ──
+  royal: '#175A9E',
+  royalLight: '#B5D9FD',
 
-  // ── Separator ──
-  separator: '#DDD8D4',
+  // ── Separator — hairline ink ──
+  separator: 'rgba(29, 31, 32, 0.16)',
 
   // ── Semantic surface tokens ──
   surface: '#FFFFFF',
-  surfaceMuted: '#F7F5F3',
-  inputBg: '#F3F0ED',
-  inputBorder: '#DDD8D4',
-  accentSurface: 'rgba(206, 17, 38, 0.06)',
+  surfaceMuted: '#EDF4FB',
+  inputBg: '#EDF4FB',
+  inputBorder: 'rgba(29, 31, 32, 0.16)',
+  accentSurface: 'rgba(46, 127, 208, 0.10)',
 
-  // ── Tints (used by overlays, badges, soft fills) ──
-  accentTint08: 'rgba(206, 17, 38, 0.08)',
-  accentTint15: 'rgba(206, 17, 38, 0.15)',
-  roseTint12: 'rgba(232, 67, 147, 0.12)',
-  roseTint20: 'rgba(232, 67, 147, 0.20)',
+  // ── Tints (overlays, badges, soft fills) ──
+  accentTint08: 'rgba(46, 127, 208, 0.08)',
+  accentTint15: 'rgba(46, 127, 208, 0.15)',
+  roseTint12: 'rgba(46, 127, 208, 0.12)',
+  roseTint20: 'rgba(46, 127, 208, 0.20)',
 };
 
 export const DarkPalette = {
   // ── Text (bright on dark) ──
-  primary: '#F5F3F0',
+  primary: '#ECEEF1',
 
-  // ── Surfaces — Clean near-black (lets flag colors pop) ──
-  cream: '#0C0C0E',
-  creamDark: '#060608',
-  creamLight: '#141416',
+  // ── Surfaces — graphite ──
+  cream: '#1A1C1E',
+  creamDark: '#141618',
+  creamLight: '#232528',
 
-  // ── Accent — Flag Red (brightened for dark) ──
-  accent: '#F04C55',
-  accentDark: '#CE1126',
-  accentLight: '#FDE8EB',
+  // ── Accent — steel blue, brightened for dark ──
+  accent: '#5B9DE6',
+  accentDark: '#7FB5F0',
+  accentLight: '#B3D6FA',
 
-  // ── Rose — Vibrant Pink (brightened for dark) ──
-  rose: '#F05AA5',
-  roseDark: '#FF6DB5',
-  roseLight: '#F9A8D4',
+  // ── Rose (legacy) — accent ramp ──
+  rose: '#5B9DE6',
+  roseDark: '#7FB5F0',
+  roseLight: '#B3D6FA',
 
-  // ── Flag Green (brightened for dark) ──
-  green: '#2CB750',
-  greenDark: '#009739',
-  greenLight: '#E0F5E8',
+  // ── Green ──
+  green: '#4CAF6E',
+  greenDark: '#2F8A52',
+  greenLight: '#1E2E24',
 
   // ── Functional ──
-  success: '#2CB750',
-  warning: '#FCCD12',
-  error: '#F05252',
-  info: '#5B93DB',
+  success: '#4CAF6E',
+  warning: '#D9A63C',
+  error: '#D97B73',
+  info: '#5B9DE6',
 
   // ── Core neutrals (flipped) ──
-  white: '#0C0C0E',
-  black: '#F5F3F0',
+  white: '#1A1C1E',
+  black: '#ECEEF1',
 
-  // ── Neutral grays (subtle warm tint) ──
-  gray: '#88868A',
-  gray100: '#0C0C0E',
-  gray200: '#141416',
-  gray300: '#201E22',
-  // gray400 bumped to pass WCAG AA (≥4.5:1) on dark bg #0C0C0E
-  gray400: '#8E8C90',
-  gray500: '#A8A6AA',
-  gray600: '#B8B6BA',
-  gray700: '#D5D3D7',
-  gray800: '#EBEAEC',
-  gray900: '#F5F3F0',
+  // ── Neutral grays ──
+  gray: '#98989B',
+  gray100: '#1A1C1E',
+  gray200: '#232528',
+  gray300: '#2E3134',
+  gray400: '#98989B',
+  gray500: '#A8A8AB',
+  gray600: '#B7B7BA',
+  gray700: '#D4D4D7',
+  gray800: '#E7E7EA',
+  gray900: '#ECEEF1',
 
   // ── Overlay ──
-  overlay: 'rgba(6, 6, 8, 0.88)',
+  overlay: 'rgba(10, 11, 12, 0.88)',
 
   // ── Cards ──
-  cardBg: '#141416',
-  cardBorder: '#2A282C',
+  cardBg: '#232528',
+  cardBorder: 'rgba(236, 238, 241, 0.18)',
 
   // ── Tab bar ──
-  tabActive: '#FFFFFF',
-  tabInactive: '#88868A',
+  tabActive: '#B3D6FA',
+  tabInactive: '#98989B',
 
-  // ── Gold — South Sudan Star Gold ──
-  gold: '#FCCD12',
-  goldDark: '#D4A800',
+  // ── Gold (legacy) ──
+  gold: '#D9A63C',
+  goldDark: '#C08A1A',
 
-  // ── Royal — South Sudan Flag Blue ──
-  royal: '#5B93DB',
-  royalLight: '#A3C4F3',
+  // ── Royal (legacy) ──
+  royal: '#7FB5F0',
+  royalLight: '#B3D6FA',
 
-  // ── Separator ──
-  separator: '#201E22',
+  // ── Separator — hairline light ink ──
+  separator: 'rgba(236, 238, 241, 0.18)',
 
   // ── Semantic surface tokens ──
-  surface: '#141416',
-  surfaceMuted: '#0C0C0E',
-  inputBg: '#201E22',
-  inputBorder: '#2A282C',
-  accentSurface: 'rgba(240, 76, 85, 0.10)',
+  surface: '#232528',
+  surfaceMuted: '#141618',
+  inputBg: '#232528',
+  inputBorder: 'rgba(236, 238, 241, 0.18)',
+  accentSurface: 'rgba(91, 157, 230, 0.12)',
 
-  // ── Tints (used by overlays, badges, soft fills) ──
-  accentTint08: 'rgba(240, 76, 85, 0.08)',
-  accentTint15: 'rgba(240, 76, 85, 0.15)',
-  roseTint12: 'rgba(240, 90, 165, 0.12)',
-  roseTint20: 'rgba(240, 90, 165, 0.20)',
+  // ── Tints ──
+  accentTint08: 'rgba(91, 157, 230, 0.08)',
+  accentTint15: 'rgba(91, 157, 230, 0.15)',
+  roseTint12: 'rgba(91, 157, 230, 0.12)',
+  roseTint20: 'rgba(91, 157, 230, 0.20)',
 };

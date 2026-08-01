@@ -39,8 +39,6 @@ describe('Analytics', () => {
     expect(AnalyticsEvents.SIGNUP_COMPLETE).toBe('signup_complete');
     expect(AnalyticsEvents.PROFILE_SETUP_STEP).toBe('profile_setup_step');
     expect(AnalyticsEvents.PROFILE_SETUP_COMPLETE).toBe('profile_setup_complete');
-    expect(AnalyticsEvents.SWIPE).toBe('swipe');
-    expect(AnalyticsEvents.MATCH).toBe('match');
     expect(AnalyticsEvents.MESSAGE_SENT).toBe('message_sent');
     expect(AnalyticsEvents.PROFILE_VIEW).toBe('profile_view');
   });
