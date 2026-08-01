@@ -152,21 +152,21 @@ export const getSurface = (variant, colors, isDark) => {
 };
 
 // Industry gradients — everything resolves into the steel-blue ramp or
-// neutral ink. The KEY NAMES are legacy (rose/gold/flagRing callers
+// flag ink. The KEY NAMES are legacy (rose/gold/flagRing callers
 // exist across screens); the values are the redesign.
 export const Gradients = {
-  primary: ['#232528', '#1A1C1E'],
-  accent: ['#2E7FD0', '#175A9E'],
-  rose: ['#6AA7E0', '#2E7FD0'],
-  royal: ['#2465A8', '#175A9E', '#12456F'],
-  splash: ['#141618', '#1A1C1E', '#141618'],
-  card: ['transparent', 'rgba(13, 20, 28, 0.78)'],
-  storyRing: ['#175A9E', '#2E7FD0', '#6AA7E0'],
-  southSudan: ['#175A9E', '#2E7FD0', '#6AA7E0'],
-  warm: ['#6AA7E0', '#2E7FD0'],
-  flagRing: ['#175A9E', '#2E7FD0', '#6AA7E0'],
-  gold: ['#D9A63C', '#C08A1A'],
-  green: ['#4CAF6E', '#2F8A52'],
-  pink: ['#6AA7E0', '#2E7FD0', '#2465A8'],
-  redGreen: ['#2E7FD0', '#2465A8', '#175A9E'],
+  primary: ['#1F2833', '#161D26'],
+  accent: ['#0F8FD6', '#085F91'],
+  rose: ['#54B3E6', '#0F8FD6'],
+  royal: ['#0B74AF', '#085F91', '#06496F'],
+  splash: ['#10161D', '#161D26', '#10161D'],
+  card: ['transparent', 'rgba(14, 24, 34, 0.78)'],
+  storyRing: ['#085F91', '#0F8FD6', '#54B3E6'],
+  southSudan: ['#085F91', '#0F8FD6', '#54B3E6'],
+  warm: ['#54B3E6', '#0F8FD6'],
+  flagRing: ['#085F91', '#0F8FD6', '#54B3E6'],
+  gold: ['#F0B41F', '#C08A1A'],
+  green: ['#0F9D58', '#0C7A45'],
+  pink: ['#54B3E6', '#0F8FD6', '#0B74AF'],
+  redGreen: ['#0F8FD6', '#0B74AF', '#085F91'],
 };

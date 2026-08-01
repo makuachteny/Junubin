@@ -401,3 +401,21 @@ Not yet redesigned (screens work, inherit tokens/fonts, old layout):
 SignupScreen structure (steel colors applied), ProfileSetupScreen
 (still multi-step; design's 5-step grouping pending), ProfileDetail,
 Notifications, MessageRequests restyle.
+
+## Launch flow-review + fixes (2026-08-02)
+
+End-to-end review (2 reviewer agents + full pipeline) found and fixed:
+auth resilience (User-fetch retry w/ backoff, shared in-flight fetch,
+OTP network errors no longer count as attempts), deep-link `?step=`
+now reaches ProfileSetup, and the chat loop's closing arc —
+`get_or_create_direct_conversation` RPC (00048, deployed) so "Message"
+from any profile mints/reuses a real conversation; ChatScreen refuses
+conversationless sends; offline queue gained a KEEP contract (drains
+no longer delete other chats' pending sends) + stable dedupe identity;
+read receipts live end-to-end (load, ack, broadcast subscription);
+realtime echo dedupe; chat surfaces pass real user ids (was Match ids);
+verify checklist row → PhotoVerification; own-profile preview hides
+Follow/Message; fake "Clear Chat History" removed; unreachable
+Preferences/PreferenceSelect pair deleted with routes+tests.
+Suite: 36 suites / 228 tests green; expo-doctor 18/18; iOS+Android
+release bundles export; dev server serves a full bundle.

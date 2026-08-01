@@ -11,7 +11,39 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState(null);
   const [user, setUser] = useState(null);
-  const fetchingRef = useRef(false);
+  // In-flight User fetch. Concurrent callers share this promise rather
+  // than getting a bail-out `null` — the old boolean guard made
+  // loginWithOtp's own fetch return null whenever onAuthStateChange
+  // had already started one, so callers saw "no user" for a user that
+  // was actively being loaded.
+  const fetchPromiseRef = useRef(null);
+  const retryTimerRef = useRef(null);
+  const retryDelayRef = useRef(1000);
+
+  // The boot User fetch is load-bearing: AppNavigator blocks on
+  // `user` for authenticated sessions, so a single failed fetch used
+  // to strand the user on the boot spinner until app restart. Retry
+  // with capped exponential backoff until it lands (or sign-out).
+  const scheduleUserRetry = useCallback((authId) => {
+    if (retryTimerRef.current) return;
+    const delay = retryDelayRef.current;
+    retryDelayRef.current = Math.min(delay * 2, 15000);
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = null;
+      fetchUser(authId).then((u) => {
+        if (u) retryDelayRef.current = 1000;
+        else scheduleUserRetry(authId);
+      }).catch(() => scheduleUserRetry(authId));
+    }, delay);
+  }, []);
+
+  const clearUserRetry = useCallback(() => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    retryDelayRef.current = 1000;
+  }, []);
 
   useEffect(() => {
     // Get initial session. We mark ready as soon as the session resolves so
@@ -23,7 +55,9 @@ export function AuthProvider({ children }) {
       setReady(true);
       if (s) {
         PaymentService.identify(s.user.id);
-        fetchUser(s.user.id).catch(() => {});
+        fetchUser(s.user.id)
+          .then((u) => { if (!u) scheduleUserRetry(s.user.id); })
+          .catch(() => scheduleUserRetry(s.user.id));
       }
     }).catch(() => {
       setReady(true);
@@ -34,14 +68,20 @@ export function AuthProvider({ children }) {
       setSession(s);
       if (s) {
         PaymentService.identify(s.user.id);
-        fetchUser(s.user.id).catch(() => {});
+        fetchUser(s.user.id)
+          .then((u) => { if (!u) scheduleUserRetry(s.user.id); })
+          .catch(() => scheduleUserRetry(s.user.id));
       } else {
         PaymentService.logout();
+        clearUserRetry();
         setUser(null);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearUserRetry();
+    };
   }, []);
 
   const ensureSupabaseConfig = useCallback(() => {
@@ -54,9 +94,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   const fetchUser = useCallback(async (authId) => {
-    if (fetchingRef.current) return null;
-    fetchingRef.current = true;
-    try {
+    // Share the in-flight fetch: a second caller (e.g. loginWithOtp
+    // racing onAuthStateChange) awaits the same promise and gets the
+    // real user, instead of a bail-out null.
+    if (fetchPromiseRef.current) return fetchPromiseRef.current;
+    const run = (async () => {
       const { data, error } = await supabase
         .from('User')
         .select('*, profile:Profile(*), photos:Photo(*)')
@@ -104,8 +146,12 @@ export function AuthProvider({ children }) {
         return normalizedUser;
       }
       return null;
+    })();
+    fetchPromiseRef.current = run;
+    try {
+      return await run;
     } finally {
-      fetchingRef.current = false;
+      fetchPromiseRef.current = null;
     }
   }, []);
 

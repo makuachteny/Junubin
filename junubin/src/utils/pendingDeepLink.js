@@ -23,9 +23,7 @@ const KEY = '@junubin/pending_deep_link_v1';
 // listed is considered safe to dispatch even when signed out.
 const AUTH_REQUIRED_TOP_LEVEL = new Set([
   'chat',
-  'message-requests',
   'survey',
-  'accessibility-survey',
 ]);
 
 const PROTOCOL_RE = /^junubin:\/\/(.+)$/i;
@@ -37,10 +35,13 @@ const HTTPS_RE = /^https?:\/\/junubin\.app\/(.+)$/i;
  */
 export function pathFromUrl(url) {
   if (!url || typeof url !== 'string') return null;
+  // Keep the query string — linkTo('/survey?step=photo') must carry the
+  // step param through to the screen's parse config; stripping it here
+  // made every deferred deep link land on the route's default state.
   const m1 = url.match(PROTOCOL_RE);
-  if (m1) return m1[1].split('?')[0].split('#')[0];
+  if (m1) return m1[1].split('#')[0];
   const m2 = url.match(HTTPS_RE);
-  if (m2) return m2[1].split('?')[0].split('#')[0];
+  if (m2) return m2[1].split('#')[0];
   return null;
 }
 

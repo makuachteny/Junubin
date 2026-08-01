@@ -48,6 +48,7 @@ jest.mock('../../api/hooks/useRealtime', () => ({
     onMessage: () => () => {},
     onTypingStart: () => () => {},
     onTypingStop: () => () => {},
+    onReadReceipt: () => () => {},
     emitTypingStart: jest.fn(),
     emitTypingStop: jest.fn(),
     emitReadReceipt: jest.fn(),

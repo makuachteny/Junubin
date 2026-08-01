@@ -21,6 +21,7 @@ import { useAuth } from '../auth';
 import * as safetyService from '../api/services/safetyService';
 import * as connectionService from '../api/services/connectionService';
 import * as messageRequestService from '../api/services/messageRequestService';
+import * as chatService from '../api/services/chatService';
 import MessageRequestComposer from '../components/MessageRequestComposer';
 import { useMyFollowCounts, useFollow } from '../hooks/useFollow';
 import { useCurrentUser, useEligibility } from '../hooks';
@@ -54,17 +55,22 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const { colors, isDark } = useTheme();
   const s = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const profile = route.params?.profile || {};
+  // Chat surfaces pass conversation rows whose `.id` is the MATCH id;
+  // the person's real user id is `.userId`. Every service call below
+  // needs the USER id — using the match id made follow toggles fail,
+  // canMessageDirectly return false, and request sends hit FK errors.
+  const peerUserId = profile.userId || profile.id;
   const { session } = useAuth();
-  const followCounts = useMyFollowCounts(profile.id);
+  const followCounts = useMyFollowCounts(peerUserId);
   const {
     isFollowing,
     isFriend,
     toggleFollow,
     loading: followLoading,
-  } = useFollow(profile.id);
+  } = useFollow(peerUserId);
   const { currentUser } = useCurrentUser();
   const { nudge: surveyNudge } = useEligibility();
-  const isOwnProfile = !!currentUser?.id && currentUser.id === profile.id;
+  const isOwnProfile = !!currentUser?.id && currentUser.id === peerUserId;
 
   // ── Messaging permission ──
   // canMessageDirectly is true for a mutual connection OR an accepted
@@ -77,11 +83,11 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const [showComposer, setShowComposer] = useState(false);
 
   const refreshConnection = useCallback(async () => {
-    if (!session || !profile?.id || isOwnProfile) return;
+    if (!session || !peerUserId || isOwnProfile) return;
     try {
       const [state, direct] = await Promise.all([
-        connectionService.getConnectionState(profile.id),
-        connectionService.canMessageDirectly(profile.id),
+        connectionService.getConnectionState(peerUserId),
+        connectionService.canMessageDirectly(peerUserId),
       ]);
       setRequestStatus(state?.requestStatus || 'none');
       setCanMessage(!!direct);
@@ -90,13 +96,36 @@ const ProfileDetailScreen = ({ navigation, route }) => {
       if (__DEV__) console.warn('Connection state failed:', e?.message);
       setCanMessage(false);
     }
-  }, [session, profile?.id, isOwnProfile]);
+  }, [session, peerUserId, isOwnProfile]);
 
   useEffect(() => { refreshConnection(); }, [refreshConnection]);
 
-  const handleMessage = useCallback(() => {
+  const [openingChat, setOpeningChat] = useState(false);
+  const handleMessage = useCallback(async () => {
     if (canMessage) {
-      navigation.navigate('Chat', { match: profile });
+      if (openingChat) return;
+      setOpeningChat(true);
+      try {
+        // Server-side gate + mint (00048): reuses the pair's existing
+        // conversation or creates Match+Conversation+members for a
+        // mutual connection. ChatScreen requires the conversationId —
+        // without it the composer refuses to send.
+        const conversationId = await chatService.getOrCreateDirectConversation(peerUserId);
+        navigation.navigate('Chat', {
+          conversationId,
+          match: { ...profile, id: peerUserId, userId: peerUserId, conversationId },
+        });
+      } catch (e) {
+        // not_connected → fall back to the request composer; anything
+        // else (offline, blocked) gets a plain error.
+        if (/not_connected/i.test(e?.message || '')) {
+          setShowComposer(true);
+        } else {
+          Alert.alert('Could not open chat', e?.message || 'Try again in a moment.');
+        }
+      } finally {
+        setOpeningChat(false);
+      }
       return;
     }
     if (requestStatus === 'pending_out') {
@@ -108,18 +137,18 @@ const ProfileDetailScreen = ({ navigation, route }) => {
       return;
     }
     setShowComposer(true);
-  }, [canMessage, requestStatus, navigation, profile]);
+  }, [canMessage, requestStatus, navigation, profile, peerUserId, openingChat]);
 
   const handleSendRequest = useCallback(async (text) => {
     try {
-      const res = await messageRequestService.sendMessageRequest(profile.id, text);
+      const res = await messageRequestService.sendMessageRequest(peerUserId, text);
       setShowComposer(false);
       setRequestStatus(res?.status === 'accepted' ? 'accepted' : 'pending_out');
       Alert.alert('Request sent', `${profile.name || 'They'} will see your note and can start the conversation.`);
     } catch (e) {
       Alert.alert('Could not send', e?.message || 'Try again in a moment.');
     }
-  }, [profile.id, profile.name]);
+  }, [peerUserId, profile.name]);
 
   const messageLabel = canMessage ? 'Message'
     : requestStatus === 'pending_out' ? 'Requested'

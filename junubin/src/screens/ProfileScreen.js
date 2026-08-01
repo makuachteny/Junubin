@@ -69,11 +69,20 @@ export default function ProfileScreen({ navigation }) {
   );
 
   const handleEdit = () => navigation.navigate('EditProfile');
-  const handleStrengthRow = (step) => navigation.navigate('EditProfile', { focusStep: step });
+  // The verify step has no editor section — it IS the PhotoVerification
+  // flow; routing it into EditProfile dead-ended at the top of the form.
+  const handleStrengthRow = (step) => (
+    step === 'verify'
+      ? navigation.navigate('PhotoVerification')
+      : navigation.navigate('EditProfile', { focusStep: step })
+  );
   // "Preview as others" reuses the same full-screen profile view the
   // Directory opens for other people — no bespoke preview surface.
   const handlePreview = () => navigation.navigate('ProfileView', {
     profile: { ...(displayUser || {}), images: displayUser?.images || [] },
+    // Own-profile preview: ProfileView hides Follow/Message so the
+    // owner can't fire self-targeted actions from their own card.
+    preview: true,
   });
   const openFollowList = (initialTab) => navigation.navigate('FollowList', {
     userId: displayUser?.id, userName: displayUser?.name, initialTab,

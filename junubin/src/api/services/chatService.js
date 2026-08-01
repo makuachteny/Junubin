@@ -1,6 +1,5 @@
 import { supabase } from '../../config/supabase';
 import { cacheGet, cacheSet } from '../../utils/offlineCache';
-import { enqueueAction } from '../../utils/offlineQueue';
 
 const OFFLINE_MESSAGES_TTL = 600_000; // 10 min
 
@@ -90,49 +89,47 @@ export async function sendMessage(conversationId, body, type = 'text') {
   if (!appUser) throw new Error('User not found');
 
   // Strip all angle brackets and HTML entities before persisting.
+  // Failures propagate to the caller — ChatScreen owns the offline
+  // queueing (one layer, one queue shape: 'text_message'); the old
+  // second enqueue here used a shape no drain handler matched, so it
+  // only produced ghost entries.
   const sanitized = body.replace(/<[^>]*>?/g, '').replace(/&[a-z]+;/gi, '').slice(0, 4000);
 
-  try {
-    const { data: message, error } = await supabase
-      .from('Message')
-      .insert({
-        conversationId,
-        senderId: appUser.id,
-        body: sanitized,
-        type: 'text',
-      })
-      .select('*')
-      .single();
+  const { data: message, error } = await supabase
+    .from('Message')
+    .insert({
+      conversationId,
+      senderId: appUser.id,
+      body: sanitized,
+      type: 'text',
+    })
+    .select('*')
+    .single();
 
-    if (error) throw error;
-    return message;
-  } catch (err) {
-    // Queue transient failures (network drop, 5xx) so a flaky tunnel
-    // doesn't silently swallow a typed-and-tapped message. The
-    // existing offlineQueue knows the 'text' shape (see
-    // offlineQueue.js:38) so the consumer just needs to replay
-    // sendMessage(conversationId, body, type) on reconnect.
-    // Hard-rejection errors (RLS, validation) get queued too but
-    // dropped on replay precheck — better to leave the disposal to
-    // the consumer than to misclassify here.
-    const status = err?.status || err?.statusCode;
-    const transient = !status
-      || (status >= 500 && status < 600)
-      || /network|fetch|timeout/i.test(err?.message || '');
-    if (transient) {
-      await enqueueAction({
-        kind: 'text',
-        conversationId,
-        body: sanitized,
-        type: 'text',
-        // tempId is stable-per-send so the queue dedupes a retry of
-        // the same enter-tap rather than fanning out to N copies.
-        tempId: `${appUser.id}-${Date.now()}`,
-        enqueuedAt: Date.now(),
-      }).catch(() => {});
-    }
-    throw err;
-  }
+  if (error) throw error;
+  return message;
+}
+
+/**
+ * Resolve (or mint) the direct conversation with a peer. Wraps the
+ * `get_or_create_direct_conversation` RPC (00048): server-side it
+ * requires the pair to be mutual follows or have an accepted message
+ * request, refuses across blocks, reuses any existing conversation,
+ * and otherwise mints Match+Conversation+members atomically. This is
+ * THE way a "Message" button gets a conversationId — navigating to
+ * Chat without one renders a composer whose sends go nowhere.
+ *
+ * Throws with the server's reason ('not_connected', 'blocked', …) so
+ * callers can fall back to the message-request composer.
+ */
+export async function getOrCreateDirectConversation(peerUserId) {
+  if (!peerUserId) throw new Error('Missing peer');
+  const { data, error } = await supabase.rpc('get_or_create_direct_conversation', {
+    peer_id: peerUserId,
+  });
+  if (error) throw error;
+  if (!data) throw new Error('No conversation returned');
+  return data;
 }
 
 /**

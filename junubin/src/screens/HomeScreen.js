@@ -203,7 +203,7 @@ const HomeScreen = ({ navigation }) => {
 
   // ── Handlers ──
   const openProfile = useCallback((person) => {
-    navigation?.navigate?.('ProfileView', {
+    navigation?.navigate?.('ProfileDetail', {
       profile: { ...person, images: person.images || person.photos || [] },
     });
   }, [navigation]);
@@ -423,7 +423,7 @@ const HomeScreen = ({ navigation }) => {
             onDisclosureAccept={acceptDisclosure}
             onDisclosureDecline={declineDisclosure}
             onBrowseList={() => changeViewMode('list')}
-            onPersonPress={(person) => navigation?.navigate?.('ProfileView', {
+            onPersonPress={(person) => navigation?.navigate?.('ProfileDetail', {
               profile: { ...person, images: person.photos || person.images || [] },
             })}
           />
@@ -572,7 +572,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   cityPillCount: {
     fontFamily: FontFamily.regular,
     fontSize: 11.5,
-    color: colors.gray600,
+    color: colors.gray500,
   },
   segmented: {
     flexDirection: 'row',
@@ -707,7 +707,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   rowMeta: {
     fontFamily: FontFamily.regular,
     fontSize: 12.5,
-    color: colors.gray600,
+    color: colors.gray500,
     marginTop: 2,
   },
   followBtn: {
@@ -731,7 +731,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: colors.accentDark,
   },
   followTextActive: {
-    color: colors.gray600,
+    color: colors.gray500,
   },
   listFooter: {
     paddingHorizontal: 18,
@@ -741,7 +741,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   listFooterText: {
     fontFamily: FontFamily.regular,
     fontSize: 12.5,
-    color: colors.gray500,
+    color: colors.gray400,
     textAlign: 'center',
   },
   listFooterLink: {

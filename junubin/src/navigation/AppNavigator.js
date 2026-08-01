@@ -72,20 +72,12 @@ function lazify(importFn) {
 const ProfileScreen = lazify(() => import('../screens/ProfileScreen'));
 const ProfileTabScreen = withBoundary(ProfileScreen, 'profile');
 const ProfileDetailScreen = lazify(() => import('../screens/ProfileDetailScreen'));
-const ProfileViewScreen = lazify(() => import('../screens/ProfileViewScreen'));
 const SettingsScreen = lazify(() => import('../screens/SettingsScreen'));
-const PreferencesScreen = lazify(() => import('../screens/PreferencesScreen'));
 const ChatScreen = withBoundary(lazify(() => import('../screens/ChatScreen')), 'chat');
-const MessageRequestsScreen = lazify(() => import('../screens/MessageRequestsScreen'));
 const EditProfileScreen = lazify(() => import('../screens/EditProfileScreen'));
 const NotificationsScreen = lazify(() => import('../screens/NotificationsScreen'));
 const SettingsInfoScreen = lazify(() => import('../screens/SettingsInfoScreen'));
-const AccessibilitySurveyScreen = lazify(() => import('../screens/AccessibilitySurveyScreen'));
-const PreferenceSelectScreen = lazify(() => import('../screens/PreferenceSelectScreen'));
 const PhotoVerificationScreen = lazify(() => import('../screens/PhotoVerificationScreen'));
-const ReferralScreen = lazify(() => import('../screens/ReferralScreen'));
-const FollowListScreen = lazify(() => import('../screens/FollowListScreen'));
-const FindFriendsScreen = lazify(() => import('../screens/FindFriendsScreen'));
 const WebViewScreen = lazify(() => import('../screens/WebViewScreen'));
 
 // ─── Routes deliberately NOT registered ───
@@ -135,22 +127,22 @@ function HomeTabs() {
           tabBarActiveTintColor: colors.tabActive,
           tabBarInactiveTintColor: colors.tabInactive,
           tabBarStyle: {
-            backgroundColor: colors.cream,
-            // Industry chrome: hairline ink on top, no floating shadow.
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: colors.separator,
+            // The bar is flag-ink in both themes; the active tab reads
+            // in flag gold. No top hairline — the ink edge is the line.
+            backgroundColor: colors.tabBarBg,
+            borderTopWidth: 0,
             height: Platform.OS === 'ios' ? 88 : 68,
             paddingBottom: Platform.OS === 'ios' ? 22 : 12,
             paddingTop: Platform.OS === 'ios' ? 10 : 12,
           },
           // Chats unread badge (set via navigation.setOptions from
-          // MessagesScreen): small accent pill, bg-colored numeral.
+          // MessagesScreen): small flag-red pill, white numeral.
           tabBarBadgeStyle: {
             minWidth: 16,
             height: 16,
             borderRadius: 8,
-            backgroundColor: colors.accent,
-            color: colors.cream,
+            backgroundColor: colors.ssRed,
+            color: '#FFFFFF',
             fontSize: 10,
             fontFamily: FontFamily.bold,
             fontWeight: '700',
@@ -271,20 +263,12 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
       <MainStack.Screen name="Profile" component={ProfileScreen} />
       <MainStack.Screen name="ProfileDetail" component={ProfileDetailScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
-      <MainStack.Screen name="ProfileView" component={ProfileViewScreen} options={{ presentation: 'fullScreenModal', gestureEnabled: true }} />
       <MainStack.Screen name="Settings" component={SettingsScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="Preferences" component={PreferencesScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Chat" component={ChatScreen} />
-      <MainStack.Screen name="MessageRequests" component={MessageRequestsScreen} />
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Notifications" component={NotificationsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="SettingsInfo" component={SettingsInfoScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="AccessibilitySurvey" component={AccessibilitySurveyScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
-      <MainStack.Screen name="PreferenceSelect" component={PreferenceSelectScreen} options={{ gestureEnabled: true }} />
       <MainStack.Screen name="PhotoVerification" component={PhotoVerificationScreen} options={{ presentation: 'modal' }} />
-      <MainStack.Screen name="Referral" component={ReferralScreen} />
-      <MainStack.Screen name="FollowList" component={FollowListScreen} />
-      <MainStack.Screen name="FindFriends" component={FindFriendsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="WebView" component={WebViewScreen} options={{ presentation: 'modal' }} />
     </MainStack.Navigator>
   );

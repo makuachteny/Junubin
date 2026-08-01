@@ -25,10 +25,9 @@ import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LogoMark from '../components/LogoMark';
 import Blueprint from '../components/Blueprint';
-import DateWheelPicker from '../components/DateWheelPicker';
+import BirthdaySelects from '../components/BirthdaySelects';
 import { ALL_TRIBE_KEYS } from '../data/tribes';
 import { normalizeLocationVisibility } from '../data/profileOptions';
-import { LOCATION_VISIBILITY_OPTIONS } from '../utils/locationConsent';
 import { OPEN_TO_OPTIONS, normalizeOpenTo, openToLabels } from '../data/openTo';
 import { LANGUAGE_OPTIONS, normalizeLanguages } from '../data/languages';
 import { promptToOpenSettings } from '../utils/permissionAlert';
@@ -56,6 +55,21 @@ const STEPS = [
 // Kakuma, Omaha and Melbourne equally well.
 const SUGGESTED_CITIES = ['Nairobi', 'Kampala', 'Juba', 'Cairo', 'Melbourne', 'Omaha'];
 
+// One flag color per step — fills the progress segment for that step
+// and the 8px kicker square (design's obSegs / obStepColor arrays).
+// Resolved through the theme at render so dark mode gets its variants.
+const STEP_COLOR_KEYS = ['ssBlue', 'ssGreen', 'ssGold', 'ssRed', 'ssBlue'];
+
+// The design's "WHO CAN SEE WHERE YOU ARE?" radio cards, mapped onto
+// the real Profile.locationVisibility values ('off' | 'city' |
+// 'coarse'). Ordered most-visible first like the mock; the DEFAULT is
+// still 'off' — order here is presentation only, never a default.
+const VISIBILITY_OPTIONS = [
+  { value: 'coarse', label: 'Everyone on JuNubin', sub: 'Your approximate area shows on the Nearby map — never your exact address.' },
+  { value: 'city',   label: 'City only',           sub: 'People see your city, never a map pin.' },
+  { value: 'off',    label: 'Nobody',              sub: 'You browse the map; you never appear on it.' },
+];
+
 // Every profile still carries accountPurpose: 'socialize'. The value is
 // no longer a user choice — profile-completeness checks, AppNavigator's
 // deep-link routing and AuthContext's mode resolution all still branch
@@ -68,8 +82,9 @@ const ACCOUNT_PURPOSE = 'socialize';
 const openToPrimaryLabel = (keys) => openToLabels(keys)[0] || 'Community';
 
 // Map eligibility step ids (and legacy step keys) → the 5 grouped
-// steps. Used when the SurveyNudgeModal / a deep link opens this
-// screen with `resumeAt` set: we seek to the nearest surviving step.
+// steps. Used when a deep link (junubin://survey?step=<id>) or an
+// in-app `resumeAt` opens this screen: we seek to the nearest
+// surviving step.
 // Ids for fields that are no longer collected in onboarding resolve to
 // the closest sensible step — profile-detail ids (interests, prompts,
 // education…) land on the final step so the user can finish and then
@@ -114,13 +129,16 @@ const RESUME_KEY_BY_ELIGIBILITY_ID = {
 };
 
 const ProfileSetupScreen = ({ navigation, route }) => {
-  const resumeAtParam = route?.params?.resumeAt || null;
+  // `resumeAt` comes from in-app navigation; `step` is the
+  // junubin://survey?step=<id> deep-link param (App.js linking config
+  // parses it as `step`). Both feed the same seek.
+  const resumeAtParam = route?.params?.resumeAt || route?.params?.step || null;
 
   const [currentStep, setCurrentStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  // Seek to the requested step when ProfileSetup is opened from the
-  // SurveyNudgeModal (or a deep link). Tracked via a ref so the seek
+  // Seek to the requested step when ProfileSetup is opened with a
+  // resume target (in-app or deep link). Tracked via a ref so the seek
   // only fires once per (resumeAtParam, mount) — once the user manually
   // advances or goes back, we never bounce them back here.
   const didSeekResumeRef = useRef(false);
@@ -313,8 +331,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         accountPurpose: ACCOUNT_PURPOSE,
         profileComplete: true,
         // Mark the survey as complete here — the flow this user just
-        // finished IS the survey. AccessibilitySurvey remains reachable
-        // from Settings for accessibility preferences.
+        // finished IS the survey; nothing else asks these questions.
         surveyCompletedAt: new Date().toISOString(),
         // EULA acceptance was checked on the SignupScreen before the
         // user reached this point. Stamp it on the Profile now that we
@@ -402,11 +419,16 @@ const ProfileSetupScreen = ({ navigation, route }) => {
     }
   };
 
+  // On step 0 there may be nothing to go back to — for a fresh signup
+  // this screen is MainNavigator's initial route, so the chevron only
+  // renders when goBack can actually do something.
+  const canLeaveBack = navigation?.canGoBack?.() ?? false;
+  const showBackButton = currentStep > 0 || canLeaveBack;
   const handleBack = () => {
     setFieldError(null);
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1);
-    } else {
+    } else if (canLeaveBack) {
       navigation.goBack();
     }
   };
@@ -509,7 +531,9 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   const canSkip = step.skippable;
 
   // ─── Shared chip renderer (Industry chip spec) ───
-  const renderChip = ({ key, label, selected, onPress, testID, role = 'checkbox', height = 40 }) => (
+  // The mock scales chip text with chip height: 44px chips → 14.5,
+  // 40px chips → 14, 38px city chips → 13.5.
+  const renderChip = ({ key, label, selected, onPress, testID, role = 'checkbox', height = 40, fontSize = 14 }) => (
     <TouchableOpacity
       key={key}
       testID={testID}
@@ -523,7 +547,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       // effective touch target still clears the 44pt accessibility floor.
       hitSlop={{ top: Math.max(0, Math.ceil((44 - height) / 2)), bottom: Math.max(0, Math.ceil((44 - height) / 2)) }}
     >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{label}</Text>
+      <Text style={[styles.chipText, { fontSize }, selected && styles.chipTextSelected]}>{label}</Text>
     </TouchableOpacity>
   );
 
@@ -551,13 +575,11 @@ const ProfileSetupScreen = ({ navigation, route }) => {
               <Text style={styles.fieldLabel}>
                 BIRTHDAY <Text style={styles.fieldLabelHint}>— only your age is shown</Text>
               </Text>
-              <DateWheelPicker
+              <BirthdaySelects
                 testID="setup-dob"
                 value={birthDate}
-                placeholder="Tap to pick your birth date"
                 onChange={(payload) => setBirthDate(payload.mmddyyyy)}
               />
-              <Text style={styles.helperText}>You must be 18 or older to use JuNubin.</Text>
             </View>
           </View>
         );
@@ -573,9 +595,9 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                 onPress: () => toggleOpenTo(opt.key),
                 testID: `open-to-${opt.key}`,
                 height: 44,
+                fontSize: 14.5,
               }))}
             </View>
-            <Text style={styles.helperText}>You can change these any time in Settings.</Text>
           </View>
         );
 
@@ -605,6 +627,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                   testID: `setup-city-${c}`,
                   role: 'radio',
                   height: 38,
+                  fontSize: 13.5,
                 }))}
               </View>
             </View>
@@ -683,7 +706,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
               WHO CAN SEE WHERE YOU ARE?
             </Text>
             <View style={{ gap: 8 }}>
-              {LOCATION_VISIBILITY_OPTIONS.map((opt) => {
+              {VISIBILITY_OPTIONS.map((opt) => {
                 const isActive = locationVisibility === opt.value;
                 return (
                   <TouchableOpacity
@@ -694,17 +717,14 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                     activeOpacity={0.8}
                     accessibilityRole="radio"
                     accessibilityState={{ checked: isActive }}
-                    accessibilityLabel={`${opt.label}. ${opt.description}`}
+                    accessibilityLabel={`${opt.label}. ${opt.sub}`}
                   >
                     <View style={[styles.radioOuter, isActive && styles.radioOuterActive]}>
                       {isActive && <View style={styles.radioInner} />}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.visLabel}>
-                        {opt.label}
-                        {opt.value === 'off' ? '  ·  Default' : ''}
-                      </Text>
-                      <Text style={styles.visSub}>{opt.description}</Text>
+                      <Text style={styles.visLabel}>{opt.label}</Text>
+                      <Text style={styles.visSub}>{opt.sub}</Text>
                     </View>
                   </TouchableOpacity>
                 );
@@ -733,8 +753,11 @@ const ProfileSetupScreen = ({ navigation, route }) => {
               style={styles.backBtn}
               accessibilityRole="button"
               accessibilityLabel="Back"
+              disabled={!showBackButton}
             >
-              <Ionicons name="chevron-back" size={22} color={colors.black} />
+              {showBackButton && (
+                <Ionicons name="chevron-back" size={22} color={colors.black} />
+              )}
             </TouchableOpacity>
 
             <View style={styles.progressTrack}>
@@ -743,7 +766,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                   key={i}
                   style={[
                     styles.progressSeg,
-                    { backgroundColor: i <= currentStep ? colors.accent : colors.separator },
+                    // Filled segments each keep their OWN step color
+                    // (blue, green, gold, red, blue) — the design's
+                    // flag-stripe progress, not a single accent fill.
+                    { backgroundColor: i <= currentStep ? colors[STEP_COLOR_KEYS[i]] : colors.separator },
                   ]}
                 />
               ))}
@@ -765,7 +791,10 @@ const ProfileSetupScreen = ({ navigation, route }) => {
 
           {/* ── Kicker + title + sub ── */}
           <View style={styles.titleSection}>
-            <Text style={styles.kicker}>STEP {currentStep + 1} OF {totalSteps}</Text>
+            <View style={styles.kickerRow}>
+              <View style={[styles.kickerSquare, { backgroundColor: colors[STEP_COLOR_KEYS[currentStep]] }]} />
+              <Text style={styles.kicker}>STEP {currentStep + 1} OF {totalSteps}</Text>
+            </View>
             <Text style={styles.stepTitle}>{step.title}</Text>
             <Text style={styles.stepSubtitle}>{step.subtitle}</Text>
           </View>

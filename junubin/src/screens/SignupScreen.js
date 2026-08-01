@@ -1,85 +1,84 @@
-import React, { useState, useRef, useMemo, useEffect } from 'react';
+// ═══════════════════════════════════════════════════════════
+// JuNubin — Sign in with phone ("Industry" redesign, design.html
+// Phone + OTP screens). Two steps on the theme background:
+//   phone → country prefix + tel input + Blueprint gold SEND CODE
+//   otp   → six code boxes + in-app 3×4 keypad, auto-verifies at 6
+// Auth is Supabase phone OTP via useAuth().startOtp / loginWithOtp.
+// ═══════════════════════════════════════════════════════════
+
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   TextInput,
-  Dimensions,
   Keyboard,
-  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Image,
-  Animated,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily } from '../theme';
-import LogoMark from '../components/LogoMark';
+import { useTheme, FontFamily } from '../theme';
+import Blueprint from '../components/Blueprint';
 import { useAuth } from '../auth';
-import { useAccessibilityPreferences } from '../accessibility';
-import { validateEmail, validatePhoneDigits } from '../utils/validators';
+import { validatePhoneDigits } from '../utils/validators';
 import { trackEvent, AnalyticsEvents } from '../utils/analytics';
 
+// Country prefixes from the design (Kenya default, then South Sudan,
+// Uganda, US/Canada, Australia). The design cycles on tap.
+const PREFIXES = ['+254', '+211', '+256', '+1', '+61'];
 
-const { width: W, height: H } = Dimensions.get('window');
-const LANDING_IMAGE = require('../assets/landing.jpeg');
+// In-app keypad rows (design: 1–9, blank, 0, backspace).
+const KEYPAD = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'];
 
-// ── Warm earth-tone palette for the auth flow ──
-// Login feels welcoming/grounded — honey gold, burnt orange, warm brown ochre,
-// instead of the flag-red used elsewhere in the app.
-// Industry steel ramp — this screen is fixed-dark (photo/ink ground),
-// so the accent steps are deliberate literals from the redesign mock
-// rather than theme tokens that flip in light mode.
-const WARM = {
-  highlight: '#B3D6FA',   // light steel for italic accent words
-  primary:   '#4F97E0',   // CTA steel (mock welcome button)
-  mid:       '#2E7FD0',   // base accent
-  deep:      '#175A9E',   // deep steel
-  link:      '#7FB5F0',   // links / resend
+const OTP_LENGTH = 6;
+const MAX_OTP_ATTEMPTS = 5;
+
+const formatAuthError = (error) => {
+  const msg = error?.message || String(error || '');
+  if (/Supabase config missing/i.test(msg)) return msg;
+  if (/Supabase URL must use https/i.test(msg)) return msg;
+  if (/Network request failed/i.test(msg)) {
+    return 'Network request failed. Check your internet connection and confirm your Supabase URL/key are set correctly.';
+  }
+  return msg || 'Please try again.';
 };
 
-const SignupScreen = ({ navigation, route }) => {
-  // Email-only auth for the v1 launch. Phone OTP is removed for now —
-  // when we re-enable it, restore the `selectedMethod` state, phone field,
-  // country picker, and pass `phone` into startOtp/loginWithOtp.
-  const [step, setStep] = useState('input'); // 'input' | 'verify'
-  const [email, setEmail] = useState('');
-  const [verificationCode, setVerificationCode] = useState(['', '', '', '', '', '']);
-  const [emailActive, setEmailActive] = useState(false);
-  // Surface a friendly error before/while Supabase's server-side rate-limit
-  // kicks in — without this, a user typing wrong codes sees nothing happen
-  // and assumes the app is broken. Counter is reset on success or Resend.
+const SignupScreen = ({ navigation }) => {
+  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
+  const [prefixIdx, setPrefixIdx] = useState(0);
+  const [phone, setPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [inputError, setInputError] = useState('');
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  // Surface a friendly error before/while Supabase's server-side
+  // rate-limit kicks in — without this, a user typing wrong codes sees
+  // nothing happen and assumes the app is broken. Reset on success or
+  // Resend. Network drops never count (see handleVerify).
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const MAX_OTP_ATTEMPTS = 5;
   const attemptsExhausted = failedAttempts >= MAX_OTP_ATTEMPTS;
+
+  // Apple App Review (and most international privacy regimes) require
+  // an explicit acceptance click for ToS / Privacy — a passive "by
+  // continuing" line is not sufficient. Not in the design mock, but
+  // it gates SEND CODE deliberately.
+  const [eulaAccepted, setEulaAccepted] = useState(false);
+
   const insets = useSafeAreaInsets();
   const { startOtp, loginWithOtp } = useAuth();
-  const { prefs } = useAccessibilityPreferences();
   const { colors, isDark } = useTheme();
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const styles = useMemo(() => getStyles(colors), [colors]);
 
-  // Cinematic entrance — slow background zoom + content fade-in (matches Onboarding)
-  const bgZoom = useRef(new Animated.Value(1)).current;
-  const entrance = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     trackEvent(AnalyticsEvents.SIGNUP_START);
-    Animated.timing(bgZoom, { toValue: 1.06, duration: 6000, useNativeDriver: true }).start();
-    Animated.spring(entrance, { toValue: 1, tension: 35, friction: 10, useNativeDriver: true }).start();
-  }, [bgZoom, entrance]);
+  }, []);
 
-  const contentOpacity = entrance.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 0.3, 1] });
-  const contentTranslate = entrance.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
-
-  // Refs for verification code inputs
-  const codeRefs = useRef([]);
-
-  // Resend cooldown — gate the Resend button for 30s after each tap so
-  // users can't hammer the OTP service. Interval is cleared on unmount.
+  // ── Resend cooldown — gate Resend for 30s per tap so users can't
+  //    hammer the OTP service. Interval cleared on unmount. ──
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const cooldownTimerRef = useRef(null);
   useEffect(() => {
@@ -110,32 +109,19 @@ const SignupScreen = ({ navigation, route }) => {
     }, 1000);
   };
 
-  const handleEmailChange = (text) => {
+  const prefix = PREFIXES[prefixIdx];
+  // E.164: prefix + national number, leading zeros stripped
+  // ("+254" + "0912 345 678" → "+254912345678").
+  const e164 = prefix + phone.replace(/\D/g, '').replace(/^0+/, '');
+  const displayNumber = `${prefix} ${phone.trim() || ''}`.trim();
+
+  const handlePhoneChange = (text) => {
     if (inputError) setInputError('');
-    setEmail(text);
+    setPhone(text);
   };
-
-  const [inputError, setInputError] = useState('');
-  // Apple App Review (and most international privacy regimes) require
-  // an explicit acceptance click for ToS / Privacy on a dating app —
-  // a passive "by continuing" line is no longer sufficient. We persist
-  // the click as `Profile.eulaAcceptedAt` once the User row exists; for
-  // now (pre-account) we just gate the Continue button.
-  const [eulaAccepted, setEulaAccepted] = useState(false);
-  const formatAuthError = (error) => {
-    const msg = error?.message || String(error || '');
-    if (/Supabase config missing/i.test(msg)) return msg;
-    if (/Supabase URL must use https/i.test(msg)) return msg;
-    if (/Network request failed/i.test(msg)) {
-      return 'Network request failed. Check your internet connection and confirm your Supabase URL/key are set correctly.';
-    }
-    return msg || 'Please try again.';
-  };
-
-  const validateInput = () => validateEmail(email);
 
   const handleSendCode = async () => {
-    const error = validateInput();
+    const error = validatePhoneDigits(phone);
     if (error) {
       setInputError(error);
       return;
@@ -143,70 +129,86 @@ const SignupScreen = ({ navigation, route }) => {
     setInputError('');
     try {
       Keyboard.dismiss();
-      await startOtp({ email: email.trim().toLowerCase() });
-      setStep('verify');
-    } catch (error) {
-      Alert.alert('Could not send code', formatAuthError(error));
+      setSending(true);
+      await startOtp({ phone: e164 });
+      setOtp('');
+      setFailedAttempts(0);
+      setStep('otp');
+    } catch (err) {
+      Alert.alert('Could not send code', formatAuthError(err));
+    } finally {
+      setSending(false);
     }
   };
 
-  const handleCodeChange = (text, index) => {
-    const newCode = [...verificationCode];
-    newCode[index] = text;
-    setVerificationCode(newCode);
-
-    // Auto-advance to next input
-    if (text && index < 5) {
-      codeRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleCodeKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !verificationCode[index] && index > 0) {
-      codeRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerify = async () => {
-    const code = verificationCode.join('');
-    if (code.length === 6) {
-      try {
-        const result = await loginWithOtp({
-          email: email.trim().toLowerCase(),
-          code,
-        });
-        setFailedAttempts(0); // success — clear the retry guard
-        trackEvent(AnalyticsEvents.SIGNUP_COMPLETE, { method: 'email' });
-        // Returning user with any profile data → go straight to Main
-        const appUser = result?.appUser;
-        const appProfile = appUser?.profile;
-        if (
-          appProfile?.profileComplete ||
-          appProfile?.accountPurpose ||
-          appProfile?.displayName ||
-          appUser?.displayName
-        ) {
-          return;
-        }
-        // Brand-new user → profile setup
-        navigation.replace('ProfileSetup');
-      } catch (error) {
-        const next = failedAttempts + 1;
-        setFailedAttempts(next);
-        if (next >= MAX_OTP_ATTEMPTS) {
-          Alert.alert(
-            'Too many incorrect codes',
-            "We're holding off verification for a few minutes. Tap 'Resend code' to get a fresh one.",
-          );
-        } else {
-          const remaining = MAX_OTP_ATTEMPTS - next;
-          Alert.alert(
-            'Invalid code',
-            `That code didn't match. ${remaining} attempt${remaining === 1 ? '' : 's'} left.`,
-          );
-        }
+  const handleVerify = useCallback(async (code) => {
+    if (verifying) return;
+    setVerifying(true);
+    try {
+      const result = await loginWithOtp({ phone: e164, code });
+      setFailedAttempts(0); // success — clear the retry guard
+      trackEvent(AnalyticsEvents.SIGNUP_COMPLETE, { method: 'phone' });
+      // Returning user with any profile data → AppNavigator flips to Main
+      const appUser = result?.appUser;
+      const appProfile = appUser?.profile;
+      if (
+        appProfile?.profileComplete ||
+        appProfile?.accountPurpose ||
+        appProfile?.displayName ||
+        appUser?.displayName
+      ) {
+        return;
       }
+      // Brand-new user → profile setup
+      navigation.replace('ProfileSetup');
+    } catch (error) {
+      // A network drop is NOT a wrong code — counting it toward the
+      // attempt lockout froze the flow for users on flaky connections
+      // who had typed the RIGHT code all along.
+      const isNetwork = /network|fetch|timeout|abort/i.test(error?.message || '');
+      if (isNetwork) {
+        Alert.alert(
+          'Connection problem',
+          "We couldn't reach the server to check your code. Check your connection and try again — this doesn't count against your attempts.",
+        );
+        setOtp('');
+        return;
+      }
+      const next = failedAttempts + 1;
+      setFailedAttempts(next);
+      setOtp(''); // auto-verify fires at 6 digits, so clear for a retype
+      if (next >= MAX_OTP_ATTEMPTS) {
+        Alert.alert(
+          'Too many incorrect codes',
+          "We're holding off verification for a few minutes. Tap 'Resend' to get a fresh one.",
+        );
+      } else {
+        const remaining = MAX_OTP_ATTEMPTS - next;
+        Alert.alert(
+          'Invalid code',
+          `That code didn't match. ${remaining} attempt${remaining === 1 ? '' : 's'} left.`,
+        );
+      }
+    } finally {
+      setVerifying(false);
     }
+  }, [verifying, loginWithOtp, e164, failedAttempts, navigation]);
+
+  // Keypad entry — append/delete on the otp string; auto-verify the
+  // moment the sixth digit lands (design's otpTap behavior).
+  const handleKey = (key) => {
+    if (verifying) return;
+    if (key === '⌫') {
+      setOtp((prev) => prev.slice(0, -1));
+      return;
+    }
+    if (!key || attemptsExhausted) return;
+    setOtp((prev) => {
+      if (prev.length >= OTP_LENGTH) return prev;
+      const next = prev + key;
+      if (next.length === OTP_LENGTH) handleVerify(next);
+      return next;
+    });
   };
 
   const handleResend = () => {
@@ -214,743 +216,417 @@ const SignupScreen = ({ navigation, route }) => {
     startResendCooldown();
     (async () => {
       try {
-        await startOtp({
-          email: email.trim().toLowerCase(),
-        });
+        await startOtp({ phone: e164 });
         setFailedAttempts(0); // fresh code → re-enable verification
+        setOtp('');
         Alert.alert('Code Sent', 'A new verification code has been sent.');
-        setVerificationCode(['', '', '', '', '', '']);
-        codeRefs.current[0]?.focus();
       } catch (error) {
         Alert.alert('Could not resend', formatAuthError(error));
       }
     })();
   };
 
-  const isCodeComplete = verificationCode.join('').length === 6;
+  const backToPhone = () => {
+    setStep('phone');
+    setOtp('');
+    setFailedAttempts(0);
+  };
 
-  const maskedContact = email.replace(/(.{2})(.*)(@.*)/, '$1***$3');
-
-  // ─── Verification Code Screen ───
-  if (step === 'verify') {
+  // ─── OTP screen ───
+  if (step === 'otp') {
     return (
-      <View style={styles.root}>
-        <StatusBar style="light" />
-        <Animated.View style={[styles.bgWrap, { transform: [{ scale: bgZoom }] }]}>
-          <Image source={LANDING_IMAGE} style={styles.bgImage} resizeMode="cover" />
-        </Animated.View>
-        <LinearGradient
-          colors={[
-            'rgba(0,0,0,0.45)',
-            'rgba(0,0,0,0.20)',
-            'rgba(0,0,0,0.65)',
-            'rgba(0,0,0,0.95)',
-            'rgba(0,0,0,0.99)',
-          ]}
-          locations={[0, 0.30, 0.55, 0.82, 1]}
-          style={StyleSheet.absoluteFill}
-        />
-
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <View style={[styles.container, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 14 }]}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={backToPhone}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
-              {/* Top bar — same as input step */}
-              <View style={styles.topBar}>
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => {
-                    setStep('input');
-                    setVerificationCode(['', '', '', '', '', '']);
-                    setFailedAttempts(0);
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-                </TouchableOpacity>
-                <LogoMark size={28} light />
-                <View style={{ width: 36 }} />
-              </View>
+          <Ionicons name="chevron-back" size={22} color={colors.black} />
+        </TouchableOpacity>
 
-              {/* Anchored content */}
-              <View style={styles.contentWrap}>
-                <View style={styles.heroAccentLine} />
-                <Text style={styles.eyebrow}>VERIFY</Text>
-                <Text style={styles.heading}>
-                  Enter your{'\n'}
-                  <Text style={styles.headingAccent}>code.</Text>
-                </Text>
-                <Text style={styles.subheading}>
-                  We sent a 6-digit code to{' '}
-                  <Text style={styles.verifyContactInline}>{maskedContact}</Text>
-                </Text>
+        <Text style={styles.h1} accessibilityRole="header">Enter the code</Text>
+        <Text style={styles.sub}>
+          Sent to {displayNumber} ·{' '}
+          <Text
+            style={styles.link}
+            onPress={backToPhone}
+            accessibilityRole="link"
+            accessibilityLabel="Edit phone number"
+          >
+            edit
+          </Text>
+        </Text>
 
-                <View style={styles.codeRow}>
-                  {verificationCode.map((digit, index) => (
-                    <TextInput
-                      key={index}
-                      ref={(ref) => { codeRefs.current[index] = ref; }}
-                      style={[
-                        styles.codeInput,
-                        digit ? styles.codeInputFilled : null,
-                        attemptsExhausted && styles.codeInputDisabled,
-                      ]}
-                      value={digit}
-                      onChangeText={(text) => handleCodeChange(text.slice(-1), index)}
-                      onKeyPress={(e) => handleCodeKeyPress(e, index)}
-                      keyboardType="number-pad"
-                      maxLength={1}
-                      textAlign="center"
-                      autoFocus={index === 0}
-                      placeholderTextColor="rgba(255,255,255,0.3)"
-                      editable={!attemptsExhausted}
-                    />
-                  ))}
-                </View>
-
-                {attemptsExhausted ? (
-                  <Text style={styles.attemptsLockedHint}>
-                    Too many incorrect codes. Tap "Resend code" for a fresh one.
-                  </Text>
-                ) : null}
-
-                <TouchableOpacity
-                  onPress={handleResend}
-                  style={styles.resendBtn}
-                  disabled={cooldownSeconds > 0}
-                  activeOpacity={cooldownSeconds > 0 ? 1 : 0.6}
-                  accessibilityState={{ disabled: cooldownSeconds > 0 }}
-                >
-                  {cooldownSeconds > 0 ? (
-                    <Text style={styles.resendTextDisabled}>
-                      Resend in {cooldownSeconds}s
-                    </Text>
-                  ) : (
-                    <>
-                      <Text style={styles.resendText}>Didn't receive a code? </Text>
-                      <Text style={styles.resendLink}>Resend code</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              {/* Verify CTA — same gradient pill */}
-              <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
-                <TouchableOpacity
-                  style={[styles.ctaWrap, (!isCodeComplete || attemptsExhausted) && styles.ctaWrapDisabled]}
-                  onPress={handleVerify}
-                  disabled={!isCodeComplete || attemptsExhausted}
-                  activeOpacity={0.9}
-                >
-                  <LinearGradient
-                    colors={[WARM.primary, WARM.mid, WARM.deep]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.ctaGradient}
-                  >
-                    <Text style={styles.ctaText}>Verify</Text>
-                    <View style={styles.ctaArrow}>
-                      <Ionicons name="checkmark" size={18} color="#FFF" />
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
+        {/* Six code boxes — active box border = accent */}
+        <View style={styles.otpRow} accessibilityLabel={`Verification code, ${otp.length} of ${OTP_LENGTH} digits entered`}>
+          {Array.from({ length: OTP_LENGTH }, (_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.otpBox,
+                { borderColor: i === otp.length ? colors.accent : colors.separator },
+              ]}
+            >
+              <Text style={styles.otpDigit}>{otp[i] || ''}</Text>
             </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+          ))}
+        </View>
+
+        <Text style={styles.resendLine}>
+          Didn't get it?{' '}
+          {cooldownSeconds > 0 ? (
+            <Text style={styles.resendDisabled}>Resend in {cooldownSeconds}s</Text>
+          ) : (
+            <Text
+              style={styles.link}
+              onPress={handleResend}
+              accessibilityRole="link"
+              accessibilityLabel="Resend code"
+            >
+              Resend
+            </Text>
+          )}
+        </Text>
+
+        {attemptsExhausted ? (
+          <Text style={styles.lockedHint}>
+            Too many incorrect codes. Tap "Resend" for a fresh one.
+          </Text>
+        ) : null}
+
+        <View style={{ flex: 1 }} />
+
+        {/* In-app keypad — 3×4: 1–9, blank, 0, ⌫ */}
+        <View style={styles.keypad}>
+          {KEYPAD.map((key, i) => (
+            <TouchableOpacity
+              key={i}
+              style={[
+                styles.key,
+                (key === '' || key === '⌫') && styles.keyGhost,
+              ]}
+              onPress={() => handleKey(key)}
+              disabled={key === '' || verifying}
+              activeOpacity={0.6}
+              accessibilityRole={key === '' ? 'none' : 'button'}
+              accessibilityLabel={key === '⌫' ? 'Delete' : key || undefined}
+              accessibilityElementsHidden={key === ''}
+            >
+              <Text style={styles.keyLabel}>{key}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
     );
   }
 
-  // ─── Input Screen (Email only) ───
-  const hasInput = email.trim().length > 0;
-
+  // ─── Phone screen ───
   return (
-    <View style={styles.root}>
-      <StatusBar style="light" />
+    <KeyboardAvoidingView
+      style={[styles.container, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 20 }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      {navigation?.canGoBack?.() ? (
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.black} />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.backBtn} />
+      )}
 
-      {/* Background landing image — matches OnboardingScreen */}
-      <Animated.View style={[styles.bgWrap, { transform: [{ scale: bgZoom }] }]}>
-        <Image source={LANDING_IMAGE} style={styles.bgImage} resizeMode="cover" />
-      </Animated.View>
+      <Text style={styles.h1} accessibilityRole="header">What's your number?</Text>
+      <Text style={styles.sub}>We'll text you a code. That's the whole sign-in.</Text>
 
-      {/* Gradient overlay — same 5-stop fade as Onboarding */}
-      <LinearGradient
-        colors={[
-          'rgba(0,0,0,0.30)',
-          'rgba(0,0,0,0.10)',
-          'rgba(0,0,0,0.55)',
-          'rgba(0,0,0,0.92)',
-          'rgba(0,0,0,0.98)',
-        ]}
-        locations={[0, 0.28, 0.55, 0.82, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      <View style={styles.phoneRow}>
+        <TouchableOpacity
+          style={styles.prefixBtn}
+          onPress={() => setPrefixIdx((prefixIdx + 1) % PREFIXES.length)}
+          accessibilityRole="button"
+          accessibilityLabel={`Country code ${prefix}. Tap to change`}
+        >
+          <Text style={styles.prefixText}>{prefix}</Text>
+        </TouchableOpacity>
+        <TextInput
+          style={styles.phoneInput}
+          value={phone}
+          onChangeText={handlePhoneChange}
+          placeholder="912 345 678"
+          placeholderTextColor={colors.gray400}
+          keyboardType="phone-pad"
+          textContentType="telephoneNumber"
+          autoComplete="tel"
+          accessibilityLabel="Phone number"
+        />
+      </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      <Text style={styles.helper}>Your number is never shown on your profile.</Text>
+
+      {inputError ? (
+        <View style={styles.errorRow}>
+          <Ionicons name="alert-circle" size={15} color={colors.error} />
+          <Text style={styles.errorText}>{inputError}</Text>
+        </View>
+      ) : null}
+
+      <View style={{ flex: 1 }} />
+
+      {/* Explicit ToS/Privacy acceptance — required for App Review even
+          though the design mock omits it. Gates SEND CODE. */}
+      <TouchableOpacity
+        style={styles.eulaRow}
+        onPress={() => setEulaAccepted((v) => !v)}
+        activeOpacity={0.7}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: eulaAccepted }}
+        accessibilityLabel="I am 18 or older and agree to the Terms and Privacy Policy"
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
-            {/* Top bar — back chevron + Skip pill, matches Onboarding */}
-            <View style={styles.topBar}>
-              {navigation?.canGoBack?.() ? (
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => navigation.goBack()}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <Ionicons name="chevron-back" size={22} color="#FFFFFF" />
-                </TouchableOpacity>
-              ) : <View style={{ width: 36 }} />}
+        <View style={[styles.eulaBox, eulaAccepted && styles.eulaBoxChecked]}>
+          {eulaAccepted ? (
+            <Ionicons name="checkmark" size={13} color={colors.onGold} />
+          ) : null}
+        </View>
+        <Text style={styles.eulaText}>
+          I'm 18 or older and accept JuNubin's{' '}
+          <Text
+            style={styles.link}
+            onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'terms' })}
+          >
+            Terms
+          </Text>
+          {' '}&{' '}
+          <Text
+            style={styles.link}
+            onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'privacy' })}
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
+      </TouchableOpacity>
 
-              <LogoMark size={28} light />
-
-              <View style={{ width: 36 }} />
-            </View>
-
-            {/* Anchored content — sits low like the Onboarding pages */}
-            <Animated.View
-              style={[
-                styles.contentWrap,
-                { opacity: contentOpacity, transform: [{ translateY: contentTranslate }] },
-              ]}
-            >
-              <View style={styles.heroAccentLine} />
-              <Text style={styles.eyebrow}>JOIN THE COMMUNITY</Text>
-              <Text style={styles.subheading}>
-                Sign up with your email —{'\n'}we'll send you a verification code.
-              </Text>
-
-              {/* Email field — sole entry point for v1; phone OTP comes back later. */}
-              <View style={[styles.fieldCard, styles.fieldCardActive]}>
-                <Text style={[styles.fieldTitle, styles.fieldTitleActive]}>Email address</Text>
-                <View style={styles.inputGroup}>
-                  <TextInput
-                    style={[styles.input, styles.inputFull, emailActive && styles.inputActive]}
-                    placeholder="you@example.com"
-                    placeholderTextColor="rgba(255, 255, 255, 0.35)"
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={email}
-                    onChangeText={handleEmailChange}
-                    onFocus={() => setEmailActive(true)}
-                    onBlur={() => setEmailActive(false)}
-                    autoFocus
-                  />
-                </View>
-              </View>
-
-              {inputError ? (
-                <View style={styles.inputErrorRow}>
-                  <Ionicons name="alert-circle" size={15} color="#F05252" />
-                  <Text style={styles.inputErrorText}>{inputError}</Text>
-                </View>
-              ) : null}
-            </Animated.View>
-
-            {/* Bottom CTA — gradient pill matching Onboarding */}
-            <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
-              {step === 'input' && (
-                <TouchableOpacity
-                  style={styles.eulaRow}
-                  onPress={() => setEulaAccepted((v) => !v)}
-                  activeOpacity={0.7}
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: eulaAccepted }}
-                  accessibilityLabel="I am 18 or older and agree to the Terms and Privacy Policy"
-                >
-                  <View style={[styles.eulaBox, eulaAccepted && styles.eulaBoxChecked]}>
-                    {eulaAccepted ? (
-                      <Ionicons name="checkmark" size={14} color="#000" />
-                    ) : null}
-                  </View>
-                  <Text style={styles.eulaText}>
-                    I'm 18 or older and accept JuNubin's{' '}
-                    <Text style={styles.termsLink} onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'terms' })}>
-                      Terms
-                    </Text>
-                    {' '}&{' '}
-                    <Text style={styles.termsLink} onPress={() => navigation.navigate('SettingsInfo', { pageKey: 'privacy' })}>
-                      Privacy Policy
-                    </Text>
-                    .
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity
-                style={[styles.ctaWrap, (!hasInput || (step === 'input' && !eulaAccepted)) && styles.ctaWrapDisabled]}
-                onPress={handleSendCode}
-                disabled={!hasInput || !!inputError || (step === 'input' && !eulaAccepted)}
-                activeOpacity={0.9}
-              >
-                <LinearGradient
-                  colors={[WARM.primary, WARM.mid, WARM.deep]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.ctaGradient}
-                >
-                  <Text style={styles.ctaText}>Continue</Text>
-                  <View style={styles.ctaArrow}>
-                    <Ionicons name="arrow-forward" size={18} color="#FFF" />
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <Text style={styles.termsText}>
-                Screenshots are blocked everywhere in JuNubin.
-              </Text>
-            </View>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </View>
+      <Blueprint>
+        <TouchableOpacity
+          style={[styles.cta, (sending || !eulaAccepted) && styles.ctaDisabled]}
+          onPress={handleSendCode}
+          disabled={sending || !eulaAccepted}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Send code"
+          accessibilityState={{ disabled: sending || !eulaAccepted }}
+        >
+          <Text style={styles.ctaText}>SEND CODE</Text>
+        </TouchableOpacity>
+      </Blueprint>
+    </KeyboardAvoidingView>
   );
 };
 
-const getStyles = (colors, isDark) => StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#000000',
-  },
-  bgWrap: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  bgImage: {
-    width: W * 1.2,
-    height: H * 1.05,
-    marginLeft: -(W * 0.1),
-  },
+// ═══════════════════════════════════════════════════════════
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 24,
+    backgroundColor: colors.cream,
+    paddingHorizontal: 22,
   },
-  containerVerify: {
-    backgroundColor: colors.white,
-  },
-  // Top bar — back / logo / skip
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  skipText: {
-    fontSize: 15,
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.55)',
-    letterSpacing: 0.3,
-  },
-  backButtonVerify: {
+
+  backBtn: {
     width: 44,
     height: 44,
-    borderRadius: 4,
-    backgroundColor: colors.gray100,
+    marginLeft: -12,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-start',
-    marginBottom: 24,
-    marginTop: 4,
-  },
-  // Anchored content — heading + form sit toward the bottom of the screen,
-  // matching the cinematic anchor of OnboardingScreen.
-  contentWrap: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    paddingBottom: 12,
-  },
-  heroAccentLine: {
-    width: 38,
-    height: 2.5,
-    borderRadius: 2,
-    backgroundColor: WARM.primary,
-    marginBottom: 16,
-    opacity: 0.95,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: WARM.primary,
-    letterSpacing: 3.5,
-    marginBottom: 14,
-  },
-  // With the big "Get Started." heading gone, the subheading carries the
-  // page's intro tone — slightly bigger and brighter than a typical
-  // subhead so the field cards below still feel anchored to a heading.
-  subheading: {
-    fontSize: 17,
-    fontFamily: FontFamily.medium,
-    color: 'rgba(255, 255, 255, 0.85)',
-    marginBottom: 26,
-    lineHeight: 24,
-  },
-  // Field cards — frosted glass on dark
-  fieldCard: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-  },
-  fieldCardActive: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  fieldTitle: {
-    fontSize: 13,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.45)',
-    letterSpacing: 0.3,
-  },
-  fieldTitleActive: {
-    color: 'rgba(255, 255, 255, 0.9)',
-  },
-  // Or divider
-  orRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 14,
-    gap: 12,
-  },
-  orLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.12)',
-  },
-  orText: {
-    fontSize: 13,
-    fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.35)',
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginBottom: 8,
-    marginLeft: 2,
-  },
-  // Bottom anchored CTA + terms — matches OnboardingScreen's "Get Started" button
-  bottom: {
-    paddingTop: 10,
-  },
-  ctaWrap: {
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 14,
-    shadowColor: WARM.deep,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 14,
-  },
-  ctaWrapDisabled: {
-    opacity: 0.4,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  ctaGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    paddingVertical: 17,
-  },
-  ctaText: {
-    fontSize: 17,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: '#FFF',
-    letterSpacing: 0.3,
-  },
-  ctaArrow: {
-    width: 28,
-    height: 28,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 
-  // Method toggle
-  methodToggle: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 4,
-    padding: 3,
-    marginBottom: 16,
-  },
-  methodTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    borderRadius: 4,
-  },
-  methodTabActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  methodTabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    color: 'rgba(255, 255, 255, 0.5)',
-  },
-  methodTabTextActive: {
-    color: '#1A1A1A',
-  },
-
-  // Input
-  inputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 12,
-  },
-  countryCode: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  countryCodeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-  },
-  countryCodeText: {
-    ...Typography.bodySemibold,
-    color: '#FFFFFF',
-  },
-  phoneCodeBox: {
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  phoneCodeText: {
-    ...Typography.bodySemibold,
-    color: 'rgba(255, 255, 255, 0.6)',
-  },
-  switchMethod: {
+  h1: {
     marginTop: 18,
-    alignSelf: 'center',
+    marginBottom: 6,
+    fontSize: 36,
+    lineHeight: 38,
+    fontFamily: FontFamily.heading,
+    color: colors.black,
   },
-  switchMethodText: {
-    fontSize: 14,
+  sub: {
+    marginBottom: 26,
+    fontSize: 15,
+    lineHeight: 22,
+    fontFamily: FontFamily.regular,
+    color: colors.gray500,
+  },
+  link: {
     fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-    color: '#6AA7E0',
-  },
-  input: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    ...Typography.body,
-    color: '#FFFFFF',
-  },
-  inputFull: {
-    flex: 1,
-  },
-  inputActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
+    color: colors.accentDark,
   },
 
-  // Inline error
-  inputErrorRow: {
+  // ─── Phone step ───
+  phoneRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  prefixBtn: {
+    height: 56,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  prefixText: {
+    fontSize: 17,
+    fontFamily: FontFamily.regular,
+    color: colors.black,
+  },
+  phoneInput: {
+    flex: 1,
+    minWidth: 0,
+    height: 56,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 4,
+    paddingHorizontal: 16,
+    fontSize: 19,
+    letterSpacing: 0.76,
+    fontFamily: FontFamily.regular,
+    color: colors.black,
+  },
+  helper: {
+    marginTop: 12,
+    fontSize: 12.5,
+    lineHeight: 19,
+    fontFamily: FontFamily.regular,
+    color: colors.gray400,
+  },
+  errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 10,
   },
-  inputErrorText: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    color: '#F05252',
+  errorText: {
     flex: 1,
+    fontSize: 13,
+    fontFamily: FontFamily.semibold,
+    color: colors.error,
   },
 
   // EULA acceptance row
   eulaRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingHorizontal: 6,
-    paddingVertical: 12,
-    marginBottom: 12,
     gap: 10,
+    paddingVertical: 12,
+    marginBottom: 10,
   },
   eulaBox: {
-    width: 18, height: 18, borderRadius: 4,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.45)',
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'transparent',
+    width: 18,
+    height: 18,
     marginTop: 2,
+    borderRadius: 2,
+    borderWidth: 1.5,
+    borderColor: colors.gray400,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   eulaBoxChecked: {
-    backgroundColor: '#4F97E0',
-    borderColor: '#4F97E0',
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
   },
   eulaText: {
     flex: 1,
     fontSize: 12,
-    fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.78)',
     lineHeight: 18,
-  },
-
-  // Terms
-  termsText: {
-    fontSize: 11,
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.35)',
-    textAlign: 'center',
-    lineHeight: 17,
-  },
-  termsLink: {
-    color: 'rgba(255,255,255,0.55)',
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
+    color: colors.gray500,
   },
 
-
-  // ─── Verification Screen — frosted glass on cinematic dark ───
-  verifyContactInline: {
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
-  },
-  codeRow: {
-    flexDirection: 'row',
+  // Gold CTA in a Blueprint frame (design: 54px, condensed caps)
+  cta: {
+    height: 54,
+    backgroundColor: colors.gold,
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: 4,
-    marginBottom: 22,
   },
-  codeInput: {
-    width: 46,
+  ctaDisabled: {
+    opacity: 0.4,
+  },
+  ctaText: {
+    fontSize: 18,
+    letterSpacing: 1.44,
+    fontFamily: FontFamily.headingBold,
+    color: colors.onGold,
+  },
+
+  // ─── OTP step ───
+  otpRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  otpBox: {
+    flex: 1,
     height: 60,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  otpDigit: {
     fontSize: 26,
     fontFamily: FontFamily.heading,
-    color: '#FFFFFF',
-    textAlign: 'center',
+    color: colors.black,
   },
-  codeInputFilled: {
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderColor: '#4F97E0',
-  },
-  codeInputDisabled: {
-    opacity: 0.45,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderColor: 'rgba(255,255,255,0.06)',
-  },
-  attemptsLockedHint: {
+  resendLine: {
+    marginTop: 14,
     fontSize: 13,
-    fontFamily: FontFamily.medium,
-    color: '#B3D6FA',
-    textAlign: 'center',
-    marginTop: -6,
-    marginBottom: 14,
-    paddingHorizontal: 16,
-    lineHeight: 18,
-  },
-  resendBtn: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  resendText: {
-    fontSize: 14,
     fontFamily: FontFamily.regular,
-    color: 'rgba(255,255,255,0.55)',
+    color: colors.gray400,
   },
-  resendLink: {
-    fontSize: 14,
-    fontFamily: FontFamily.bold,
-    fontWeight: '700',
-    color: WARM.link,
-  },
-  resendTextDisabled: {
-    fontSize: 14,
+  resendDisabled: {
     fontFamily: FontFamily.medium,
-    color: 'rgba(255,255,255,0.40)',
+    color: colors.gray400,
+  },
+  lockedHint: {
+    marginTop: 10,
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: FontFamily.medium,
+    color: colors.gray500,
   },
 
-  // Country picker — tall bottom sheet
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
-  },
-  pickerSheet: {
-    backgroundColor: '#1A1A1A',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 40,
-    minHeight: '75%',
-  },
-  pickerTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  pickerRow: {
+  // In-app keypad
+  keypad: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingBottom: 6,
+  },
+  key: {
+    // 3 columns with two 6px gutters between them.
+    flexBasis: '32%',
+    flexGrow: 1,
+    height: 52,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: 4,
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
   },
-  pickerRowActive: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+  keyGhost: {
+    backgroundColor: 'transparent',
   },
-  pickerFlag: {
+  keyLabel: {
     fontSize: 22,
-  },
-  pickerName: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: FontFamily.medium,
-    color: '#FFFFFF',
-  },
-  pickerCode: {
-    fontSize: 14,
-    fontFamily: FontFamily.semibold,
-    color: 'rgba(255,255,255,0.5)',
+    fontFamily: FontFamily.headingMedium,
+    color: colors.black,
   },
 });
 

@@ -16,7 +16,7 @@ const INFO_PAGES = {
     sections: [
       {
         heading: 'Primary Email',
-        body: 'support@eastside.app',
+        body: 'support@junubin.app',
       },
       {
         heading: 'Support Hours',
@@ -50,11 +50,11 @@ const INFO_PAGES = {
     sections: [
       {
         heading: 'Support',
-        body: 'support@eastside.app',
+        body: 'support@junubin.app',
       },
       {
         heading: 'Business',
-        body: 'partnerships@eastside.app',
+        body: 'partnerships@junubin.app',
       },
     ],
   },

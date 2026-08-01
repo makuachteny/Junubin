@@ -47,6 +47,7 @@ jest.mock('../../api/hooks/useRealtime', () => ({
     onMessage: () => () => {},
     onTypingStart: () => () => {},
     onTypingStop: () => () => {},
+    onReadReceipt: () => () => {},
     emitTypingStart: jest.fn(),
     emitTypingStop: jest.fn(),
     emitReadReceipt: jest.fn(),
@@ -147,7 +148,9 @@ describe('Chat interactive actions', () => {
 
   it('sends a plain text message from the composer', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
+    // A real conversationId is required — ChatScreen refuses to
+    // fake-send into a conversationless thread.
+    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] }, conversationId: 'conv-1' } };
     const { getByPlaceholderText, getByTestId, getByText } = render(
       <ChatScreen navigation={navigation} route={route} />
     );

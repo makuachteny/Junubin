@@ -5,8 +5,9 @@
 // floating chrome (city pill, Map|List segments, quick chips). This
 // component no longer draws its own filter row — HomeScreen passes the
 // active quick filter down via `quickFilter`. Pins are square photo
-// tiles; the current user is a pulsing accent dot dead-center; the
-// tapped pin's preview is a Blueprint card that rises from the bottom.
+// tiles ringed cream (flag gold when selected); the current user is a
+// pulsing gold dot dead-center; the tapped pin's preview is a
+// Blueprint card that rises from the bottom.
 //
 // Privacy contract (must stay in sync with 00032_share_location_optin.sql
 // and 00047_social_pivot.sql):
@@ -74,20 +75,6 @@ try {
 // user coords would round Manhattan addresses to a city block.
 const bucketCoord = (n) => Math.round(n * 1000) / 1000;
 
-// Mode-case quirk: demo roster uses capitalized 'Dating' / 'Social' /
-// 'Both' (matches the client's UI toggle vocabulary), but real users
-// from the server carry lowercase 'dating' / 'social' (the 00025
-// CHECK constraint). Normalize before comparing.
-const norm = (v) => String(v || '').toLowerCase();
-
-const matchesMode = (userMode, target) => {
-  const m = norm(userMode);
-  const t = norm(target);
-  if (t === 'dating') return m === 'dating' || m === 'both';
-  if (t === 'social') return m === 'social' || m === 'both';
-  return true;
-};
-
 // Project a coordinate `distanceKm` away from `center` along
 // `bearingDeg` (0 = north, 90 = east). Standard great-circle math; we
 // only need ≤ ~5km accuracy so flat-earth approximation would also
@@ -143,10 +130,9 @@ const isActiveThisWeek = (person) => {
 // `center === null` (location permission denied) falls back to the
 // roster's static city coords so the map at least shows the demo
 // users somewhere meaningful.
-const peopleForMode = (mode, center) => {
+const demoPeople = (center) => {
   if (!DEMO_DATA_ENABLED) return [];
   return DEMO_ROSTER
-    .filter((u) => matchesMode(u.mode, mode))
     .map((u, i) => {
       if (!center) {
         if (!u.coords) return null;
@@ -164,10 +150,6 @@ const peopleForMode = (mode, center) => {
 };
 
 export default function PeopleMap({
-  // `mode` is a legacy dating/social discriminator. It defaults to null
-  // now — the app has one mode — but the prop is kept so any remaining
-  // caller doesn't change behaviour unexpectedly.
-  mode = null,
   onPersonPress,
   // Height of the floating chrome HomeScreen draws over the map —
   // overlays rendered here must clear it.
@@ -217,7 +199,7 @@ export default function PeopleMap({
           if (cancelled) return;
           setLocationError('Enable Location in Settings to center the map on you.');
           // Centroid fallback — average the static city coords.
-          const fallback = peopleForMode(mode, null);
+          const fallback = demoPeople(null);
           if (fallback.length > 0) {
             const lat = fallback.reduce((s, p) => s + p.coords.latitude, 0) / fallback.length;
             const lng = fallback.reduce((s, p) => s + p.coords.longitude, 0) / fallback.length;
@@ -242,10 +224,7 @@ export default function PeopleMap({
       }
     })();
     return () => { cancelled = true; };
-    // Runs on mount and again the moment consent flips to true. The
-    // centroid fallback uses the current mode snapshot, which is fine —
-    // the map's pan gestures handle further navigation.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Runs on mount and again the moment consent flips to true.
   }, [disclosureAccepted]);
 
   // The "YOU" dot pulses forever — a slow accent ring expanding out of
@@ -274,10 +253,7 @@ export default function PeopleMap({
   useEffect(() => {
     if (!center) return;
     let cancelled = false;
-    discoverService.getNearbyUsers({
-      center,
-      mode: mode === 'Dating' ? 'dating' : 'social',
-    }).then(({ users }) => {
+    discoverService.getNearbyUsers({ center }).then(({ users }) => {
       if (cancelled) return;
       setLivePeople(users || []);
     }).catch(() => {
@@ -287,7 +263,7 @@ export default function PeopleMap({
     // center is a fresh object each render so we depend on its
     // primitive parts to avoid useless refetches.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [center?.latitude, center?.longitude, mode]);
+  }, [center?.latitude, center?.longitude]);
 
   const allPeople = useMemo(() => {
     // Real users hide the demo roster entirely — same hide-when-real
@@ -296,10 +272,10 @@ export default function PeopleMap({
     // caller (early-launch state). The moment one real user opts
     // into shareLocation within range, the demo disappears.
     if (livePeople.length > 0) return livePeople;
-    return peopleForMode(mode, center);
+    return demoPeople(center);
   },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [mode, center?.latitude, center?.longitude, livePeople],
+    [center?.latitude, center?.longitude, livePeople],
   );
 
   // Apply the quick filter from HomeScreen's floating chips.
@@ -564,7 +540,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     elevation: 5,
   },
   pinSelected: {
-    borderColor: colors.accent,
+    borderColor: colors.ssGold,
   },
   pinPhoto: {
     width: '100%',
@@ -583,21 +559,21 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ssGold,
   },
   youDot: {
     width: 15,
     height: 15,
-    borderRadius: 8,
-    backgroundColor: colors.accentDark,
+    borderRadius: 7.5,
+    backgroundColor: colors.ssGold,
     borderWidth: 3,
     borderColor: colors.cream,
   },
   youLabel: {
-    fontFamily: FontFamily.heading,
+    fontFamily: FontFamily.headingBold,
     fontSize: 10.5,
-    letterSpacing: 2,
-    color: colors.accentDark,
+    letterSpacing: 1.5,
+    color: colors.ssGoldDark,
     marginTop: 4,
   },
 

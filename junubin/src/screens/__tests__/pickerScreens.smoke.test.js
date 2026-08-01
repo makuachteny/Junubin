@@ -8,7 +8,4 @@ describe('picker screens load without wiring errors', () => {
     expect(typeof require('../EditProfileScreen').default).toBe('function');
   });
 
-  it('PreferenceSelectScreen exports a component', () => {
-    expect(typeof require('../PreferenceSelectScreen').default).toBe('function');
-  });
 });

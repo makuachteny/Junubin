@@ -3,13 +3,12 @@
 // Two segments in one surface:
 //   Messages — the conversation inbox (accepted connections).
 //   Requests — pending incoming message requests, rendered inline as
-//              Blueprint cards with Accept / Decline. This replaces
-//              the old "navigate away to MessageRequests" flow for the
-//              common case; the MessageRequests route stays registered
-//              for deep links and the Sent tab.
+//              Blueprint cards with Accept / Decline. Requests live
+//              here and only here — there is no standalone requests
+//              screen in the redesign.
 //
-// Accept reuses the same service flow as MessageRequestsScreen
-// (acceptMessageRequest → open the Chat). Declining is silent.
+// Accept runs the accept_message_request flow, then opens the new
+// Chat. Declining is silent.
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
@@ -24,7 +23,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GraffitiChat } from '../components/icons';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';

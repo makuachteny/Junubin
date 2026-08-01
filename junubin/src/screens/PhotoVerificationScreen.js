@@ -325,9 +325,8 @@ const getStyles = (colors) => StyleSheet.create({
     marginBottom: 4,
   },
   stepTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
+    fontSize: 24,
+    fontFamily: FontFamily.heading,
     color: colors.black,
     textAlign: 'center',
     letterSpacing: -0.3,
@@ -346,7 +345,7 @@ const getStyles = (colors) => StyleSheet.create({
   cameraPlaceholder: {
     width: 240,
     height: 320,
-    borderRadius: 24,
+    borderRadius: 4,
     backgroundColor: colors.gray100,
     justifyContent: 'center',
     alignItems: 'center',
@@ -357,7 +356,9 @@ const getStyles = (colors) => StyleSheet.create({
   reviewImage: {
     width: 220,
     height: 280,
-    borderRadius: 20,
+    borderRadius: 0,
+    borderWidth: 1,
+    borderColor: colors.separator,
     backgroundColor: colors.gray300,
   },
   reviewActions: {

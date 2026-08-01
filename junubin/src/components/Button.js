@@ -24,13 +24,8 @@ function getVariant(variant, colors, isDark) {
       return {
         container: {
           backgroundColor: colors.accent,
-          shadowColor: colors.accent,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.35,
-          shadowRadius: 16,
-          elevation: 8,
         },
-        textColor: '#FFFFFF',
+        textColor: isDark ? colors.cream : '#FFFFFF',
       };
     case 'dark':
       return {
@@ -87,16 +82,19 @@ function getVariant(variant, colors, isDark) {
         textColor: '#FFFFFF',
       };
     case 'gold':
+      // The redesign's primary CTA: flag gold, ink text, condensed
+      // caps ("CONTINUE WITH PHONE", "SEND CODE", "SAVE"). Square and
+      // flat — the Industry language elevates with hairlines, not glow.
       return {
         container: {
           backgroundColor: colors.gold,
-          shadowColor: colors.gold,
-          shadowOffset: { width: 0, height: 8 },
-          shadowOpacity: 0.30,
-          shadowRadius: 16,
-          elevation: 8,
         },
-        textColor: '#1A1A1A',
+        textColor: colors.onGold,
+        text: {
+          fontFamily: FontFamily.headingBold,
+          textTransform: 'uppercase',
+          letterSpacing: 1.4,
+        },
       };
     case 'royal':
       return {
@@ -134,7 +132,9 @@ export default function Button({
   const opacityAnim = useRef(new Animated.Value(1)).current;
 
   const s = SIZES[size];
-  const radius = s.height / 2;
+  // Industry design language: buttons are square objects (radius 4),
+  // not pills. This single constant reskins every Button in the app.
+  const radius = 4;
   const v = getVariant(variant, colors, isDark);
 
   const handlePressIn = useCallback(() => {
@@ -208,6 +208,7 @@ export default function Button({
                     color: v.textColor,
                     textAlign: 'center',
                   },
+                  v.text,
                   textStyle,
                 ]}
               >

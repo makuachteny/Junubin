@@ -114,9 +114,7 @@ const linkingConfig = {
   config: {
     screens: {
       ProfileSetup:       { path: 'survey', parse: { step: sanitizeSurveyStep } },
-      AccessibilitySurvey: 'accessibility-survey',
       Chat:               { path: 'chat/:conversationId' },
-      MessageRequests:    'message-requests',
       Main: {
         screens: {
           HomeTab:      'home',

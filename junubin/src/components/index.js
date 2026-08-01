@@ -12,7 +12,6 @@ export { default as UnderlineTabs } from './UnderlineTabs';
 // ── People discovery ──
 export { default as PeopleMap } from './PeopleMap';
 export { default as LocationDisclosure } from './LocationDisclosure';
-export { default as ProfileCard } from './ProfileCard';
 export { default as OnlinePulseDot } from './OnlinePulseDot';
 
 // ── Profile ──

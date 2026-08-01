@@ -39,7 +39,7 @@ jest.mock('react-native-safe-area-context', () => ({
 const COLORS = {
   cream: '#FFF', black: '#111', white: '#FFF',
   gray300: '#CCC', gray400: '#A0A0A0', gray500: '#888', gray600: '#666',
-  accent: '#2E7FD0', accentDark: '#175A9E',
+  accent: '#0F8FD6', accentDark: '#085F91',
   accentTint08: 'rgba(46,127,208,0.08)', accentTint15: 'rgba(46,127,208,0.15)',
   surfaceMuted: '#EDF4FB', separator: '#E7E7E7',
 };

@@ -19,22 +19,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const QUEUE_KEY = '@junubin_offline_queue';
 const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — dating actions stale fast
 
+// Sentinel a handler returns to say "this action isn't mine — keep it
+// for a later drain". Without it, a handler that silently ignored an
+// action counted as success and the queue DELETED it: draining the
+// queue inside chat A permanently destroyed chat B's pending sends.
+export const KEEP = Symbol('offline-queue-keep');
+
 // Build a stable identity key for an action so we can dedupe on
-// enqueue + on replay. Each `kind` has its own natural key:
+// enqueue + on replay. Each shape has its own natural key:
 //
-//   - text        → ('text', conversationId, tempId)
+//   - type 'text_message' → ('text', conversationId, tempId)   (ChatScreen)
 //
-// Anything that doesn't match a known shape gets a fallback identity
-// based on the JSON of the action; same shape = same key. (The
-// dating-era 'swipe' / 'voiceNote' / 'chatImage' kinds are gone —
-// stale entries from an older build fall through to the default
-// branch and are dropped by the replay handler.)
+// The identity must NOT hash volatile fields (queuedAt is stamped on
+// every enqueue) or a retry of the same message never matches its
+// stored copy and fans out into duplicates.
 function actionIdentity(a) {
   if (!a || typeof a !== 'object') return JSON.stringify(a);
-  switch (a.kind) {
-    case 'text':      return `text:${a.conversationId || ''}:${a.tempId || a.body || ''}`;
-    default:          return `${a.kind || 'unknown'}:${JSON.stringify(a)}`;
+  if (a.type === 'text_message' || a.kind === 'text') {
+    return `text:${a.conversationId || ''}:${a.tempId || a.body || ''}`;
   }
+  const { queuedAt, ...stable } = a;
+  return `${a.kind || a.type || 'unknown'}:${JSON.stringify(stable)}`;
 }
 
 export async function enqueueAction(action) {
@@ -96,7 +101,10 @@ export async function processQueue(handler, opts = {}) {
       }
 
       try {
-        await handler(action);
+        const result = await handler(action);
+        // KEEP = "not mine, retain for a later drain" (e.g. a chat
+        // screen draining only its own conversation's sends).
+        if (result === KEEP) failed.push(action);
       } catch {
         failed.push(action);
       }

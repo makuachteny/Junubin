@@ -38,7 +38,7 @@ import OnlinePulseDot from '../components/OnlinePulseDot';
 import { useScreenshotProtection } from '../utils/useScreenshotProtection';
 
 import { interactiveStore } from '../utils/interactiveStore';
-import { enqueueAction, processQueue } from '../utils/offlineQueue';
+import { enqueueAction, processQueue, KEEP } from '../utils/offlineQueue';
 import { useNetworkStatus } from '../utils/useNetworkStatus';
 import { useAccessibilityPreferences } from '../accessibility';
 
@@ -161,7 +161,7 @@ export default function ChatScreen({ navigation, route }) {
   // Mutual-follow state, kept for the header's "connected" affordance.
   // Plain text isn't gated here — who can open the thread (a mutual
   // connection or an accepted message request) controls that upstream.
-  const { isFriend } = useFollow(match.id);
+  const { isFriend } = useFollow(match.userId || match.id);
 
   // For real conversations: start empty; getMessages + realtime fill in.
   // For demo conversations: pre-fill from mockMessages keyed by the
@@ -275,7 +275,7 @@ export default function ChatScreen({ navigation, route }) {
 
   const {
     onMessage, onTypingStart, onTypingStop,
-    emitTypingStart, emitTypingStop, emitReadReceipt,
+    emitTypingStart, emitTypingStop, emitReadReceipt, onReadReceipt,
     joinConversation, leaveConversation,
   } = useRealtime(currentUser?.id);
 
@@ -303,7 +303,10 @@ export default function ChatScreen({ navigation, route }) {
           text: m.text,
           time: m.time,
           type: m.type || 'text',
-          read: true,
+          // Keep the service's computed receipt: for my messages it's
+          // Boolean(readAt). Hardcoding true here was the bug that made
+          // every sent message show the "Read" double-check forever.
+          read: m.read,
         })));
       }
     }).catch((err) => {
@@ -321,15 +324,21 @@ export default function ChatScreen({ navigation, route }) {
     const unsub = onMessage(conversationId, (msg) => {
       if (!msg) return;
       if (sentIdsRef.current.has(msg.id)) return;
+      // Self-sent messages arrive via the optimistic path + REST ack.
+      // The postgres_changes echo can beat the HTTP response on a slow
+      // link, in which case sentIdsRef doesn't know the id yet and the
+      // bubble would double. Own-sender inserts are never appended from
+      // realtime.
+      if (msg.senderId && msg.senderId === currentUser?.id) return;
 
-      setMessages((prev) => [...prev, {
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, {
         id: msg.id,
-        sender: msg.senderId === currentUser?.id ? 'me' : 'them',
+        sender: 'them',
         text: msg.body,
         type: msg.type || 'text',
         time: new Date(msg.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
         read: true,
-      }]);
+      }]));
 
       // Bump the incoming-message counter for scam-detection
       // re-evaluation. Skip self-sent messages — those go through
@@ -374,6 +383,21 @@ export default function ChatScreen({ navigation, route }) {
     return () => { unsubStart(); unsubStop(); };
   }, [conversationId, onTypingStart, onTypingStop]);
 
+  // Peer opened the thread → flip my delivered bubbles to "Read".
+  // Without this subscription the 00022 receipt broadcast was emitted
+  // but never consumed, so the double-check state only updated on a
+  // full history refetch.
+  useEffect(() => {
+    if (!conversationId || isDemoChat) return undefined;
+    const unsub = onReadReceipt(conversationId, (payload) => {
+      if (!payload || payload.userId === currentUser?.id) return;
+      setMessages((prev) => prev.map((m) => (
+        m.sender === 'me' && !m.read ? { ...m, read: true } : m
+      )));
+    });
+    return unsub;
+  }, [conversationId, isDemoChat, onReadReceipt, currentUser?.id]);
+
   // Emit read receipt when chat opens
   useEffect(() => {
     if (conversationId) {
@@ -409,7 +433,10 @@ export default function ChatScreen({ navigation, route }) {
   useEffect(() => {
     if (!isConnected || !conversationId) return;
     processQueue(async (action) => {
-      if (action.conversationId !== conversationId) return;
+      // Not this conversation's action — RETAIN it for whichever
+      // screen owns it. Returning undefined here used to count as
+      // success and permanently deleted other chats' pending sends.
+      if (action.conversationId !== conversationId) return KEEP;
       if (action.type === 'game_answer') return;
       if (action.type === 'text_message') {
         const result = await chatService.sendMessage(action.conversationId, action.body);
@@ -417,7 +444,7 @@ export default function ChatScreen({ navigation, route }) {
           sentIdsRef.current.add(result.id);
           if (action.tempId) {
             setMessages((prev) => prev.map((m) => (
-              m.id === action.tempId ? { ...m, id: result.id, read: true, status: 'sent' } : m
+              m.id === action.tempId ? { ...m, id: result.id, read: false, status: 'sent' } : m
             )));
           }
         }
@@ -458,7 +485,7 @@ export default function ChatScreen({ navigation, route }) {
           length_bucket: text.length < 20 ? 'short' : text.length < 100 ? 'medium' : 'long',
         });
         setMessages((prev) => prev.map((m) => (
-          m.id === tempId ? { ...m, id: result.id, read: true, status: 'sent' } : m
+          m.id === tempId ? { ...m, id: result.id, read: false, status: 'sent' } : m
         )));
       }
     } catch (err) {
@@ -474,6 +501,17 @@ export default function ChatScreen({ navigation, route }) {
 
   const handleSend = useCallback(() => {
     if (!inputText.trim()) return;
+    // A real (non-demo) thread without a conversationId has nowhere to
+    // persist — refuse loudly instead of rendering a bubble that only
+    // pretends to send. Callers are expected to resolve a conversation
+    // (get_or_create_direct_conversation RPC) before navigating here.
+    if (!conversationId && !isDemoChat) {
+      Alert.alert(
+        "Can't send yet",
+        'This conversation could not be opened. Go back and try again from their profile.',
+      );
+      return;
+    }
     const text = inputText.trim();
 
     // Stop typing indicator when sending
@@ -530,18 +568,6 @@ export default function ChatScreen({ navigation, route }) {
       {
         text: 'Safety Center',
         onPress: () => navigation.navigate('SettingsInfo', { pageKey: 'safety' }),
-      },
-      {
-        text: 'Clear Chat History',
-        style: 'destructive',
-        onPress: () => Alert.alert(
-          'Clear chat history?',
-          'This will remove every message in this chat for you. The other person can still see them.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Clear', style: 'destructive', onPress: () => setMessages([]) },
-          ]
-        ),
       },
       {
         text: 'Remove connection',
