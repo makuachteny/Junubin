@@ -829,7 +829,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                 accessibilityLabel={step.cta === 'ENTER JUNUBIN' ? 'Enter JuNubin' : 'Continue'}
               >
                 {saving ? (
-                  <ActivityIndicator color={colors.cream} />
+                  <ActivityIndicator color={colors.onGold} />
                 ) : (
                   <Text style={styles.ctaText}>{step.cta}</Text>
                 )}
@@ -900,11 +900,22 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   titleSection: {
     paddingHorizontal: 22,
   },
-  kicker: {
+  kickerRow: {
     marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  // 8px flag-colored square before "STEP n OF 5" — color set inline
+  // per step.
+  kickerSquare: {
+    width: 8,
+    height: 8,
+  },
+  kicker: {
     fontSize: 12,
     fontFamily: FontFamily.heading,
-    letterSpacing: 2,
+    letterSpacing: 2.4,
     color: colors.accentDark,
   },
   stepTitle: {
