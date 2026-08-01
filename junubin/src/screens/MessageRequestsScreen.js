@@ -369,7 +369,7 @@ export default function MessageRequestsScreen({ navigation, route }) {
 const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.cream,
   },
   header: {
     flexDirection: 'row',
@@ -384,7 +384,8 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: {
-    ...Typography.sectionTitle,
+    fontSize: 22,
+    fontFamily: FontFamily.heading,
     color: colors.black,
   },
   tabWrap: {
@@ -417,7 +418,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   // ─── Received: a card per request so the note has room ───
   card: {
     backgroundColor: colors.cardBg,
-    borderRadius: 16,
+    borderRadius: 0,
     padding: 14,
     gap: 10,
     borderWidth: StyleSheet.hairlineWidth,
@@ -429,15 +430,19 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     gap: 12,
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
     backgroundColor: colors.gray300,
   },
   avatarSm: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
     backgroundColor: colors.gray300,
   },
   headText: {
@@ -450,10 +455,8 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     gap: 4,
   },
   name: {
-    ...Typography.bodySmallMedium,
-    fontSize: 15,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
+    fontSize: 17,
+    fontFamily: FontFamily.heading,
     color: colors.black,
   },
   meta: {
@@ -462,8 +465,13 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   },
   note: {
     ...Typography.bodySmall,
+    fontSize: 13.5,
     color: colors.black,
     lineHeight: 20,
+    backgroundColor: colors.surfaceMuted,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 2,
   },
   notePlaceholder: {
     fontStyle: 'italic',
@@ -477,12 +485,12 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   declineBtn: {
     flex: 1,
     minHeight: 44,
-    borderRadius: 22,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray300,
+    borderWidth: 1,
+    borderColor: colors.separator,
   },
   declineText: {
     ...Typography.label,
@@ -492,7 +500,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   acceptBtn: {
     flex: 1,
     minHeight: 44,
-    borderRadius: 22,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.accent,
@@ -514,7 +522,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     gap: 12,
     paddingVertical: prefs?.largerTouchTargets ? 14 : 11,
     paddingHorizontal: 12,
-    borderRadius: 14,
+    borderRadius: 0,
     backgroundColor: colors.cardBg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
@@ -522,7 +530,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   statusPill: {
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 999,
+    borderRadius: 4,
     backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
   },
   statusPillAccepted: {

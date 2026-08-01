@@ -143,25 +143,87 @@ describe('Onboarding / open-to flow', () => {
     jest.useRealTimers();
   });
 
-  it('renders the open-to step first on ProfileSetup', () => {
-    // "What are you open to?" replaced the Dating/Socialize purpose
-    // cards in the social pivot. It leads because it is what makes
-    // someone findable by the right people.
+  it('renders the name step first on ProfileSetup (5-step Industry flow)', () => {
+    // The redesign collapses onboarding to 5 grouped steps. Step 1 is
+    // name + birthday ("What should we call you?").
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
     const { getByText } = render(<ProfileSetupScreen navigation={nav} route={route} />);
-    expect(getByText('What are you open to?')).toBeTruthy();
+    expect(getByText('What should we call you?')).toBeTruthy();
+    expect(getByText('STEP 1 OF 5')).toBeTruthy();
   });
 
-  it('open-to step shows the community badges', () => {
+  it('open-to step (step 2) shows the community chips', () => {
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = { params: {} };
-    const { getByTestId } = render(
+    // resumeAt seeks straight to the openTo step.
+    const route = { params: { resumeAt: 'openTo' } };
+    const { getByTestId, getByText } = render(
       <ProfileSetupScreen navigation={nav} route={route} />
     );
+    expect(getByText('What are you open to?')).toBeTruthy();
     expect(getByTestId('open-to-friendship')).toBeTruthy();
     expect(getByTestId('open-to-community')).toBeTruthy();
     expect(getByTestId('open-to-student')).toBeTruthy();
+  });
+
+  it('maps stale eligibility resume ids onto the nearest surviving step', () => {
+    const nav = { navigate: jest.fn(), goBack: jest.fn() };
+
+    // `country` is no longer asked — nearest step is city (step 3).
+    let r = render(
+      <ProfileSetupScreen navigation={nav} route={{ params: { resumeAt: 'country' } }} />
+    );
+    expect(r.getByText('Which city are you in?')).toBeTruthy();
+    r.unmount();
+
+    // `photos` maps to the final Photo & visibility step.
+    r = render(
+      <ProfileSetupScreen navigation={nav} route={{ params: { resumeAt: 'photos' } }} />
+    );
+    expect(r.getByText('Photo & visibility')).toBeTruthy();
+    r.unmount();
+
+    // Fields moved to EditProfile (interests / prompts) land on the
+    // last step so the user can finish and polish later.
+    r = render(
+      <ProfileSetupScreen navigation={nav} route={{ params: { resumeAt: 'interests' } }} />
+    );
+    expect(r.getByText('Photo & visibility')).toBeTruthy();
+    r.unmount();
+
+    // Legacy dating-era ids land on openTo.
+    r = render(
+      <ProfileSetupScreen navigation={nav} route={{ params: { resumeAt: 'sexuality' } }} />
+    );
+    expect(r.getByText('What are you open to?')).toBeTruthy();
+  });
+
+  it('skips only on the city and background steps, and shows the visibility consent last', () => {
+    const nav = { navigate: jest.fn(), goBack: jest.fn() };
+
+    // Steps 1 and 2 are not skippable.
+    let r = render(
+      <ProfileSetupScreen navigation={nav} route={{ params: {} }} />
+    );
+    expect(r.queryByText('Skip')).toBeNull();
+    r.unmount();
+
+    // Step 3 (city) is skippable — Skip advances to background.
+    r = render(
+      <ProfileSetupScreen navigation={nav} route={{ params: { resumeAt: 'city' } }} />
+    );
+    fireEvent.press(r.getByText('Skip'));
+    expect(r.getByText('Your background & languages')).toBeTruthy();
+    expect(r.getByTestId('language-Juba Arabic')).toBeTruthy();
+    // Step 4 is also skippable — Skip lands on Photo & visibility.
+    fireEvent.press(r.getByText('Skip'));
+    expect(r.getByText('Photo & visibility')).toBeTruthy();
+    // Final step: no Skip, real locationVisibility radios, ENTER CTA.
+    expect(r.queryByText('Skip')).toBeNull();
+    expect(r.getByTestId('location-visibility-off')).toBeTruthy();
+    expect(r.getByTestId('location-visibility-city')).toBeTruthy();
+    expect(r.getByTestId('location-visibility-coarse')).toBeTruthy();
+    expect(r.getByText('ENTER JUNUBIN')).toBeTruthy();
   });
 
   it('asks no dating questions anywhere in onboarding', () => {
@@ -221,8 +283,8 @@ describe('Onboarding / open-to flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    // First step is the open-to badges, not the name field.
-    expect(await findByText('What are you open to?')).toBeTruthy();
+    // First step of the 5-step flow is name + birthday.
+    expect(await findByText('What should we call you?')).toBeTruthy();
   });
 
   it('unauthenticated user sees Onboarding', async () => {

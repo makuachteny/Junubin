@@ -78,32 +78,18 @@ const STEP_ORDER = [
   // is NOT gated here — gating a field the survey lets you skip is
   // what produces a nudge the user can never satisfy.
   //
-  // Country IS gated: "where are my South Sudanese people near me or
-  // in the city I care about" doesn't work without it, and
-  // ProfileSetup requires it to advance. City stays optional.
-  { id: 'country',     test: (p, u) => !!u?.countryCode },
-  // Photos: ProfileSetup tightened to ≥ 3 photos to ship. Keep the
-  // gate in lock-step or users finish setup but the eligibility check
-  // immediately bounces them right back here. Previous value (≥ 2)
-  // let users through ProfileSetup while still flagging photos
-  // incomplete — a quiet inconsistency that surfaced as the survey
-  // popup never going away.
-  { id: 'photos',      test: (p, u) => (u?.photos?.length || 0) >= 3 },
-  // Prompt answer — what ProfileSetup ACTUALLY collects on the
-  // "Answer a profile prompt" step. The old `bio` test gated on
-  // `Profile.bio`, but ProfileSetup never writes that column (only
-  // EditProfile does). Result: bio?.length >= 30 was always false,
-  // so the survey-nudge popup kept firing on every dating action no
-  // matter how complete the user's setup was. Bio remains an
-  // optional "level-up" item via profileCompleteness.js — it's a
-  // soft score, not a gate.
-  { id: 'prompts', test: (p) => (p?.promptAnswer?.length || 0) >= 10 },
-  // Interests — ProfileSetup requires ≥ 3 selections to advance past
-  // the interests step. Mirror that gate here so a user whose
-  // profile somehow lost the interests column (legacy data, mid-edit
-  // crash) gets routed back to the interests step rather than slipping
-  // through the eligibility check.
-  { id: 'interests', test: (p) => Array.isArray(p?.interests) && p.interests.length >= 3 },
+  // Photos: the 5-step onboarding (Industry redesign) requires exactly
+  // one photo, so the gate is ≥ 1 — keeping it higher would bounce
+  // every fresh signup straight back into a nudge for a step the flow
+  // never asked for. More photos are a soft profileCompleteness item.
+  { id: 'photos',      test: (p, u) => (u?.photos?.length || 0) >= 1 },
+  // country / prompts / interests are deliberately NOT gated any more:
+  // the 5-step onboarding doesn't collect them (city is skippable,
+  // prompts and interests moved to EditProfile via the Profile tab's
+  // strength checklist). Gating a field onboarding never asks for
+  // produces a nudge the user can't satisfy without detouring into
+  // EditProfile — exactly the pattern the redesign removed. They stay
+  // soft scores in profileCompleteness.js.
   // NOTE: the dating-only steps (`interestedIn`, `datingIntentions`,
   // `survey`) were removed in the community pivot along with the
   // ProfileSetup steps that collected them. `onlyDating` is still

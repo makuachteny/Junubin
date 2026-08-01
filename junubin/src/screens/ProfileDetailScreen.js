@@ -649,10 +649,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Photo ──
   photoWrap: { width: SW, height: PHOTO_H, backgroundColor: colors.gray200 },
-  backBtn: { position: 'absolute', left: 14, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
-  moreBtn: { position: 'absolute', right: 14, width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  backBtn: { position: 'absolute', left: 14, width: 44, height: 44, borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  moreBtn: { position: 'absolute', right: 14, width: 44, height: 44, borderRadius: 4, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', zIndex: 10 },
   photoGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 160 },
-  inlinePhotoCard: { marginHorizontal: 18, borderRadius: 20, overflow: 'hidden', marginVertical: 0, height: (SW - 36) * 1.25, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 16, elevation: 8 },
+  inlinePhotoCard: { marginHorizontal: 18, borderRadius: 0, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.separator, overflow: 'hidden', marginVertical: 0, height: (SW - 36) * 1.25 },
   nameOverlay: { position: 'absolute', bottom: 16, left: 18, right: 18, zIndex: 5 },
   nameRow: { flexDirection: 'row', alignItems: 'center' },
   nameText: { fontSize: 30, fontWeight: '800', fontFamily: FontFamily.extrabold, color: '#FFF', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
@@ -694,7 +694,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   // ── Quick facts ──
   factsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14, marginTop: 8 },
-  factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  factPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: colors.surfaceMuted, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.separator, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 },
   factText: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
   factFilled: { backgroundColor: colors.black },
   factFilledText: { fontSize: 13, fontWeight: '700', fontFamily: FontFamily.bold, color: isDark ? '#1A1A1A' : '#FFF' },
@@ -720,22 +720,23 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ── Identity — inline pills ──
   identitySection: { marginBottom: 6 },
-  identityPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
+  identityPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.surfaceMuted, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.separator, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4 },
   identityEmoji: { fontSize: 16 },
   identityLabel: { fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.black },
 
   // ── Sections ──
   section: { marginBottom: 4 },
-  sectionLabel: { fontSize: 12, fontWeight: '800', fontFamily: FontFamily.extrabold, color: colors.gray500, letterSpacing: 1, textTransform: 'uppercase' },
+  sectionLabel: { fontSize: 12, fontWeight: '600', fontFamily: FontFamily.semibold, color: colors.gray600, letterSpacing: 1, textTransform: 'uppercase' },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
 
   interestPill: {
-    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted,
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24,
+    backgroundColor: 'transparent',
+    borderWidth: 1, borderColor: colors.separator,
+    paddingHorizontal: 13, paddingVertical: 8, borderRadius: 4,
   },
   interestText: { color: colors.black, fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
 
-  intoPill: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : colors.surfaceMuted },
+  intoPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 4, backgroundColor: colors.surfaceMuted, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.separator },
   intoText: { color: colors.black, fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold },
 
   // ── Action Bar ──
@@ -743,7 +744,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // Follow and Message share the width; More is a fixed square. All
   // three clear 46pt, comfortably over the 44pt minimum.
   followActionBtn: {
-    flex: 1, height: 46, borderRadius: 23, backgroundColor: colors.accent,
+    flex: 1, height: 46, borderRadius: 4, backgroundColor: colors.accent,
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6,
   },
   followActionBtnActive: {
@@ -753,7 +754,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   followActionText: { fontSize: 15, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.2 },
   messageActionBtn: {
-    flex: 1, height: 46, borderRadius: 23,
+    flex: 1, height: 46, borderRadius: 4,
     backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,13,12,0.06)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)',
@@ -761,13 +762,13 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   messageActionText: { color: colors.black, fontSize: 15, fontWeight: '700', fontFamily: FontFamily.bold, letterSpacing: 0.2 },
   moreActionBtn: {
-    width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center',
+    width: 46, height: 46, borderRadius: 4, justifyContent: 'center', alignItems: 'center',
     backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(15,13,12,0.06)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)',
   },
-  openToPill: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, backgroundColor: colors.black },
-  openToText: { color: isDark ? '#1A1A1A' : '#FFF', fontSize: 14, fontWeight: '600', fontFamily: FontFamily.semibold },
+  openToPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 2, backgroundColor: colors.accentTint15 },
+  openToText: { color: colors.accentDark, fontSize: 13, fontWeight: '600', fontFamily: FontFamily.semibold },
 });
 
 export default ProfileDetailScreen;

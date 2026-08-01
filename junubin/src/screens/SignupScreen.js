@@ -544,7 +544,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -561,7 +561,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   backButtonVerify: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 4,
     backgroundColor: colors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
@@ -605,7 +605,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   // Field cards — frosted glass on dark
   fieldCard: {
     backgroundColor: 'rgba(255,255,255,0.06)',
-    borderRadius: 16,
+    borderRadius: 4,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderWidth: 1,
@@ -655,7 +655,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingTop: 10,
   },
   ctaWrap: {
-    borderRadius: 28,
+    borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 14,
     shadowColor: WARM.deep,
@@ -686,7 +686,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   ctaArrow: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -696,7 +696,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   methodToggle: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 14,
+    borderRadius: 4,
     padding: 3,
     marginBottom: 16,
   },
@@ -707,7 +707,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 4,
   },
   methodTabActive: {
     backgroundColor: '#FFFFFF',
@@ -735,7 +735,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   countryCodeActive: {
@@ -748,7 +748,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   phoneCodeBox: {
     paddingHorizontal: 14,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
   },
   phoneCodeText: {
@@ -769,7 +769,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     ...Typography.body,
     color: '#FFFFFF',
@@ -853,21 +853,20 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginBottom: 22,
   },
   codeInput: {
-    width: 44,
-    height: 54,
-    borderRadius: 12,
+    width: 46,
+    height: 60,
+    borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.10)',
-    fontSize: 22,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
+    fontSize: 26,
+    fontFamily: FontFamily.heading,
     color: '#FFFFFF',
     textAlign: 'center',
   },
   codeInputFilled: {
     backgroundColor: 'rgba(255,255,255,0.14)',
-    borderColor: 'rgba(255,255,255,0.22)',
+    borderColor: '#4F97E0',
   },
   codeInputDisabled: {
     opacity: 0.45,
