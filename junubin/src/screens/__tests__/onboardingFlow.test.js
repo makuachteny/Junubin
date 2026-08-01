@@ -149,12 +149,17 @@ describe('Onboarding / open-to flow', () => {
 
   it('renders the name step first on ProfileSetup (5-step Industry flow)', () => {
     // The redesign collapses onboarding to 5 grouped steps. Step 1 is
-    // name + birthday ("What should we call you?").
+    // name + birthday ("What should we call you?") — a labeled name
+    // input plus the three day/month/year birthday selects.
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
-    const { getByText } = render(<ProfileSetupScreen navigation={nav} route={route} />);
+    const { getByText, getByTestId } = render(<ProfileSetupScreen navigation={nav} route={route} />);
     expect(getByText('What should we call you?')).toBeTruthy();
     expect(getByText('STEP 1 OF 5')).toBeTruthy();
+    expect(getByTestId('setup-dob-day')).toBeTruthy();
+    expect(getByTestId('setup-dob-month')).toBeTruthy();
+    expect(getByTestId('setup-dob-year')).toBeTruthy();
+    expect(getByText('CONTINUE')).toBeTruthy();
   });
 
   it('open-to step (step 2) shows the community chips', () => {

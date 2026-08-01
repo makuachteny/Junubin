@@ -777,7 +777,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ssRed,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 6,
@@ -786,7 +786,8 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     fontSize: 11.5,
     fontWeight: '700',
     fontFamily: FontFamily.bold,
-    color: colors.cream,
+    // Literal white in both modes — it sits on flag red.
+    color: '#FFFFFF',
   },
 
   // ─── Footer hint ───
