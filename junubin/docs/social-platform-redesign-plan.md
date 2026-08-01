@@ -385,7 +385,69 @@ A full-source audit against this plan found and fixed:
 
 ---
 
-## Industry redesign — status (2026-08-01)
+## Industry redesign — COMPLETE (2026-08-01, full pass)
+
+Every screen in the claude.ai/design "JuNubin Redesign" prototype
+(`JuNubin Redesign.dc.html`) is now implemented, and every surface not in
+that prototype is deleted. Suite: 38 suites / 268 tests green; iOS bundle
+exports.
+
+**Foundation.** `theme/palettes.js` remapped to the design's warm-paper
+(`#FDFCFA` / `#F4F1EA`) and deep-ink (`#161D26` / `#1F2833`) grounds with
+the steel-blue accent (`#0F8FD6` / `#4DB4EF`), plus a flag token system:
+`ssInk / ssRed / ssGreen / ssGold / ssBlue`, their `…Tint` fills and
+`…Dark` readable-on-tint steps (which flip lighter in dark mode), and
+`onGold` / `onInk`. Tab bar is flag-ink in both themes with a gold active
+tab and red badge. `Button` variant `gold` is the primary CTA (gold,
+ink text, condensed caps, letterspaced) and lives inside a `Blueprint`
+frame wherever the design shows one.
+
+**Screens implemented:** Welcome (flag mark, gold-highlighted headline,
+bottom flag stripe) · Phone → SMS OTP (prefix cycler, six code boxes,
+in-app keypad, auto-verify) · 5-step onboarding (flag-colored segments,
+`BirthdaySelects`, truthful visibility cards) · Nearby (full-bleed map,
+floating chrome, gold pin/YOU markers, selected-pin card, list mode) ·
+Directory (blueprint cards, `NO. 01 — CITY` kickers, debounced search,
+facet chips) · Chats-as-home (flag kicker, Messages|Requests segments,
+gold unread bar, red count pill, inline request cards) · Person detail
+(340pt hero, follow/message two-state, OPEN TO, ABOUT grid,
+`selfPreview`) · Chat thread (ink/surface bubbles, day dividers,
+text-only notice, gold send) · Profile (gold-ringed avatar, strength
+card with tri-color bar, 5-item checklist) · Edit profile (background /
+languages / prompt + gold SAVE) · Settings (flattened, six in-screen
+sub-views) · Notifications feed.
+
+**Deleted (not in the design):** `FindFriendsScreen`, `FollowListScreen`,
+`ReferralScreen`, `AccessibilitySurveyScreen`, `ProfileViewScreen`,
+`MessageRequestsScreen` (requests are inline in Chats), `ProfileCard`,
+`SurveyNudgeModal`, `GraffitiAccents`, `referralService`, and the
+`modeFiltering` test for the long-gone swipe deck. Their routes, deep
+links (`message-requests`, `accessibility-survey`) and push-tap targets
+are scrubbed; `useEligibility` keeps a null `nudge` slot so call sites
+are unchanged. `EditProfileScreen` went from ~2,190 lines to the
+design's three fields; `profileCompleteness` now has exactly the
+design's five items at 20% each.
+
+### Known gaps after this pass
+
+- **Phone sign-in needs an SMS provider.** The flow is the design's
+  phone+OTP and AuthContext already supports Supabase's sms path, but
+  production sign-in requires a configured provider (e.g. Twilio) in the
+  Supabase project. Until then only the email path would work, and it
+  is no longer surfaced in the UI.
+- **Notifications feed has no data source.** No notifications table or
+  service exists (delivery is push-only), so the redesigned feed renders
+  its empty state and the bell dot proxies pending requests.
+- **Per-category notification prefs are device-local** (AsyncStorage);
+  nothing server-side reads them yet.
+- **Deliberate deviations from the prototype:** the ToS/Privacy
+  acceptance row stays on the phone step (Apple App Review requirement);
+  onboarding's middle visibility option is "City only" rather than the
+  prototype's unbacked "Mutual follows only"; background is single-select
+  because `Profile.ethnicity` is one column; Chat keeps its ⋯ safety
+  menu; Directory city chips are a static set (no facet endpoint).
+
+## Industry redesign — status (2026-08-01, first pass)
 
 Visual system from claude.ai/design "Comprehensive Mobile App Redesign"
 (Industry: Barlow/Barlow Condensed, steel-blue accent, square blueprint

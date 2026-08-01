@@ -69,6 +69,8 @@ jest.mock('@react-navigation/native', () => {
 });
 
 const mockNavigate = jest.fn();
+const mockStartOtp = jest.fn(async () => ({ message: 'OTP sent' }));
+const mockLoginWithOtp = jest.fn(async () => ({ appUser: null }));
 
 describe('Flow smoke tests', () => {
   beforeEach(() => {
@@ -83,10 +85,14 @@ describe('Flow smoke tests', () => {
         gray500: '#888888',
         gray600: '#666666',
         gray200: '#DDDDDD',
-        accent: '#CE1126',
+        accent: '#0F8FD6',
+        accentDark: '#085F91',
         rose: '#E84393',
         surfaceMuted: '#F1F1F1',
         separator: '#E7E7E7',
+        gold: '#F0B41F',
+        onGold: '#241B03',
+        error: '#D94A4A',
       },
     });
 
@@ -95,8 +101,8 @@ describe('Flow smoke tests', () => {
       isAuthenticated: false,
       session: null,
       user: null,
-      startOtp: jest.fn(),
-      loginWithOtp: jest.fn(),
+      startOtp: mockStartOtp,
+      loginWithOtp: mockLoginWithOtp,
     });
 
     mockUseSubscription.mockReturnValue({
@@ -115,11 +121,46 @@ describe('Flow smoke tests', () => {
     });
   });
 
-  it('onboarding get started navigates to Signup', () => {
+  it('welcome CONTINUE WITH PHONE navigates to Signup', () => {
     const navigation = { navigate: jest.fn() };
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText('GET STARTED'));
+    fireEvent.press(getByText('CONTINUE WITH PHONE'));
     expect(navigation.navigate).toHaveBeenCalledWith('Signup');
+  });
+
+  it('signup walks phone → code → verify with the in-app keypad', async () => {
+    const navigation = {
+      navigate: jest.fn(),
+      replace: jest.fn(),
+      goBack: jest.fn(),
+      canGoBack: () => true,
+    };
+    const { getByText, getByPlaceholderText, getByRole, getByTestId, findByText } = render(
+      <SignupScreen navigation={navigation} />
+    );
+
+    // Phone step — design copy
+    expect(getByText("What's your number?")).toBeTruthy();
+    fireEvent.changeText(getByPlaceholderText('912 345 678'), '912 345 678');
+    fireEvent.press(getByRole('checkbox')); // accept ToS
+    await act(async () => {
+      fireEvent.press(getByText('SEND CODE'));
+    });
+    expect(mockStartOtp).toHaveBeenCalledWith({ phone: '+254912345678' });
+
+    // OTP step — six digits on the keypad auto-verifies
+    expect(await findByText('Enter the code')).toBeTruthy();
+    for (const d of ['1', '2', '3', '4', '5', '6']) {
+      await act(async () => {
+        fireEvent.press(getByTestId(`keypad-${d}`));
+      });
+    }
+    expect(mockLoginWithOtp).toHaveBeenCalledWith({
+      phone: '+254912345678',
+      code: '123456',
+    });
+    // No profile on the account → ProfileSetup
+    expect(navigation.replace).toHaveBeenCalledWith('ProfileSetup');
   });
 
 });

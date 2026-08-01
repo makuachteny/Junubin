@@ -6,7 +6,7 @@
 // decide, so the placeholder nudges people to say who they are rather
 // than opening with a request.
 //
-// Used by ProfileDetailScreen and ProfileViewScreen. The parent owns
+// Used by ProfileDetailScreen. The parent owns
 // the messageRequestService call and the success/failure alerts — this
 // component just collects the text.
 

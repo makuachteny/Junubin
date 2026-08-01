@@ -204,23 +204,73 @@ describe('HomeScreen — people discovery', () => {
 });
 
 describe('DirectoryScreen', () => {
-  it('renders search and results', async () => {
-    const { getByTestId, findByText } = render(
+  it('renders search, filter chips and numbered blueprint results', async () => {
+    const { getByTestId, findByText, getByText } = render(
       <DirectoryScreen navigation={navigation} route={{ params: {} }} />
     );
     expect(getByTestId('directory-search')).toBeTruthy();
-    expect(getByTestId('directory-filters')).toBeTruthy();
+    expect(getByTestId('directory-chip-all')).toBeTruthy();
+    expect(getByTestId('directory-chip-verified')).toBeTruthy();
     expect(await findByText('Nyandeng')).toBeTruthy();
+    // Registry kicker + letterspaced count line from the design.
+    expect(getByText('NO. 01 — JUBA')).toBeTruthy();
+    expect(getByText('1 PEOPLE IN THE DIASPORA DIRECTORY')).toBeTruthy();
   });
 
-  it('every filter is available — nothing is locked behind a paid tier', async () => {
-    const { getByTestId, queryByText } = render(
+  it('city chip filters by city; tapping it again clears back to Everywhere', async () => {
+    const { getByTestId } = render(
       <DirectoryScreen navigation={navigation} route={{ params: {} }} />
     );
     await act(async () => {});
+    mockSearchDirectory.mockClear();
     await act(async () => {
-      fireEvent.press(getByTestId('directory-filters'));
+      fireEvent.press(getByTestId('directory-chip-Nairobi'));
     });
+    await waitFor(() => expect(mockSearchDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ city: 'Nairobi' })
+    ));
+    mockSearchDirectory.mockClear();
+    await act(async () => {
+      fireEvent.press(getByTestId('directory-chip-Nairobi'));
+    });
+    await waitFor(() => expect(mockSearchDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ city: undefined })
+    ));
+  });
+
+  it('"Verified only" chip maps to the verifiedOnly facet', async () => {
+    const { getByTestId } = render(
+      <DirectoryScreen navigation={navigation} route={{ params: {} }} />
+    );
+    await act(async () => {});
+    mockSearchDirectory.mockClear();
+    await act(async () => {
+      fireEvent.press(getByTestId('directory-chip-verified'));
+    });
+    await waitFor(() => expect(mockSearchDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ verifiedOnly: true })
+    ));
+  });
+
+  it('tapping a card opens ProfileDetail with the profile', async () => {
+    const { getByTestId, findByText } = render(
+      <DirectoryScreen navigation={navigation} route={{ params: {} }} />
+    );
+    await findByText('Nyandeng');
+    await act(async () => {
+      fireEvent.press(getByTestId('person-card-u1'));
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'ProfileDetail',
+      expect.objectContaining({ profile: expect.objectContaining({ id: 'u1' }) })
+    );
+  });
+
+  it('every filter is available — nothing is locked behind a paid tier', async () => {
+    const { queryByText } = render(
+      <DirectoryScreen navigation={navigation} route={{ params: {} }} />
+    );
+    await act(async () => {});
     expect(queryByText(/Upgrade/i)).toBeNull();
     expect(queryByText(/JuNubin\+/i)).toBeNull();
   });

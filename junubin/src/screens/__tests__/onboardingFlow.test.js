@@ -316,9 +316,9 @@ describe('Onboarding / open-to flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    // Onboarding landing now shows the Get Started CTA (Skip removed
-     // when the multi-page flow collapsed to a single landing screen).
-    expect(await findByText('GET STARTED')).toBeTruthy();
+    // The redesigned Welcome landing leads with the phone CTA (no
+    // passwords, no Get Started interstitial).
+    expect(await findByText('CONTINUE WITH PHONE')).toBeTruthy();
   });
 
   it('returning unauthenticated user skips landing and sees Signup', async () => {
@@ -333,7 +333,8 @@ describe('Onboarding / open-to flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(await findByText('JOIN THE COMMUNITY')).toBeTruthy();
-    expect(queryByText('GET STARTED')).toBeNull();
+    // Signup's phone step headline (redesign copy).
+    expect(await findByText("What's your number?")).toBeTruthy();
+    expect(queryByText('CONTINUE WITH PHONE')).toBeNull();
   });
 });

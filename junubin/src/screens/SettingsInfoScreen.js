@@ -1,3 +1,7 @@
+// Settings info pages (FAQ / Contact / Terms / Privacy / Guidelines /
+// Safety tips) — chrome matches the redesigned Settings screen: back
+// chevron + 24pt condensed title, flat hairline-divided sections,
+// 14.5pt Barlow body. Content stays keyed off `pageKey`.
 import React, { useMemo } from 'react';
 import {
   View,
@@ -8,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily, getShadow } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 
 const INFO_PAGES = {
   email: {
@@ -216,19 +220,23 @@ const INFO_PAGES = {
 
 export default function SettingsInfoScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const { colors } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const pageKey = route?.params?.pageKey || 'faq';
   const page = INFO_PAGES[pageKey] || INFO_PAGES.faq;
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="chevron-back" size={24} color={colors.black} />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{page.title}</Text>
-        <View style={styles.rightSpacer} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -236,7 +244,7 @@ export default function SettingsInfoScreen({ navigation, route }) {
           <Text style={styles.subtitle}>{page.subtitle}</Text>
         ) : null}
         {page.sections.map((section) => (
-          <View key={section.heading} style={styles.card}>
+          <View key={section.heading} style={styles.section}>
             <Text style={styles.sectionHeading}>{section.heading}</Text>
             <Text style={styles.sectionBody}>{section.body}</Text>
           </View>
@@ -246,56 +254,56 @@ export default function SettingsInfoScreen({ navigation, route }) {
   );
 }
 
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.cream,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    height: 56,
-    borderBottomWidth: 0,
-    backgroundColor: 'transparent',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingBottom: 6,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    ...Typography.screenTitle,
+    fontFamily: FontFamily.heading,
+    fontSize: 24,
     color: colors.black,
-  },
-  rightSpacer: {
-    width: 24,
+    flex: 1,
   },
   content: {
-    padding: 16,
-    gap: 12,
-    paddingBottom: 28,
+    paddingHorizontal: 18,
+    paddingTop: 6,
+    paddingBottom: 30,
   },
   subtitle: {
-    ...Typography.caption,
-    color: colors.gray500,
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    color: colors.gray400,
     marginBottom: 4,
-    marginLeft: 4,
   },
-  card: {
-    backgroundColor: colors.cardBg,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    paddingHorizontal: 14,
+  section: {
     paddingVertical: 14,
-    ...getShadow('sm', isDark),
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
   },
   sectionHeading: {
-    ...Typography.bodySemibold,
+    fontFamily: FontFamily.heading,
+    fontSize: 17,
     color: colors.black,
-    fontFamily: FontFamily.bold,
     marginBottom: 6,
   },
   sectionBody: {
-    ...Typography.bodySmall,
-    color: colors.gray600,
-    lineHeight: 21,
+    fontFamily: FontFamily.regular,
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: colors.gray500,
   },
 });

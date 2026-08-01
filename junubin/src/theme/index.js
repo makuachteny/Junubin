@@ -1,7 +1,8 @@
-// AnaJunubin — Unified Theme
-// South Sudan Flag Blend: Orange accent · Pink rose · Green · Blue · Gold · Red · Black
-// Warm sunset orange as primary, pink for likes, flag colors as vibrant accents
-// Primary typeface: DM Sans
+// JuNubin — Unified Theme (claude.ai/design "JuNubin Redesign").
+// Industry design language: warm paper / deep ink ground, steel-blue
+// accent, and the South Sudan flag colors as a working system —
+// gold CTAs, ink tab bar, red/green/gold/blue tag tints.
+// Typefaces: Barlow (body) · Barlow Condensed (display).
 
 import { LightPalette, DarkPalette } from './palettes';
 import { ThemeProvider, useTheme } from './ThemeContext';
@@ -9,7 +10,7 @@ import { FontFamily, fontForWeight, fontAssets } from './fonts';
 import { getShadow } from './shadows';
 import { wp, hp, ms, clamp, isSmallScreen, isLargeScreen, SCREEN_WIDTH, SCREEN_HEIGHT } from './responsive';
 
-// Backward compat — static Colors for components that always render on dark surfaces (ProfileCard)
+// Backward compat — static Colors for components that render on fixed-dark surfaces (Welcome)
 const Colors = LightPalette;
 
 export { LightPalette, DarkPalette, ThemeProvider, useTheme, Colors, FontFamily, fontForWeight, fontAssets, getShadow };

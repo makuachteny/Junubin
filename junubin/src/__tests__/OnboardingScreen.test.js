@@ -11,8 +11,9 @@ jest.mock('react-native-safe-area-context', () => ({
 const mockNavigate = jest.fn();
 const navigation = { navigate: mockNavigate, replace: jest.fn() };
 
-// Industry redesign welcome screen: full-bleed photo + scrim, condensed
-// wordmark, headline, Blueprint CTA. These tests lock the new surface.
+// Industry redesign Welcome screen (design.html): full-bleed photo +
+// scrim, flag mark + wordmark, gold-accent headline, Blueprint gold
+// CTA, flag stripe. These tests lock the new surface.
 describe('OnboardingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -30,18 +31,24 @@ describe('OnboardingScreen', () => {
     expect(getByText(/not a dating app/)).toBeTruthy();
   });
 
-  it('GET STARTED navigates to the Signup screen', () => {
+  it('shows the one-tap sign in caption', () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText('GET STARTED'));
+    expect(getByText('One-tap sign in. No passwords, ever.')).toBeTruthy();
+  });
+
+  it('CONTINUE WITH PHONE navigates to the Signup screen', () => {
+    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
+    fireEvent.press(getByText('CONTINUE WITH PHONE'));
     expect(mockNavigate).toHaveBeenCalledWith('Signup');
   });
 
-  it('links to terms and privacy', () => {
-    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText('Terms'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsInfo', { pageKey: 'terms' });
-    fireEvent.press(getByText('Privacy Policy'));
-    expect(mockNavigate).toHaveBeenCalledWith('SettingsInfo', { pageKey: 'privacy' });
+  it('renders all five flag stripe bands', () => {
+    const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
+    const tree = JSON.stringify(toJSON());
+    // Design's exact band hexes (black, red, gold, green, blue).
+    ['#000000', '#D94A4A', '#F0B41F', '#0F9D58', '#0F8FD6'].forEach((hex) => {
+      expect(tree).toContain(hex);
+    });
   });
 
   it('carries no dating-era copy or warm-gold palette', () => {

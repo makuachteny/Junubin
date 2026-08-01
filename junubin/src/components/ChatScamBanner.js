@@ -14,11 +14,12 @@
 // banner once per conversation/session — re-fetching when N more
 // incoming messages arrive lets us re-flag if the pattern escalates.
 //
-// Visual: amber / dark amber pill with a shield icon. Tappable to
-// expand the list of flagged signals; long-press goes to safety FAQ.
+// Visual (redesign): a quiet hairline notice on the gold tint — a
+// bordered strip, not an amber alarm pill. Tappable to expand the
+// list of flagged signals.
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
 
@@ -26,12 +27,10 @@ const SEVERITY_COPY = {
   high: {
     title: 'This looks like a known scam pattern',
     body: 'Never send money, airtime or gift cards to someone you have not met, no matter who they say they are. Anyone who is genuinely who they claim to be will not mind waiting while you verify.',
-    tone: '#B45309',
   },
   medium: {
     title: 'A few things here worth double-checking',
     body: 'Take your time. Verify who you are talking to through someone you already trust before sending money or personal details, and keep the conversation on JuNubin so it can be reported.',
-    tone: '#D97706',
   },
   low: null,
 };
@@ -74,7 +73,7 @@ export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
 
   const signals = Array.isArray(verdict.signals) ? verdict.signals : [];
   const labels = signals.map((id) => SIGNAL_LABEL[id] || id);
-  const styles = getStyles(colors, meta.tone);
+  const styles = getStyles(colors);
 
   return (
     <View style={styles.wrap} accessibilityLiveRegion="polite">
@@ -85,7 +84,7 @@ export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
         accessibilityRole="button"
         accessibilityLabel={`${meta.title}. Tap to see details.`}
       >
-        <Ionicons name="shield-half" size={18} color="#FFFFFF" />
+        <Ionicons name="shield-half" size={16} color={colors.ssGoldDark} />
         <View style={styles.textWrap}>
           <Text style={styles.title} numberOfLines={1}>{meta.title}</Text>
           {labels.length > 0 ? (
@@ -94,7 +93,7 @@ export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
             </Text>
           ) : null}
         </View>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color="rgba(255,255,255,0.85)" />
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={15} color={colors.ssGoldDark} />
       </TouchableOpacity>
 
       {expanded && (
@@ -119,7 +118,7 @@ export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
               onPress={onLearnMore}
               activeOpacity={0.75}
             >
-              <Ionicons name="information-circle-outline" size={14} color="#FFFFFF" />
+              <Ionicons name="information-circle-outline" size={14} color={colors.ssGoldDark} />
               <Text style={styles.actionText}>How to stay safe</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -136,12 +135,12 @@ export default function ChatScamBanner({ verdict, onDismiss, onLearnMore }) {
   );
 }
 
-const getStyles = (colors, tone) =>
+const getStyles = (colors) =>
   StyleSheet.create({
     wrap: {
-      backgroundColor: tone,
-      borderBottomWidth: 1,
-      borderBottomColor: 'rgba(0,0,0,0.15)',
+      backgroundColor: colors.ssGoldTint,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.separator,
     },
     row: {
       flexDirection: 'row',
@@ -152,12 +151,12 @@ const getStyles = (colors, tone) =>
     },
     textWrap: { flex: 1 },
     title: {
-      color: '#FFFFFF',
-      fontSize: 13,
+      color: colors.ssGoldDark,
+      fontSize: 12.5,
       fontFamily: FontFamily.semibold,
     },
     sub: {
-      color: 'rgba(255,255,255,0.85)',
+      color: colors.gray500,
       fontSize: 11,
       fontFamily: FontFamily.regular,
       marginTop: 1,
@@ -169,7 +168,7 @@ const getStyles = (colors, tone) =>
       gap: 8,
     },
     message: {
-      color: 'rgba(255,255,255,0.95)',
+      color: colors.gray500,
       fontSize: 12,
       fontFamily: FontFamily.regular,
       lineHeight: 17,
@@ -182,11 +181,12 @@ const getStyles = (colors, tone) =>
     chip: {
       paddingHorizontal: 8,
       paddingVertical: 3,
-      backgroundColor: 'rgba(255,255,255,0.18)',
-      borderRadius: 10,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.separator,
+      borderRadius: 2,
     },
     chipText: {
-      color: '#FFFFFF',
+      color: colors.ssGoldDark,
       fontSize: 11,
       fontFamily: FontFamily.medium,
     },
@@ -200,12 +200,13 @@ const getStyles = (colors, tone) =>
       alignItems: 'center',
       gap: 4,
       paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 12,
-      backgroundColor: 'rgba(0,0,0,0.18)',
+      height: 30,
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: colors.ssGoldDark,
     },
     actionText: {
-      color: '#FFFFFF',
+      color: colors.ssGoldDark,
       fontSize: 11,
       fontFamily: FontFamily.semibold,
     },

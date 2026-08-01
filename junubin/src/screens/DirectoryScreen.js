@@ -1,19 +1,19 @@
 // DirectoryScreen — the searchable South Sudanese diaspora directory.
 //
 // Home answers "who is near me". The directory answers "who is anywhere
-// I care about": search by name, city, country, background, language,
-// profession, school, or what someone is open to.
-//
-// Every filter here is free. JuNubin has no paid tier, so nothing on
-// this screen is locked, blurred or upsold.
+// I care about": free-text search plus one quick facet — a city or
+// "Verified only". Every filter is free; JuNubin has no paid tier, so
+// nothing on this screen is locked, blurred or upsold.
 //
 // People appear in the directory only when `Profile.directoryVisible`
 // is true and their account is active and unmoderated — the `directory`
 // Edge Function enforces that server-side along with block filtering,
 // so the client never has to be trusted with it.
 //
-// Visual language: Industry redesign — square Blueprint person cards,
-// hairline borders, condensed display type. Tokens only, no hex.
+// Visual language: Industry redesign, design.html Directory tab —
+// flag-mark kicker header, hairline search field, single-select chip
+// row, numbered Blueprint person cards. Tokens only, no hex (the flag
+// mark's bands come from the ss* flag tokens).
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
@@ -24,59 +24,45 @@ import {
   TextInput,
   FlatList,
   ActivityIndicator,
-  Modal,
   ScrollView,
-  Pressable,
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 import Blueprint from '../components/Blueprint';
 import Button from '../components/Button';
 import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import { useAuth } from '../auth';
 import * as directoryService from '../api/services/directoryService';
 import * as followService from '../api/services/followService';
-import { POPULAR_TRIBE_KEYS } from '../data/tribes';
-import { LANGUAGE_OPTIONS } from '../data/languages';
-import { OPEN_TO_OPTIONS, OPEN_TO_BY_KEY, normalizeOpenTo } from '../data/openTo';
+import { OPEN_TO_BY_KEY, normalizeOpenTo } from '../data/openTo';
 import { imageSource } from '../utils/imageSource';
 import { reportError } from '../utils/reportError';
 import { trackEvent } from '../utils/analytics';
 import { hapticSelection } from '../utils/haptics';
 
-// Chips are {value, label} because `openTo` persists KEYS, not labels
-// (see data/openTo.js) — filtering on the label would match nothing.
-// Languages persist as plain strings, so value === label there.
-//
-// The language chip row is trimmed to the most common values; the full
-// list lives in data/languages.js and free-text search covers the tail.
-const COMMON_LANGUAGES = new Set([
-  'Juba Arabic', 'English', 'Dinka', 'Nuer', 'Bari',
-  'Shilluk', 'Zande', 'Swahili', 'Arabic', 'Amharic',
-]);
+// The directory Edge Function exposes no facet endpoint, so the city
+// chips are the same static diaspora hubs the onboarding city step
+// suggests. Free-text search covers every other city.
+const CITY_CHIPS = ['Nairobi', 'Kampala', 'Juba', 'Cairo', 'Melbourne', 'Omaha'];
 
-const LANGUAGE_CHIPS = LANGUAGE_OPTIONS
-  .filter((l) => COMMON_LANGUAGES.has(typeof l === 'string' ? l : l.label))
-  .map((l) => {
-    const name = typeof l === 'string' ? l : l.label;
-    return { value: name, label: name };
-  });
+// Single-select chip row: "Everywhere" | one city | "Verified only".
+// Tapping the selected chip clears back to Everywhere (design behavior).
+const FILTER_CHIPS = [
+  { key: 'all', label: 'Everywhere' },
+  ...CITY_CHIPS.map((c) => ({ key: c, label: c })),
+  { key: 'verified', label: 'Verified only' },
+];
 
-const OPEN_TO_CHIPS = OPEN_TO_OPTIONS.map((o) => ({ value: o.key, label: o.label }));
-
-const ETHNICITY_CHIPS = POPULAR_TRIBE_KEYS.map((t) => ({ value: t, label: t }));
-
-const emptyFilters = {
-  ethnicity: null,
-  language: null,
-  openTo: null,
-  verifiedOnly: false,
-};
-
-const countActive = (f) =>
-  (f.ethnicity ? 1 : 0) + (f.language ? 1 : 0) + (f.openTo ? 1 : 0) + (f.verifiedOnly ? 1 : 0);
+// ss-tag palette cycles blue → green → gold → red by tag index, same
+// as the design's ssTag() helper.
+const TAG_CYCLE = [
+  ['ssBlueTint', 'ssBlueDark'],
+  ['ssGreenTint', 'ssGreenDark'],
+  ['ssGoldTint', 'ssGoldDark'],
+  ['ssRedTint', 'ssRedDark'],
+];
 
 // "City, Country · profession" — one line per the mock. Falls back
 // through job → school so the line still says something useful.
@@ -86,9 +72,18 @@ const cityLine = (person) => {
   return [place, work].filter(Boolean).join(' · ') || null;
 };
 
-// One directory result — the mock's Blueprint person card: square
-// 72×88 photo, condensed name, openTo tags, Follow + Profile actions.
-function DirectoryPersonCard({ person, onOpen, onFollow, isFollowing, styles, colors }) {
+// Registry-style card kicker: "NO. 04 — NAIROBI". The number is the
+// person's position in the result list, not a stable id — it reads as
+// a ledger line, exactly like the design.
+const cardKicker = (index, person) => {
+  const num = String(index + 1).padStart(2, '0');
+  const city = (person?.city || '').toUpperCase();
+  return city ? `NO. ${num} — ${city}` : `NO. ${num}`;
+};
+
+// One directory result — the design's numbered Blueprint frame: 82×100
+// photo, ledger kicker, condensed name, cycling ss-tags, Follow+Profile.
+function DirectoryPersonCard({ person, index, onOpen, onFollow, isFollowing, styles, colors }) {
   const nameAge = person.age ? `${person.name}, ${person.age}` : person.name;
   const line = cityLine(person);
   const tags = normalizeOpenTo(person.openTo)
@@ -109,6 +104,8 @@ function DirectoryPersonCard({ person, onOpen, onFollow, isFollowing, styles, co
       </TouchableOpacity>
 
       <View style={styles.personBody}>
+        <Text style={styles.personKicker} numberOfLines={1}>{cardKicker(index, person)}</Text>
+
         <TouchableOpacity
           onPress={() => onOpen(person)}
           activeOpacity={0.7}
@@ -131,11 +128,16 @@ function DirectoryPersonCard({ person, onOpen, onFollow, isFollowing, styles, co
 
         {tags.length > 0 ? (
           <View style={styles.personTags}>
-            {tags.map((t) => (
-              <View key={t.key} style={styles.personTag}>
-                <Text style={styles.personTagText} numberOfLines={1}>{t.label}</Text>
-              </View>
-            ))}
+            {tags.map((t, j) => {
+              const [bg, fg] = TAG_CYCLE[j % TAG_CYCLE.length];
+              return (
+                <View key={t.key} style={[styles.personTag, { backgroundColor: colors[bg] }]}>
+                  <Text style={[styles.personTagText, { color: colors[fg] }]} numberOfLines={1}>
+                    {t.label}
+                  </Text>
+                </View>
+              );
+            })}
           </View>
         ) : null}
 
@@ -169,6 +171,22 @@ function DirectoryPersonCard({ person, onOpen, onFollow, isFollowing, styles, co
   );
 }
 
+// Plain loading placeholder — the same Blueprint geometry as a result
+// card with muted blocks where the content will land.
+function SkeletonCard({ styles }) {
+  return (
+    <Blueprint style={styles.personCard}>
+      <View style={[styles.personPhotoWrap, styles.skeletonBlock]} />
+      <View style={styles.personBody}>
+        <View style={[styles.skeletonBlock, styles.skeletonKicker]} />
+        <View style={[styles.skeletonBlock, styles.skeletonName]} />
+        <View style={[styles.skeletonBlock, styles.skeletonLine]} />
+        <View style={[styles.skeletonBlock, styles.skeletonBtn]} />
+      </View>
+    </Blueprint>
+  );
+}
+
 const DirectoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
@@ -177,9 +195,7 @@ const DirectoryScreen = ({ navigation }) => {
 
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState(emptyFilters);
-  const [draftFilters, setDraftFilters] = useState(emptyFilters);
-  const [showFilters, setShowFilters] = useState(false);
+  const [filter, setFilter] = useState('all');
 
   const [people, setPeople] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -189,8 +205,6 @@ const DirectoryScreen = ({ navigation }) => {
   const [followingIds, setFollowingIds] = useState(() => new Set());
   const cursorRef = useRef(null);
 
-  const activeCount = countActive(filters);
-
   const search = useCallback(async ({ append = false } = {}) => {
     if (!session) { setPeople([]); return; }
     if (append) setLoadingMore(true); else setLoading(true);
@@ -198,17 +212,15 @@ const DirectoryScreen = ({ navigation }) => {
     try {
       const { people: results, nextCursor } = await directoryService.searchDirectory({
         query: query || undefined,
-        ethnicity: filters.ethnicity || undefined,
-        languages: filters.language ? [filters.language] : undefined,
-        openTo: filters.openTo ? [filters.openTo] : undefined,
-        verifiedOnly: filters.verifiedOnly || undefined,
+        city: filter !== 'all' && filter !== 'verified' ? filter : undefined,
+        verifiedOnly: filter === 'verified' || undefined,
         cursor: append ? cursorRef.current : undefined,
         limit: 24,
       });
       cursorRef.current = nextCursor || null;
       setPeople((prev) => (append ? [...prev, ...(results || [])] : (results || [])));
     } catch (err) {
-      reportError('DirectoryScreen.search', err, { query, filters });
+      reportError('DirectoryScreen.search', err, { query, filter });
       if (!append) setPeople([]);
       setLoadError(true);
     } finally {
@@ -216,12 +228,25 @@ const DirectoryScreen = ({ navigation }) => {
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [session, query, filters]);
+  }, [session, query, filter]);
 
   useEffect(() => {
     cursorRef.current = null;
     search();
   }, [search]);
+
+  // Debounce keystrokes into the committed query — the design searches
+  // as you type, so there is no explicit submit step.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const q = queryInput.trim();
+      setQuery((prev) => {
+        if (prev !== q && q) trackEvent('directory_search');
+        return q;
+      });
+    }, 350);
+    return () => clearTimeout(t);
+  }, [queryInput]);
 
   useEffect(() => {
     if (!session || people.length === 0) return;
@@ -232,37 +257,13 @@ const DirectoryScreen = ({ navigation }) => {
     return () => { cancelled = true; };
   }, [session, people]);
 
-  const submitQuery = useCallback(() => {
-    setQuery(queryInput.trim());
-    if (queryInput.trim()) trackEvent('directory_search');
-  }, [queryInput]);
-
-  const openFilters = useCallback(() => {
-    setDraftFilters(filters);
-    setShowFilters(true);
-  }, [filters]);
-
-  const applyFilters = useCallback(() => {
-    setFilters(draftFilters);
-    setShowFilters(false);
-    trackEvent('directory_filters_applied', { count: countActive(draftFilters) });
-  }, [draftFilters]);
-
-  const toggleDraft = useCallback((key, value) => {
+  // Single-select: tapping the active chip clears back to Everywhere.
+  const tapChip = useCallback((key) => {
     hapticSelection();
-    setDraftFilters((prev) => ({
-      ...prev,
-      [key]: prev[key] === value ? null : value,
-    }));
-  }, []);
-
-  // Quick chips in the header row toggle the SAME filter state the
-  // sheet edits — one source of truth, two entry points.
-  const toggleQuickFilter = useCallback((key, value) => {
-    hapticSelection();
-    setFilters((prev) => {
-      if (key === 'verifiedOnly') return { ...prev, verifiedOnly: !prev.verifiedOnly };
-      return { ...prev, [key]: prev[key] === value ? null : value };
+    setFilter((prev) => {
+      const next = prev === key ? 'all' : key;
+      trackEvent('directory_filters_applied', { count: next === 'all' ? 0 : 1 });
+      return next;
     });
   }, []);
 
@@ -289,53 +290,38 @@ const DirectoryScreen = ({ navigation }) => {
   }, [followingIds]);
 
   const openProfile = useCallback((person) => {
-    navigation?.navigate?.('ProfileView', {
+    navigation?.navigate?.('ProfileDetail', {
       profile: { ...person, images: person.images || person.photos || [] },
     });
   }, [navigation]);
 
-  const renderChipGroup = (title, key, chips) => (
-    <View style={styles.filterGroup} key={key}>
-      <Text style={styles.filterGroupTitle}>{title}</Text>
-      <View style={styles.filterChips}>
-        {chips.map((chip) => {
-          const selected = draftFilters[key] === chip.value;
-          return (
-            <TouchableOpacity
-              key={chip.value}
-              style={[styles.filterChip, selected && styles.filterChipActive]}
-              onPress={() => toggleDraft(key, chip.value)}
-              accessibilityRole="button"
-              accessibilityState={{ selected }}
-            >
-              <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>
-                {chip.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-
-  // "8 PEOPLE IN THE DIASPORA DIRECTORY" / "3 PEOPLE MATCHING "JUBA""
+  // "8 PEOPLE IN THE DIASPORA DIRECTORY" / '3 PEOPLE MATCHING "JUBA"'
   const countLine = query
     ? `${people.length} PEOPLE MATCHING "${query.toUpperCase()}"`
     : `${people.length} PEOPLE IN THE DIASPORA DIRECTORY`;
 
   return (
     <View style={styles.screen}>
-      {/* ─── HEADER ─── */}
+      {/* ─── HEADER: flag mark + kicker + h1 + search + chips ─── */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <Text style={styles.headerTitle}>Directory</Text>
+        <View>
+          <View style={styles.brandRow}>
+            <View style={styles.flagMark} accessibilityElementsHidden importantForAccessibility="no">
+              <View style={[styles.flagBand, { backgroundColor: colors.ssInk }]} />
+              <View style={[styles.flagBand, styles.flagBandRed]} />
+              <View style={[styles.flagBand, { backgroundColor: colors.ssGreen }]} />
+            </View>
+            <Text style={styles.kicker}>JUNUBIN</Text>
+          </View>
+          <Text style={styles.headerTitle} accessibilityRole="header">Directory</Text>
+        </View>
 
         <View style={styles.searchField}>
-          <Ionicons name="search" size={18} color={colors.gray500} />
+          <Ionicons name="search" size={18} color={colors.gray400} />
           <TextInput
             style={styles.searchInput}
             value={queryInput}
             onChangeText={setQueryInput}
-            onSubmitEditing={submitQuery}
             placeholder="Name, city, profession, school…"
             placeholderTextColor={colors.gray400}
             returnKeyType="search"
@@ -345,7 +331,7 @@ const DirectoryScreen = ({ navigation }) => {
           />
           {queryInput.length > 0 ? (
             <TouchableOpacity
-              onPress={() => { setQueryInput(''); setQuery(''); }}
+              onPress={() => setQueryInput('')}
               hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
               accessibilityRole="button"
               accessibilityLabel="Clear search"
@@ -361,45 +347,17 @@ const DirectoryScreen = ({ navigation }) => {
           style={styles.chipsScroll}
           contentContainerStyle={styles.chipsRow}
         >
-          <TouchableOpacity
-            style={[styles.chip, activeCount > 0 && styles.chipSelected]}
-            onPress={openFilters}
-            accessibilityRole="button"
-            accessibilityLabel={activeCount > 0 ? `Filters, ${activeCount} active` : 'Filters'}
-            testID="directory-filters"
-          >
-            <Ionicons
-              name="options-outline"
-              size={15}
-              color={activeCount > 0 ? colors.accentDark : colors.black}
-            />
-            <Text style={[styles.chipText, activeCount > 0 && styles.chipTextSelected]}>
-              {activeCount > 0 ? `Filters · ${activeCount}` : 'Filters'}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.chip, filters.verifiedOnly && styles.chipSelected]}
-            onPress={() => toggleQuickFilter('verifiedOnly')}
-            accessibilityRole="button"
-            accessibilityState={{ selected: filters.verifiedOnly }}
-            accessibilityLabel="Verified only"
-          >
-            <Text style={[styles.chipText, filters.verifiedOnly && styles.chipTextSelected]}>
-              Verified only
-            </Text>
-          </TouchableOpacity>
-
-          {OPEN_TO_CHIPS.map((chip) => {
-            const selected = filters.openTo === chip.value;
+          {FILTER_CHIPS.map((chip) => {
+            const selected = filter === chip.key;
             return (
               <TouchableOpacity
-                key={chip.value}
+                key={chip.key}
                 style={[styles.chip, selected && styles.chipSelected]}
-                onPress={() => toggleQuickFilter('openTo', chip.value)}
+                onPress={() => tapChip(chip.key)}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
-                accessibilityLabel={`Open to ${chip.label}`}
+                accessibilityLabel={chip.label}
+                testID={`directory-chip-${chip.key}`}
               >
                 <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                   {chip.label}
@@ -414,9 +372,10 @@ const DirectoryScreen = ({ navigation }) => {
       <FlatList
         data={people}
         keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <DirectoryPersonCard
             person={item}
+            index={index}
             onOpen={openProfile}
             onFollow={handleFollow}
             isFollowing={followingIds.has(item.id)}
@@ -424,10 +383,10 @@ const DirectoryScreen = ({ navigation }) => {
             colors={colors}
           />
         )}
-        ListHeaderComponent={!loading && people.length > 0 ? (
+        ListHeaderComponent={!loading ? (
           <Text style={styles.countLine} accessibilityRole="text">{countLine}</Text>
         ) : null}
-        contentContainerStyle={people.length === 0 ? styles.emptyWrap : styles.listContent}
+        contentContainerStyle={people.length === 0 && !loading ? styles.emptyWrap : styles.listContent}
         onEndReachedThreshold={0.4}
         onEndReached={() => {
           if (!loading && !loadingMore && cursorRef.current) search({ append: true });
@@ -442,16 +401,18 @@ const DirectoryScreen = ({ navigation }) => {
           <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
         ) : null}
         ListEmptyComponent={loading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginTop: 40 }} />
+          <View style={styles.skeletonList}>
+            <SkeletonCard styles={styles} />
+            <SkeletonCard styles={styles} />
+            <SkeletonCard styles={styles} />
+          </View>
         ) : (
           <View style={styles.empty}>
-            <View style={styles.emptyBadge}>
-              <Ionicons
-                name={loadError ? 'cloud-offline-outline' : 'search-outline'}
-                size={30}
-                color={colors.accent}
-              />
-            </View>
+            <Ionicons
+              name={loadError ? 'cloud-offline-outline' : 'search-outline'}
+              size={28}
+              color={colors.gray400}
+            />
             <Text style={styles.emptyTitle}>
               {loadError ? "Couldn't load the directory" : 'No one matched'}
             </Text>
@@ -463,66 +424,19 @@ const DirectoryScreen = ({ navigation }) => {
             <View style={styles.emptyActions}>
               {loadError ? (
                 <Button title="Try again" variant="primary" size="md" fullWidth onPress={() => search()} />
-              ) : activeCount > 0 || query ? (
+              ) : filter !== 'all' || query ? (
                 <Button
                   title="Clear search and filters"
                   variant="primary"
                   size="md"
                   fullWidth
-                  onPress={() => { setQueryInput(''); setQuery(''); setFilters(emptyFilters); }}
+                  onPress={() => { setQueryInput(''); setQuery(''); setFilter('all'); }}
                 />
               ) : null}
             </View>
           </View>
         )}
       />
-
-      {/* ─── FILTER SHEET ─── */}
-      <Modal
-        visible={showFilters}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowFilters(false)}
-      >
-        <Pressable style={styles.sheetBackdrop} onPress={() => setShowFilters(false)} />
-        <View style={styles.sheet}>
-          <View style={styles.sheetHandle} />
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Filters</Text>
-            <TouchableOpacity onPress={() => setDraftFilters(emptyFilters)}>
-              <Text style={styles.sheetReset}>Reset</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.sheetBody} showsVerticalScrollIndicator={false}>
-            {renderChipGroup('Background', 'ethnicity', ETHNICITY_CHIPS)}
-            {renderChipGroup('Language', 'language', LANGUAGE_CHIPS)}
-            {renderChipGroup('Open to', 'openTo', OPEN_TO_CHIPS)}
-
-            <View style={styles.filterGroup}>
-              <Text style={styles.filterGroupTitle}>Verification</Text>
-              <TouchableOpacity
-                style={[styles.toggleRow, draftFilters.verifiedOnly && styles.toggleRowActive]}
-                onPress={() => setDraftFilters((p) => ({ ...p, verifiedOnly: !p.verifiedOnly }))}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: draftFilters.verifiedOnly }}
-              >
-                <Ionicons
-                  name={draftFilters.verifiedOnly ? 'checkbox' : 'square-outline'}
-                  size={20}
-                  color={draftFilters.verifiedOnly ? colors.accent : colors.gray400}
-                />
-                <Text style={styles.toggleLabel}>Verified members only</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={{ height: 12 }} />
-          </ScrollView>
-
-          <View style={[styles.sheetFooter, { paddingBottom: insets.bottom + 12 }]}>
-            <Button title="Show results" variant="primary" size="md" fullWidth onPress={applyFilters} />
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 };
@@ -540,13 +454,44 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
   },
+
+  // ── Brand row: 20×14 tricolor mark + letterspaced kicker ──
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  flagMark: {
+    width: 20,
+    height: 14,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    flexDirection: 'column',
+  },
+  flagBand: {
+    flex: 1,
+  },
+  flagBandRed: {
+    backgroundColor: colors.ssRed,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.cream,
+  },
+  kicker: {
+    fontFamily: FontFamily.heading,
+    fontSize: 10.5,
+    letterSpacing: 2.7,
+    color: colors.accentDark,
+  },
   headerTitle: {
     fontFamily: FontFamily.heading,
-    fontSize: 28,
+    fontSize: 31,
+    lineHeight: 31,
+    marginTop: 2,
     color: colors.black,
   },
 
-  // ── Search box — 46px, hairline, muted surface, square-ish r4 ──
+  // ── Search box — 46px, hairline, muted surface, r4 ──
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -566,7 +511,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     padding: 0,
   },
 
-  // ── Quick filter chips ──
+  // ── Filter chips — single-select, 36px, r4 ──
   chipsScroll: {
     marginHorizontal: -18,
   },
@@ -576,14 +521,13 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     alignItems: 'center',
   },
   chip: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'center',
     height: 36,
     paddingHorizontal: 13,
     borderWidth: 1,
     borderColor: colors.separator,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.cream,
     borderRadius: 4,
   },
   chipSelected: {
@@ -601,11 +545,10 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
 
   // ── Results ──
   countLine: {
-    fontFamily: FontFamily.medium,
+    fontFamily: FontFamily.regular,
     fontSize: 12,
     color: colors.gray400,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
+    letterSpacing: 0.7,
     marginBottom: 14,
   },
   listContent: {
@@ -615,7 +558,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     gap: 14,
   },
 
-  // ── Person card (Blueprint) ──
+  // ── Person card (Blueprint, cream bg, 14 padding) ──
   personCard: {
     flexDirection: 'row',
     gap: 13,
@@ -623,8 +566,8 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     backgroundColor: colors.cream,
   },
   personPhotoWrap: {
-    width: 72,
-    height: 88,
+    width: 82,
+    height: 100,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
     backgroundColor: colors.surfaceMuted,
@@ -637,6 +580,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: 5,
+  },
+  personKicker: {
+    fontFamily: FontFamily.heading,
+    fontSize: 10,
+    letterSpacing: 2.2,
+    color: colors.gray400,
   },
   personNameRow: {
     flexDirection: 'row',
@@ -652,7 +601,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   personCity: {
     fontFamily: FontFamily.regular,
     fontSize: 12.5,
-    color: colors.gray600,
+    color: colors.gray500,
     marginTop: 2,
   },
   personTags: {
@@ -663,14 +612,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   personTag: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    backgroundColor: colors.accentTint15,
     borderRadius: 2,
   },
   personTagText: {
     fontFamily: FontFamily.semibold,
     fontSize: 11,
-    letterSpacing: 0.4,
-    color: colors.accentDark,
+    letterSpacing: 0.44,
   },
   personActions: {
     flexDirection: 'row',
@@ -690,7 +637,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   },
   followBtnFollowing: {
     borderColor: colors.separator,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.cream,
   },
   followBtnText: {
     fontFamily: FontFamily.semibold,
@@ -698,7 +645,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     color: colors.accentDark,
   },
   followBtnTextFollowing: {
-    color: colors.gray600,
+    color: colors.gray500,
   },
   profileBtn: {
     height: 34,
@@ -716,29 +663,49 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     color: colors.black,
   },
 
+  // ── Loading skeletons — plain muted blocks in the card geometry ──
+  skeletonList: {
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    gap: 14,
+  },
+  skeletonBlock: {
+    backgroundColor: colors.surfaceMuted,
+  },
+  skeletonKicker: {
+    width: 110,
+    height: 10,
+  },
+  skeletonName: {
+    width: 140,
+    height: 19,
+  },
+  skeletonLine: {
+    width: 180,
+    height: 12,
+  },
+  skeletonBtn: {
+    width: 82,
+    height: 34,
+    marginTop: 8,
+  },
+
   // ── Empty / error ──
   emptyWrap: {
     flexGrow: 1,
+    paddingHorizontal: 18,
+    paddingTop: 14,
   },
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
-  },
-  emptyBadge: {
-    width: 60,
-    height: 60,
-    backgroundColor: colors.accentTint08,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
+    gap: 8,
   },
   emptyTitle: {
-    ...Typography.h3,
     fontFamily: FontFamily.heading,
+    fontSize: 20,
     color: colors.black,
     textAlign: 'center',
   },
@@ -746,120 +713,12 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 13,
     lineHeight: 19,
-    color: colors.gray600,
+    color: colors.gray500,
     textAlign: 'center',
-    marginTop: 6,
   },
   emptyActions: {
-    marginTop: 20,
-    width: '100%',
-  },
-
-  // ── Filter sheet ──
-  sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    maxHeight: '78%',
-    backgroundColor: colors.cream,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.separator,
-    paddingTop: 8,
-  },
-  sheetHandle: {
-    width: 38,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gray300,
-    alignSelf: 'center',
-    marginBottom: 8,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 8,
-  },
-  sheetTitle: {
-    fontFamily: FontFamily.heading,
-    fontSize: 22,
-    color: colors.black,
-  },
-  sheetReset: {
-    fontFamily: FontFamily.semibold,
-    fontSize: 13,
-    color: colors.accent,
-  },
-  sheetBody: {
-    paddingHorizontal: 20,
-  },
-  sheetFooter: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.separator,
-  },
-  filterGroup: {
     marginTop: 14,
-  },
-  filterGroupTitle: {
-    fontFamily: FontFamily.semibold,
-    fontSize: 12,
-    color: colors.gray600,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-  },
-  filterChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    backgroundColor: 'transparent',
-  },
-  filterChipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint15,
-  },
-  filterChipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 12,
-    color: colors.black,
-  },
-  filterChipTextActive: {
-    color: colors.accentDark,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    backgroundColor: 'transparent',
-  },
-  toggleRowActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint08,
-  },
-  toggleLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: 13,
-    color: colors.black,
+    width: '100%',
   },
 });
 

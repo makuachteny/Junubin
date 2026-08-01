@@ -203,12 +203,10 @@ const SignupScreen = ({ navigation }) => {
       return;
     }
     if (!key || attemptsExhausted) return;
-    setOtp((prev) => {
-      if (prev.length >= OTP_LENGTH) return prev;
-      const next = prev + key;
-      if (next.length === OTP_LENGTH) handleVerify(next);
-      return next;
-    });
+    if (otp.length >= OTP_LENGTH) return;
+    const next = otp + key;
+    setOtp(next);
+    if (next.length === OTP_LENGTH) handleVerify(next);
   };
 
   const handleResend = () => {
@@ -303,6 +301,7 @@ const SignupScreen = ({ navigation }) => {
           {KEYPAD.map((key, i) => (
             <TouchableOpacity
               key={i}
+              testID={key ? `keypad-${key === '⌫' ? 'delete' : key}` : 'keypad-blank'}
               style={[
                 styles.key,
                 (key === '' || key === '⌫') && styles.keyGhost,

@@ -52,9 +52,11 @@ export function useNotifications(navigationRef, isAuthenticated = true) {
             nav.navigate('Main', { screen: 'MessagesTab' });
           }
           break;
+        // Requests live inside the Chats tab now (Requests segment) —
+        // the standalone MessageRequests screen went with the redesign.
         case 'message_request':
         case 'message_request_accepted':
-          nav.navigate('MessageRequests');
+          nav.navigate('Main', { screen: 'MessagesTab' });
           break;
         case 'follow':
           nav.navigate('Notifications');

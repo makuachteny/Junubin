@@ -134,7 +134,7 @@ describe('Chat interactive actions', () => {
       <ChatScreen navigation={navigation} route={route} />
     );
 
-    expect(getByPlaceholderText('Type a message...')).toBeTruthy();
+    expect(getByPlaceholderText('Message…')).toBeTruthy();
     expect(getByTestId('chat-send')).toBeTruthy();
     expect(queryByTestId('chat-mic')).toBeNull();
     expect(queryByTestId('chat-plus')).toBeNull();
@@ -146,6 +146,23 @@ describe('Chat interactive actions', () => {
     await act(async () => {});
   });
 
+  // Redesign chrome: a fresh thread opens on the TODAY divider with
+  // the text-only notice under it, and the "Safety tips" link routes
+  // to the Safety info page.
+  it('shows the day divider and the text-only notice with a safety link', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
+    const { getByText } = render(
+      <ChatScreen navigation={navigation} route={route} />
+    );
+    await act(async () => {});
+
+    expect(getByText('TODAY')).toBeTruthy();
+    expect(getByText(/Chats are text-only by design/)).toBeTruthy();
+    fireEvent.press(getByText('Safety tips'));
+    expect(navigation.navigate).toHaveBeenCalledWith('SettingsInfo', { pageKey: 'safety' });
+  });
+
   it('sends a plain text message from the composer', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     // A real conversationId is required — ChatScreen refuses to
@@ -155,7 +172,7 @@ describe('Chat interactive actions', () => {
       <ChatScreen navigation={navigation} route={route} />
     );
 
-    fireEvent.changeText(getByPlaceholderText('Type a message...'), 'Hello there');
+    fireEvent.changeText(getByPlaceholderText('Message…'), 'Hello there');
     await act(async () => {
       fireEvent.press(getByTestId('chat-send'));
     });

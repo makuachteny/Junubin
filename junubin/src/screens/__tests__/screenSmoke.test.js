@@ -197,8 +197,10 @@ describe('screen smoke tests', () => {
   it('renders Onboarding screen', () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() };
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    expect(getByText('GET STARTED')).toBeTruthy();
-    expect(getByText('Find your South Sudanese people.')).toBeTruthy();
+    expect(getByText('CONTINUE WITH PHONE')).toBeTruthy();
+    // The headline splits "South Sudanese" into a gold <Text> child, so
+    // match the surrounding fragments rather than the whole sentence.
+    expect(getByText('South Sudanese')).toBeTruthy();
   });
 
   it('renders Chat screen', async () => {
@@ -206,16 +208,13 @@ describe('screen smoke tests', () => {
     const route = {
       params: {
         match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] },
-        // The connection banner only renders when we arrive straight
-        // from the moment the connection was made.
-        fromMatch: true,
       },
     };
     const { getByText, getByPlaceholderText } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
-    expect(getByText("You're connected with Asha")).toBeTruthy();
-    expect(getByPlaceholderText('Type a message...')).toBeTruthy();
+    expect(getByText('Asha')).toBeTruthy();
+    expect(getByPlaceholderText('Message…')).toBeTruthy();
     // ChatScreen kicks off getMessages()/markConversationRead() on mount;
     // flush those promises inside act so their state updates don't warn.
     await act(async () => {});
@@ -228,7 +227,6 @@ describe('screen smoke tests', () => {
     expect(getByText('LOCATION VISIBILITY')).toBeTruthy();
     expect(getByText('APPEARANCE')).toBeTruthy();
     expect(getByText('ACCOUNT & SAFETY')).toBeTruthy();
-    expect(getByText('DISCOVERY')).toBeTruthy();
   });
 
   it('renders Main app navigator for authenticated users', async () => {

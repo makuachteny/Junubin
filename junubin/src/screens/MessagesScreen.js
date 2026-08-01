@@ -79,14 +79,13 @@ export default function MessagesScreen({ navigation }) {
 
   const [segment, setSegment] = useState('messages');
   const [matches, setMatches] = useState([]);
-  // Pending incoming message requests, full request shape
-  // ({ id, from, message, createdAt }) — same rows the MessageRequests
-  // screen renders, shown inline here as the second segment.
+  // Pending incoming message requests ({ id, from, message,
+  // createdAt }), shown inline as the second segment.
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // Ids currently mid-accept / mid-decline, so a double-tap can't fire
-  // two accepts (same guard as MessageRequestsScreen).
+  // Ids currently mid-accept / mid-decline, so a double-tap can't
+  // fire two accepts.
   const [busyIds, setBusyIds] = useState(() => new Set());
 
   const setBusy = useCallback((id, on) => {
@@ -190,9 +189,9 @@ export default function MessagesScreen({ navigation }) {
     navigation.navigate('ProfileDetail', { profile });
   }, [navigation]);
 
-  // Accept — same flow as MessageRequestsScreen: accept_message_request
-  // RPC, then straight into the new conversation. Demo rows have no
-  // server request, so they just convert locally.
+  // Accept — the accept_message_request RPC, then straight into the
+  // new conversation. Demo rows have no server request, so they just
+  // convert locally.
   const handleAccept = useCallback(async (request) => {
     if (busyIds.has(request.id)) return;
     hapticMedium();

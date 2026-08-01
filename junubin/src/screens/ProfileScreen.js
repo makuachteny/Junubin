@@ -1,13 +1,11 @@
-// ProfileScreen — the "Profile" tab (also reachable as the `Profile`
-// stack route, e.g. from Messages). Industry redesign: square
-// Blueprint-framed avatar, condensed display type, a PROFILE STRENGTH
-// checklist driven by the profileCompleteness util, and OPEN TO /
-// LANGUAGES chip sections.
-//
-// Renders correctly both as a bottom tab (no back affordance) and when
-// pushed on the stack (back chevron appears because canGoBack() is true).
+// ProfileScreen — the "Profile" tab (claude.ai/design "JuNubin
+// Redesign", Profile screen). Header kicker (mini flag + JUNUBIN) over
+// a condensed h1, gold-ringed Blueprint avatar, a static follower
+// strip, the PROFILE STRENGTH checklist (five rows, driven by the
+// profileCompleteness util so the percent and checks can't disagree),
+// OPEN TO / LANGUAGES chips, and the Edit / Preview / theme actions.
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -15,41 +13,55 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme, FontFamily } from '../theme';
 import Blueprint from '../components/Blueprint';
 import { imageSource } from '../utils/imageSource';
+import { promptToOpenSettings } from '../utils/permissionAlert';
 import { useCurrentUser } from '../hooks';
 import { useMyFollowCounts } from '../hooks/useFollow';
+import * as profileService from '../api/services/profileService';
 import { calculateCompleteness } from '../utils/profileCompleteness';
 import { OPEN_TO_BY_KEY, normalizeOpenTo } from '../data/openTo';
+import { getCountryByCode } from '../data/countries';
 
-// The strength checklist shows a curated subset of the completeness
-// fields (the mock shows ~5 rows, the util tracks 11). Keys/steps
-// mirror src/utils/profileCompleteness.js FIELDS — done-ness comes
-// from the util's `missing` list, so the percent and the checks can
-// never disagree.
+// The five checklist rows — keys mirror src/utils/profileCompleteness.js
+// FIELDS exactly (the util now tracks only these five, 20% each).
+// `action` names which surface a tap opens: the photo row runs the
+// picker in place, verify is the PhotoVerification flow, everything
+// else edits in EditProfile.
 const STRENGTH_ROWS = [
-  { key: 'photos', label: 'Add at least 3 photos', step: 'photos' },
-  { key: 'bio', label: 'Write a bio', step: 'bio' },
-  { key: 'job', label: 'Add your job title', step: 'job' },
-  { key: 'ethnicity', label: 'Add your tribe / heritage', step: 'ethnicity' },
-  { key: 'openTo', label: 'Say what you are open to', step: 'openTo' },
-  { key: 'verified', label: 'Verify your photos', step: 'verify' },
+  { key: 'photos',       label: 'Add a profile photo',     action: 'photo' },
+  { key: 'ethnicity',    label: 'Add your background',     action: 'edit' },
+  { key: 'languages',    label: 'Add languages',           action: 'edit' },
+  { key: 'promptAnswer', label: 'Answer a profile prompt', action: 'edit' },
+  { key: 'verified',     label: 'Verify your photo',       action: 'verify' },
 ];
+
+// ss-tag chips cycle the four flag tint/dark pairs by index — the
+// design's `ssTag(label, i)` helper.
+const TAG_CYCLE = ['Blue', 'Green', 'Gold', 'Red'];
+const tagColors = (colors, index) => {
+  const c = TAG_CYCLE[index % TAG_CYCLE.length];
+  return { backgroundColor: colors[`ss${c}Tint`], color: colors[`ss${c}Dark`] };
+};
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const { colors, isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const { currentUser, refreshUser } = useCurrentUser();
+  const [uploading, setUploading] = useState(false);
 
-  // Re-pull the user from the server every time Profile gains focus so
-  // edits made in EditProfile (a modal pushed on top) are always
-  // reflected when the user returns here — never a stale in-memory copy.
+  // Re-pull the user every time Profile gains focus so edits made in
+  // EditProfile / PhotoVerification are reflected on return — never a
+  // stale in-memory copy.
   useFocusEffect(
     useCallback(() => {
       refreshUser?.();
@@ -68,28 +80,59 @@ export default function ProfileScreen({ navigation }) {
     [completeness],
   );
 
+  // "Add a profile photo" runs the picker right here — EditProfile no
+  // longer manages photos, and bouncing through a form to add one photo
+  // dead-ended the checklist's most important row.
+  const handleAddPhoto = async () => {
+    if (uploading) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      promptToOpenSettings({
+        title: 'Photo access needed',
+        message: 'JuNubin needs photo access to add profile photos. Enable it in Settings.',
+      });
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [3, 4],
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    setUploading(true);
+    try {
+      await profileService.uploadPhoto(result.assets[0].uri);
+      await refreshUser();
+    } catch (err) {
+      Alert.alert('Upload failed', err.message || 'Could not upload photo. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleStrengthRow = (action) => {
+    if (action === 'photo') return handleAddPhoto();
+    if (action === 'verify') return navigation.navigate('PhotoVerification');
+    return navigation.navigate('EditProfile');
+  };
+
   const handleEdit = () => navigation.navigate('EditProfile');
-  // The verify step has no editor section — it IS the PhotoVerification
-  // flow; routing it into EditProfile dead-ended at the top of the form.
-  const handleStrengthRow = (step) => (
-    step === 'verify'
-      ? navigation.navigate('PhotoVerification')
-      : navigation.navigate('EditProfile', { focusStep: step })
-  );
-  // "Preview as others" reuses the same full-screen profile view the
+  // "Preview as others" reuses the same full-screen detail view the
   // Directory opens for other people — no bespoke preview surface.
-  const handlePreview = () => navigation.navigate('ProfileView', {
-    profile: { ...(displayUser || {}), images: displayUser?.images || [] },
-    // Own-profile preview: ProfileView hides Follow/Message so the
-    // owner can't fire self-targeted actions from their own card.
-    preview: true,
-  });
-  const openFollowList = (initialTab) => navigation.navigate('FollowList', {
-    userId: displayUser?.id, userName: displayUser?.name, initialTab,
+  const handlePreview = () => navigation.navigate('ProfileDetail', {
+    profile: {
+      ...(displayUser || {}),
+      userId: displayUser?.id,
+      images: displayUser?.images || [],
+    },
+    selfPreview: true,
   });
 
+  const countryName =
+    getCountryByCode(displayUser?.countryCode)?.name || displayUser?.country;
   const cityLine = [
-    [displayUser?.city, displayUser?.country].filter(Boolean).join(', '),
+    [displayUser?.city, countryName].filter(Boolean).join(', '),
     displayUser?.pronouns,
   ].filter(Boolean).join(' · ');
 
@@ -97,28 +140,26 @@ export default function ProfileScreen({ navigation }) {
     .map((key) => OPEN_TO_BY_KEY[key]?.label || key);
   const languages = Array.isArray(displayUser?.languages) ? displayUser.languages : [];
 
-  const canGoBack = navigation?.canGoBack?.();
-
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
       <ScrollView
         style={styles.content}
         contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header row ── */}
+        {/* ── Header row: flag kicker + h1, gear ── */}
         <View style={styles.headerRow}>
-          {canGoBack ? (
-            <TouchableOpacity
-              onPress={() => navigation.goBack()}
-              style={styles.headerBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-            >
-              <Ionicons name="chevron-back" size={24} color={colors.black} />
-            </TouchableOpacity>
-          ) : null}
-          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={styles.headerBody}>
+            <View style={styles.kickerRow}>
+              <View style={styles.flagMark}>
+                <View style={[styles.flagStripe, { backgroundColor: colors.ssInk }]} />
+                <View style={[styles.flagStripe, styles.flagStripeMid, { backgroundColor: colors.ssRed }]} />
+                <View style={[styles.flagStripe, { backgroundColor: colors.ssGreen }]} />
+              </View>
+              <Text style={styles.kicker}>JUNUBIN</Text>
+            </View>
+            <Text style={styles.headerTitle} accessibilityRole="header">Profile</Text>
+          </View>
           <TouchableOpacity
             onPress={() => navigation.navigate('Settings')}
             style={styles.headerBtn}
@@ -129,16 +170,18 @@ export default function ProfileScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* ── Identity block ── */}
+        {/* ── Identity row ── */}
         <View style={styles.identityRow}>
-          <Blueprint style={styles.avatarFrame}>
-            <Image
-              source={imageSource(displayUser?.images?.[0])}
-              style={styles.avatar}
-              resizeMode="cover"
-              accessibilityLabel="Your profile photo"
-            />
-          </Blueprint>
+          <View style={styles.avatarRing}>
+            <Blueprint style={styles.avatarFrame}>
+              <Image
+                source={imageSource(displayUser?.images?.[0])}
+                style={styles.avatar}
+                resizeMode="cover"
+                accessibilityLabel="Your profile photo"
+              />
+            </Blueprint>
+          </View>
           <View style={styles.identityBody}>
             <View style={styles.nameRow}>
               <Text style={styles.name} numberOfLines={1}>
@@ -155,39 +198,37 @@ export default function ProfileScreen({ navigation }) {
               ) : null}
             </View>
             {cityLine ? <Text style={styles.cityLine} numberOfLines={1}>{cityLine}</Text> : null}
-            <View style={styles.followRow}>
-              <TouchableOpacity
-                onPress={() => openFollowList('Followers')}
-                accessibilityRole="button"
-                accessibilityLabel={`${followCounts.followers} followers`}
-                hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-              >
-                <Text style={styles.followText}>
-                  <Text style={styles.followNum}>{followCounts.followers}</Text> followers
+            {/* Static stats — FollowList is gone; these are facts, not links. */}
+            <View style={styles.statsStrip}>
+              <View style={[styles.statCell, styles.statCellDivided]}>
+                <Text style={styles.statText}>
+                  <Text style={styles.statNum}>{followCounts.followers}</Text>
+                  <Text> followers</Text>
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => openFollowList('Following')}
-                accessibilityRole="button"
-                accessibilityLabel={`${followCounts.following} following`}
-                hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
-              >
-                <Text style={styles.followText}>
-                  <Text style={styles.followNum}>{followCounts.following}</Text> following
+              </View>
+              <View style={styles.statCell}>
+                <Text style={styles.statText}>
+                  <Text style={styles.statNum}>{followCounts.following}</Text>
+                  <Text> following</Text>
                 </Text>
-              </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* ── Profile strength (replaces the old completeness banner) ── */}
+        {/* ── Profile strength ── */}
         <Blueprint style={styles.strengthCard}>
           <View style={styles.strengthHeader}>
             <Text style={styles.strengthTitle}>PROFILE STRENGTH</Text>
             <Text style={styles.strengthPct}>{completeness.score}%</Text>
           </View>
-          <View style={styles.strengthBar}>
-            <View style={[styles.strengthFill, { width: `${completeness.score}%` }]} />
+          <View style={styles.strengthTrack}>
+            <LinearGradient
+              colors={[colors.ssGreen, colors.ssGold, colors.ssBlue]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.strengthFill, { width: `${completeness.score}%` }]}
+            />
           </View>
           <View style={styles.strengthList}>
             {STRENGTH_ROWS.map((row) => {
@@ -196,7 +237,8 @@ export default function ProfileScreen({ navigation }) {
                 <TouchableOpacity
                   key={row.key}
                   style={styles.strengthRow}
-                  onPress={() => handleStrengthRow(row.step)}
+                  onPress={() => handleStrengthRow(row.action)}
+                  disabled={row.action === 'photo' && uploading}
                   accessibilityRole="button"
                   accessibilityState={{ checked: done }}
                   accessibilityLabel={`${row.label}${done ? ', done' : ''}`}
@@ -219,13 +261,16 @@ export default function ProfileScreen({ navigation }) {
         {/* ── Open to ── */}
         {openToLabels.length > 0 ? (
           <>
-            <Text style={styles.sectionLabel}>OPEN TO</Text>
+            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>OPEN TO</Text>
             <View style={styles.chipWrap}>
-              {openToLabels.map((label) => (
-                <View key={label} style={styles.openChip}>
-                  <Text style={styles.openChipText}>{label}</Text>
-                </View>
-              ))}
+              {openToLabels.map((label, i) => {
+                const tag = tagColors(colors, i);
+                return (
+                  <View key={label} style={[styles.tagChip, { backgroundColor: tag.backgroundColor }]}>
+                    <Text style={[styles.tagChipText, { color: tag.color }]}>{label}</Text>
+                  </View>
+                );
+              })}
             </View>
           </>
         ) : null}
@@ -233,7 +278,7 @@ export default function ProfileScreen({ navigation }) {
         {/* ── Languages ── */}
         {languages.length > 0 ? (
           <>
-            <Text style={styles.sectionLabel}>LANGUAGES</Text>
+            <Text style={[styles.sectionLabel, { marginTop: 18 }]}>LANGUAGES</Text>
             <View style={styles.chipWrap}>
               {languages.map((lang) => (
                 <View key={lang} style={styles.langChip}>
@@ -263,6 +308,16 @@ export default function ProfileScreen({ navigation }) {
             <Text style={styles.outlineBtnText}>Preview as others</Text>
           </TouchableOpacity>
         </View>
+        <TouchableOpacity
+          style={[styles.outlineBtn, styles.themeBtn]}
+          onPress={toggleTheme}
+          accessibilityRole="button"
+          accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          <Text style={styles.outlineBtnText}>
+            {isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          </Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -278,7 +333,6 @@ const getStyles = (colors) => StyleSheet.create({
   },
   contentInner: {
     paddingHorizontal: 18,
-    paddingTop: 8,
   },
 
   // ── Header ──
@@ -286,10 +340,39 @@ const getStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerTitle: {
+  headerBody: {
     flex: 1,
+  },
+  kickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  flagMark: {
+    width: 20,
+    height: 14,
+    borderWidth: 1,
+    borderColor: colors.separator,
+  },
+  flagStripe: {
+    flex: 1,
+  },
+  flagStripeMid: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.cream,
+  },
+  kicker: {
     fontFamily: FontFamily.heading,
-    fontSize: 28,
+    fontSize: 10.5,
+    letterSpacing: 2.7,
+    color: colors.accentDark,
+  },
+  headerTitle: {
+    fontFamily: FontFamily.heading,
+    fontSize: 31,
+    lineHeight: 31,
+    marginTop: 2,
     color: colors.black,
   },
   headerBtn: {
@@ -305,6 +388,13 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     gap: 14,
     marginTop: 12,
+  },
+  // Design: `outline: 3px solid var(--ss-gold); outline-offset: 2px` —
+  // RN has no outline, so a bordered wrapper with a 2px gap stands in.
+  avatarRing: {
+    borderWidth: 3,
+    borderColor: colors.ssGold,
+    padding: 2,
   },
   avatarFrame: {
     width: 86,
@@ -333,21 +423,32 @@ const getStyles = (colors) => StyleSheet.create({
   cityLine: {
     fontFamily: FontFamily.regular,
     fontSize: 13,
-    color: colors.gray600,
+    color: colors.gray500,
     marginTop: 2,
   },
-  followRow: {
+  statsStrip: {
     flexDirection: 'row',
-    gap: 14,
-    marginTop: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
   },
-  followText: {
+  statCell: {
+    paddingVertical: 5,
+    paddingHorizontal: 12,
+  },
+  statCellDivided: {
+    borderRightWidth: StyleSheet.hairlineWidth,
+    borderRightColor: colors.separator,
+  },
+  statText: {
     fontFamily: FontFamily.regular,
-    fontSize: 13,
-    color: colors.gray600,
+    fontSize: 12.5,
+    color: colors.gray500,
   },
-  followNum: {
-    fontFamily: FontFamily.bold,
+  statNum: {
+    fontFamily: FontFamily.heading,
+    fontSize: 15,
     color: colors.black,
   },
 
@@ -367,7 +468,7 @@ const getStyles = (colors) => StyleSheet.create({
   strengthTitle: {
     fontFamily: FontFamily.heading,
     fontSize: 15,
-    letterSpacing: 1,
+    letterSpacing: 0.9,
     color: colors.black,
   },
   strengthPct: {
@@ -375,15 +476,15 @@ const getStyles = (colors) => StyleSheet.create({
     fontSize: 13,
     color: colors.accentDark,
   },
-  strengthBar: {
+  strengthTrack: {
     height: 5,
     backgroundColor: colors.surfaceMuted,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
+    overflow: 'hidden',
   },
   strengthFill: {
     height: '100%',
-    backgroundColor: colors.accent,
   },
   strengthList: {
     marginTop: 2,
@@ -427,9 +528,8 @@ const getStyles = (colors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: 12,
     letterSpacing: 1,
-    color: colors.gray600,
+    color: colors.gray500,
     textTransform: 'uppercase',
-    marginTop: 20,
   },
   chipWrap: {
     flexDirection: 'row',
@@ -437,16 +537,14 @@ const getStyles = (colors) => StyleSheet.create({
     gap: 6,
     marginTop: 8,
   },
-  openChip: {
+  tagChip: {
     paddingVertical: 5,
     paddingHorizontal: 10,
-    backgroundColor: colors.accentTint15,
     borderRadius: 2,
   },
-  openChipText: {
+  tagChipText: {
     fontFamily: FontFamily.semibold,
     fontSize: 12,
-    color: colors.accentDark,
   },
   langChip: {
     paddingVertical: 5,
@@ -476,6 +574,11 @@ const getStyles = (colors) => StyleSheet.create({
     borderColor: colors.separator,
     borderRadius: 4,
     backgroundColor: 'transparent',
+  },
+  themeBtn: {
+    flex: 0,
+    width: '100%',
+    marginTop: 10,
   },
   outlineBtnText: {
     fontFamily: FontFamily.semibold,

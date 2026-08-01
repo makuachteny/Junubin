@@ -1,58 +1,145 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+// Settings — flattened single screen with in-screen sub-views
+// (claude.ai/design "JuNubin Redesign", Settings overlay).
+//
+// One route, six views: main, verify, blocked, notifs, help, del.
+// The header back button pops the sub-view first, then closes the
+// screen — sub-views are component state, not navigation routes, so
+// the whole surface stays a single stack entry.
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   TouchableOpacity,
-  Switch,
+  ActivityIndicator,
   Alert,
-  Animated,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily } from '../theme';
-import BrandLogo from '../components/BrandLogo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme, FontFamily } from '../theme';
+import Blueprint from '../components/Blueprint';
 import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
 import * as safetyService from '../api/services/safetyService';
 import { supabase } from '../config/supabase';
+import { imageSource } from '../utils/imageSource';
 import {
   promptForPushPermission,
   getNotificationPermissionStatus,
 } from '../utils/notifications';
 import { promptToOpenSettings } from '../utils/permissionAlert';
-import { LOCATION_VISIBILITY, LOCATION_VISIBILITY_OPTIONS } from '../utils/locationConsent';
-import { REFERRALS_BACKEND_READY } from '../utils/referralService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LOCATION_VISIBILITY } from '../utils/locationConsent';
 
-const INCOGNITO_KEY = '@junubin_incognito';
-const DISTANCE_UNIT_KEY = '@junubin_distance_unit';
+// Per-category push toggles. Local-only for now — there is no
+// notification-prefs column server-side yet, so these persist on the
+// device and default to on. The OS-level permission stays the real
+// gate; flipping a toggle on while the OS permission is missing walks
+// the user through the prompt / system-settings path.
+const NOTIF_PREFS_KEY = '@junubin_notif_prefs';
+const NOTIF_TOGGLES = [
+  { key: 'requests', label: 'Message requests' },
+  { key: 'messages', label: 'New messages' },
+  { key: 'follows', label: 'New followers' },
+  { key: 'nearby', label: 'People-nearby digest' },
+];
+const NOTIF_DEFAULTS = { requests: true, messages: true, follows: true, nearby: true };
+
+// The design's visibility copy, mapped onto the app's real
+// Profile.locationVisibility values ('coarse' | 'city' | 'off').
+const VIS_OPTIONS = [
+  {
+    value: LOCATION_VISIBILITY.COARSE,
+    label: 'Everyone on JuNubin',
+    sub: 'Your approximate area shows on the Nearby map.',
+  },
+  {
+    value: LOCATION_VISIBILITY.CITY,
+    label: 'City only',
+    sub: 'People see your city, never a map pin.',
+  },
+  {
+    value: LOCATION_VISIBILITY.OFF,
+    label: 'Nobody',
+    sub: 'You browse the map; you never appear on it.',
+  },
+];
+
+const SUBVIEW_TITLES = {
+  verify: 'Verify your photo',
+  blocked: 'Blocked people',
+  notifs: 'Notifications',
+  help: 'Help & policies',
+  del: 'Delete account',
+};
+
+const HELP_ROWS = [
+  { label: 'FAQ', pageKey: 'faq' },
+  { label: 'Contact us', pageKey: 'contact' },
+  { label: 'Terms of use', pageKey: 'terms' },
+  { label: 'Privacy policy', pageKey: 'privacy' },
+  { label: 'Community guidelines', pageKey: 'guidelines' },
+  { label: 'Safety tips', pageKey: 'safety' },
+];
+
+// 44×26 track switch from the design — accent when on, 20px knob in
+// the page background color. RN's native Switch renders differently
+// per platform; the design's toggle is part of the visual language,
+// so it's drawn by hand. Purely visual — the row that contains it is
+// the switch for touch and screen readers.
+function TrackSwitch({ value, colors }) {
+  return (
+    <View
+      style={[
+        trackStyles.track,
+        { backgroundColor: value ? colors.accent : colors.gray300 },
+      ]}
+      pointerEvents="none"
+    >
+      <View style={[trackStyles.knob, { backgroundColor: colors.cream, left: value ? 21 : 3 }]} />
+    </View>
+  );
+}
+
+const trackStyles = StyleSheet.create({
+  track: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+  },
+  knob: {
+    position: 'absolute',
+    top: 3,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+  },
+});
 
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark, toggleTheme } = useTheme();
   const { logout, session } = useAuth();
   const { currentUser } = useCurrentUser();
-  const [showMe, setShowMe] = useState(currentUser.preferences?.showMe ?? true);
-
-  const handleShowMeToggle = (val) => {
-    setShowMe(val);
-    if (session) {
-      profileService.updateProfile({ showMe: val }).catch(() => {});
-    }
-  };
   // Payments UI is permanently off — the only thing we still need from
   // the subscription context is `reset()` so logout/delete clear any
   // cached entitlement state.
   const { reset } = useSubscription();
-  const [incognito, setIncognitoState] = useState(false);
-  const [distanceUnit, setDistanceUnitState] = useState('mi');
-  // Location visibility. Source of truth is `Profile.locationVisibility`
-  // (00047) — 'off' | 'city' | 'coarse', defaulting to 'off'. The legacy
-  // `Profile.shareLocation` boolean is kept in sync by a DB trigger, so
-  // we only ever write the new column from here.
+  const styles = useMemo(() => getStyles(colors), [colors]);
+
+  // null = main list; otherwise 'verify' | 'blocked' | 'notifs' |
+  // 'help' | 'del'.
+  const [view, setView] = useState(null);
+
+  // ── Location visibility ─────────────────────────────────────────
+  // Source of truth is `Profile.locationVisibility` (00047) — 'off' |
+  // 'city' | 'coarse', defaulting to 'off'. The legacy
+  // `Profile.shareLocation` boolean is kept in sync by a DB trigger,
+  // so we only ever write the new column from here.
   const [locationVisibility, setLocationVisibilityState] = useState(LOCATION_VISIBILITY.OFF);
   // Temporary sharing window (`Profile.locationVisibleUntil`, 00047).
   // null = visible until manually disabled; a future ISO timestamp
@@ -60,48 +147,17 @@ export default function SettingsScreen({ navigation }) {
   // user server-side with no cron needed.
   const [visibleUntil, setVisibleUntilState] = useState(null);
 
-  // Hydrate persisted toggles on mount. Incognito's source of truth is
-  // `Profile.incognito` (so it syncs across devices); AsyncStorage is a
-  // fast-path cache that avoids a flicker on cold start before the
-  // server fetch lands. distanceUnit stays local-only — it's a UI
-  // display preference, not an account setting.
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      AsyncStorage.getItem(INCOGNITO_KEY),
-      AsyncStorage.getItem(DISTANCE_UNIT_KEY),
-    ]).then(([inc, unit]) => {
-      if (cancelled) return;
-      if (inc === 'true') setIncognitoState(true);
-      if (unit === 'mi' || unit === 'km') setDistanceUnitState(unit);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-
-  // Re-hydrate incognito from currentUser whenever the profile changes
-  // (e.g., after refreshUser fires from useAppStateRefresh on
-  // background→foreground). Server wins; AsyncStorage is updated to
-  // match so the next cold start matches the server immediately.
-  useEffect(() => {
-    const serverFlag = !!currentUser?.profile?.incognito;
-    setIncognitoState(serverFlag);
-    AsyncStorage.setItem(INCOGNITO_KEY, serverFlag ? 'true' : 'false').catch(() => {});
-  }, [currentUser?.profile?.incognito]);
-
   // Location visibility is server-only (no AsyncStorage cache) — the
-  // map surface is only meaningful when authenticated, so the brief
-  // flash of 'off' before the server fetch lands is acceptable, and
-  // erring toward hidden is the right way to be wrong. Falls back to
-  // the legacy boolean for a client running against a pre-00047 DB.
+  // brief flash of 'off' before the server fetch lands errs toward
+  // hidden, which is the right way to be wrong. Falls back to the
+  // legacy boolean for a client running against a pre-00047 DB.
   useEffect(() => {
     const profile = currentUser?.profile;
     const stored = profile?.locationVisibility;
 
     // An expired temporary window means the server already treats this
-    // user as hidden. Reconcile the stored state to match ("visible for
-    // 1 hour" ending IS turning visibility off) so the radio group
-    // doesn't claim a visibility level nobody can see. Fire-and-forget:
-    // the server ignores expired windows either way.
+    // user as hidden. Reconcile the stored state to match so the radio
+    // group doesn't claim a visibility level nobody can see.
     const until = profile?.locationVisibleUntil || null;
     const expired = until && new Date(until).getTime() <= Date.now();
     if (expired && stored !== LOCATION_VISIBILITY.OFF) {
@@ -126,31 +182,9 @@ export default function SettingsScreen({ navigation }) {
     }
   }, [currentUser?.profile?.locationVisibility, currentUser?.profile?.shareLocation, currentUser?.profile?.locationVisibleUntil]);
 
-  // Persist on change. Write to the DB first so other devices can see
-  // it; the local cache is best-effort. If the DB write fails (offline),
-  // we revert the toggle so the user isn't lied to about a setting that
-  // didn't actually save.
-  const setIncognito = useCallback(async (next) => {
-    setIncognitoState(next);
-    AsyncStorage.setItem(INCOGNITO_KEY, next ? 'true' : 'false').catch(() => {});
-    try {
-      await profileService.updateProfile({ incognito: next });
-    } catch (e) {
-      // Revert local state on failure.
-      setIncognitoState(!next);
-      AsyncStorage.setItem(INCOGNITO_KEY, !next ? 'true' : 'false').catch(() => {});
-      Alert.alert('Could not update', e?.message || 'Try again when you have a connection.');
-    }
-  }, []);
-  const setDistanceUnit = useCallback((next) => {
-    const value = typeof next === 'function' ? next(distanceUnit) : next;
-    setDistanceUnitState(value);
-    AsyncStorage.setItem(DISTANCE_UNIT_KEY, value).catch(() => {});
-  }, [distanceUnit]);
-
-  // Same revert-on-failure pattern as Incognito. Writing this column is
-  // what makes someone discoverable, so a failed save must not leave the
-  // UI claiming a visibility level the server never accepted.
+  // Persist on change with revert-on-failure — writing this column is
+  // what makes someone discoverable, so a failed save must not leave
+  // the UI claiming a visibility level the server never accepted.
   const setLocationVisibility = useCallback(async (next) => {
     const previous = locationVisibility;
     if (next === previous) return;
@@ -171,8 +205,6 @@ export default function SettingsScreen({ navigation }) {
   }, [locationVisibility, visibleUntil]);
 
   // Temporary-visibility window. `hours` = 1 | 8 | null (no limit).
-  // Same revert-on-failure pattern — a window the server never accepted
-  // must not be shown as active.
   const setTemporaryWindow = useCallback(async (hours) => {
     const previous = visibleUntil;
     const next = hours ? new Date(Date.now() + hours * 3600_000).toISOString() : null;
@@ -184,68 +216,95 @@ export default function SettingsScreen({ navigation }) {
       Alert.alert('Could not update', e?.message || 'Try again when you have a connection.');
     }
   }, [visibleUntil]);
-  const styles = useMemo(() => getStyles(colors), [colors]);
-  const contentAnim = useRef(new Animated.Value(0)).current;
+
+  // ── Notification toggles ────────────────────────────────────────
+  const [notifPrefs, setNotifPrefs] = useState(NOTIF_DEFAULTS);
 
   useEffect(() => {
-    Animated.timing(contentAnim, {
-      toValue: 1,
-      duration: 340,
-      useNativeDriver: true,
-    }).start();
-  }, [contentAnim]);
+    let cancelled = false;
+    AsyncStorage.getItem(NOTIF_PREFS_KEY).then((raw) => {
+      if (cancelled || !raw) return;
+      try {
+        setNotifPrefs({ ...NOTIF_DEFAULTS, ...JSON.parse(raw) });
+      } catch {}
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
-  const handleViewBlocked = useCallback(async () => {
+  const toggleNotifPref = useCallback(async (key) => {
+    const turningOn = !notifPrefs[key];
+    const next = { ...notifPrefs, [key]: turningOn };
+    setNotifPrefs(next);
+    AsyncStorage.setItem(NOTIF_PREFS_KEY, JSON.stringify(next)).catch(() => {});
+    // A toggle only means something if the OS lets us deliver at all.
+    // Turning any category on with permission missing walks the user
+    // through the prompt (undetermined) or system settings (denied).
+    if (turningOn) {
+      try {
+        const status = await getNotificationPermissionStatus();
+        if (status === 'denied') {
+          promptToOpenSettings({
+            title: 'Notifications turned off',
+            message: 'Open Settings to let JuNubin send you push notifications.',
+          });
+        } else if (status !== 'granted') {
+          await promptForPushPermission();
+        }
+      } catch {}
+    }
+  }, [notifPrefs]);
+
+  // ── Blocked people ──────────────────────────────────────────────
+  // null = not fetched yet (loading); [] = fetched, empty.
+  const [blockedRows, setBlockedRows] = useState(null);
+
+  const loadBlocked = useCallback(async () => {
+    setBlockedRows(null);
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) {
-        Alert.alert('Blocked Users', 'Sign in to manage blocked users.');
-        return;
-      }
+      if (!authUser) { setBlockedRows([]); return; }
       const { data: appUser } = await supabase
         .from('User')
         .select('id')
         .eq('auth_id', authUser.id)
         .single();
-      if (!appUser) {
-        Alert.alert('Blocked Users', 'Could not load your account.');
-        return;
-      }
-
+      if (!appUser) { setBlockedRows([]); return; }
       const { data: rows, error } = await supabase
         .from('Block')
-        .select('blockedId, blocked:User!blockedId(id, displayName)')
+        .select('blockedId, blocked:User!blockedId(id, displayName, photos:Photo(url, sortOrder))')
         .eq('blockerId', appUser.id);
       if (error) throw error;
-
-      if (!rows || rows.length === 0) {
-        Alert.alert('Blocked Users', 'You have no blocked users.', [{ text: 'OK' }]);
-        return;
-      }
-
-      const buttons = rows.slice(0, 8).map((r) => ({
-        text: `Unblock ${r.blocked?.displayName || 'user'}`,
-        onPress: async () => {
-          try {
-            await safetyService.unblockUser(r.blockedId);
-            Alert.alert('Unblocked', 'They can now see and contact you again.');
-          } catch (e) {
-            Alert.alert('Could not unblock', e?.message || 'Try again.');
-          }
-        },
+      setBlockedRows((rows || []).map((r) => {
+        const photos = Array.isArray(r.blocked?.photos) ? [...r.blocked.photos] : [];
+        photos.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        return {
+          id: r.blockedId,
+          name: r.blocked?.displayName || 'Someone',
+          photo: photos[0]?.url || null,
+        };
       }));
-      buttons.push({ text: 'Done', style: 'cancel' });
-      Alert.alert(
-        'Blocked Users',
-        rows.length > 8 ? `Showing first 8 of ${rows.length}.` : `${rows.length} blocked.`,
-        buttons,
-      );
-    } catch (e) {
-      Alert.alert('Blocked Users', e?.message || 'Could not load blocked list.');
+    } catch {
+      // Degrade to the empty state rather than stranding a spinner —
+      // the copy still tells the user how blocking works.
+      setBlockedRows([]);
     }
   }, []);
 
-  const handleLogout = () => {
+  useEffect(() => {
+    if (view === 'blocked') loadBlocked();
+  }, [view, loadBlocked]);
+
+  const handleUnblock = useCallback(async (row) => {
+    try {
+      await safetyService.unblockUser(row.id);
+      setBlockedRows((prev) => (prev || []).filter((r) => r.id !== row.id));
+    } catch (e) {
+      Alert.alert('Could not unblock', e?.message || 'Try again.');
+    }
+  }, []);
+
+  // ── Log out / delete account ────────────────────────────────────
+  const handleLogout = useCallback(() => {
     Alert.alert(
       'Log Out',
       'Are you sure you want to log out?',
@@ -259,9 +318,9 @@ export default function SettingsScreen({ navigation }) {
             await reset();
           },
         },
-      ]
+      ],
     );
-  };
+  }, [logout, reset]);
 
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
@@ -274,11 +333,10 @@ export default function SettingsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             // Hard delete via the account-delete Edge Function:
-            // tears down storage objects, the User row (FK
-            // cascades the rest), and the auth.users row. App
-            // Store guideline 5.1.1.v requires "real" deletion;
-            // soft-deletes leave the account discoverable and
-            // matchable, which violates that guideline.
+            // tears down storage objects, the User row (FK cascades
+            // the rest), and the auth.users row. App Store guideline
+            // 5.1.1.v requires "real" deletion; soft-deletes leave
+            // the account discoverable, which violates it.
             let serverDeleted = false;
             try {
               if (session?.access_token) {
@@ -292,9 +350,7 @@ export default function SettingsScreen({ navigation }) {
             }
             // If the Edge Function isn't deployed yet (early dev)
             // fall back to the soft-delete flag so the in-app
-            // sign-out still happens. The flag isn't filtered on
-            // reads anywhere — surfaced here only so the prior
-            // behavior is preserved during deploy.
+            // sign-out still happens.
             if (!serverDeleted) {
               try {
                 if (session) {
@@ -306,80 +362,31 @@ export default function SettingsScreen({ navigation }) {
             await reset();
           },
         },
-      ]
+      ],
     );
   }, [session, logout, reset]);
 
-  // Push notifications — distinct from the (deferred) in-app
-  // notification feed. The OS-level permission powers the real
-  // push pipeline (00013 triggers → push-send). Tapping this
-  // row either prompts the user the first time, or opens the
-  // system Settings if they've already denied.
-  const handleNotifications = useCallback(async () => {
-    const status = await getNotificationPermissionStatus();
-    if (status === 'granted') {
-      Alert.alert(
-        'Notifications on',
-        'You\'ll get a heads-up when someone follows you, sends a message, or asks to connect.',
-      );
-      return;
-    }
-    if (status === 'denied') {
-      promptToOpenSettings({
-        title: 'Notifications turned off',
-        message: 'Open Settings to let JuNubin send you push notifications about new followers, messages, and connection requests.',
-      });
-      return;
-    }
-    const token = await promptForPushPermission();
-    if (token) {
-      Alert.alert('Notifications on', 'You\'re all set.');
-    } else {
-      promptToOpenSettings({
-        title: 'Notifications still off',
-        message: 'You can enable JuNubin notifications in Settings whenever you change your mind.',
-      });
-    }
-  }, []);
-
-  const handleInfoPagePress = useCallback((pageKey) => {
-    navigation.navigate('SettingsInfo', { pageKey });
-  }, [navigation]);
-
-  const handleManageAccount = useCallback(() => {
-    navigation.navigate('EditProfile');
-  }, [navigation]);
-
   const isVerified = !!(currentUser?.verified || currentUser?.profile?.isVerified);
 
-  // ACCOUNT & SAFETY — flat rows, mock order. Everything reuses the
-  // pre-existing handlers verbatim; only the presentation changed.
   const accountRows = useMemo(() => [
     {
       label: isVerified ? 'Verify your photo — done ✓' : 'Verify your photo',
-      onPress: () => navigation.navigate('PhotoVerification'),
+      onPress: () => setView('verify'),
     },
-    { label: 'Blocked people', onPress: handleViewBlocked },
-    { label: 'Notifications', onPress: handleNotifications },
-    // The info pages stay individual rows (SettingsInfo renders one
-    // pageKey at a time — there is no index page to drill into yet).
-    { label: 'FAQ', onPress: () => handleInfoPagePress('faq') },
-    { label: 'Contact us', onPress: () => handleInfoPagePress('contact') },
-    { label: 'Terms of use', onPress: () => handleInfoPagePress('terms') },
-    { label: 'Privacy policy', onPress: () => handleInfoPagePress('privacy') },
-    { label: 'Community guidelines', onPress: () => handleInfoPagePress('guidelines') },
-    { label: 'Safety tips', onPress: () => handleInfoPagePress('safety') },
-    // Accessibility prefs are a one-time onboarding step but the
-    // screen is reusable for tuning later — exposing it here gives
-    // a user who skipped it (or who developed new needs) a way back
-    // in without flipping accountPurpose.
-    { label: 'Accessibility preferences', onPress: () => navigation.navigate('AccessibilitySurvey', { returnTo: 'back' }) },
-    { label: 'Manage account', onPress: handleManageAccount },
+    { label: 'Blocked people', onPress: () => setView('blocked') },
+    { label: 'Notifications', onPress: () => setView('notifs') },
+    { label: 'Help, terms & safety', onPress: () => setView('help') },
     { label: 'Log out', onPress: handleLogout },
-    { label: 'Delete account', destructive: true, onPress: handleDeleteAccount },
-  ], [isVerified, handleViewBlocked, handleNotifications, handleInfoPagePress, handleManageAccount, handleDeleteAccount, navigation]);
+    { label: 'Delete account', destructive: true, onPress: () => setView('del') },
+  ], [isVerified, handleLogout]);
 
-  const renderRow = (row) => (
+  // Back pops the sub-view first, then closes the screen.
+  const handleBack = useCallback(() => {
+    if (view) setView(null);
+    else navigation.goBack();
+  }, [view, navigation]);
+
+  const renderChevronRow = (row) => (
     <TouchableOpacity
       key={row.label}
       style={styles.flatRow}
@@ -395,43 +402,17 @@ export default function SettingsScreen({ navigation }) {
     </TouchableOpacity>
   );
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-      </View>
+  // ── Sub-view bodies ─────────────────────────────────────────────
 
-      <Animated.ScrollView
-        contentContainerStyle={styles.content}
-        style={{
-          opacity: contentAnim,
-          transform: [
-            {
-              translateY: contentAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [16, 0],
-              }),
-            },
-          ],
-        }}
-      >
-        {/* ── LOCATION VISIBILITY ── */}
-        {/* Three explicit levels rather than a single on/off switch, so
-            "I want people to know I'm in Nairobi" and "I want a pin on
-            the map" are separate choices. Hidden is the default and
-            stays the default. */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>LOCATION VISIBILITY</Text>
-          {LOCATION_VISIBILITY_OPTIONS.map((opt) => {
+  const renderMain = () => (
+    <>
+      {/* LOCATION VISIBILITY — three explicit levels rather than a
+          single on/off switch. Hidden is the default and stays the
+          default. */}
+      <View>
+        <Text style={styles.sectionLabel}>LOCATION VISIBILITY</Text>
+        <View style={{ gap: 8 }}>
+          {VIS_OPTIONS.map((opt) => {
             const selected = locationVisibility === opt.value;
             return (
               <TouchableOpacity
@@ -441,161 +422,232 @@ export default function SettingsScreen({ navigation }) {
                 activeOpacity={0.85}
                 accessibilityRole="radio"
                 accessibilityState={{ selected }}
-                accessibilityLabel={`${opt.label}. ${opt.description}`}
+                accessibilityLabel={`${opt.label}. ${opt.sub}`}
                 testID={`location-visibility-${opt.value}`}
               >
                 <View style={[styles.radioOuter, selected && styles.radioOuterActive]}>
                   {selected && <View style={styles.radioInner} />}
                 </View>
-                <View style={styles.visOptionText}>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.visOptionLabel}>{opt.label}</Text>
-                  <Text style={styles.visOptionDesc}>{opt.description}</Text>
+                  <Text style={styles.visOptionDesc}>{opt.sub}</Text>
                 </View>
               </TouchableOpacity>
             );
           })}
-
-          {/* Temporary visibility — only meaningful when the user is
-              visible at all. "1 hour" / "8 hours" write a future
-              locationVisibleUntil; discover-nearby drops the user the
-              moment it passes, and the hydrate effect above flips the
-              radio back to Hidden on the next visit. */}
-          {locationVisibility !== LOCATION_VISIBILITY.OFF && (
-            <View style={styles.visibleForBlock}>
-              <Text style={styles.visibleForLabel}>Stay visible for</Text>
-              <View style={styles.visibleForRow}>
-                {[
-                  { hours: 1, label: '1 hour' },
-                  { hours: 8, label: '8 hours' },
-                  { hours: null, label: 'Until I turn it off' },
-                ].map((opt) => {
-                  const selected = opt.hours === null ? !visibleUntil : false;
-                  return (
-                    <TouchableOpacity
-                      key={opt.label}
-                      style={[styles.visibleForChip, selected && styles.visibleForChipActive]}
-                      onPress={() => setTemporaryWindow(opt.hours)}
-                      activeOpacity={0.85}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={`Stay visible for ${opt.label}`}
-                      testID={`visible-for-${opt.hours ?? 'unlimited'}`}
-                    >
-                      <Text style={[styles.visibleForChipText, selected && styles.visibleForChipTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {visibleUntil && (
-                <Text style={styles.visibleForUntil}>
-                  Visible until {new Date(visibleUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                  {' — after that you go back to Hidden automatically.'}
-                </Text>
-              )}
-            </View>
-          )}
-          <Text style={styles.footnote}>
-            Your location is never sold, shared with advertisers, or used to target ads, and
-            JuNubin never tracks you in the background.
-          </Text>
         </View>
 
-        {/* ── APPEARANCE ── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>APPEARANCE</Text>
-          <View style={styles.borderedRow}>
-            <Text style={styles.rowLabel}>Dark mode</Text>
-            <Switch
-              value={isDark}
-              onValueChange={toggleTheme}
-              trackColor={{ false: colors.gray300, true: colors.accent }}
-              thumbColor="#FFFFFF"
-              accessibilityLabel="Dark mode"
-            />
+        {/* Temporary visibility — only meaningful when the user is
+            visible at all. "1 hour" / "8 hours" write a future
+            locationVisibleUntil; discover-nearby drops the user the
+            moment it passes, and the hydrate effect flips the radio
+            back to Nobody on the next visit. */}
+        {locationVisibility !== LOCATION_VISIBILITY.OFF && (
+          <View style={styles.visibleForBlock}>
+            <Text style={styles.visibleForLabel}>STAY VISIBLE FOR</Text>
+            <View style={styles.visibleForRow}>
+              {[
+                { hours: 1, label: '1 hour' },
+                { hours: 8, label: '8 hours' },
+                { hours: null, label: 'Until I turn it off' },
+              ].map((opt) => {
+                const selected = opt.hours === null ? !visibleUntil : false;
+                return (
+                  <TouchableOpacity
+                    key={opt.label}
+                    style={[styles.visibleForChip, selected && styles.visibleForChipActive]}
+                    onPress={() => setTemporaryWindow(opt.hours)}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`Stay visible for ${opt.label}`}
+                    testID={`visible-for-${opt.hours ?? 'unlimited'}`}
+                  >
+                    <Text style={[styles.visibleForChipText, selected && styles.visibleForChipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {visibleUntil && (
+              <Text style={styles.visibleForUntil}>
+                Visible until {new Date(visibleUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                {' — after that you go back to Nobody automatically.'}
+              </Text>
+            )}
           </View>
+        )}
+      </View>
+
+      {/* APPEARANCE */}
+      <View>
+        <Text style={styles.sectionLabel}>APPEARANCE</Text>
+        <TouchableOpacity
+          style={styles.borderedRow}
+          onPress={toggleTheme}
+          activeOpacity={0.8}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: isDark }}
+          accessibilityLabel="Dark mode"
+        >
+          <Text style={styles.rowLabel}>Dark mode</Text>
+          <TrackSwitch value={isDark} colors={colors} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ACCOUNT & SAFETY */}
+      <View>
+        <Text style={styles.sectionLabel}>ACCOUNT & SAFETY</Text>
+        <View>{accountRows.map(renderChevronRow)}</View>
+      </View>
+    </>
+  );
+
+  const renderVerify = () => (
+    <View style={styles.verifyWrap}>
+      <Ionicons name="shield-checkmark-outline" size={46} color={colors.accentDark} />
+      <Text style={styles.verifyBody}>
+        A quick selfie proves you're a real person. It's compared to your profile photo,
+        then deleted. Verified profiles get a badge everywhere.
+      </Text>
+      {isVerified ? (
+        <View style={styles.verifiedChip}>
+          <Ionicons name="checkmark" size={17} color={colors.accentDark} />
+          <Text style={styles.verifiedChipText}>You're verified</Text>
         </View>
+      ) : (
+        <Blueprint style={{ width: '100%' }}>
+          <TouchableOpacity
+            style={styles.goldCta}
+            onPress={() => navigation.navigate('PhotoVerification')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Take verification selfie"
+          >
+            <Text style={styles.goldCtaText}>TAKE VERIFICATION SELFIE</Text>
+          </TouchableOpacity>
+        </Blueprint>
+      )}
+    </View>
+  );
 
-        {/* ── ACCOUNT & SAFETY ── */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>ACCOUNT & SAFETY</Text>
-          {accountRows.map(renderRow)}
-        </View>
-
-        {/* ── DISCOVERY ── */}
-        {/* Toggles that govern whether/how this user shows up in other
-            people's results. Same wiring as before, new clothes. */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>DISCOVERY</Text>
-
-          <View style={styles.switchRow}>
-            <View style={styles.switchRowText}>
-              <Text style={styles.rowLabel}>Show me on JuNubin</Text>
-              <Text style={styles.rowDesc}>
-                While turned off, you will not appear in the directory or on the map.
-              </Text>
-            </View>
-            <Switch
-              value={showMe}
-              onValueChange={handleShowMeToggle}
-              trackColor={{ false: colors.gray300, true: colors.accent }}
-              thumbColor="#FFFFFF"
-              accessibilityLabel="Show me on JuNubin"
-            />
-          </View>
-
-          {/* Was gated behind the Junub tier. The app is free, so
-              private browsing is simply available to everyone —
-              paywalling a privacy control was never defensible. */}
-          <View style={styles.switchRow}>
-            <View style={styles.switchRowText}>
-              <Text style={styles.rowLabel}>Incognito mode</Text>
-              <Text style={styles.rowDesc}>
-                Browse the directory and map without appearing in other people's results.
-              </Text>
-            </View>
-            <Switch
-              value={incognito}
-              onValueChange={setIncognito}
-              trackColor={{ false: colors.gray300, true: colors.accent }}
-              thumbColor="#FFFFFF"
-              accessibilityLabel="Incognito mode"
-            />
-          </View>
-
-          <View style={styles.switchRow}>
-            <View style={styles.switchRowText}>
-              <Text style={styles.rowLabel}>Distance unit</Text>
-              <Text style={styles.rowDesc}>
-                {distanceUnit === 'mi' ? 'Miles' : 'Kilometers'}
-              </Text>
-            </View>
+  const renderBlocked = () => {
+    if (blockedRows === null) {
+      return <ActivityIndicator style={{ marginTop: 44 }} color={colors.accent} />;
+    }
+    if (blockedRows.length === 0) {
+      return (
+        <Text style={styles.blockedEmpty}>
+          You haven't blocked anyone.{'\n'}Block from the ⋯ menu on any profile — they're never told.
+        </Text>
+      );
+    }
+    return (
+      <View>
+        {blockedRows.map((row) => (
+          <View key={row.id} style={styles.blockedRow}>
+            <Image source={imageSource(row.photo)} style={styles.blockedAvatar} />
+            <Text style={styles.blockedName} numberOfLines={1}>{row.name}</Text>
             <TouchableOpacity
-              style={styles.unitToggle}
-              onPress={() => setDistanceUnit(u => u === 'mi' ? 'km' : 'mi')}
+              style={styles.unblockBtn}
+              onPress={() => handleUnblock(row)}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel={`Distance unit: ${distanceUnit === 'mi' ? 'miles' : 'kilometers'}. Tap to switch.`}
+              accessibilityLabel={`Unblock ${row.name}`}
             >
-              <Text style={styles.unitToggleText}>{distanceUnit.toUpperCase()}</Text>
+              <Text style={styles.unblockText}>Unblock</Text>
             </TouchableOpacity>
           </View>
+        ))}
+      </View>
+    );
+  };
 
-          {renderRow({ label: 'Find friends', onPress: () => navigation.navigate('FindFriends') })}
-          {/* Invite Friends hides until REFERRALS_BACKEND_READY flips
-              true — the reward grants are local-only today and would let
-              a user generate free rewards client-side. */}
-          {REFERRALS_BACKEND_READY &&
-            renderRow({ label: 'Invite friends', onPress: () => navigation.navigate('Referral') })}
-        </View>
+  const renderNotifs = () => (
+    <>
+      <View>
+        {NOTIF_TOGGLES.map((t) => (
+          <TouchableOpacity
+            key={t.key}
+            style={styles.notifRow}
+            onPress={() => toggleNotifPref(t.key)}
+            activeOpacity={0.8}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: !!notifPrefs[t.key] }}
+            accessibilityLabel={t.label}
+            testID={`notif-${t.key}`}
+          >
+            <Text style={styles.rowLabel}>{t.label}</Text>
+            <TrackSwitch value={!!notifPrefs[t.key]} colors={colors} />
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={styles.notifFootnote}>
+        Push only — JuNubin never emails or texts you about activity.
+      </Text>
+    </>
+  );
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <BrandLogo size="small" />
-          <Text style={styles.footerVersion}>Version 1.0.0 (build: 1)</Text>
-        </View>
-      </Animated.ScrollView>
+  const renderHelp = () => (
+    <View>
+      {HELP_ROWS.map((row) => renderChevronRow({
+        label: row.label,
+        onPress: () => navigation.navigate('SettingsInfo', { pageKey: row.pageKey }),
+      }))}
+    </View>
+  );
+
+  const renderDelete = () => (
+    <Blueprint style={styles.deleteCard}>
+      <Text style={styles.deleteTitle}>This can't be undone</Text>
+      <Text style={styles.deleteBody}>
+        Your profile, follows and chats are deleted within 24 hours. People you messaged
+        keep their copy of the conversation.
+      </Text>
+      <TouchableOpacity
+        style={styles.deleteBtn}
+        onPress={handleDeleteAccount}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Delete my account"
+      >
+        <Text style={styles.deleteBtnText}>Delete my account</Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.cancelBtn}
+        onPress={() => setView(null)}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+      >
+        <Text style={styles.cancelBtnText}>Cancel</Text>
+      </TouchableOpacity>
+    </Blueprint>
+  );
+
+  return (
+    <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleBack}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.black} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{SUBVIEW_TITLES[view] || 'Settings'}</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {!view && renderMain()}
+        {view === 'verify' && renderVerify()}
+        {view === 'blocked' && renderBlocked()}
+        {view === 'notifs' && renderNotifs()}
+        {view === 'help' && renderHelp()}
+        {view === 'del' && renderDelete()}
+      </ScrollView>
     </View>
   );
 }
@@ -610,7 +662,7 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingBottom: 6,
   },
   backButton: {
     width: 44,
@@ -629,35 +681,29 @@ const getStyles = (colors) => StyleSheet.create({
     paddingBottom: 30,
     gap: 22,
   },
-
-  // ── Sections ──
-  section: {},
   sectionLabel: {
     fontSize: 12,
-    fontWeight: '600',
     fontFamily: FontFamily.semibold,
     letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: colors.gray600,
+    color: colors.gray500,
     marginBottom: 9,
   },
 
-  // ── Location visibility radio rows ──
+  // ── Location visibility radio cards ──
   visOption: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
     borderWidth: 1,
     borderColor: colors.separator,
     borderRadius: 4,
     backgroundColor: 'transparent',
-    marginBottom: 8,
   },
   visOptionActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.accentTint08,
+    backgroundColor: colors.accentSurface,
   },
   radioOuter: {
     width: 18,
@@ -678,7 +724,6 @@ const getStyles = (colors) => StyleSheet.create({
     borderRadius: 4.5,
     backgroundColor: colors.accent,
   },
-  visOptionText: { flex: 1 },
   visOptionLabel: {
     fontFamily: FontFamily.semibold,
     fontSize: 14.5,
@@ -688,18 +733,20 @@ const getStyles = (colors) => StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 12,
     lineHeight: 17,
-    color: colors.gray600,
+    color: colors.gray500,
     marginTop: 2,
   },
 
-  // ── Temporary visibility chips ──
+  // ── Temporary visibility (required privacy control, folded in
+  //    quietly under the section in the design's language) ──
   visibleForBlock: {
-    marginTop: 6,
+    marginTop: 12,
   },
   visibleForLabel: {
+    fontSize: 10.5,
     fontFamily: FontFamily.semibold,
-    fontSize: 13,
-    color: colors.black,
+    letterSpacing: 1,
+    color: colors.gray400,
   },
   visibleForRow: {
     flexDirection: 'row',
@@ -718,7 +765,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   visibleForChipActive: {
     borderColor: colors.accent,
-    backgroundColor: colors.accentTint15,
+    backgroundColor: colors.accentSurface,
   },
   visibleForChipText: {
     fontFamily: FontFamily.medium,
@@ -732,18 +779,11 @@ const getStyles = (colors) => StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 12,
     lineHeight: 17,
-    color: colors.gray600,
+    color: colors.gray500,
     marginTop: 8,
   },
-  footnote: {
-    fontFamily: FontFamily.regular,
-    fontSize: 11,
-    lineHeight: 16,
-    color: colors.gray600,
-    marginTop: 10,
-  },
 
-  // ── Appearance / bordered toggle row ──
+  // ── Appearance ──
   borderedRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -758,13 +798,6 @@ const getStyles = (colors) => StyleSheet.create({
     fontFamily: FontFamily.semibold,
     fontSize: 14.5,
     color: colors.black,
-  },
-  rowDesc: {
-    fontFamily: FontFamily.regular,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.gray600,
-    marginTop: 2,
   },
 
   // ── Flat chevron rows ──
@@ -783,46 +816,152 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
   },
 
-  // ── Discovery switch rows ──
-  switchRow: {
+  // ── Verify sub-view ──
+  verifyWrap: {
+    alignItems: 'center',
+    gap: 16,
+    paddingTop: 24,
+  },
+  verifyBody: {
+    fontFamily: FontFamily.regular,
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: colors.gray500,
+    textAlign: 'center',
+    maxWidth: 300,
+  },
+  goldCta: {
+    height: 52,
+    backgroundColor: colors.ssGold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  goldCtaText: {
+    fontSize: 17,
+    letterSpacing: 1.36,
+    fontFamily: FontFamily.headingBold,
+    color: colors.onGold,
+  },
+  verifiedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: 4,
+    backgroundColor: colors.accentSurface,
+  },
+  verifiedChipText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 14.5,
+    color: colors.accentDark,
+  },
+
+  // ── Blocked sub-view ──
+  blockedEmpty: {
+    textAlign: 'center',
+    paddingVertical: 44,
+    paddingHorizontal: 20,
+    fontFamily: FontFamily.regular,
+    fontSize: 13.5,
+    lineHeight: 21,
+    color: colors.gray400,
+  },
+  blockedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.separator,
+  },
+  blockedAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    backgroundColor: colors.creamDark,
+  },
+  blockedName: {
+    flex: 1,
+    fontFamily: FontFamily.heading,
+    fontSize: 17,
+    color: colors.black,
+  },
+  unblockBtn: {
+    height: 34,
+    paddingHorizontal: 13,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.separator,
+    borderRadius: 4,
+  },
+  unblockText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 12.5,
+    color: colors.black,
+  },
+
+  // ── Notifications sub-view ──
+  notifRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 13,
+    height: 54,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
     paddingHorizontal: 2,
   },
-  switchRowText: { flex: 1 },
-  unitToggle: {
-    minWidth: 44,
-    height: 32,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.accent,
-    backgroundColor: colors.accentTint15,
-  },
-  unitToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: colors.accentDark,
-    letterSpacing: 0.5,
+  notifFootnote: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12.5,
+    lineHeight: 19,
+    color: colors.gray400,
   },
 
-  // ── Footer ──
-  footer: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    gap: 8,
+  // ── Delete sub-view ──
+  deleteCard: {
+    padding: 18,
+    gap: 12,
+    marginTop: 12,
   },
-  footerVersion: {
-    ...Typography.caption,
-    color: colors.gray600,
+  deleteTitle: {
+    fontFamily: FontFamily.headingBold,
+    fontSize: 18,
+    letterSpacing: 0.5,
+    color: colors.black,
+  },
+  deleteBody: {
     fontFamily: FontFamily.regular,
+    fontSize: 13.5,
+    lineHeight: 21,
+    color: colors.gray500,
+  },
+  deleteBtn: {
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.error,
+    borderRadius: 4,
+  },
+  deleteBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+    color: colors.error,
+  },
+  cancelBtn: {
+    height: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.separator,
+    borderRadius: 4,
+  },
+  cancelBtnText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 14,
+    color: colors.black,
   },
 });
