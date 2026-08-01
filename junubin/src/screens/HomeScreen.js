@@ -48,10 +48,10 @@ import { imageSource } from '../utils/imageSource';
 import { reportError } from '../utils/reportError';
 import { trackEvent } from '../utils/analytics';
 import { hapticSelection } from '../utils/haptics';
-import { locationVisibilityLabel } from '../utils/locationConsent';
 import {
   getLocationDisclosureAccepted,
   setLocationDisclosureAccepted,
+  locationVisibilityLabel,
 } from '../utils/locationConsent';
 
 const VIEW_MODE_KEY = '@junubin/home_view_mode_v1';

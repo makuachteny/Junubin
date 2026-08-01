@@ -236,6 +236,8 @@ describe('screen smoke tests', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(await findByText('Home Screen')).toBeTruthy();
+    // Chats (MessagesTab) is the initial tab — the retention loop is
+    // conversations, so the app opens on them.
+    expect(await findByText('Messages Screen')).toBeTruthy();
   });
 });

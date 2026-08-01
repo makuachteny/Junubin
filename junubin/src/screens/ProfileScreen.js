@@ -1,3 +1,12 @@
+// ProfileScreen — the "Profile" tab (also reachable as the `Profile`
+// stack route, e.g. from Messages). Industry redesign: square
+// Blueprint-framed avatar, condensed display type, a PROFILE STRENGTH
+// checklist driven by the profileCompleteness util, and OPEN TO /
+// LANGUAGES chip sections.
+//
+// Renders correctly both as a bottom tab (no back affordance) and when
+// pushed on the stack (back chevron appears because canGoBack() is true).
+
 import React, { useMemo, useCallback } from 'react';
 import {
   View,
@@ -10,13 +19,27 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, FontFamily, Layout } from '../theme';
-import ProfileCompletenessCard from '../components/ProfileCompletenessCard';
+import { useTheme, FontFamily } from '../theme';
+import Blueprint from '../components/Blueprint';
 import { imageSource } from '../utils/imageSource';
 import { useCurrentUser } from '../hooks';
 import { useMyFollowCounts } from '../hooks/useFollow';
 import { calculateCompleteness } from '../utils/profileCompleteness';
-import { REFERRALS_BACKEND_READY } from '../utils/referralService';
+import { OPEN_TO_BY_KEY, normalizeOpenTo } from '../data/openTo';
+
+// The strength checklist shows a curated subset of the completeness
+// fields (the mock shows ~5 rows, the util tracks 11). Keys/steps
+// mirror src/utils/profileCompleteness.js FIELDS — done-ness comes
+// from the util's `missing` list, so the percent and the checks can
+// never disagree.
+const STRENGTH_ROWS = [
+  { key: 'photos', label: 'Add at least 3 photos', step: 'photos' },
+  { key: 'bio', label: 'Write a bio', step: 'bio' },
+  { key: 'job', label: 'Add your job title', step: 'job' },
+  { key: 'ethnicity', label: 'Add your tribe / heritage', step: 'ethnicity' },
+  { key: 'openTo', label: 'Say what you are open to', step: 'openTo' },
+  { key: 'verified', label: 'Verify your photos', step: 'verify' },
+];
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -36,330 +59,418 @@ export default function ProfileScreen({ navigation }) {
   const displayUser = currentUser;
   const followCounts = useMyFollowCounts(currentUser?.id);
 
-  const completeness = useMemo(() => calculateCompleteness(displayUser?._raw || displayUser), [displayUser]);
+  const completeness = useMemo(
+    () => calculateCompleteness(displayUser?._raw || displayUser),
+    [displayUser],
+  );
+  const missingKeys = useMemo(
+    () => new Set((completeness.missing || []).map((m) => m.key)),
+    [completeness],
+  );
 
   const handleEdit = () => navigation.navigate('EditProfile');
-  const handleVerify = () => navigation.navigate('PhotoVerification');
-  const handleCompletePress = () => {
-    navigation.navigate('EditProfile', { focusStep: completeness.nextField?.step });
-  };
+  const handleStrengthRow = (step) => navigation.navigate('EditProfile', { focusStep: step });
+  // "Preview as others" reuses the same full-screen profile view the
+  // Directory opens for other people — no bespoke preview surface.
+  const handlePreview = () => navigation.navigate('ProfileView', {
+    profile: { ...(displayUser || {}), images: displayUser?.images || [] },
+  });
+  const openFollowList = (initialTab) => navigation.navigate('FollowList', {
+    userId: displayUser?.id, userName: displayUser?.name, initialTab,
+  });
 
-  const followItems = [
-    { label: 'Followers', count: followCounts.followers, tab: 'Followers' },
-    { label: 'Following', count: followCounts.following, tab: 'Following' },
-    { label: 'Friends', count: followCounts.friends ?? 0, tab: 'Friends' },
-  ];
+  const cityLine = [
+    [displayUser?.city, displayUser?.country].filter(Boolean).join(', '),
+    displayUser?.pronouns,
+  ].filter(Boolean).join(' · ');
+
+  const openToLabels = normalizeOpenTo(displayUser?.openTo)
+    .map((key) => OPEN_TO_BY_KEY[key]?.label || key);
+  const languages = Array.isArray(displayUser?.languages) ? displayUser.languages : [];
+
+  const canGoBack = navigation?.canGoBack?.();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={Layout.headerBackIconSize} color={colors.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Settings')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} accessibilityRole="button" accessibilityLabel="Settings">
-          <Ionicons name="settings-outline" size={Layout.headerIconSize} color={colors.black} />
-        </TouchableOpacity>
-      </View>
-
       <ScrollView
         style={styles.content}
-        contentContainerStyle={styles.contentInner}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
-        <View style={styles.heroSection}>
-          <View style={styles.heroImageWrap}>
-            <Image source={imageSource(displayUser?.images?.[0])} style={styles.heroImage} resizeMode="cover" />
-            {displayUser?.verified && (
-              <View style={[styles.verifiedDot, { borderColor: colors.surfaceMuted }]}>
-                <Ionicons name="checkmark" size={14} color="#FFF" />
-              </View>
-            )}
-          </View>
-          <Text style={styles.heroName} numberOfLines={1}>
-            {displayUser?.name}
-            {displayUser?.age ? <Text style={styles.heroAge}>, {displayUser.age}</Text> : null}
-          </Text>
-          {displayUser?.bio ? (
-            <Text style={styles.heroBio} numberOfLines={2}>{displayUser.bio}</Text>
-          ) : (
-            <TouchableOpacity onPress={handleEdit} activeOpacity={0.7}>
-              <Text style={styles.heroBioPlaceholder}>+ Add a bio</Text>
+        {/* ── Header row ── */}
+        <View style={styles.headerRow}>
+          {canGoBack ? (
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={styles.headerBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
+              <Ionicons name="chevron-back" size={24} color={colors.black} />
             </TouchableOpacity>
-          )}
+          ) : null}
+          <Text style={styles.headerTitle}>Profile</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Settings')}
+            style={styles.headerBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Ionicons name="settings-outline" size={21} color={colors.black} />
+          </TouchableOpacity>
         </View>
 
-        {/* Follow stats — single rounded card so the row is cohesive */}
-        <View style={styles.followCard}>
-          {followItems.map((item, idx) => (
-            <React.Fragment key={item.label}>
-              <TouchableOpacity
-                style={styles.followCol}
-                onPress={() => navigation.navigate('FollowList', {
-                  userId: displayUser?.id, userName: displayUser?.name, initialTab: item.tab,
-                })}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.followCountNum}>{item.count}</Text>
-                <Text style={styles.followCountLabel}>{item.label}</Text>
-              </TouchableOpacity>
-              {idx < followItems.length - 1 && <View style={styles.followDivider} />}
-            </React.Fragment>
-          ))}
-        </View>
-
-        {/* Complete Your Profile — top of the action area to nudge */}
-        <ProfileCompletenessCard
-          score={completeness.score}
-          filledCount={completeness.filledCount}
-          totalCount={completeness.totalCount}
-          suggestion={completeness.suggestion}
-          tier={completeness.tier}
-          onPress={handleCompletePress}
-          colors={colors}
-        />
-
-        {/* Quick actions. "Invite" hides while REFERRALS_BACKEND_READY
-            is false — the reward path is local-only, so surfacing the
-            entry point would let users grant themselves free Super
-            Likes / Spotlights without any server verification. */}
-        <View style={styles.quickActions}>
-          <QuickAction icon="create-outline" label="Edit profile" onPress={handleEdit} colors={colors} />
-          <QuickAction icon="shield-checkmark-outline" label="Verify" onPress={handleVerify} colors={colors} />
-          {REFERRALS_BACKEND_READY && (
-            <QuickAction
-              icon="gift-outline"
-              label="Invite"
-              onPress={() => navigation.navigate('Referral')}
-              colors={colors}
+        {/* ── Identity block ── */}
+        <View style={styles.identityRow}>
+          <Blueprint style={styles.avatarFrame}>
+            <Image
+              source={imageSource(displayUser?.images?.[0])}
+              style={styles.avatar}
+              resizeMode="cover"
+              accessibilityLabel="Your profile photo"
             />
-          )}
+          </Blueprint>
+          <View style={styles.identityBody}>
+            <View style={styles.nameRow}>
+              <Text style={styles.name} numberOfLines={1}>
+                {displayUser?.name}
+                {displayUser?.age ? `, ${displayUser.age}` : ''}
+              </Text>
+              {displayUser?.verified ? (
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={17}
+                  color={colors.accentDark}
+                  accessibilityLabel="Verified"
+                />
+              ) : null}
+            </View>
+            {cityLine ? <Text style={styles.cityLine} numberOfLines={1}>{cityLine}</Text> : null}
+            <View style={styles.followRow}>
+              <TouchableOpacity
+                onPress={() => openFollowList('Followers')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followCounts.followers} followers`}
+                hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+              >
+                <Text style={styles.followText}>
+                  <Text style={styles.followNum}>{followCounts.followers}</Text> followers
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => openFollowList('Following')}
+                accessibilityRole="button"
+                accessibilityLabel={`${followCounts.following} following`}
+                hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+              >
+                <Text style={styles.followText}>
+                  <Text style={styles.followNum}>{followCounts.following}</Text> following
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
-        <View style={{ height: insets.bottom + 24 }} />
+        {/* ── Profile strength (replaces the old completeness banner) ── */}
+        <Blueprint style={styles.strengthCard}>
+          <View style={styles.strengthHeader}>
+            <Text style={styles.strengthTitle}>PROFILE STRENGTH</Text>
+            <Text style={styles.strengthPct}>{completeness.score}%</Text>
+          </View>
+          <View style={styles.strengthBar}>
+            <View style={[styles.strengthFill, { width: `${completeness.score}%` }]} />
+          </View>
+          <View style={styles.strengthList}>
+            {STRENGTH_ROWS.map((row) => {
+              const done = !missingKeys.has(row.key);
+              return (
+                <TouchableOpacity
+                  key={row.key}
+                  style={styles.strengthRow}
+                  onPress={() => handleStrengthRow(row.step)}
+                  accessibilityRole="button"
+                  accessibilityState={{ checked: done }}
+                  accessibilityLabel={`${row.label}${done ? ', done' : ''}`}
+                >
+                  <View style={[styles.check, done ? styles.checkDone : styles.checkTodo]}>
+                    {done ? (
+                      <Ionicons name="checkmark" size={11} color={colors.cream} />
+                    ) : null}
+                  </View>
+                  <Text style={[styles.strengthLabel, done && styles.strengthLabelDone]}>
+                    {row.label}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={colors.gray400} />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </Blueprint>
+
+        {/* ── Open to ── */}
+        {openToLabels.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>OPEN TO</Text>
+            <View style={styles.chipWrap}>
+              {openToLabels.map((label) => (
+                <View key={label} style={styles.openChip}>
+                  <Text style={styles.openChipText}>{label}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {/* ── Languages ── */}
+        {languages.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>LANGUAGES</Text>
+            <View style={styles.chipWrap}>
+              {languages.map((lang) => (
+                <View key={lang} style={styles.langChip}>
+                  <Text style={styles.langChipText}>{lang}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        {/* ── Actions ── */}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.outlineBtn}
+            onPress={handleEdit}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+          >
+            <Text style={styles.outlineBtnText}>Edit profile</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.outlineBtn}
+            onPress={handlePreview}
+            accessibilityRole="button"
+            accessibilityLabel="Preview as others"
+          >
+            <Text style={styles.outlineBtnText}>Preview as others</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-function QuickAction({ icon, label, onPress, colors }) {
-  return (
-    <TouchableOpacity style={qa.btn(colors)} onPress={onPress} activeOpacity={0.8}>
-      <View style={qa.icon(colors)}>
-        <Ionicons name={icon} size={18} color={colors.black} />
-      </View>
-      <Text style={qa.text(colors)}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-const qa = {
-  btn: (colors) => ({
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: colors.cardBg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    gap: 6,
-  }),
-  icon: (colors) => ({
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  }),
-  text: (colors) => ({
-    fontSize: 12,
-    fontWeight: '600',
-    fontFamily: FontFamily.semibold,
-    color: colors.black,
-  }),
-};
-
 const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surfaceMuted,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: Layout.headerPaddingX,
-    height: Layout.headerHeight,
-    backgroundColor: 'transparent',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    fontFamily: FontFamily.bold,
-    color: colors.black,
-    letterSpacing: -0.2,
+    backgroundColor: colors.cream,
   },
   content: {
     flex: 1,
   },
   contentInner: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    gap: 14,
+    paddingHorizontal: 18,
+    paddingTop: 8,
   },
 
-  // ── Hero ──
-  heroSection: {
+  // ── Header ──
+  headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 6,
   },
-  heroImageWrap: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: colors.gray300,
-    marginBottom: 12,
+  headerTitle: {
+    flex: 1,
+    fontFamily: FontFamily.heading,
+    fontSize: 28,
+    color: colors.black,
   },
-  heroImage: {
+  headerBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ── Identity ──
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 12,
+  },
+  avatarFrame: {
+    width: 86,
+    height: 86,
+    backgroundColor: colors.surfaceMuted,
+  },
+  avatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 56,
   },
-  verifiedDot: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.green,
+  identityBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
+    gap: 7,
   },
-  heroName: {
-    fontSize: 22,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
+  name: {
+    fontFamily: FontFamily.heading,
+    fontSize: 24,
     color: colors.black,
-    letterSpacing: -0.4,
+    flexShrink: 1,
   },
-  heroAge: {
-    fontWeight: '500',
-    fontFamily: FontFamily.medium,
-    color: colors.gray500,
-  },
-  heroBio: {
-    fontSize: 14,
+  cityLine: {
     fontFamily: FontFamily.regular,
-    color: colors.gray500,
-    marginTop: 4,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-    lineHeight: 19,
-  },
-  heroBioPlaceholder: {
     fontSize: 13,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-    color: colors.accent,
+    color: colors.gray600,
+    marginTop: 2,
+  },
+  followRow: {
+    flexDirection: 'row',
+    gap: 14,
     marginTop: 6,
   },
-
-  // ── Follow card ──
-  followCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.cardBg,
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    paddingVertical: 14,
+  followText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 13,
+    color: colors.gray600,
   },
-  followCol: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  followCountNum: {
-    fontSize: 20,
-    fontWeight: '900',
-    fontFamily: FontFamily.black,
-    color: colors.black,
-    letterSpacing: -0.3,
-  },
-  followCountLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-    color: colors.gray500,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-  },
-  followDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 28,
-    backgroundColor: colors.separator,
-  },
-
-  // ── Quick actions row ──
-  quickActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-
-  // ── Stats ──
-  sectionLabel: {
-    fontSize: 12,
+  followNum: {
     fontFamily: FontFamily.bold,
-    fontWeight: '700',
-    color: colors.gray500,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginTop: 4,
-    marginBottom: -4,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: colors.cardBg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.separator,
-    gap: 4,
-  },
-  statIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  statCount: {
-    fontSize: 18,
-    fontWeight: '800',
-    fontFamily: FontFamily.extrabold,
     color: colors.black,
-    letterSpacing: -0.3,
-  },
-  statLabel: {
-    fontSize: 11,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-    color: colors.gray500,
-    letterSpacing: 0.3,
   },
 
+  // ── Profile strength ──
+  strengthCard: {
+    marginTop: 18,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    gap: 8,
+    backgroundColor: colors.cream,
+  },
+  strengthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  strengthTitle: {
+    fontFamily: FontFamily.heading,
+    fontSize: 15,
+    letterSpacing: 1,
+    color: colors.black,
+  },
+  strengthPct: {
+    fontFamily: FontFamily.bold,
+    fontSize: 13,
+    color: colors.accentDark,
+  },
+  strengthBar: {
+    height: 5,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+  },
+  strengthFill: {
+    height: '100%',
+    backgroundColor: colors.accent,
+  },
+  strengthList: {
+    marginTop: 2,
+  },
+  strengthRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 40,
+  },
+  check: {
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkDone: {
+    backgroundColor: colors.accent,
+    borderWidth: 1.5,
+    borderColor: colors.accent,
+  },
+  checkTodo: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: colors.gray400,
+  },
+  strengthLabel: {
+    flex: 1,
+    fontFamily: FontFamily.medium,
+    fontSize: 13.5,
+    color: colors.black,
+  },
+  strengthLabelDone: {
+    color: colors.gray400,
+    textDecorationLine: 'line-through',
+  },
+
+  // ── Sections ──
+  sectionLabel: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 12,
+    letterSpacing: 1,
+    color: colors.gray600,
+    textTransform: 'uppercase',
+    marginTop: 20,
+  },
+  chipWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 8,
+  },
+  openChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: colors.accentTint15,
+    borderRadius: 2,
+  },
+  openChipText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 12,
+    color: colors.accentDark,
+  },
+  langChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    borderRadius: 2,
+  },
+  langChipText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+    color: colors.black,
+  },
+
+  // ── Actions ──
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 22,
+  },
+  outlineBtn: {
+    flex: 1,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    borderRadius: 4,
+    backgroundColor: 'transparent',
+  },
+  outlineBtnText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 14,
+    color: colors.black,
+  },
 });
