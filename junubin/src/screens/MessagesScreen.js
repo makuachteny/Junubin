@@ -296,6 +296,12 @@ export default function MessagesScreen({ navigation }) {
     const isUnread = unreadCount > 0 || !!item.unread;
     const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
     const isOnline = !!(item.online || item.isOnline);
+    // "You: " prefix when the last message in the thread is mine.
+    // matchesService exposes `lastMessageMine`; absent (cached rows
+    // from before the field existed) we just omit the prefix.
+    const preview = item.lastMessage
+      ? `${item.lastMessageMine ? 'You: ' : ''}${item.lastMessage}`
+      : '';
 
     return (
       <Animated.View style={animStyle}>
@@ -306,6 +312,7 @@ export default function MessagesScreen({ navigation }) {
           accessibilityRole="button"
           accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${isUnread ? `${unreadCount || 1} unread message${(unreadCount || 1) === 1 ? '' : 's'}` : 'conversation'}` : item.name}
         >
+          {isUnread && <View style={styles.unreadBar} />}
           <TouchableOpacity
             style={styles.avatarWrap}
             onPress={(e) => {
@@ -338,7 +345,7 @@ export default function MessagesScreen({ navigation }) {
               ]}
               numberOfLines={1}
             >
-              {item.lastMessage || 'Say hi 👋'}
+              {preview || 'Say hi 👋'}
             </Text>
           </View>
           {unreadCount > 0 && (
@@ -526,7 +533,6 @@ export default function MessagesScreen({ navigation }) {
           }
           ListEmptyComponent={
             <View style={styles.emptyMessages}>
-              <GraffitiChat size={50} color={colors.gray400} />
               <Text style={styles.emptyText}>No conversations yet</Text>
               <Text style={styles.emptySubtext}>Find people in the community and say hello.</Text>
             </View>
@@ -578,10 +584,49 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  headerTitle: {
+  headerLeft: {
     flex: 1,
+  },
+  kickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  // 20×14 three-stripe flag mark; ink/red/green with hairline gaps in
+  // the screen background so the stripes read separated, like the mock.
+  flagMark: {
+    width: 20,
+    height: 14,
+    borderWidth: 1,
+    borderColor: colors.separator,
+  },
+  flagStripeInk: {
+    flex: 1,
+    backgroundColor: colors.ssInk,
+  },
+  flagStripeRed: {
+    flex: 1,
+    backgroundColor: colors.ssRed,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.cream,
+  },
+  flagStripeGreen: {
+    flex: 1,
+    backgroundColor: colors.ssGreen,
+  },
+  kicker: {
     fontFamily: FontFamily.heading,
-    fontSize: 28,
+    fontSize: 10.5,
+    fontWeight: '600',
+    letterSpacing: 2.7,
+    color: colors.accentDark,
+  },
+  headerTitle: {
+    marginTop: 2,
+    fontFamily: FontFamily.heading,
+    fontSize: 31,
+    lineHeight: 31,
     fontWeight: '600',
     color: colors.black,
   },
@@ -598,7 +643,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ssRed,
   },
 
   // ─── Segmented control ───
@@ -648,20 +693,30 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   messageRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 13,
     paddingHorizontal: 18,
-    paddingVertical: prefs?.largerTouchTargets ? 16 : 13,
+    paddingVertical: prefs?.largerTouchTargets ? 16 : 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
+    position: 'relative',
+  },
+  // 3px flag-gold bar hugging the left edge of unread rows.
+  unreadBar: {
+    position: 'absolute',
+    left: 0,
+    top: 12,
+    bottom: 12,
+    width: 3,
+    backgroundColor: colors.ssGold,
   },
   avatarWrap: {
     position: 'relative',
   },
-  // Square 52px photo — the Industry language uses square frames with a
+  // Square 56px photo — the design language uses square frames with a
   // hairline border, never circles.
   avatar: {
-    width: 52,
-    height: 52,
+    width: 56,
+    height: 56,
     borderRadius: 0,
     backgroundColor: colors.gray300,
     borderWidth: StyleSheet.hairlineWidth,
@@ -674,7 +729,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     width: 11,
     height: 11,
     borderRadius: 5.5,
-    backgroundColor: colors.accentDark,
+    backgroundColor: colors.ssGreen,
     borderWidth: 2,
     borderColor: colors.cream,
   },
@@ -704,7 +759,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   msgPreview: {
     fontSize: 13,
     fontFamily: FontFamily.regular,
-    color: prefs?.highContrast ? colors.gray700 : colors.gray600,
+    color: prefs?.highContrast ? colors.gray700 : colors.gray500,
     marginTop: 2,
   },
   msgPreviewUnread: {

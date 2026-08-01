@@ -964,21 +964,15 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     height: 54,
     borderWidth: 1,
     borderColor: colors.separator,
-    backgroundColor: colors.cardBg,
+    // Design inputs sit on the surface fill, one tone below the cream
+    // page background.
+    backgroundColor: colors.inputBg,
     borderRadius: 4,
     paddingHorizontal: 16,
     fontSize: 18,
     fontFamily: FontFamily.regular,
     color: colors.black,
   },
-  helperText: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    fontFamily: FontFamily.regular,
-    color: colors.gray500,
-    marginTop: 12,
-  },
-
   // ─── Chips ───
   chipGrid: {
     flexDirection: 'row',
@@ -1036,7 +1030,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   photoTile: {
     width: '100%',
     height: '100%',
-    backgroundColor: colors.cardBg,
+    backgroundColor: colors.inputBg,
     overflow: 'hidden',
   },
   photoTileEmpty: {
@@ -1128,17 +1122,19 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     paddingHorizontal: 22,
     paddingTop: 14,
   },
+  // Flag-gold primary CTA (design's CONTINUE / ENTER JUNUBIN button),
+  // flush inside its Blueprint frame.
   ctaBtn: {
     height: 54,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ssGold,
     justifyContent: 'center',
     alignItems: 'center',
   },
   ctaText: {
     fontSize: 18,
-    fontFamily: FontFamily.heading,
-    letterSpacing: 1,
-    color: colors.cream,
+    fontFamily: FontFamily.headingBold,
+    letterSpacing: 1.4,
+    color: colors.onGold,
     textTransform: 'uppercase',
   },
 

@@ -187,6 +187,20 @@ describe('HomeScreen — people discovery', () => {
     );
     expect(await findByText('Nyandeng')).toBeTruthy();
   });
+
+  it('tapping a person opens ProfileDetail (ProfileView is gone)', async () => {
+    mockGetItem.mockImplementation(async (key) =>
+      (key === '@junubin/home_view_mode_v1' ? 'list' : null));
+    const { findByText } = render(
+      <HomeScreen navigation={navigation} route={{ params: {} }} />
+    );
+    const row = await findByText('Nyandeng');
+    await act(async () => { fireEvent.press(row); });
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'ProfileDetail',
+      expect.objectContaining({ profile: expect.objectContaining({ id: 'u1' }) }),
+    );
+  });
 });
 
 describe('DirectoryScreen', () => {

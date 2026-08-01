@@ -103,6 +103,10 @@ const COLORS = {
   inputBg: '#F8F8F8', inputBorder: '#E0E0E0',
   tabActive: '#111', tabInactive: '#9A9A9A',
   error: '#CE1126', success: '#009739', rose: '#E84393', gold: '#FCCD12',
+  // Flag system + fills the redesigned 5-step chrome consumes (per-step
+  // segment colors, kicker square, gold CTA, surface-filled inputs).
+  ssBlue: '#0F8FD6', ssGreen: '#0F9D58', ssGold: '#F0B41F', ssRed: '#D94A4A',
+  onGold: '#241B03', inputBg: '#F4F1EA',
 };
 
 describe('Onboarding / open-to flow', () => {
