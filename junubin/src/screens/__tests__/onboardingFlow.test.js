@@ -232,6 +232,15 @@ describe('Onboarding / open-to flow', () => {
     expect(r.getByTestId('location-visibility-off')).toBeTruthy();
     expect(r.getByTestId('location-visibility-city')).toBeTruthy();
     expect(r.getByTestId('location-visibility-coarse')).toBeTruthy();
+    // Radio-card copy is truthful about the real values: coarse =
+    // Everyone (approximate area on the map), off = Nobody.
+    expect(r.getByText('Everyone on JuNubin')).toBeTruthy();
+    expect(r.getByText('Nobody')).toBeTruthy();
+    expect(r.getByText('You browse the map; you never appear on it.')).toBeTruthy();
+    // 'off' is checked by DEFAULT — appearing on the map is opt-in.
+    expect(
+      r.getByTestId('location-visibility-off').props.accessibilityState.checked
+    ).toBe(true);
     expect(r.getByText('ENTER JUNUBIN')).toBeTruthy();
   });
 

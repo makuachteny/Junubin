@@ -398,7 +398,7 @@ export default function MessagesScreen({ navigation }) {
             accessibilityState={{ disabled: busy }}
           >
             {busy ? (
-              <ActivityIndicator size="small" color={colors.cream} />
+              <ActivityIndicator size="small" color="#FFFFFF" />
             ) : (
               <Text style={styles.acceptText}>Accept</Text>
             )}
