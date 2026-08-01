@@ -861,10 +861,11 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     lineHeight: 20,
     fontFamily: FontFamily.regular,
     color: colors.black,
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.ssGoldTint,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.ssGold,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 2,
   },
   requestActions: {
     flexDirection: 'row',
@@ -876,13 +877,14 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.ssGreen,
   },
   acceptText: {
     fontSize: 13.5,
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
-    color: colors.cream,
+    // Literal white in both modes — it sits on flag green.
+    color: '#FFFFFF',
   },
   declineBtn: {
     flex: 1,
