@@ -75,6 +75,9 @@ export async function getMatches() {
       images: photos,
       verified: otherUser?.isVerified || false,
       lastMessage: lastMessage?.body || '',
+      // Whether the newest message in the thread is the current
+      // user's — the inbox prefixes those previews with "You: ".
+      lastMessageMine: !!lastMessage && lastMessage.senderId === userId,
       timestamp: lastMessage
         ? formatTimestamp(lastMessage.createdAt)
         : formatTimestamp(m.createdAt),
