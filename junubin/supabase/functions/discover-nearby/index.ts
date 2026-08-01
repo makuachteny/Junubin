@@ -28,7 +28,8 @@
 //   - We use service_role to bypass RLS for the candidate scan (the
 //     map is a special-case surface that crosses follow/match
 //     boundaries) but enforce filtering ourselves: location opt-in,
-//     mode match, Block exclusion, self exclusion.
+//     mutual-follow audience, mode match, Block exclusion, self
+//     exclusion.
 //   - Distance is filtered in JS (haversine). Postgres has cube +
 //     earthdistance for this if it ever becomes a perf concern; for
 //     v1 with thousands of opted-in users it's fine.
@@ -37,7 +38,7 @@
 //     marker chrome uses this to render the green dot.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, getUser, errorResponse, jsonResponse } from "../_shared/utils.ts";
+import { corsHeaders, getUser, errorResponse, jsonResponse, getMutualFollowIds } from "../_shared/utils.ts";
 
 const DEFAULT_RADIUS_KM = 50;
 const MAX_RADIUS_KM = 500;
@@ -137,7 +138,7 @@ serve(async (req: Request) => {
       .select(`
         id, displayName, dateOfBirth, isVerified, latitude, longitude, lastActiveAt,
         city, countryCode,
-        photos:Photo(url, sortOrder),
+        photos:Photo(url, sortOrder, moderationStatus),
         profile:Profile!inner(
           appMode, accountPurpose, ethnicity, incognito, showMe,
           locationVisibility, locationVisibleUntil
@@ -167,6 +168,19 @@ serve(async (req: Request) => {
       blockedIds.add(b.blockerId === callerId ? b.blockedId : b.blockerId);
     }
 
+    // Mutual-follow audience for locationVisibility = 'mutuals' (00049).
+    // Resolved ONCE, as two set queries over the caller's own follow
+    // graph, and only when the candidate set actually contains a
+    // 'mutuals' profile — the common map query touches nobody at that
+    // level and pays nothing. Per-candidate follow lookups would be
+    // hundreds of round trips per pan of the map.
+    const hasMutualsCandidate = (rows || []).some(
+      (row: any) => row?.profile?.locationVisibility === 'mutuals',
+    );
+    const mutualFollowIds = hasMutualsCandidate
+      ? await getMutualFollowIds(supabase, callerId)
+      : new Set<string>();
+
     const fifteenMinAgo = Date.now() - 15 * 60 * 1000;
     const users: any[] = [];
 
@@ -188,6 +202,13 @@ serve(async (req: Request) => {
         if (!Number.isFinite(until) || until <= Date.now()) continue;
       }
 
+      // 'mutuals' (00049) — "only people you both follow can see your
+      // area". Enforced here, on the server, because the control is a
+      // privacy promise: if this check lived in the client the profile
+      // would still be on the wire to everyone. The relationship must
+      // hold in BOTH directions; a one-way follower is not an audience.
+      if (p.locationVisibility === 'mutuals' && !mutualFollowIds.has(row.id)) continue;
+
       // Mode match. If the caller specified a mode, the candidate
       // must resolve to the same. If the caller passed no mode we
       // show everyone — the post-pivot community map is not
@@ -208,7 +229,12 @@ serve(async (req: Request) => {
 
       // Primary photo first; the rest in sortOrder so the marker
       // ring can rotate through them if the client ever wants.
+      // Drop rejected photos (00050) before anything else. A row with
+      // no moderationStatus is kept: that is the shape every photo has
+      // until the migration lands, and defaulting the unknown case to
+      // "hide" would blank the map instead of a single bad image.
       const sortedPhotos = (row.photos || [])
+        .filter((ph: any) => ph?.moderationStatus !== 'rejected')
         .slice()
         .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
         .map((ph: any) => ph.url)
@@ -236,10 +262,13 @@ serve(async (req: Request) => {
         // than a raw distance for users sharing at 'city' granularity.
         city: row.city || null,
         countryCode: row.countryCode || null,
-        // The candidate's chosen granularity ('city' | 'coarse'), so
-        // the map can render a city chip instead of a pin for people
-        // who opted into city-level visibility only. The query filter
-        // is `<> 'off'`, so both levels are in this list.
+        // The candidate's chosen granularity ('city' | 'coarse' |
+        // 'mutuals'), so the map can render a city chip instead of a
+        // pin for people who opted into city-level visibility only.
+        // The query filter is `<> 'off'`, so every sharing level is in
+        // this list; 'mutuals' rows only survive the loop above for a
+        // caller they mutually follow, and they map at the same coarse
+        // bucket as 'coarse'.
         locationVisibility: p.locationVisibility || 'off',
         // Distance is useful for the marker label ("0.6 mi"). Client
         // can recompute against center but returning it saves a

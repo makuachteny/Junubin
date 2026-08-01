@@ -1,10 +1,10 @@
 // ProfileScreen — the "Profile" tab (JuNubin Redesign).
 //
-// Covers the surfaces this screen owns: the header (kicker + gear),
+// Covers the surfaces this screen owns: the header (title + gear),
 // the identity block with its static follower strip, the PROFILE
-// STRENGTH checklist (five design rows driven by the
-// profileCompleteness util), the OPEN TO / LANGUAGES chips, and the
-// Edit / Preview / theme-toggle actions.
+// STRENGTH checklist (six design rows driven by the
+// profileCompleteness util), the OPEN TO chips, the ABOUT fact grid,
+// the LANGUAGES chips, and the Edit / Preview / theme-toggle actions.
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
@@ -63,8 +63,8 @@ const COLORS = {
   onGold: '#241B03',
 };
 
-// One photo + languages filled; background, prompt and verification
-// missing → strength = 2/5 = 40%.
+// Photo + languages + occupation filled; background, prompt and
+// verification missing → strength = 3/6 = 50%.
 const USER = {
   id: 'me-1',
   name: 'Akol',
@@ -74,6 +74,9 @@ const USER = {
   images: ['https://example.com/me.jpg'],
   openTo: ['friendship', 'community'],
   languages: ['Juba Arabic', 'English'],
+  profession: 'Nurse',
+  education: '',
+  ethnicity: '',
 };
 
 const navigation = {
@@ -93,29 +96,71 @@ describe('ProfileScreen (Profile tab)', () => {
   it('renders the header, identity block, strength card, chips and actions', () => {
     const { getByText } = render(<ProfileScreen navigation={navigation} route={{ params: {} }} />);
 
-    expect(getByText('JUNUBIN')).toBeTruthy();
     expect(getByText('Profile')).toBeTruthy();
     expect(getByText(/Akol/)).toBeTruthy();
     expect(getByText('PROFILE STRENGTH')).toBeTruthy();
     expect(getByText(/followers/)).toBeTruthy();
     expect(getByText(/following/)).toBeTruthy();
     expect(getByText('OPEN TO')).toBeTruthy();
+    expect(getByText('ABOUT')).toBeTruthy();
     expect(getByText('LANGUAGES')).toBeTruthy();
     expect(getByText('Juba Arabic')).toBeTruthy();
     expect(getByText('Edit profile')).toBeTruthy();
     expect(getByText('Preview as others')).toBeTruthy();
   });
 
-  it('shows the five design checklist rows and the matching percent', () => {
-    const { getByText } = render(<ProfileScreen navigation={navigation} route={{ params: {} }} />);
+  it('shows the six design checklist rows, in order, with the matching percent', () => {
+    const { getByText, getAllByRole } = render(
+      <ProfileScreen navigation={navigation} route={{ params: {} }} />
+    );
 
     expect(getByText('Add a profile photo')).toBeTruthy();
     expect(getByText('Add your background')).toBeTruthy();
     expect(getByText('Add languages')).toBeTruthy();
+    expect(getByText('Add occupation & school')).toBeTruthy();
     expect(getByText('Answer a profile prompt')).toBeTruthy();
     expect(getByText('Verify your photo')).toBeTruthy();
-    // photos + languages done → 2/5.
-    expect(getByText('40%')).toBeTruthy();
+    // photos + languages + occupation done → 3/6.
+    expect(getByText('50%')).toBeTruthy();
+
+    // Design order: photo, background, languages, occupation & school,
+    // prompt, verify.
+    const labels = getAllByRole('button')
+      .map((n) => n.props.accessibilityLabel)
+      .filter((l) => /^(Add |Answer |Verify )/.test(l || ''));
+    expect(labels).toEqual([
+      'Add a profile photo, done',
+      'Add your background',
+      'Add languages, done',
+      'Add occupation & school, done',
+      'Answer a profile prompt',
+      'Verify your photo',
+    ]);
+  });
+
+  it('renders the ABOUT grid, with design placeholders for unset facts', () => {
+    const { getByText } = render(<ProfileScreen navigation={navigation} route={{ params: {} }} />);
+
+    expect(getByText('OCCUPATION')).toBeTruthy();
+    expect(getByText('Nurse')).toBeTruthy();
+    expect(getByText('SCHOOL')).toBeTruthy();
+    expect(getByText('Add school')).toBeTruthy();
+    expect(getByText('BACKGROUND')).toBeTruthy();
+    expect(getByText('Add background')).toBeTruthy();
+  });
+
+  it('an occupation-only profile still checks "Add occupation & school"', () => {
+    mockUseCurrentUser.mockReturnValue({
+      currentUser: { ...USER, profession: '', education: 'Univ. of Nairobi' },
+      refreshUser: jest.fn(),
+    });
+    const { getByLabelText, getByText } = render(
+      <ProfileScreen navigation={navigation} route={{ params: {} }} />
+    );
+
+    expect(getByLabelText('Add occupation & school, done')).toBeTruthy();
+    expect(getByText('Univ. of Nairobi')).toBeTruthy();
+    expect(getByText('Add occupation')).toBeTruthy();
   });
 
   it('gear opens Settings; actions open EditProfile and the self-preview detail', () => {
@@ -143,6 +188,9 @@ describe('ProfileScreen (Profile tab)', () => {
     const { getByText } = render(<ProfileScreen navigation={navigation} route={{ params: {} }} />);
 
     fireEvent.press(getByText('Add your background'));
+    expect(navigation.navigate).toHaveBeenCalledWith('EditProfile');
+
+    fireEvent.press(getByText('Add occupation & school'));
     expect(navigation.navigate).toHaveBeenCalledWith('EditProfile');
 
     fireEvent.press(getByText('Verify your photo'));

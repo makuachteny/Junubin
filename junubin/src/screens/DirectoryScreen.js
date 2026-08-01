@@ -11,9 +11,8 @@
 // so the client never has to be trusted with it.
 //
 // Visual language: Industry redesign, design.html Directory tab —
-// flag-mark kicker header, hairline search field, single-select chip
-// row, numbered Blueprint person cards. Tokens only, no hex (the flag
-// mark's bands come from the ss* flag tokens).
+// compact header, hairline search field, single-select chip
+// row, numbered Blueprint person cards. Tokens only, no hex.
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
@@ -26,6 +25,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,10 +37,13 @@ import { useAuth } from '../auth';
 import * as directoryService from '../api/services/directoryService';
 import * as followService from '../api/services/followService';
 import { OPEN_TO_BY_KEY, normalizeOpenTo } from '../data/openTo';
+import { getCountryByCode } from '../data/countries';
 import { imageSource } from '../utils/imageSource';
 import { reportError } from '../utils/reportError';
 import { trackEvent } from '../utils/analytics';
 import { hapticSelection } from '../utils/haptics';
+import { bottomTabInset, layoutForWidth } from '../theme/layout';
+import { useTabBarScrollVisibility } from '../navigation/TabBarVisibilityContext';
 
 // The directory Edge Function exposes no facet endpoint, so the city
 // chips are the same static diaspora hubs the onboarding city step
@@ -64,10 +67,15 @@ const TAG_CYCLE = [
   ['ssRedTint', 'ssRedDark'],
 ];
 
-// "City, Country · profession" — one line per the mock. Falls back
-// through job → school so the line still says something useful.
+// "City, Country · profession" — one line per the mock. The country is
+// the resolved NAME ("Kenya"), never the stored alpha-2 code, which is
+// what the design's label means. Work falls back through job → school
+// so the line still says something useful.
 const cityLine = (person) => {
-  const place = [person?.city, person?.country || person?.countryCode].filter(Boolean).join(', ');
+  const countryName = getCountryByCode(person?.countryCode || person?.country)?.name
+    || person?.country
+    || '';
+  const place = [person?.city, countryName].filter(Boolean).join(', ');
   const work = person?.profession || person?.job || person?.school;
   return [place, work].filter(Boolean).join(' · ') || null;
 };
@@ -189,8 +197,11 @@ function SkeletonCard({ styles }) {
 
 const DirectoryScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { colors, isDark } = useTheme();
-  const styles = useMemo(() => getStyles(colors, insets, isDark), [colors, insets, isDark]);
+  const layout = useMemo(() => layoutForWidth(width), [width]);
+  const styles = useMemo(() => getStyles(colors, insets, isDark, layout), [colors, insets, isDark, layout]);
+  const tabBarScrollProps = useTabBarScrollVisibility();
   const { session } = useAuth();
 
   const [queryInput, setQueryInput] = useState('');
@@ -295,29 +306,26 @@ const DirectoryScreen = ({ navigation }) => {
     });
   }, [navigation]);
 
-  // "8 PEOPLE IN THE DIASPORA DIRECTORY" / '3 PEOPLE MATCHING "JUBA"'
+  // "8 PEOPLE IN THE DIASPORA DIRECTORY" / '3 PEOPLE MATCHING "JUBA"'.
+  // The design counts the whole filtered set; the `directory` Edge
+  // Function returns a cursor page and no total, so this counts what is
+  // loaded. Exact while a single page covers the results (nextCursor
+  // null) — it needs a `total` in the function response to be exact for
+  // paginated result sets.
   const countLine = query
     ? `${people.length} PEOPLE MATCHING "${query.toUpperCase()}"`
     : `${people.length} PEOPLE IN THE DIASPORA DIRECTORY`;
 
   return (
     <View style={styles.screen}>
-      {/* ─── HEADER: flag mark + kicker + h1 + search + chips ─── */}
+      {/* ─── HEADER: h1 + search + chips ─── */}
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
         <View>
-          <View style={styles.brandRow}>
-            <View style={styles.flagMark} accessibilityElementsHidden importantForAccessibility="no">
-              <View style={[styles.flagBand, { backgroundColor: colors.ssInk }]} />
-              <View style={[styles.flagBand, styles.flagBandRed]} />
-              <View style={[styles.flagBand, { backgroundColor: colors.ssGreen }]} />
-            </View>
-            <Text style={styles.kicker}>JUNUBIN</Text>
-          </View>
           <Text style={styles.headerTitle} accessibilityRole="header">Directory</Text>
         </View>
 
         <View style={styles.searchField}>
-          <Ionicons name="search" size={18} color={colors.gray400} />
+          <Ionicons name="search-outline" size={18} color={colors.gray400} />
           <TextInput
             style={styles.searchInput}
             value={queryInput}
@@ -329,16 +337,6 @@ const DirectoryScreen = ({ navigation }) => {
             accessibilityLabel="Search the directory"
             testID="directory-search"
           />
-          {queryInput.length > 0 ? (
-            <TouchableOpacity
-              onPress={() => setQueryInput('')}
-              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-            >
-              <Ionicons name="close-circle" size={16} color={colors.gray400} />
-            </TouchableOpacity>
-          ) : null}
         </View>
 
         <ScrollView
@@ -370,6 +368,7 @@ const DirectoryScreen = ({ navigation }) => {
 
       {/* ─── RESULTS ─── */}
       <FlatList
+        {...tabBarScrollProps}
         data={people}
         keyExtractor={(item) => String(item.id)}
         renderItem={({ item, index }) => (
@@ -441,48 +440,21 @@ const DirectoryScreen = ({ navigation }) => {
   );
 };
 
-const getStyles = (colors, insets, isDark) => StyleSheet.create({
+const getStyles = (colors, insets, isDark, layout) => StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.cream,
   },
   header: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     paddingBottom: 12,
     gap: 12,
     backgroundColor: colors.cream,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
+    ...layout.centeredContent,
   },
 
-  // ── Brand row: 20×14 tricolor mark + letterspaced kicker ──
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  flagMark: {
-    width: 20,
-    height: 14,
-    borderWidth: 1,
-    borderColor: colors.separator,
-    flexDirection: 'column',
-  },
-  flagBand: {
-    flex: 1,
-  },
-  flagBandRed: {
-    backgroundColor: colors.ssRed,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.cream,
-  },
-  kicker: {
-    fontFamily: FontFamily.heading,
-    fontSize: 10.5,
-    letterSpacing: 2.7,
-    color: colors.accentDark,
-  },
   headerTitle: {
     fontFamily: FontFamily.heading,
     fontSize: 31,
@@ -496,7 +468,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 46,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.separator,
     backgroundColor: colors.surfaceMuted,
     borderRadius: 4,
@@ -513,10 +485,10 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
 
   // ── Filter chips — single-select, 36px, r4 ──
   chipsScroll: {
-    marginHorizontal: -18,
+    marginHorizontal: -layout.horizontal,
   },
   chipsRow: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     gap: 8,
     alignItems: 'center',
   },
@@ -548,14 +520,15 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 12,
     color: colors.gray400,
-    letterSpacing: 0.7,
+    letterSpacing: 0.72,
     marginBottom: 14,
   },
   listContent: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     paddingTop: 14,
-    paddingBottom: insets.bottom + 24,
+    paddingBottom: bottomTabInset(insets.bottom),
     gap: 14,
+    ...layout.centeredList,
   },
 
   // ── Person card (Blueprint, cream bg, 14 padding) ──
@@ -568,7 +541,7 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   personPhotoWrap: {
     width: 82,
     height: 100,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.separator,
     backgroundColor: colors.surfaceMuted,
   },
@@ -665,9 +638,10 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
 
   // ── Loading skeletons — plain muted blocks in the card geometry ──
   skeletonList: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     paddingTop: 14,
     gap: 14,
+    ...layout.centeredList,
   },
   skeletonBlock: {
     backgroundColor: colors.surfaceMuted,
@@ -693,8 +667,10 @@ const getStyles = (colors, insets, isDark) => StyleSheet.create({
   // ── Empty / error ──
   emptyWrap: {
     flexGrow: 1,
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     paddingTop: 14,
+    paddingBottom: bottomTabInset(insets.bottom),
+    ...layout.centeredList,
   },
   empty: {
     flex: 1,

@@ -22,24 +22,6 @@
 
 export const PRONOUN_OPTIONS = ['she/her/hers', 'he/him/his', 'they/them/theirs', 'ze/zir/zirs'];
 
-// ── DEPRECATED dating vocabularies ───────────────────────────────────
-// JuNubin pivoted from a dating app to a South Sudanese social /
-// community platform. Neither ProfileSetupScreen nor EditProfileScreen
-// collects these any more — the corresponding steps and editors were
-// removed. They're kept as exports (not deleted) purely so the
-// discover/filter surfaces that still read legacy Profile columns can
-// render historical values without a crash. Do NOT add new UI on top
-// of them.
-export const DATE_PREF_OPTIONS = ['Men', 'Women', 'Everyone'];
-
-export const INTENTION_OPTIONS = [
-  'Life partner',
-  'Long-term relationship',
-  'Short-term relationship',
-  'Figuring it out',
-  'Prefer not to say',
-];
-
 export const EDUCATION_OPTIONS = [
   'High school',
   'Some college',
@@ -57,12 +39,6 @@ export const INTEREST_OPTIONS = [
   'Poetry', 'Singing', 'Running', 'Volunteering', 'Food', 'Nature', 'Languages', 'History',
 ];
 
-// Prompts are community-flavoured now. The three dating-only prompts
-// ('The way to my heart is...', "I'm looking for someone who...",
-// 'My love language is...') were dropped in the pivot. A user who saved
-// one of those before the pivot keeps the stored promptQuestion on
-// their profile — it just no longer appears as a selectable chip in
-// EditProfile, so re-picking replaces it with a current option.
 export const PROMPT_OPTIONS = [
   'A fun fact about me is...',
   'My ideal Sunday looks like...',
@@ -110,8 +86,6 @@ export function normalizeLocationVisibility(value) {
   return LOCATION_VISIBILITY_KEYS.includes(value) ? value : 'off';
 }
 
-// "Here for" — the neutral replacement for the old dating-flavoured
-// lookingFor chips ('Something serious', 'Marriage-minded', ...).
 // Persists to Profile.lookingFor.
 export const HERE_FOR_OPTIONS = [
   'Friendship',
@@ -120,17 +94,4 @@ export const HERE_FOR_OPTIONS = [
   'Mentorship',
   'Events & meetups',
   'Just browsing',
-];
-
-export const SEXUALITY_OPTIONS = [
-  'Straight', 'Gay', 'Lesbian', 'Bisexual', 'Pansexual', 'Asexual', 'Queer', 'Prefer not to say',
-];
-
-export const CHILDREN_OPTIONS = [
-  'No children',
-  'Have children',
-  'Want children someday',
-  "Don't want children",
-  'Open to children',
-  'Prefer not to say',
 ];

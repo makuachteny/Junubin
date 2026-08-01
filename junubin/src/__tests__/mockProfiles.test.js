@@ -1,11 +1,11 @@
 // Sanity tests on the demo roster + downstream mock surfaces. These
-// guarantee identity stays consistent across mockMatches, mockLikes
+// guarantee identity stays consistent across mockConversations, mockRequestProfiles
 // and mockMessages — the property we promised the user when
 // re-introducing demo data.
 
 import { DEMO_ROSTER, DEMO_BY_ID } from '../data/__dev__/demoRoster';
 import {
-  mockMatches, mockLikes, mockMessages,
+  mockConversations, mockRequestProfiles, mockMessages,
 } from '../data/__dev__/mockProfiles';
 import { isDemoId, DEMO_DATA_ENABLED, DEMO_ID_PREFIX } from '../config/demoData';
 
@@ -17,8 +17,8 @@ describe('Demo roster — base contract', () => {
     });
   });
 
-  it('roster mode values are one of Dating / Social / Both', () => {
-    DEMO_ROSTER.forEach((u) => expect(['Dating', 'Social', 'Both']).toContain(u.mode));
+  it('roster mode values are community-only', () => {
+    DEMO_ROSTER.forEach((u) => expect(u.mode).toBe('Community'));
   });
 
   it('every roster entry has photos + required text fields', () => {
@@ -53,22 +53,22 @@ describe('Photo consistency — primary image is the same across surfaces', () =
     });
   });
 
-  it('mockMatches images[0] matches the linked user\'s primary photo', () => {
-    mockMatches.forEach((m) => {
+  it('mockConversations images[0] matches the linked user\'s primary photo', () => {
+    mockConversations.forEach((m) => {
       const user = DEMO_BY_ID[m.userId];
       expect(m.images[0]).toBe(user.photos[0]);
     });
   });
 
-  it('mockMatches images carry the full photo array (not just one)', () => {
-    mockMatches.forEach((m) => {
+  it('mockConversations images carry the full photo array (not just one)', () => {
+    mockConversations.forEach((m) => {
       const user = DEMO_BY_ID[m.userId];
       expect(m.images.length).toBe(user.photos.length);
     });
   });
 
-  it('mockLikes images[0] matches the linked user\'s primary photo', () => {
-    mockLikes.forEach((l) => {
+  it('mockRequestProfiles images[0] matches the linked user\'s primary photo', () => {
+    mockRequestProfiles.forEach((l) => {
       const user = DEMO_BY_ID[l.userId];
       expect(l.images[0]).toBe(user.photos[0]);
     });
@@ -77,15 +77,15 @@ describe('Photo consistency — primary image is the same across surfaces', () =
 });
 
 describe('Cross-surface consistency', () => {
-  it('every mockMatches.userId points at a real roster member', () => {
-    mockMatches.forEach((m) => {
+  it('every mockConversations.userId points at a real roster member', () => {
+    mockConversations.forEach((m) => {
       expect(isDemoId(m.userId)).toBe(true);
       expect(DEMO_BY_ID[m.userId]).toBeTruthy();
     });
   });
 
-  it('every mockLikes.userId points at a real roster member', () => {
-    mockLikes.forEach((l) => {
+  it('every mockRequestProfiles.userId points at a real roster member', () => {
+    mockRequestProfiles.forEach((l) => {
       expect(isDemoId(l.userId)).toBe(true);
       expect(DEMO_BY_ID[l.userId]).toBeTruthy();
     });
@@ -98,8 +98,8 @@ describe('Cross-surface consistency', () => {
     });
   });
 
-  it('every match in mockMatches has a chat thread in mockMessages', () => {
-    mockMatches.forEach((m) => {
+  it('every conversation in mockConversations has a chat thread in mockMessages', () => {
+    mockConversations.forEach((m) => {
       expect(mockMessages[m.userId]).toBeDefined();
       expect(mockMessages[m.userId].length).toBeGreaterThan(0);
     });

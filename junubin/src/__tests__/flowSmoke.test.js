@@ -7,7 +7,6 @@ import SignupScreen from '../screens/SignupScreen';
 
 const mockUseTheme = jest.fn();
 const mockUseAuth = jest.fn();
-const mockUseSubscription = jest.fn();
 const mockUseCurrentUser = jest.fn();
 
 jest.mock('../theme', () => {
@@ -18,10 +17,6 @@ jest.mock('../theme', () => {
 jest.mock('../auth', () => ({
   useAuth: () => mockUseAuth(),
   useRequireAuth: () => (() => true),
-}));
-
-jest.mock('../payments', () => ({
-  useSubscription: () => mockUseSubscription(),
 }));
 
 jest.mock('../hooks', () => ({
@@ -103,13 +98,6 @@ describe('Flow smoke tests', () => {
       user: null,
       startOtp: mockStartOtp,
       loginWithOtp: mockLoginWithOtp,
-    });
-
-    mockUseSubscription.mockReturnValue({
-      tier: 'free',
-      effectiveTier: 'free',
-      adsEnabled: true,
-      hasTier: () => false,
     });
 
     mockUseCurrentUser.mockReturnValue({

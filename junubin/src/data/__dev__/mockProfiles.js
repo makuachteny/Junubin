@@ -18,7 +18,7 @@ export const currentUser = {
   avatar: null,
   images: [],
   preferences: {
-    mode: 'Social',
+    mode: 'Community',
     showMe: true,
     distance: 25,
   },
@@ -29,34 +29,34 @@ export const currentUser = {
 // opens a chat for THAT roster member (not a fresh fake person).
 // `updatedAt` is the raw timestamp for MessagesScreen's sort.
 //
-// IMPORTANT: the `userId` field links each match to the demo roster.
-// ChatScreen reads route.params.match and looks up the matching
+// IMPORTANT: the `userId` field links each conversation to the demo
+// roster. ChatScreen reads route.params.thread/peer and looks up the
 // roster entry by `userId || id`.
-export const mockMatches = [
-  { id: 'demo_match_001', userId: 'demo_001', name: 'Adau',     images: DEMO_BY_ID.demo_001.photos, lastMessage: 'Sunday brunch then?',       timestamp: '2m ago',  unread: true,  ethnicity: 'Dinka',   mode: 'social', updatedAt: '2026-05-13T19:58:00.000Z' },
-  { id: 'demo_match_002', userId: 'demo_003', name: 'Nyirou',   images: DEMO_BY_ID.demo_003.photos, lastMessage: "Send me that playlist?",   timestamp: '1h ago',  unread: false, ethnicity: 'Nuer',    mode: 'social', updatedAt: '2026-05-13T18:58:00.000Z' },
-  { id: 'demo_match_003', userId: 'demo_009', name: 'Achol',    images: DEMO_BY_ID.demo_009.photos, lastMessage: 'See you Saturday!',         timestamp: '3h ago',  unread: true,  ethnicity: 'Shilluk', mode: 'social', updatedAt: '2026-05-13T16:58:00.000Z' },
-  { id: 'demo_match_004', userId: 'demo_006', name: 'Akech',    images: DEMO_BY_ID.demo_006.photos, lastMessage: 'I just got here, where you?', timestamp: '5h ago',  unread: false, ethnicity: 'Dinka',   mode: 'social', updatedAt: '2026-05-13T14:58:00.000Z' },
-  { id: 'demo_match_005', userId: 'demo_010', name: 'Akuol',    images: DEMO_BY_ID.demo_010.photos, lastMessage: 'Coffee this weekend?',      timestamp: '7h ago',  unread: true,  ethnicity: 'Dinka',   mode: 'social', updatedAt: '2026-05-13T12:58:00.000Z' },
-  { id: 'demo_match_006', userId: 'demo_007', name: 'Nyandeng', images: DEMO_BY_ID.demo_007.photos, lastMessage: 'That playlist is so good.', timestamp: '9h ago',  unread: false, ethnicity: 'Nuer',    mode: 'social', updatedAt: '2026-05-13T10:58:00.000Z' },
+export const mockConversations = [
+  { id: 'demo_thread_001', userId: 'demo_001', name: 'Adau',     images: DEMO_BY_ID.demo_001.photos, lastMessage: 'Sunday brunch then?',       timestamp: '2m ago',  unread: true,  ethnicity: 'Dinka',   mode: 'community', updatedAt: '2026-05-13T19:58:00.000Z' },
+  { id: 'demo_thread_002', userId: 'demo_003', name: 'Nyirou',   images: DEMO_BY_ID.demo_003.photos, lastMessage: "Send me that playlist?",   timestamp: '1h ago',  unread: false, ethnicity: 'Nuer',    mode: 'community', updatedAt: '2026-05-13T18:58:00.000Z' },
+  { id: 'demo_thread_003', userId: 'demo_009', name: 'Achol',    images: DEMO_BY_ID.demo_009.photos, lastMessage: 'See you Saturday!',         timestamp: '3h ago',  unread: true,  ethnicity: 'Shilluk', mode: 'community', updatedAt: '2026-05-13T16:58:00.000Z' },
+  { id: 'demo_thread_004', userId: 'demo_006', name: 'Akech',    images: DEMO_BY_ID.demo_006.photos, lastMessage: 'I just got here, where you?', timestamp: '5h ago',  unread: false, ethnicity: 'Dinka',   mode: 'community', updatedAt: '2026-05-13T14:58:00.000Z' },
+  { id: 'demo_thread_005', userId: 'demo_010', name: 'Akuol',    images: DEMO_BY_ID.demo_010.photos, lastMessage: 'Coffee this weekend?',      timestamp: '7h ago',  unread: true,  ethnicity: 'Dinka',   mode: 'community', updatedAt: '2026-05-13T12:58:00.000Z' },
+  { id: 'demo_thread_006', userId: 'demo_007', name: 'Nyandeng', images: DEMO_BY_ID.demo_007.photos, lastMessage: 'That playlist is so good.', timestamp: '9h ago',  unread: false, ethnicity: 'Nuer',    mode: 'community', updatedAt: '2026-05-13T10:58:00.000Z' },
 ];
 
 // Invites — eight demo users with a pending message request to the
 // current-user. Subset of the roster that's intentionally different
-// from mockMatches so the two inbox sections aren't redundant.
-export const mockLikes = [
-  { id: 'demo_like_001', userId: 'demo_008', name: 'Nyibol',   age: 30, images: DEMO_BY_ID.demo_008.photos, distance: '2 mi', verified: true,  activity: 'nearby', likedAt: '2026-03-25T10:12:00.000Z', country: 'AU', languages: ['English', 'Dinka'],   mode: 'social' },
-  { id: 'demo_like_002', userId: 'demo_004', name: 'Athieng',  age: 25, images: DEMO_BY_ID.demo_004.photos, distance: '5 mi', verified: true,  activity: 'active', likedAt: '2026-03-24T18:42:00.000Z',                     country: 'CA', languages: ['English', 'Bari'],    mode: 'dating' },
-  { id: 'demo_like_003', userId: 'demo_005', name: 'Yar',      age: 21, images: DEMO_BY_ID.demo_005.photos, distance: '4 mi', verified: false, activity: 'nearby', likedAt: '2026-03-23T14:10:00.000Z',                     country: 'US', languages: ['English', 'Dinka'],   mode: 'social' },
-  { id: 'demo_like_004', userId: 'demo_002', name: 'Abuk',     age: 27, images: DEMO_BY_ID.demo_002.photos, distance: '2 mi', verified: true,  activity: 'active', likedAt: '2026-03-22T11:05:00.000Z',                     country: 'AU', languages: ['English', 'Bari'],    mode: 'social' },
-  { id: 'demo_like_005', userId: 'demo_001', name: 'Adau',     age: 24, images: DEMO_BY_ID.demo_001.photos, distance: '3 mi', verified: true,  activity: 'nearby', likedAt: '2026-03-21T16:20:00.000Z', country: 'US', languages: ['English', 'Dinka'],   mode: 'dating' },
-  { id: 'demo_like_006', userId: 'demo_007', name: 'Nyandeng', age: 23, images: DEMO_BY_ID.demo_007.photos, distance: '3 mi', verified: true,  activity: 'active', likedAt: '2026-03-25T01:15:00.000Z',                     country: 'US', languages: ['English', 'Nuer'],    mode: 'dating' },
-  { id: 'demo_like_007', userId: 'demo_010', name: 'Akuol',    age: 28, images: DEMO_BY_ID.demo_010.photos, distance: '4 mi', verified: true,  activity: 'nearby', likedAt: '2026-03-22T03:25:00.000Z',                     country: 'US', languages: ['English', 'Dinka'],   mode: 'dating' },
-  { id: 'demo_like_008', userId: 'demo_006', name: 'Akech',    age: 24, images: DEMO_BY_ID.demo_006.photos, distance: '7 mi', verified: false, activity: 'nearby', likedAt: '2026-03-20T09:00:00.000Z',                     country: 'US', languages: ['English', 'Dinka'],   mode: 'social' },
+// from mockConversations so the two inbox sections aren't redundant.
+export const mockRequestProfiles = [
+  { id: 'demo_request_001', userId: 'demo_008', name: 'Nyibol',   age: 30, images: DEMO_BY_ID.demo_008.photos, distance: '2 mi', verified: true,  activity: 'nearby', likedAt: '2026-03-25T10:12:00.000Z', country: 'AU', languages: ['English', 'Dinka'],   mode: 'community' },
+  { id: 'demo_request_002', userId: 'demo_004', name: 'Athieng',  age: 25, images: DEMO_BY_ID.demo_004.photos, distance: '5 mi', verified: true,  activity: 'active', likedAt: '2026-03-24T18:42:00.000Z',                     country: 'CA', languages: ['English', 'Bari'],    mode: 'community' },
+  { id: 'demo_request_003', userId: 'demo_005', name: 'Yar',      age: 21, images: DEMO_BY_ID.demo_005.photos, distance: '4 mi', verified: false, activity: 'nearby', likedAt: '2026-03-23T14:10:00.000Z',                     country: 'US', languages: ['English', 'Dinka'],   mode: 'community' },
+  { id: 'demo_request_004', userId: 'demo_002', name: 'Abuk',     age: 27, images: DEMO_BY_ID.demo_002.photos, distance: '2 mi', verified: true,  activity: 'active', likedAt: '2026-03-22T11:05:00.000Z',                     country: 'AU', languages: ['English', 'Bari'],    mode: 'community' },
+  { id: 'demo_request_005', userId: 'demo_001', name: 'Adau',     age: 24, images: DEMO_BY_ID.demo_001.photos, distance: '3 mi', verified: true,  activity: 'nearby', likedAt: '2026-03-21T16:20:00.000Z', country: 'US', languages: ['English', 'Dinka'],   mode: 'community' },
+  { id: 'demo_request_006', userId: 'demo_007', name: 'Nyandeng', age: 23, images: DEMO_BY_ID.demo_007.photos, distance: '3 mi', verified: true,  activity: 'active', likedAt: '2026-03-25T01:15:00.000Z',                     country: 'US', languages: ['English', 'Nuer'],    mode: 'community' },
+  { id: 'demo_request_007', userId: 'demo_010', name: 'Akuol',    age: 28, images: DEMO_BY_ID.demo_010.photos, distance: '4 mi', verified: true,  activity: 'nearby', likedAt: '2026-03-22T03:25:00.000Z',                     country: 'US', languages: ['English', 'Dinka'],   mode: 'community' },
+  { id: 'demo_request_008', userId: 'demo_006', name: 'Akech',    age: 24, images: DEMO_BY_ID.demo_006.photos, distance: '7 mi', verified: false, activity: 'nearby', likedAt: '2026-03-20T09:00:00.000Z',                     country: 'US', languages: ['English', 'Dinka'],   mode: 'community' },
 ];
 
-// Pre-seeded chat history for each demo match. Keyed by the roster
-// userId, NOT the match.id, so ChatScreen can look up the thread for
+// Pre-seeded chat history for each demo conversation. Keyed by the roster
+// userId, NOT the thread id, so ChatScreen can look up the thread for
 // whichever demo user it just opened.
 //
 // Each conversation is short (3–5 messages) and ends on a message

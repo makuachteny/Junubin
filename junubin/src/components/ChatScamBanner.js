@@ -7,7 +7,7 @@
 // relative / community leader / organisation, "I'm stranded, send
 // transport money" stories, and pushes to move the conversation
 // off-platform where nothing can be reported. Copy below covers all of
-// those without assuming the two people are dating.
+// those without assuming the relationship between the two people.
 //
 // Render at the top of ChatScreen above the message list. The
 // component owns its own dismiss state so a user can clear the

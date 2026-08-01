@@ -143,7 +143,7 @@ beforeEach(() => {
 describe('HomeScreen — people discovery', () => {
   // Industry redesign: the map is full-bleed with floating chrome — no
   // "Nearby" title bar. The city pill + Map|List segment ARE the header.
-  it('renders the floating city pill and Map/List segment, not a swipe deck', async () => {
+  it('renders the floating city pill and Map/List segment', async () => {
     const { getByTestId, queryByTestId } = render(
       <HomeScreen navigation={navigation} route={{ params: {} }} />
     );
@@ -164,6 +164,32 @@ describe('HomeScreen — people discovery', () => {
     await act(async () => {});
     expect(getByTestId('location-disclosure-accept')).toBeTruthy();
     expect(mockRequestPermissions).not.toHaveBeenCalled();
+  });
+
+  it('puts city search and people filters inside the location dropdown', async () => {
+    mockGetItem.mockImplementation(async (key) =>
+      (key === '@junubin/home_view_mode_v1' ? 'list' : null));
+    const { getByTestId, getByText } = render(
+      <HomeScreen navigation={navigation} route={{ params: {} }} />
+    );
+    await act(async () => {});
+
+    await act(async () => {
+      fireEvent.press(getByTestId('home-city-pill'));
+    });
+
+    expect(getByTestId('home-city-search')).toBeTruthy();
+    expect(getByText('Everyone')).toBeTruthy();
+    expect(getByText('Verified')).toBeTruthy();
+    expect(getByText('Active this week')).toBeTruthy();
+
+    mockSearchDirectory.mockClear();
+    await act(async () => {
+      fireEvent.press(getByText('Verified'));
+    });
+    await waitFor(() => expect(mockSearchDirectory).toHaveBeenCalledWith(
+      expect.objectContaining({ verifiedOnly: true })
+    ));
   });
 
   it('declining the disclosure drops the user into the list, still without asking the OS', async () => {

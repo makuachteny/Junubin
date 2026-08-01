@@ -1,6 +1,8 @@
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import * as profileService from '../../api/services/profileService';
 
 import ProfileSetupScreen from '../ProfileSetupScreen';
 import AppNavigator from '../../navigation/AppNavigator';
@@ -8,10 +10,10 @@ import AppNavigator from '../../navigation/AppNavigator';
 
 const mockUseTheme = jest.fn();
 const mockUseAuth = jest.fn();
-const mockUseSubscription = jest.fn();
 const mockUseCurrentUser = jest.fn();
 const mockSetItem = jest.fn(async () => {});
 const mockGetItem = jest.fn(async () => null);
+const mockDevAuthBypassEnabled = jest.fn();
 
 jest.mock('../../theme', () => {
   const actual = jest.requireActual('../../theme');
@@ -20,10 +22,6 @@ jest.mock('../../theme', () => {
 
 jest.mock('../../auth', () => ({
   useAuth: () => mockUseAuth(),
-}));
-
-jest.mock('../../payments', () => ({
-  useSubscription: () => mockUseSubscription(),
 }));
 
 jest.mock('../../hooks', () => ({
@@ -41,6 +39,7 @@ jest.mock('../../accessibility', () => ({
 }));
 
 jest.mock('expo-image-picker', () => ({
+  requestMediaLibraryPermissionsAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
   MediaTypeOptions: { Images: 'Images' },
 }));
@@ -53,6 +52,10 @@ jest.mock('../../api/services/profileService', () => ({
 jest.mock('../../utils/haptics', () => ({
   hapticSelection: jest.fn(),
   hapticHeavy: jest.fn(),
+}));
+
+jest.mock('../../config/devAuth', () => ({
+  devAuthBypassEnabled: () => mockDevAuthBypassEnabled(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -114,30 +117,16 @@ describe('Onboarding / open-to flow', () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     mockGetItem.mockResolvedValue(null);
+    mockDevAuthBypassEnabled.mockReturnValue(false);
+    ImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///one-photo.jpg' }],
+    });
     mockUseTheme.mockReturnValue({ isDark: false, toggleTheme: jest.fn(), colors: COLORS });
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: null, logout: jest.fn(), updateUser: jest.fn(),
-    });
-    mockUseSubscription.mockReturnValue({
-      tier: 'free',
-      effectiveTier: 'free',
-      promoTier: null,
-      promoEndsAt: null,
-      adsEnabled: true,
-      hasTier: () => false,
-      consumeCoins: () => true,
-      addCoins: jest.fn(),
-      addSpotlights: jest.fn(),
-      addSuperLikes: jest.fn(),
-      addWhispers: jest.fn(),
-      setAdsEnabled: jest.fn(),
-      grantPromoTier: jest.fn(),
-      restorePurchases: jest.fn(),
-      cancelSubscription: jest.fn(),
-      isSubscribed: () => false,
-      purchaseInProgress: false,
-      reset: jest.fn(),
     });
     mockUseCurrentUser.mockReturnValue({ currentUser: null });
   });
@@ -200,11 +189,6 @@ describe('Onboarding / open-to flow', () => {
     expect(r.getByText('Photo & visibility')).toBeTruthy();
     r.unmount();
 
-    // Legacy dating-era ids land on openTo.
-    r = render(
-      <ProfileSetupScreen navigation={nav} route={{ params: { resumeAt: 'sexuality' } }} />
-    );
-    expect(r.getByText('What are you open to?')).toBeTruthy();
   });
 
   it('skips only on the city and background steps, and shows the visibility consent last', () => {
@@ -244,10 +228,51 @@ describe('Onboarding / open-to flow', () => {
     expect(r.getByText('ENTER JUNUBIN')).toBeTruthy();
   });
 
-  it('asks no dating questions anywhere in onboarding', () => {
-    // Acceptance criterion for the pivot: a new user is never asked
-    // about sexuality, who they want to date, dating intentions, or
-    // children. These steps were deleted, not hidden behind a flag.
+  it('dev profile setup completes with one selected photo', async () => {
+    mockDevAuthBypassEnabled.mockReturnValue(true);
+    const updateUser = jest.fn();
+    const nav = {
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      getState: () => ({ routeNames: ['Main'] }),
+      reset: jest.fn(),
+    };
+    mockUseAuth.mockReturnValue({
+      ready: true,
+      isAuthenticated: true,
+      session: { user: { id: 'dev_1' } },
+      user: {
+        id: 'dev_1',
+        auth_id: 'dev_1',
+        displayName: 'Adau',
+        dateOfBirth: '1998-01-01T00:00:00.000Z',
+        profile: { openTo: ['friendship'], accountPurpose: 'socialize' },
+        photos: [],
+      },
+      logout: jest.fn(),
+      updateUser,
+    });
+
+    const r = render(
+      <ProfileSetupScreen navigation={nav} route={{ params: { resumeAt: 'photos' } }} />
+    );
+    await act(async () => {
+      fireEvent.press(r.getByTestId('setup-photo-tile'));
+    });
+    await act(async () => {
+      fireEvent.press(r.getByText('ENTER JUNUBIN'));
+    });
+
+    expect(profileService.uploadPhoto).not.toHaveBeenCalled();
+    expect(updateUser).toHaveBeenCalledWith(expect.objectContaining({
+      displayName: 'Adau',
+      photos: [expect.objectContaining({ url: 'file:///one-photo.jpg', isPrimary: true })],
+      profile: expect.objectContaining({ profileComplete: true }),
+    }));
+    expect(nav.reset).toHaveBeenCalledWith({ index: 0, routes: [{ name: 'Main' }] });
+  });
+
+  it('asks no removed relationship questions anywhere in onboarding', () => {
     const nav = { navigate: jest.fn(), goBack: jest.fn() };
     const route = { params: {} };
     const { queryByText } = render(
@@ -259,7 +284,7 @@ describe('Onboarding / open-to flow', () => {
     expect(queryByText('What brings you here?')).toBeNull();
   });
 
-  it('authenticated user with complete profile goes to Main (Chats is the home tab)', async () => {
+  it('authenticated user with complete profile goes to Main (Nearby map is the home tab)', async () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: { profileComplete: true } },
@@ -271,7 +296,7 @@ describe('Onboarding / open-to flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(await findByText('Messages Screen')).toBeTruthy();
+    expect(await findByText('Home Screen')).toBeTruthy();
   });
 
   it('authenticated user with accountPurpose set goes to Main', async () => {
@@ -286,7 +311,7 @@ describe('Onboarding / open-to flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(await findByText('Messages Screen')).toBeTruthy();
+    expect(await findByText('Home Screen')).toBeTruthy();
   });
 
   it('authenticated user without profile goes to ProfileSetup', async () => {

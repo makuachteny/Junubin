@@ -1,12 +1,23 @@
-// AnaJunubin — Push Notifications Service
+// JuNubin — Push Notifications Service
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
+import { reportError } from './reportError';
 
-// Persist the Expo push token on the User row so server-side senders
-// (match notifications, message notifications, etc.) can target the right
-// device. Without this step the token is generated but never reaches the
+// EAS project id, needed by getExpoPushTokenAsync in a built binary.
+// Auto-detection reads the same value, but it resolves from a handful
+// of different config shapes depending on SDK and build type — and
+// when it comes back undefined the call throws rather than degrading,
+// so we pass it explicitly instead of hoping.
+const easProjectId =
+  Constants?.expoConfig?.extra?.eas?.projectId ||
+  Constants?.easConfig?.projectId ||
+  undefined;
+
+// Persist the Expo push token on the User row so server-side senders can
+// target the right device. Without this step the token is generated but never reaches the
 // backend, so notifications can't be delivered.
 async function savePushTokenToServer(token) {
   try {
@@ -40,7 +51,7 @@ Notifications.setNotificationHandler({
 // default; it only registers if the user has *already* granted (e.g.
 // they opted in via an in-app pre-prompt). For the first OS dialog,
 // call `promptForPushPermission()` explicitly from a context that has
-// just shown the user a reason — first match, first follow, opening
+// just shown the user a reason — first follow, opening
 // settings → notifications, etc.
 //
 // Pass { prompt: true } to opt back into the legacy "register and
@@ -79,17 +90,24 @@ export async function registerForPushNotifications({ prompt = false } = {}) {
   }
 
   try {
-    const token = await Notifications.getExpoPushTokenAsync();
+    const token = await Notifications.getExpoPushTokenAsync(
+      easProjectId ? { projectId: easProjectId } : undefined,
+    );
     await savePushTokenToServer(token.data);
     return token.data;
-  } catch {
+  } catch (err) {
+    // Previously this swallowed the error and returned null, so a
+    // misconfigured push setup looked identical to "user declined" —
+    // no token, no signal, no way to tell from the outside. Report it
+    // and keep returning null so callers are unaffected.
+    reportError('notifications:getExpoPushToken', err, { easProjectId: !!easProjectId });
     return null;
   }
 }
 
 /**
  * Explicit prompt-and-register entrypoint. Call this from a pre-prompt
- * UI ("Get notified when someone matches with you?") right after a
+ * UI ("Get notified about messages and requests?") right after a
  * notification-eligible event so the OS dialog has context. Returns
  * the resulting token, or null if the user declined / device can't
  * receive pushes.

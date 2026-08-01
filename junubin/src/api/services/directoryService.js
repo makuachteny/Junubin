@@ -1,7 +1,7 @@
 // JuNubin — Directory Service
 //
 // Client for the `directory` Edge Function: the searchable people
-// directory that replaces the swipe deck as the primary way to find
+// directory that is the primary way to find
 // other Junubin. The function runs service-role because the `User`
 // SELECT policy (00029/00047) hides strangers from direct client
 // queries — there is no client-side equivalent of this call.

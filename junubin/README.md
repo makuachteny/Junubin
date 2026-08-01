@@ -35,9 +35,8 @@ games, voice calls, video calls, live rooms and voice notes. Chat is text-only.
 Supabase Edge Functions (Deno/TypeScript). See `supabase/functions/` for the
 canonical list.
 
-**Payments:** Wired but dormant. RevenueCat and Stripe integrations remain in the
-tree so that pre-existing live subscriptions keep resolving, but `PAYMENTS_ENABLED`
-and `SHOW_PAYMENTS_UI` are permanently `false` and no screen offers a purchase.
+**Payments:** None. JuNubin is 100% free: no premium tiers, no paid consumables,
+no checkout screens, and no payment setup required for launch.
 
 ## Project Structure
 
@@ -49,14 +48,14 @@ junubin/
 │   │   ├── hooks/useRealtime.js     # Supabase Realtime subscription wrapper
 │   │   └── services/                # authService, chatService, connectionService,
 │   │                                # directoryService, discoverService, followService,
-│   │                                # matchesService (conversations), messageRequestService,
+│   │                                # conversationService, messageRequestService,
 │   │                                # profileService, safetyService
 │   ├── auth/AuthContext.js          # Supabase OTP auth, session resume, banned-user gate
 │   ├── components/                  # PersonCard, PeopleMap, LocationDisclosure, etc.
 │   ├── config/supabase.js           # Supabase client init
 │   ├── data/                        # countries, tribes, languages, openTo, profileOptions
 │   ├── navigation/AppNavigator.js   # 3 tabs: Nearby, Directory, Chats
-│   ├── payments/                    # Dormant rails + free-for-everyone entitlement shims
+│   ├── payments/                    # Free-for-everyone entitlement shims
 │   ├── screens/
 │   ├── theme/                       # Palettes, typography, responsive sizing
 │   └── utils/                       # imageSource, locationConsent, offlineQueue, haptics
@@ -122,18 +121,12 @@ the functions first produces a `42703` undefined-column error.
 
 ### 4. Set Edge Function secrets (server-side only)
 
-```bash
-supabase secrets set STRIPE_SECRET_KEY=sk_live_...
-supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
-```
-
 ### 5. Deploy Edge Functions
 
 ```bash
 supabase functions deploy \
   account-delete \
   directory discover discover-nearby trending \
-  stripe-billing-portal stripe-create-checkout stripe-webhook \
   moderate-image push-send \
   detect-scam-signal face-liveness
 ```
@@ -145,6 +138,10 @@ supabase functions deploy \
 > `swipe` / `swipe-undo` are retired with the swipe deck; the client no longer calls
 > them. Leave already-deployed copies alone until the legacy `Swipe`/`Match` tables
 > are decommissioned.
+>
+> Payment functions such as `stripe-create-checkout`, `stripe-webhook`,
+> `stripe-billing-portal`, and old `flw-*` functions are retired/dormant. They are
+> not launch requirements for the free app and should not be deployed for v1.
 
 Additional env vars to set with `supabase secrets set`:
 
@@ -217,8 +214,7 @@ deliberately does not let a client browse strangers:
 connection. `MessageRequest` (00047) is the permissioned first-contact path — a
 stranger sends a request, and only on acceptance does
 `accept_message_request()` mint the conversation. The legacy `Swipe` / `Match`
-tables still exist and `matchesService` still reads `Match` to build the inbox, but
-nothing writes a swipe any more.
+tables still exist for historical data, but nothing writes a swipe any more.
 
 **Location privacy** — three separate concepts, deliberately not collapsed:
 
@@ -239,10 +235,10 @@ for ad targeting. There is no background location.
 **Image handling:** `imageSource()` normalizes images across the app — `require()`
 numbers (local assets), URL strings (API), and `{ uri }` objects.
 
-**Payments:** Dormant. Entitlement helpers in
+**Payments:** None. Entitlement helpers in
 [src/payments/entitlements.js](src/payments/entitlements.js) are shims that return
-`true` for everyone; retired product IDs are kept in `RETIRED_PRODUCT_IDS` so
-historical receipts stay resolvable.
+`true` for everyone. Any older Stripe, RevenueCat, or Flutterwave material is
+retired historical context and is not part of the current launch plan.
 
 **Storage:** Supabase Storage — `photos` (profile photos), public-read with
 owner-write enforced by path-prefix RLS.
@@ -250,8 +246,7 @@ owner-write enforced by path-prefix RLS.
 **Security:**
 
 - Row-level security on every user-data table
-- Service-role-only writes on `Payment` (clients can only read their own rows)
-- HMAC-SHA256 signature verification on Stripe webhooks
+- No payment collection, checkout, subscriptions, or paid feature gates
 - Screenshot guard on sensitive screens
 - Block / report / mute / remove-follower and in-app account deletion all preserved
 - `src/navigation/__tests__/routeTargets.test.js` fails the build if any code

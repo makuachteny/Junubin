@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, supabaseUrl, supabaseAnonKey } from '../config/supabase';
-import PaymentService from '../payments/PaymentService';
 import { identifyUser, resetIdentity } from '../utils/analytics';
 import { getProfileRecord } from '../utils/eligibility';
+import { devAuthBypassEnabled, DEV_SESSION_KEY, makeDevSession } from '../config/devAuth';
+import { visiblePhotos } from '../utils/visiblePhotos';
 
 const AuthContext = createContext(null);
 
@@ -50,29 +51,52 @@ export function AuthProvider({ children }) {
     // the navigator can mount and the splash can dismiss. The user record
     // fetch (Supabase round-trip) runs in the background and updates state
     // when it lands — keeping cold start fast even on slow networks.
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setReady(true);
-      if (s) {
-        PaymentService.identify(s.user.id);
-        fetchUser(s.user.id)
-          .then((u) => { if (!u) scheduleUserRetry(s.user.id); })
-          .catch(() => scheduleUserRetry(s.user.id));
+    // Dev bypass: a locally-minted session lives in AsyncStorage, not
+    // in Supabase, so rehydrate it before marking ready — otherwise a
+    // Metro reload flashes Onboarding on every save. Resolves to true
+    // when a dev session was restored, so the Supabase branch below
+    // knows not to stomp it with its own null.
+    const restoreDevSession = async () => {
+      if (!devAuthBypassEnabled()) return false;
+      try {
+        const raw = await AsyncStorage.getItem(DEV_SESSION_KEY);
+        if (!raw) return false;
+        const stored = JSON.parse(raw);
+        setSession(stored.session);
+        setUser(stored.user);
+        return true;
+      } catch {
+        return false;
       }
-    }).catch(() => {
+    };
+
+    restoreDevSession().then((restored) =>
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        if (!s && restored) { setReady(true); return; }
+        setSession(s);
+        setReady(true);
+        if (s) {
+          fetchUser(s.user.id)
+            .then((u) => { if (!u) scheduleUserRetry(s.user.id); })
+            .catch(() => scheduleUserRetry(s.user.id));
+        }
+      })
+    ).catch(() => {
       setReady(true);
     });
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      // Supabase fires INITIAL_SESSION/SIGNED_OUT with a null session,
+      // which would wipe a dev-bypass session it doesn't know about.
+      // Real sign-out still clears state — logout() does it directly.
+      if (!s && devAuthBypassEnabled()) return;
       setSession(s);
       if (s) {
-        PaymentService.identify(s.user.id);
         fetchUser(s.user.id)
           .then((u) => { if (!u) scheduleUserRetry(s.user.id); })
           .catch(() => scheduleUserRetry(s.user.id));
       } else {
-        PaymentService.logout();
         clearUserRetry();
         setUser(null);
       }
@@ -109,7 +133,7 @@ export function AuthProvider({ children }) {
         const normalizedUser = {
           ...data,
           profile: getProfileRecord(data),
-          photos: Array.isArray(data.photos) ? data.photos : [],
+          photos: visiblePhotos(data.photos),
         };
         // Banned-on-load: forcibly sign the user out before returning.
         // This catches the "banned while logged in" case the next time
@@ -134,13 +158,10 @@ export function AuthProvider({ children }) {
         }
         setUser(normalizedUser);
         // Identify to PostHog + Sentry the moment we have a User row.
-        // Subscription tier is included as a trait so cohort splits
-        // (free vs plus vs junub) are queryable. Mode comes from the
-        // profile if set; defaults to dating to keep cohort columns
-        // populated even for users who haven't picked yet.
+        // Community mode and verification are included as traits so
+        // cohort splits stay queryable without exposing profile PII.
         identifyUser(normalizedUser.id, {
-          tier: normalizedUser.subscriptionTier || 'free',
-          mode: normalizedUser.profile?.appMode || normalizedUser.profile?.accountPurpose || 'unset',
+          mode: 'community',
           verified: !!normalizedUser.isVerified,
         });
         return normalizedUser;
@@ -156,6 +177,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const startOtp = useCallback(async ({ email, phone }) => {
+    // Dev bypass: no SMS provider is wired up yet, so pretend the code
+    // went out and let the OTP step accept anything (see loginWithOtp).
+    if (devAuthBypassEnabled()) {
+      console.log('[devAuth] OTP send bypassed — enter any 6 digits.');
+      return { message: 'OTP sent (dev bypass — enter any 6 digits)' };
+    }
     ensureSupabaseConfig();
     if (email) {
       const { error } = await supabase.auth.signInWithOtp({ email });
@@ -171,6 +198,26 @@ export function AuthProvider({ children }) {
   }, [ensureSupabaseConfig]);
 
   const loginWithOtp = useCallback(async ({ email, phone, code }) => {
+    // Dev bypass: accept any code, mint a local session + profile-less
+    // user so the navigator flips to the authenticated stack and the
+    // caller routes on to ProfileSetup.
+    if (devAuthBypassEnabled()) {
+      const { session: devSession, user: devUser } = makeDevSession(phone || email);
+      try {
+        await AsyncStorage.setItem(
+          DEV_SESSION_KEY,
+          JSON.stringify({ session: devSession, user: devUser }),
+        );
+      } catch {
+        // Non-fatal: the session still works this run, it just won't
+        // survive a reload.
+      }
+      setSession(devSession);
+      setUser(devUser);
+      console.log('[devAuth] OTP check bypassed — signed in as', devUser.id);
+      return { session: devSession, user: devSession.user, appUser: devUser };
+    }
+
     ensureSupabaseConfig();
     let result;
     if (email) {
@@ -194,11 +241,15 @@ export function AuthProvider({ children }) {
   }, [fetchUser, ensureSupabaseConfig]);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
-    PaymentService.logout();
+    // Under the dev bypass there's no Supabase session to end, and a
+    // throw here would skip the state/storage clear below.
+    if (devAuthBypassEnabled()) {
+      try { await supabase.auth.signOut(); } catch {}
+    } else {
+      await supabase.auth.signOut();
+    }
     // Drop the analytics identity so subsequent events aren't
-    // mistakenly attributed to the previous user. Mirrors the
-    // PaymentService.logout pattern.
+    // mistakenly attributed to the previous user.
     resetIdentity();
     setUser(null);
     setSession(null);

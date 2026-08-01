@@ -14,6 +14,7 @@ import {
   Image,
   ActivityIndicator,
   Animated,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,8 +31,11 @@ import { ALL_TRIBE_KEYS } from '../data/tribes';
 import { normalizeLocationVisibility } from '../data/profileOptions';
 import { OPEN_TO_OPTIONS, normalizeOpenTo, openToLabels } from '../data/openTo';
 import { LANGUAGE_OPTIONS, normalizeLanguages } from '../data/languages';
+import { SUGGESTED_CITIES, searchCities, cityLabel } from '../data/cities';
 import { promptToOpenSettings } from '../utils/permissionAlert';
 import { getProfileRecord } from '../utils/eligibility';
+import { devAuthBypassEnabled } from '../config/devAuth';
+import { layoutForWidth } from '../theme/layout';
 
 // ─── Step Definitions ───
 // The Industry redesign collapses onboarding to 5 grouped steps
@@ -50,10 +54,17 @@ const STEPS = [
   { key: 'photo',      title: 'Photo & visibility',         subtitle: 'Last step. You control exactly who sees where you are.',         cta: 'ENTER JUNUBIN', skippable: false },
 ];
 
-// Suggested-city chips on the city step (from the design mock). The
-// input stays free text — there is no canonical list that covers Juba,
-// Kakuma, Omaha and Melbourne equally well.
-const SUGGESTED_CITIES = ['Nairobi', 'Kampala', 'Juba', 'Cairo', 'Melbourne', 'Omaha'];
+// Suggested-city chips on the city step (from the design mock), now
+// backed by src/data/cities.js — the South Sudanese state capitals and
+// the diaspora hubs, with coordinates.
+//
+// The input is still FREE TEXT. The list ranks and suggests; it never
+// validates. Someone in Wanyjok or Tucson types it and we store it
+// verbatim, exactly as before. What changed is that the ten static
+// chips became a live search over ~85 cities, so the common case
+// (typing three letters of a real city) resolves to a canonical label
+// instead of ten different spellings of "Washington DC".
+const MAX_CITY_MATCHES = 8;
 
 // One flag color per step — fills the progress segment for that step
 // and the 8px kicker square (design's obSegs / obStepColor arrays).
@@ -85,10 +96,10 @@ const openToPrimaryLabel = (keys) => openToLabels(keys)[0] || 'Community';
 // steps. Used when a deep link (junubin://survey?step=<id>) or an
 // in-app `resumeAt` opens this screen: we seek to the nearest
 // surviving step.
-// Ids for fields that are no longer collected in onboarding resolve to
-// the closest sensible step — profile-detail ids (interests, prompts,
-// education…) land on the final step so the user can finish and then
-// polish via EditProfile; dating-era ids land on openTo.
+  // Ids for fields that are no longer collected in onboarding resolve to
+  // the closest sensible step — profile-detail ids (interests, prompts,
+  // education…) land on the final step so the user can finish and then
+  // polish via EditProfile.
 const RESUME_KEY_BY_ELIGIBILITY_ID = {
   // step 1 — name + birthday
   displayName:      'name',
@@ -119,13 +130,6 @@ const RESUME_KEY_BY_ELIGIBILITY_ID = {
   prompts:          'photo',
   bio:              'photo',
   survey:           'photo',
-  // ── legacy dating-era ids ──
-  interestedIn:     'openTo',
-  datingIntentions: 'openTo',
-  sexuality:        'openTo',
-  datePref:         'openTo',
-  intention:        'openTo',
-  children:         'openTo',
 };
 
 const ProfileSetupScreen = ({ navigation, route }) => {
@@ -170,15 +174,31 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   }, [saving, savingFade, savingPulse]);
 
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { session, user: authUser, updateUser } = useAuth();
   const { colors, isDark } = useTheme();
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const layout = useMemo(() => layoutForWidth(width), [width]);
+  const styles = useMemo(() => getStyles(colors, isDark, layout), [colors, isDark, layout]);
 
   // ─── Form state — only what the 5 steps collect ───
   const [firstName, setFirstName] = useState('');
   const [birthDate, setBirthDate] = useState('');
   // City = free text on User.city.
   const [city, setCity] = useState('');
+  // Chips under the city input: search results once the user types,
+  // the curated home+diaspora set before that (and again whenever the
+  // text matches nothing, so a free-text city never leaves the user
+  // staring at an empty grid).
+  //
+  // We search on the segment before the comma because tapping a chip
+  // writes the full label ("Minneapolis, MN") back into the input —
+  // searching the whole string would then match nothing and the chip
+  // the user just picked would vanish mid-tap.
+  const cityChoices = useMemo(() => {
+    const typed = city.split(',')[0];
+    const matches = searchCities(typed, MAX_CITY_MATCHES);
+    return matches.length > 0 ? matches : SUGGESTED_CITIES;
+  }, [city]);
   // openTo → Profile.openTo (array of keys from src/data/openTo.js).
   const [selectedOpenTo, setSelectedOpenTo] = useState([]);
   // ethnicity → Profile.ethnicity (single tribe key).
@@ -340,6 +360,42 @@ const ProfileSetupScreen = ({ navigation, route }) => {
         eulaVersion: '2026-05-06',
       };
 
+      if (devAuthBypassEnabled()) {
+        const existingProfile = getProfileRecord(authUser) || {};
+        const devUser = {
+          ...(authUser || {}),
+          displayName: updates.displayName,
+          dateOfBirth: updates.dateOfBirth,
+          city: updates.city,
+          moderationStatus: authUser?.moderationStatus || 'active',
+          profile: {
+            ...existingProfile,
+            ...updates,
+          },
+          photos: photos
+            .filter(Boolean)
+            .slice(0, 1)
+            .map((url, index) => ({
+              id: `dev_photo_${index}`,
+              url,
+              sortOrder: index,
+              isPrimary: index === 0,
+            })),
+        };
+        updateUser(devUser);
+        try {
+          await AsyncStorage.setItem('@junubin_mode', 'Community');
+          await AsyncStorage.setItem('@junubin_purpose', ACCOUNT_PURPOSE);
+        } catch (e) {
+          if (__DEV__) console.warn('[ProfileSetup] dev mode cache write failed:', e?.message);
+        }
+        const routeNames = navigation.getState?.()?.routeNames || [];
+        if (routeNames.includes('Main')) {
+          navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+        }
+        return;
+      }
+
       // Upload photos FIRST — confirm the user actually has a photo in
       // Supabase before we stamp surveyCompletedAt and let them in.
       // Skip cells that already hold an http(s) URL — those were
@@ -377,7 +433,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
       // accountPurpose. Best-effort — a storage failure must not undo
       // a saved profile.
       try {
-        await AsyncStorage.setItem('@junubin_mode', 'Social');
+        await AsyncStorage.setItem('@junubin_mode', 'Community');
         await AsyncStorage.setItem('@junubin_purpose', ACCOUNT_PURPOSE);
       } catch (e) {
         if (__DEV__) console.warn('[ProfileSetup] mode cache write failed:', e?.message);
@@ -619,16 +675,19 @@ const ProfileSetupScreen = ({ navigation, route }) => {
                 accessibilityLabel="City"
               />
               <View style={[styles.chipGrid, { marginTop: 10 }]}>
-                {SUGGESTED_CITIES.map((c) => renderChip({
-                  key: c,
-                  label: c,
-                  selected: city === c,
-                  onPress: () => setCity(c),
-                  testID: `setup-city-${c}`,
-                  role: 'radio',
-                  height: 38,
-                  fontSize: 13.5,
-                }))}
+                {cityChoices.map((c) => {
+                  const label = cityLabel(c);
+                  return renderChip({
+                    key: c.id,
+                    label,
+                    selected: city === label,
+                    onPress: () => setCity(label),
+                    testID: `setup-city-${c.id}`,
+                    role: 'radio',
+                    height: 38,
+                    fontSize: 13.5,
+                  });
+                })}
               </View>
             </View>
             <View style={styles.footnoteRule}>
@@ -852,7 +911,7 @@ const ProfileSetupScreen = ({ navigation, route }) => {
   );
 };
 
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors, isDark, layout) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -864,7 +923,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     height: 44,
-    paddingHorizontal: 22,
+    paddingHorizontal: layout.horizontal,
+    ...layout.centeredContent,
   },
   backBtn: {
     width: 44,
@@ -898,7 +958,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ─── Kicker / title / sub ───
   titleSection: {
-    paddingHorizontal: 22,
+    paddingHorizontal: layout.horizontal,
+    ...layout.centeredContent,
   },
   kickerRow: {
     marginTop: 16,
@@ -939,9 +1000,10 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
   },
   scrollContentInner: {
-    paddingHorizontal: 22,
+    paddingHorizontal: layout.horizontal,
     paddingBottom: 24,
     paddingTop: 2,
+    ...layout.centeredContent,
   },
   stepContent: {
     flex: 1,
@@ -1106,8 +1168,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 22,
+    paddingHorizontal: layout.horizontal,
     paddingVertical: 8,
+    ...layout.centeredContent,
   },
   errorText: {
     fontSize: 12.5,
@@ -1119,8 +1182,9 @@ const getStyles = (colors, isDark) => StyleSheet.create({
 
   // ─── CTA ───
   footer: {
-    paddingHorizontal: 22,
+    paddingHorizontal: layout.horizontal,
     paddingTop: 14,
+    ...layout.centeredContent,
   },
   // Flag-gold primary CTA (design's CONTINUE / ENTER JUNUBIN button),
   // flush inside its Blueprint frame.

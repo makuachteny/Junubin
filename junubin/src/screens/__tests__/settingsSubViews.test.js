@@ -7,7 +7,6 @@ import SettingsScreen from '../SettingsScreen';
 
 const mockUseTheme = jest.fn();
 const mockUseAuth = jest.fn();
-const mockUseSubscription = jest.fn();
 const mockUseCurrentUser = jest.fn();
 
 jest.mock('../../theme', () => {
@@ -22,14 +21,6 @@ jest.mock('../../auth', () => ({
   useAuth: () => mockUseAuth(),
   useRequireAuth: () => (() => true),
 }));
-
-jest.mock('../../payments', () => {
-  const actual = jest.requireActual('../../payments');
-  return {
-    ...actual,
-    useSubscription: () => mockUseSubscription(),
-  };
-});
 
 jest.mock('../../hooks', () => ({
   useCurrentUser: () => mockUseCurrentUser(),
@@ -72,14 +63,13 @@ const THEME = {
     accent: '#0F8FD6',
     accentDark: '#0B6EA6',
     accentSurface: 'rgba(15,143,214,0.10)',
+    roseTint12: 'rgba(15,143,214,0.12)',
     separator: '#E7E2D8',
     error: '#D94A4A',
     ssGold: '#F0B41F',
     onGold: '#241B03',
   },
 };
-
-const SUBSCRIPTION = { reset: jest.fn(async () => {}) };
 
 const renderSettings = ({ profile = {}, verified = false } = {}) => {
   mockUseCurrentUser.mockReturnValue({
@@ -94,7 +84,6 @@ describe('Settings — flattened main view', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseTheme.mockReturnValue(THEME);
-    mockUseSubscription.mockReturnValue(SUBSCRIPTION);
     mockUseAuth.mockReturnValue({
       session: { user: { id: 'auth-1' } },
       logout: jest.fn(async () => {}),
@@ -102,7 +91,7 @@ describe('Settings — flattened main view', () => {
   });
 
   it('renders the three sections and the account rows', async () => {
-    const { getByText } = renderSettings();
+    const { getByText, queryByText } = renderSettings();
     await act(async () => {});
 
     expect(getByText('Settings')).toBeTruthy();
@@ -110,10 +99,16 @@ describe('Settings — flattened main view', () => {
     expect(getByText('APPEARANCE')).toBeTruthy();
     expect(getByText('ACCOUNT & SAFETY')).toBeTruthy();
 
-    // Design's visibility copy on the app's real values.
+    // Design's three visibility cards, in the design's order, with the
+    // design's copy verbatim.
     expect(getByText('Everyone on JuNubin')).toBeTruthy();
-    expect(getByText('City only')).toBeTruthy();
+    expect(getByText('Your approximate area shows on the Nearby map.')).toBeTruthy();
+    expect(getByText('Mutual follows only')).toBeTruthy();
+    expect(getByText('Only people you both follow can see your area.')).toBeTruthy();
     expect(getByText('Nobody')).toBeTruthy();
+    expect(getByText('You browse the map; you never appear on it.')).toBeTruthy();
+    // 'city' is legacy — it is not one of the design's three cards.
+    expect(queryByText('City only')).toBeNull();
 
     expect(getByText('Dark mode')).toBeTruthy();
     expect(getByText('Verify your photo')).toBeTruthy();
@@ -142,7 +137,6 @@ describe('Settings — sub-views', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseTheme.mockReturnValue(THEME);
-    mockUseSubscription.mockReturnValue(SUBSCRIPTION);
     mockUseAuth.mockReturnValue({
       session: { user: { id: 'auth-1' } },
       logout: jest.fn(async () => {}),

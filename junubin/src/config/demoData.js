@@ -1,6 +1,6 @@
-// Demo-mode flag — controls whether the client seeds empty surfaces
-// (swipe deck, inbox, likes, feed, stories) with the demo-user
-// roster defined in src/data/__dev__/mockProfiles.js.
+// Demo-mode flag — controls whether the client seeds empty directory
+// and inbox surfaces with the demo-user roster defined in
+// src/data/__dev__/mockProfiles.js.
 //
 // Why a runtime flag instead of plain `__DEV__`:
 //   - TestFlight builds are produced with `--profile production` →
@@ -18,9 +18,9 @@
 // Toggling requires a new EAS build — there's no remote config
 // fallback yet. If/when we add one, swap this constant for a
 // Supabase-backed remote flag and the rest of the app keeps working.
-export const DEMO_DATA_ENABLED = true;
+export const DEMO_DATA_ENABLED = process.env.EXPO_PUBLIC_DEMO_DATA_ENABLED === 'true';
 
-// Stable id prefix every demo user / match / like carries. ChatScreen
+// Stable id prefix every demo user and thread carries. ChatScreen
 // uses it to short-circuit network sends + realtime subs so a demo
 // conversation behaves like a real one without trying to write
 // against a Conversation row that doesn't exist in the DB.

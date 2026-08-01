@@ -128,8 +128,8 @@ describe('Chat interactive actions', () => {
   // affordances, these queries start finding them and the test fails.
   it('composer offers text input and send only', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const match = { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] };
-    const route = { params: { match } };
+    const peer = { id: 'u1', name: 'Asha', images: ['https://example.com/a.jpg'] };
+    const route = { params: { peer } };
     const { queryByTestId, getByTestId, getByPlaceholderText } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
@@ -151,7 +151,7 @@ describe('Chat interactive actions', () => {
   // to the Safety info page.
   it('shows the day divider and the text-only notice with a safety link', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
+    const route = { params: { peer: { id: 'u1', name: 'Asha', images: ['https://example.com/a.jpg'] } } };
     const { getByText } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
@@ -167,7 +167,7 @@ describe('Chat interactive actions', () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     // A real conversationId is required — ChatScreen refuses to
     // fake-send into a conversationless thread.
-    const route = { params: { match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] }, conversationId: 'conv-1' } };
+    const route = { params: { peer: { id: 'u1', name: 'Asha', images: ['https://example.com/a.jpg'] }, conversationId: 'conv-1' } };
     const { getByPlaceholderText, getByTestId, getByText } = render(
       <ChatScreen navigation={navigation} route={route} />
     );
@@ -180,11 +180,11 @@ describe('Chat interactive actions', () => {
     expect(getByText('Hello there')).toBeTruthy();
   });
 
-  // Legacy rows (image / audio / gift / game) written by older builds
-  // are normalised by chatService to UNSUPPORTED_MESSAGE_TYPE with an
+  // Non-text rows written before the text-only chat constraint are
+  // normalised by chatService to UNSUPPORTED_MESSAGE_TYPE with an
   // empty body. The screen must render a neutral placeholder for them —
   // not an empty bubble, not a crash.
-  it('renders a placeholder for legacy non-text messages', async () => {
+  it('renders a placeholder for historical non-text messages', async () => {
     mockUseAuth.mockReturnValue({
       session: { user: { id: 'auth-1' } },
       user: { id: 'me', name: 'Me' },
@@ -197,7 +197,7 @@ describe('Chat interactive actions', () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = {
       params: {
-        match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] },
+        peer: { id: 'u1', name: 'Asha', images: ['https://example.com/a.jpg'] },
         conversationId: 'conv-1',
       },
     };

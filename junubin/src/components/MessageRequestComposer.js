@@ -6,9 +6,15 @@
 // decide, so the placeholder nudges people to say who they are rather
 // than opening with a request.
 //
-// Used by ProfileDetailScreen. The parent owns
-// the messageRequestService call and the success/failure alerts — this
+// Used by ProfileDetailScreen. The parent owns the
+// messageRequestService call and the success/failure alerts — this
 // component just collects the text.
+//
+// Visual: the redesign has no bottom sheet of its own, so this borrows
+// the design's own parts — square corners, hairline rules, a radius-4
+// field, and the Person-detail action pair (46px, radius 4, 14.5pt
+// semibold) with the same accent/hairline split as Accept/Decline in
+// the Requests list. No pills, no large rounded cards.
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
@@ -24,7 +30,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 
 // Matches MAX_MESSAGE_LENGTH in messageRequestService — the server
 // truncates past this, so the counter has to agree with it or people
@@ -32,9 +38,9 @@ import { useTheme, Typography, FontFamily } from '../theme';
 const MAX_LENGTH = 500;
 
 export default function MessageRequestComposer({ visible, name, onCancel, onSend }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const styles = useMemo(() => getStyles(colors), [colors]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -78,11 +84,11 @@ export default function MessageRequestComposer({ visible, name, onCancel, onSend
           accessibilityLabel="Close message request"
         />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]}>
-          <View style={styles.handle} />
+          <Text style={styles.kicker}>MESSAGE REQUEST</Text>
           <Text style={styles.title}>Message {name || 'this person'}</Text>
           <Text style={styles.subtitle}>
-            You are not connected yet, so this goes over as a request. Say who
-            you are and why you are reaching out — they decide whether to reply.
+            One request per person. They see your note before your chat — say
+            who you are and why you're reaching out.
           </Text>
 
           <TextInput
@@ -103,7 +109,7 @@ export default function MessageRequestComposer({ visible, name, onCancel, onSend
             <TouchableOpacity
               style={styles.cancelBtn}
               onPress={onCancel}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               accessibilityRole="button"
               accessibilityLabel="Cancel"
             >
@@ -119,7 +125,7 @@ export default function MessageRequestComposer({ visible, name, onCancel, onSend
               accessibilityState={{ disabled: !canSend }}
             >
               {sending
-                ? <ActivityIndicator size="small" color="#FFFFFF" />
+                ? <ActivityIndicator size="small" color={colors.cream} />
                 : <Text style={styles.sendText}>Send request</Text>}
             </TouchableOpacity>
           </View>
@@ -129,88 +135,95 @@ export default function MessageRequestComposer({ visible, name, onCancel, onSend
   );
 }
 
-const getStyles = (colors, isDark) => StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
+  // Square corners and a hairline top rule — the redesign has no
+  // rounded cards.
   sheet: {
-    backgroundColor: colors.cardBg,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    backgroundColor: colors.cream,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.separator,
     paddingHorizontal: 20,
-    paddingTop: 10,
-    gap: 10,
+    paddingTop: 18,
+    gap: 8,
   },
-  handle: {
-    alignSelf: 'center',
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gray300,
-    marginBottom: 6,
+  kicker: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 10.5,
+    letterSpacing: 1.05,
+    color: colors.gray400,
   },
   title: {
-    ...Typography.h4,
+    fontFamily: FontFamily.heading,
+    fontSize: 24,
     color: colors.black,
   },
   subtitle: {
-    ...Typography.caption,
-    color: colors.gray500,
+    fontFamily: FontFamily.regular,
+    fontSize: 12.5,
     lineHeight: 19,
+    color: colors.gray500,
   },
   input: {
-    ...Typography.bodySmall,
+    fontFamily: FontFamily.regular,
+    fontSize: 14.5,
+    lineHeight: 21,
     color: colors.black,
     minHeight: 110,
     maxHeight: 200,
-    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    borderRadius: 4,
+    backgroundColor: colors.inputBg,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+    marginTop: 2,
   },
   counter: {
-    ...Typography.caption,
-    fontSize: 12,
+    fontFamily: FontFamily.regular,
+    fontSize: 11.5,
     color: colors.gray400,
     alignSelf: 'flex-end',
-    marginTop: -4,
+    marginTop: -2,
   },
+  // Same pair as the Person-detail actions: two equal 46px buttons.
   actions: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 4,
   },
   cancelBtn: {
     flex: 1,
-    minHeight: 46,
-    borderRadius: 23,
+    height: 46,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.separator,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.gray300,
   },
   cancelText: {
-    ...Typography.label,
-    fontSize: 15,
-    color: colors.gray600,
+    fontFamily: FontFamily.semibold,
+    fontSize: 14.5,
+    color: colors.black,
   },
   sendBtn: {
-    flex: 2,
-    minHeight: 46,
-    borderRadius: 23,
+    flex: 1,
+    height: 46,
+    borderRadius: 4,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
   },
   sendBtnDisabled: {
     opacity: 0.45,
   },
   sendText: {
-    ...Typography.label,
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontFamily: FontFamily.semibold,
+    fontSize: 14.5,
+    color: colors.cream,
   },
 });

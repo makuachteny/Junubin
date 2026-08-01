@@ -5,7 +5,6 @@ import * as profileService from '../../api/services/profileService';
 
 const mockUseTheme = jest.fn();
 const mockUseAuth = jest.fn();
-const mockUseSubscription = jest.fn();
 const mockUseCurrentUser = jest.fn();
 
 jest.mock('../../theme', () => {
@@ -20,14 +19,6 @@ jest.mock('../../auth', () => ({
   useAuth: () => mockUseAuth(),
   useRequireAuth: () => (() => true),
 }));
-
-jest.mock('../../payments', () => {
-  const actual = jest.requireActual('../../payments');
-  return {
-    ...actual,
-    useSubscription: () => mockUseSubscription(),
-  };
-});
 
 jest.mock('../../hooks', () => ({
   useCurrentUser: () => mockUseCurrentUser(),
@@ -68,17 +59,6 @@ const THEME = {
   },
 };
 
-const SUBSCRIPTION = {
-  tier: 'free',
-  effectiveTier: 'free',
-  promoTier: null,
-  promoEndsAt: null,
-  hasTier: () => true,
-  restorePurchases: jest.fn(async () => ({ success: true })),
-  isSubscribed: () => false,
-  reset: jest.fn(async () => {}),
-};
-
 const renderSettings = (profile = {}) => {
   mockUseCurrentUser.mockReturnValue({
     currentUser: {
@@ -95,7 +75,6 @@ describe('Temporary location visibility', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockUseTheme.mockReturnValue(THEME);
-    mockUseSubscription.mockReturnValue(SUBSCRIPTION);
     mockUseAuth.mockReturnValue({
       ready: true,
       isAuthenticated: true,
@@ -162,11 +141,11 @@ describe('Temporary location visibility', () => {
     await act(async () => {});
 
     await act(async () => {
-      fireEvent.press(getByTestId('location-visibility-city'));
+      fireEvent.press(getByTestId('location-visibility-mutuals'));
     });
 
     expect(profileService.updateProfile).toHaveBeenCalledWith({
-      locationVisibility: 'city',
+      locationVisibility: 'mutuals',
       locationVisibleUntil: null,
     });
   });

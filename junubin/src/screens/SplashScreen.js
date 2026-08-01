@@ -4,18 +4,15 @@ import {
   Text,
   StyleSheet,
   Animated,
-  Dimensions,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { FontFamily } from '../theme';
-import LogoMark from '../components/LogoMark';
 
-const { width: W } = Dimensions.get('window');
+const SPLASH_IMAGE = require('../../assets/splash.png');
 
 export default function SplashScreen({ onFinish, authReady }) {
   const fade = useRef(new Animated.Value(0)).current;
-  const scale = useRef(new Animated.Value(0.86)).current;
-  const flagW = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(0.98)).current;
   const animDone = useRef(false);
   const hasFinished = useRef(false);
 
@@ -32,39 +29,22 @@ export default function SplashScreen({ onFinish, authReady }) {
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fade, { toValue: 1, duration: 600, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1, friction: 7, tension: 50, useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 1, duration: 520, useNativeDriver: true }),
     ]).start();
-
-    Animated.timing(flagW, {
-      toValue: W, duration: 900, delay: 200, useNativeDriver: false,
-    }).start();
 
     // Min display time so the entrance animation reads, but tight enough
     // not to hold the user back when auth resolves quickly.
     const timer = setTimeout(() => { animDone.current = true; tryFinish(); }, 600);
     return () => clearTimeout(timer);
-  }, [fade, scale, flagW, tryFinish]);
+  }, [fade, scale, tryFinish]);
 
   return (
     <View style={s.root}>
-      {/* Centered lockup — Instagram-style: framed icon, wordmark, tagline */}
-      <Animated.View style={[s.center, { opacity: fade, transform: [{ scale }] }]}>
-        <View style={s.logoFrame}>
-          <LogoMark size={96} light />
-        </View>
-        <Text style={s.wordmark}>JuNubin</Text>
-        <Text style={s.tagline}>South Sudanese Community</Text>
+      <Animated.View style={[s.logoWrap, { opacity: fade, transform: [{ scale }] }]}>
+        <Image source={SPLASH_IMAGE} style={s.logo} resizeMode="contain" />
       </Animated.View>
-
-      {/* Flag bar — grows from left */}
-      <Animated.View style={[s.flagBar, { width: flagW }]}>
-        <LinearGradient
-          colors={['#085F91','#0F8FD6','#54B3E6']}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFill}
-        />
-      </Animated.View>
+      <ActivityIndicator size="small" color="rgba(255,255,255,0.62)" style={s.loader} />
 
       <Text testID="splash-greeting" style={s.hidden}>Welcome</Text>
       <Text testID="splash-tagline" style={s.hidden}>Connect with your people</Text>
@@ -79,43 +59,18 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  center: {
+  logoWrap: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Rounded white-bordered tile holding the JB mark — matches the app icon
-  // language (black square, white JB) but framed so it reads as a polished
-  // brand badge rather than a bare cutout.
-  logoFrame: {
-    width: 148,
-    height: 148,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#000000',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
+  logo: {
+    width: '100%',
+    height: '100%',
   },
-  wordmark: {
-    fontSize: 36,
-    fontFamily: FontFamily.extrabold || FontFamily.bold,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 1.2,
-    marginBottom: 12,
-  },
-  tagline: {
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.55)',
-    letterSpacing: 2.5,
-    textTransform: 'uppercase',
-  },
-  flagBar: {
-    position: 'absolute', bottom: 0, left: 0,
-    height: 3, overflow: 'hidden',
+  loader: {
+    position: 'absolute',
+    bottom: 84,
   },
   hidden: { position: 'absolute', opacity: 0, height: 0 },
 });

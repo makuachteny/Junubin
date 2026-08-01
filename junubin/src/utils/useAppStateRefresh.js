@@ -2,8 +2,8 @@
 //
 // React Native apps suspend in the background and resume from cached
 // state on return. For a multi-device app like JuNubin, that cached
-// state can be hours stale: tier upgrades, profile edits, blocks, and
-// new matches all happen on other devices in the meantime.
+// state can be hours stale: profile edits, blocks, and new messages
+// can all happen on other devices in the meantime.
 //
 // We don't want to refresh on *every* foreground (an app the user
 // flicks back to after 30 seconds shouldn't re-hit the network), so

@@ -55,7 +55,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   const selfPreview = !!route.params?.selfPreview;
   // Chat surfaces pass conversation rows whose `.id` is the MATCH id;
   // the person's real user id is `.userId`. Every service call below
-  // needs the USER id — using the match id made follow toggles fail,
+  // needs the USER id — using a conversation id made follow toggles fail,
   // canMessageDirectly return false, and request sends hit FK errors.
   const peerUserId = profile.userId || profile.id;
   const { session } = useAuth();
@@ -110,7 +110,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
         const conversationId = await chatService.getOrCreateDirectConversation(peerUserId);
         navigation.navigate('Chat', {
           conversationId,
-          match: { ...profile, id: peerUserId, userId: peerUserId, conversationId },
+          peer: { ...profile, id: peerUserId, userId: peerUserId, conversationId },
         });
       } catch (e) {
         // not_connected → fall back to the request composer; anything
@@ -219,7 +219,7 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   };
 
   const {
-    name = 'User', age = 0, distance = 0, verified = false,
+    name = 'User', age = 0, distance = null, distanceKm = null, verified = false,
     job = '', school = '', ethnicity = '', education = '',
     city = '', countryCode = '', languages = [], openTo = [], profession = '',
   } = profile;
@@ -230,9 +230,18 @@ const ProfileDetailScreen = ({ navigation, route }) => {
   // "City, Country · {distance or city}" — distance when we have one
   // (nearby surfaces), otherwise the city repeats as the locator, same
   // as the design's far-away people ("Kampala, Uganda · Kampala").
+  //
+  // The distance datum is KILOMETRES everywhere in this app:
+  // discover-nearby returns `distanceKm` and PeopleMap's haversine
+  // computes km. Rendering it as "mi" relabelled the same number in the
+  // wrong unit. Formatting matches PeopleMap's selected-pin meta so
+  // "1.2 km" reads identically on both surfaces.
   const countryName = getCountryByCode(countryCode || profile.country)?.name || '';
   const place = [city, countryName].filter(Boolean).join(', ');
-  const locator = distance ? `${distance} mi` : city;
+  const km = Number(distanceKm ?? distance);
+  const locator = Number.isFinite(km) && km > 0
+    ? `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
+    : city;
   const cityLine = [place, locator].filter(Boolean).join(' · ');
 
   // OPEN TO tags — canonical labels when the values are known keys,
@@ -278,8 +287,12 @@ const ProfileDetailScreen = ({ navigation, route }) => {
               <Text style={s.heroFallbackInitial}>{name ? name.charAt(0).toUpperCase() : '?'}</Text>
             </View>
           )}
+          {/* Design: linear-gradient(180deg, transparent 55%,
+              color-mix(bg 96%, transparent) 96%). Both stops are the
+              page background — a literal 'transparent' start would
+              interpolate through black on iOS and dirty the photo. */}
           <LinearGradient
-            colors={['transparent', colors.cream]}
+            colors={[`${colors.cream}00`, `${colors.cream}F5`]}
             locations={[0.55, 0.96]}
             style={StyleSheet.absoluteFill}
             pointerEvents="none"
@@ -477,16 +490,21 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginTop: 22,
     fontSize: 12,
     fontFamily: FontFamily.semibold,
-    letterSpacing: 1,
+    // .08em × 12
+    letterSpacing: 0.96,
     color: colors.gray500,
   },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   tag: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 2 },
   tagText: { fontSize: 12, fontFamily: FontFamily.semibold },
   factsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 8 },
+  // Same metrics as ProfileScreen's ABOUT grid so the two read as one
+  // component: hairline border, radius 4, 10×12 padding, half-width
+  // cells (screen − 40 page padding − 10 gap) so the odd cell out stays
+  // in the left column instead of stretching.
   factCell: {
     width: (SW - 40 - 10) / 2,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
     borderRadius: 4,
     paddingHorizontal: 12,
@@ -495,7 +513,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   factKey: {
     fontSize: 10.5,
     fontFamily: FontFamily.semibold,
-    letterSpacing: 1,
+    // .1em × 10.5
+    letterSpacing: 1.05,
     color: colors.gray400,
   },
   factValue: {

@@ -11,7 +11,7 @@
 //   3. Sentry.addBreadcrumb — even when we don't promote the error to
 //      a full exception, it lands in the next crash report's trail.
 //
-// `tag` should be a short stable identifier (`"PaymentService.purchase"`,
+// `tag` should be a short stable identifier (`"chat.send"`,
 // `"haptics.impact"`) so dashboard searches don't drown in anonymous
 // "Error" rows. `extra` is for any context that helps triage.
 

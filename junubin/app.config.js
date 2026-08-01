@@ -80,7 +80,15 @@ export default {
         // capability the app never exercises.
         NSPhotoLibraryUsageDescription: 'JuNubin needs photo library access to upload your profile photos.',
         NSLocationWhenInUseUsageDescription: 'JuNubin uses your approximate location to show South Sudanese people near you. Your location is only read while you are using the app, is rounded before anyone sees it, and you stay hidden on the map unless you turn visibility on yourself.',
-        NSContactsUsageDescription: 'JuNubin can scan your contacts to find friends who already have an account. Contact data is only used for this lookup and is never shown to other users.',
+        // NSContactsUsageDescription intentionally OMITTED — same
+        // reasoning as the microphone and Face ID strings below.
+        // Contact-based friend-finding was never built: nothing in
+        // src/ imports expo-contacts or touches the Contacts API.
+        // Declaring the purpose string anyway asks App Review to
+        // approve a capability the binary cannot exercise, and forces
+        // a "Contacts" entry in the Play Data Safety form we would
+        // then be unable to justify. Add this back together with
+        // expo-contacts and the actual lookup screen.
         // NSFaceIDUsageDescription intentionally OMITTED. Face ID unlock
         // is not implemented — `expo-local-authentication` isn't a
         // dependency and no code calls the LocalAuthentication API.
@@ -163,7 +171,8 @@ export default {
         'android.permission.CAMERA',
         'android.permission.POST_NOTIFICATIONS',
         'android.permission.ACCESS_COARSE_LOCATION',
-        'android.permission.READ_CONTACTS',
+        // READ_CONTACTS dropped with the same reasoning as the iOS
+        // string above — no code reads contacts.
         'android.permission.READ_MEDIA_IMAGES',
       ],
       // Strip permissions that transitive SDKs (analytics, etc.) merge
@@ -171,8 +180,7 @@ export default {
       // the important one: PostHog and other libs auto-add
       // com.google.android.gms.permission.AD_ID, which forces an
       // "advertising ID" disclosure in the Play Console Data Safety
-      // form. JuNubin runs no ads and no ad attribution ("No ads ever",
-      // src/payments/products.js), so we block it to keep the Data
+      // form. JuNubin runs no ads and no ad attribution, so we block it to keep the Data
       // Safety declaration honest and minimal.
       blockedPermissions: [
         'com.google.android.gms.permission.AD_ID',

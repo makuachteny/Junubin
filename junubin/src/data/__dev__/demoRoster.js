@@ -1,7 +1,6 @@
-// Single canonical roster of demo users referenced by EVERY mock
-// surface (swipe deck, matches, likes, chat history, stories).
-// Tap "Adau" in the deck, match her, open the chat — it's the same
-// person all the way through because every consumer keys off these
+// Single canonical roster of demo users referenced by demo directory,
+// inbox, request, and chat surfaces. Tap "Adau" anywhere and it is the
+// same person all the way through because every consumer keys off these
 // stable ids.
 //
 // Photos are local require() handles, not server URLs — they ship
@@ -10,7 +9,7 @@
 // Storage URLs through profileService.
 
 // Photo handles. `p` images are the primary portraits — the same
-// face every consumer uses as the avatar (swipe thumbnail, message
+// face every consumer uses as the avatar (directory card, message
 // avatar, map pin, chat header, etc.). `f` and `m` images are
 // secondary photos — they fill out each user's ProfileDetail carousel
 // so a tap on any surface opens a real multi-photo profile, not a
@@ -79,7 +78,7 @@ const PHOTOS = {
 // to the map get the same client-side bucketing.
 export const DEMO_ROSTER = [
   {
-    id: 'demo_001', name: 'Adau', age: 24, mode: 'Dating',
+    id: 'demo_001', name: 'Adau', age: 24, mode: 'Community',
     photos: [PHOTOS.p1, PHOTOS.f1, PHOTOS.f2, PHOTOS.f3], ethnicity: 'Dinka', height: "5'8\"",
     city: 'Minneapolis, MN', coords: { latitude: 44.977, longitude: -93.265 },
     job: 'UX designer', school: 'Howard',
@@ -90,7 +89,7 @@ export const DEMO_ROSTER = [
     pronouns: 'she/her', activity: 'active',
   },
   {
-    id: 'demo_002', name: 'Abuk', age: 27, mode: 'Social',
+    id: 'demo_002', name: 'Abuk', age: 27, mode: 'Community',
     photos: [PHOTOS.p2, PHOTOS.f4, PHOTOS.f5, PHOTOS.f6], ethnicity: 'Bari', height: "5'6\"",
     city: 'Sydney, NSW',    coords: { latitude: -33.869, longitude: 151.209 },
     job: 'Architect', school: 'University of Sydney',
@@ -101,18 +100,18 @@ export const DEMO_ROSTER = [
     pronouns: 'she/her', activity: 'nearby',
   },
   {
-    id: 'demo_003', name: 'Nyirou', age: 26, mode: 'Both',
+    id: 'demo_003', name: 'Nyirou', age: 26, mode: 'Community',
     photos: [PHOTOS.p3, PHOTOS.f7, PHOTOS.f8, PHOTOS.f9], ethnicity: 'Nuer', height: "5'7\"",
     city: 'London, UK',      coords: { latitude: 51.507, longitude: -0.128 },
     job: 'Nurse', school: "King's College London",
-    bio: 'ICU nurse who decompresses by the Thames. Looking for either a friend or a partner — open to whatever feels right.',
+    bio: 'ICU nurse who decompresses by the Thames. Looking for friends, community, and good conversations.',
     verified: true,
     promptQuestion: 'The way to my heart is...', promptAnswer: 'A long walk and an even longer conversation about nothing.',
     interests: ['Faith', 'Reading', 'Running', 'Photography'], distance: 8,
     pronouns: 'she/her', activity: 'active',
   },
   {
-    id: 'demo_004', name: 'Athieng', age: 25, mode: 'Dating',
+    id: 'demo_004', name: 'Athieng', age: 25, mode: 'Community',
     photos: [PHOTOS.p4, PHOTOS.f10, PHOTOS.f11, PHOTOS.f12], ethnicity: 'Shilluk', height: "5'5\"",
     city: 'Toronto, ON',    coords: { latitude: 43.653, longitude: -79.383 },
     job: 'Software engineer', school: 'Carleton',
@@ -123,7 +122,7 @@ export const DEMO_ROSTER = [
     pronouns: 'she/her', activity: 'active',
   },
   {
-    id: 'demo_005', name: 'Yar', age: 21, mode: 'Social',
+    id: 'demo_005', name: 'Yar', age: 21, mode: 'Community',
     photos: [PHOTOS.p5, PHOTOS.f13, PHOTOS.f14, PHOTOS.f15], ethnicity: 'Dinka', height: "5'9\"",
     city: 'Minneapolis, MN', coords: { latitude: 44.972, longitude: -93.236 },
     job: 'Student', school: 'University of Minnesota',
@@ -135,7 +134,7 @@ export const DEMO_ROSTER = [
     activity: 'nearby',
   },
   {
-    id: 'demo_006', name: 'Akech', age: 24, mode: 'Both',
+    id: 'demo_006', name: 'Akech', age: 24, mode: 'Community',
     photos: [PHOTOS.p6, PHOTOS.f16, PHOTOS.f17, PHOTOS.f18], ethnicity: 'Dinka', height: "5'10\"",
     city: 'New York, NY',   coords: { latitude: 40.713, longitude: -74.006 },
     job: 'Photographer', school: 'School of Visual Arts',
@@ -146,7 +145,7 @@ export const DEMO_ROSTER = [
     pronouns: 'she/her', activity: 'nearby',
   },
   {
-    id: 'demo_007', name: 'Nyandeng', age: 23, mode: 'Dating',
+    id: 'demo_007', name: 'Nyandeng', age: 23, mode: 'Community',
     photos: [PHOTOS.p7, PHOTOS.f19, PHOTOS.f20, PHOTOS.m1], ethnicity: 'Nuer', height: "5'7\"",
     city: 'Washington, DC', coords: { latitude: 38.907, longitude: -77.037 },
     job: 'Public health researcher', school: 'Johns Hopkins',
@@ -157,7 +156,7 @@ export const DEMO_ROSTER = [
     pronouns: 'she/her', activity: 'active',
   },
   {
-    id: 'demo_008', name: 'Nyibol', age: 30, mode: 'Social',
+    id: 'demo_008', name: 'Nyibol', age: 30, mode: 'Community',
     photos: [PHOTOS.p8, PHOTOS.m2, PHOTOS.m3, PHOTOS.m4], ethnicity: 'Dinka', height: "5'8\"",
     city: 'Sydney, NSW',    coords: { latitude: -33.881, longitude: 151.215 },
     job: 'Lawyer', school: 'University of Melbourne',
@@ -169,7 +168,7 @@ export const DEMO_ROSTER = [
     activity: 'active',
   },
   {
-    id: 'demo_009', name: 'Achol', age: 25, mode: 'Dating',
+    id: 'demo_009', name: 'Achol', age: 25, mode: 'Community',
     photos: [PHOTOS.p9, PHOTOS.m5, PHOTOS.m6, PHOTOS.m7], ethnicity: 'Shilluk', height: "5'7\"",
     city: 'London, UK',      coords: { latitude: 51.515, longitude: -0.142 },
     job: 'Model', school: 'Self-taught',
@@ -180,7 +179,7 @@ export const DEMO_ROSTER = [
     pronouns: 'she/her', activity: 'active',
   },
   {
-    id: 'demo_010', name: 'Akuol', age: 28, mode: 'Both',
+    id: 'demo_010', name: 'Akuol', age: 28, mode: 'Community',
     photos: [PHOTOS.p10, PHOTOS.m8, PHOTOS.p11, PHOTOS.p12], ethnicity: 'Dinka', height: "5'9\"",
     city: 'Boston, MA',     coords: { latitude: 42.360, longitude: -71.059 },
     job: 'Music producer', school: 'Berklee',

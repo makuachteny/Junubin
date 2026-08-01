@@ -3,32 +3,36 @@
 //
 // Industry redesign: the map renders FULL-BLEED under HomeScreen's
 // floating chrome (city pill, Map|List segments, quick chips). This
-// component no longer draws its own filter row — HomeScreen passes the
-// active quick filter down via `quickFilter`. Pins are square photo
-// tiles ringed cream (flag gold when selected); the current user is a
-// pulsing gold dot dead-center; the tapped pin's preview is a
-// Blueprint card that rises from the bottom.
+// component draws neither the chrome nor the data — HomeScreen owns
+// both. In the design the pins and the list rows are the SAME filtered
+// set, so the people, the device center and the map region all arrive
+// as props from `hooks/useNearbyPeople`. Pins are square photo tiles
+// ringed cream (flag gold when selected); the current user is a pulsing
+// gold dot dead-center; the tapped pin's preview is a Blueprint card
+// that rises from the bottom.
 //
-// Privacy contract (must stay in sync with 00032_share_location_optin.sql
-// and 00047_social_pivot.sql):
+// Privacy contract (must stay in sync with 00032_share_location_optin.sql,
+// 00047_social_pivot.sql and hooks/useNearbyPeople.js):
 //   1. Users are visible on the map only if they set
 //      Profile.locationVisibility to something other than 'off'
-//      (mirrored onto the legacy Profile.shareLocation boolean).
+//      (enforced server-side by the discover-nearby function).
 //   2. Coordinates are bucketed to 3 decimal places (~110m precision)
-//      client-side before rendering, so even an opted-in user never
+//      before they reach this component, so even an opted-in user never
 //      reveals a precise apartment.
-//   3. This component NEVER asks the OS for location until the caller
-//      passes `disclosureAccepted`, which is set only after the user
-//      has read the in-app disclosure (components/LocationDisclosure).
-//      Google Play requires prominent disclosure plus affirmative
-//      consent before collecting location; Apple expects the system
-//      prompt to arrive with context. Do not "simplify" this away.
+//   3. NOTHING in the Nearby tab asks the OS for location until the
+//      user has read and accepted the in-app disclosure. This component
+//      renders that disclosure and refuses to render anything else
+//      until `disclosureAccepted` is true; the hook that would call
+//      expo-location stays disabled until then. Google Play requires
+//      prominent disclosure plus affirmative consent before collecting
+//      location; Apple expects the system prompt to arrive with
+//      context. Do not "simplify" this away.
 //   4. The map is read-only — tapping a pin opens a preview card that
 //      links to the profile. No DM-from-map (that would be a stalker
 //      vector before we have proper hide-from-specific-people tooling).
-//   5. Demo users from DEMO_ROSTER appear regardless of visibility —
-//      they're seed data for testability, not real people whose
-//      privacy could leak.
+//   5. City-only members get NO PIN, even though they are in the shared
+//      set and do appear in the list. That is exactly what they
+//      consented to.
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
@@ -40,13 +44,10 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native';
-import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily, Typography } from '../theme';
 import { imageSource } from '../utils/imageSource';
-import { DEMO_ROSTER } from '../data/__dev__/demoRoster';
-import { DEMO_DATA_ENABLED } from '../config/demoData';
-import * as discoverService from '../api/services/discoverService';
+import { nearbyCardMeta } from '../hooks/useNearbyPeople';
 import LocationDisclosure from './LocationDisclosure';
 import Blueprint from './Blueprint';
 
@@ -71,97 +72,22 @@ try {
   // Native module unavailable — fallback view rendered below.
 }
 
-// Bucket lat/long to ~110m precision. Same function applied to real
-// user coords would round Manhattan addresses to a city block.
-const bucketCoord = (n) => Math.round(n * 1000) / 1000;
-
-// Project a coordinate `distanceKm` away from `center` along
-// `bearingDeg` (0 = north, 90 = east). Standard great-circle math; we
-// only need ≤ ~5km accuracy so flat-earth approximation would also
-// work but the spherical version costs nothing extra.
-const offsetCoord = (center, bearingDeg, distanceKm) => {
-  const R = 6371; // earth radius in km
-  const bearing = (bearingDeg * Math.PI) / 180;
-  const lat1 = (center.latitude * Math.PI) / 180;
-  const lng1 = (center.longitude * Math.PI) / 180;
-  const d = distanceKm / R;
-  const lat2 = Math.asin(
-    Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(bearing),
-  );
-  const lng2 = lng1 + Math.atan2(
-    Math.sin(bearing) * Math.sin(d) * Math.cos(lat1),
-    Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
-  );
-  return { latitude: (lat2 * 180) / Math.PI, longitude: (lng2 * 180) / Math.PI };
-};
-
-// Haversine — straight-line distance (km) between two coords. Used for
-// the "X km away" meta on the selected-pin card. Mirrors the formula
-// that the server-side discover function uses.
-const distanceKm = (a, b) => {
-  if (!a || !b) return Infinity;
-  const R = 6371;
-  const toRad = (deg) => (deg * Math.PI) / 180;
-  const dLat = toRad(b.latitude - a.latitude);
-  const dLng = toRad(b.longitude - a.longitude);
-  const lat1 = toRad(a.latitude);
-  const lat2 = toRad(b.latitude);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-};
-
-// "Active this week" — matches HomeScreen's list-side definition so the
-// chip means the same thing on both surfaces.
-const isActiveThisWeek = (person) => {
-  if (!person?.lastActiveAt) return false;
-  const days = (Date.now() - new Date(person.lastActiveAt).getTime()) / 8.64e7;
-  return Number.isFinite(days) && days <= 7;
-};
-
-// Demo users are scattered around the caller's location instead of
-// pinned to their bio cities. Without this, a tester opening the map
-// from Toronto sees an empty viewport because Adau (Minneapolis),
-// Abuk (Sydney) and the rest are all hundreds of km away. Each user
-// gets a deterministic offset from `center` so the layout is stable
-// across re-renders — Adau is always 0.4km north-east of you, Abuk
-// is always 0.6km south, etc. — but the absolute position follows
-// wherever the tester actually is.
-//
-// `center === null` (location permission denied) falls back to the
-// roster's static city coords so the map at least shows the demo
-// users somewhere meaningful.
-const demoPeople = (center) => {
-  if (!DEMO_DATA_ENABLED) return [];
-  return DEMO_ROSTER
-    .map((u, i) => {
-      if (!center) {
-        if (!u.coords) return null;
-        return u;
-      }
-      // Stable per-user spread: even angle distribution (i * 36°) and
-      // stepped distance bands so the roster fans out around the
-      // tester instead of stacking on one block.
-      const angle = (i * 36) % 360;
-      const bands = [0.3, 1.5, 6, 18, 45, 80, 140, 240, 400, 700];
-      const dist = bands[i % bands.length];
-      return { ...u, coords: offsetCoord(center, angle, dist) };
-    })
-    .filter(Boolean);
-};
-
 export default function PeopleMap({
+  // The shared Nearby set, already quick-filtered by HomeScreen so the
+  // map and the list can never disagree about what a chip means.
+  people = [],
+  // Map viewport and the device center, both from useNearbyPeople.
+  region = null,
+  loading = false,
+  locationError = null,
   onPersonPress,
   // Height of the floating chrome HomeScreen draws over the map —
   // overlays rendered here must clear it.
   topInset = 12,
-  // Quick filter from HomeScreen's floating chips:
-  // 'all' | 'verified' | 'active'.
-  quickFilter = 'all',
-  // Lets HomeScreen's city pill show "N visible".
+  // Lets HomeScreen's city pill show "N visible" for map mode.
   onVisibleCountChange,
   // Location consent gate. Until this is true we render the in-app
-  // disclosure and do NOT touch expo-location. See the privacy contract
-  // at the top of this file.
+  // disclosure. See the privacy contract at the top of this file.
   disclosureAccepted = false,
   onDisclosureAccept,
   onDisclosureDecline,
@@ -174,58 +100,7 @@ export default function PeopleMap({
   const mapRef = useRef(null);
   const cardAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(0)).current;
-  const [selected, setSelected] = useState(null);
-  const [region, setRegion] = useState(null);
-  const [locating, setLocating] = useState(true);
-  const [locationError, setLocationError] = useState(null);
-
-  // Pull the caller's current location once, but ONLY after the user
-  // has accepted the in-app disclosure. If they decline the OS
-  // permission, fall back to a centroid of the visible people so the
-  // map opens on a populated continent rather than Antarctica.
-  useEffect(() => {
-    if (!disclosureAccepted) {
-      // Nothing to do yet — the disclosure card is what's rendered.
-      // Clear the spinner so flipping consent doesn't flash "Loading".
-      setLocating(false);
-      return undefined;
-    }
-    let cancelled = false;
-    setLocating(true);
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          if (cancelled) return;
-          setLocationError('Enable Location in Settings to center the map on you.');
-          // Centroid fallback — average the static city coords.
-          const fallback = demoPeople(null);
-          if (fallback.length > 0) {
-            const lat = fallback.reduce((s, p) => s + p.coords.latitude, 0) / fallback.length;
-            const lng = fallback.reduce((s, p) => s + p.coords.longitude, 0) / fallback.length;
-            setRegion({ latitude: lat, longitude: lng, latitudeDelta: 60, longitudeDelta: 60 });
-          }
-          setLocating(false);
-          return;
-        }
-        const loc = await Location.getLastKnownPositionAsync({ maxAge: 60_000 })
-          ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        if (cancelled) return;
-        setRegion({
-          latitude: bucketCoord(loc.coords.latitude),
-          longitude: bucketCoord(loc.coords.longitude),
-          latitudeDelta: 0.5,
-          longitudeDelta: 0.5,
-        });
-      } catch (err) {
-        if (!cancelled) setLocationError(err?.message || 'Could not get location.');
-      } finally {
-        if (!cancelled) setLocating(false);
-      }
-    })();
-    return () => { cancelled = true; };
-    // Runs on mount and again the moment consent flips to true.
-  }, [disclosureAccepted]);
+  const [selectedId, setSelectedId] = useState(null);
 
   // The "YOU" dot pulses forever — a slow accent ring expanding out of
   // the dot. Runs on the native driver; cheap.
@@ -240,67 +115,35 @@ export default function PeopleMap({
     return () => loop.stop();
   }, [pulseAnim]);
 
-  // Resolve the offset center from the current region (caller's
-  // device location once Location resolves). When region is still
-  // null we feed `null` so the roster falls back to its static city
-  // coords.
-  const center = region ? { latitude: region.latitude, longitude: region.longitude } : null;
-
-  // Live opted-in users from the discover-nearby Edge Function.
-  // Failures (function not deployed, network) silently fall back to an
-  // empty list and the DEMO_ROSTER pattern takes over below.
-  const [livePeople, setLivePeople] = useState([]);
-  useEffect(() => {
-    if (!center) return;
-    let cancelled = false;
-    discoverService.getNearbyUsers({ center }).then(({ users }) => {
-      if (cancelled) return;
-      setLivePeople(users || []);
-    }).catch(() => {
-      if (!cancelled) setLivePeople([]);
-    });
-    return () => { cancelled = true; };
-    // center is a fresh object each render so we depend on its
-    // primitive parts to avoid useless refetches.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [center?.latitude, center?.longitude]);
-
-  const allPeople = useMemo(() => {
-    // Real users hide the demo roster entirely — same hide-when-real
-    // pattern used by Community and Stories. Demo pins ONLY appear
-    // when discover-nearby returns zero opted-in users near the
-    // caller (early-launch state). The moment one real user opts
-    // into shareLocation within range, the demo disappears.
-    if (livePeople.length > 0) return livePeople;
-    return demoPeople(center);
-  },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [center?.latitude, center?.longitude, livePeople],
+  // Pin-eligible subset. City-only members and anyone without coords
+  // are dropped HERE, not from the shared set — they still belong in
+  // the list, which is what they opted into (rule 5 above).
+  const pinned = useMemo(
+    () => people.filter((p) => p.coords && p.locationVisibility !== 'city'),
+    [people],
   );
 
-  // Apply the quick filter from HomeScreen's floating chips.
-  //
-  // City-only users are dropped here, not server-side. `discover-nearby`
-  // returns everyone whose visibility is not 'off' so the list surfaces
-  // can show them, but we promised city-only members "no pin on the
-  // map" — putting one down anyway would break that promise even
-  // though the coordinate is coarse. They still appear in the Home list
-  // and the Directory, which is what they consented to.
-  const visiblePeople = useMemo(() => allPeople.filter((p) => {
-    if (p.locationVisibility === 'city') return false;
-    if (!p.coords) return false;
-    if (quickFilter === 'verified' && !p.verified) return false;
-    if (quickFilter === 'active' && !(p.activity === 'active' || isActiveThisWeek(p))) return false;
-    return true;
-  }), [allPeople, quickFilter]);
-
   useEffect(() => {
-    onVisibleCountChange?.(visiblePeople.length);
+    onVisibleCountChange?.(pinned.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visiblePeople.length]);
+  }, [pinned.length]);
+
+  // Design's `hasMapCard`: the card shows only while the selected
+  // person is still in the filtered set. Changing a quick chip out from
+  // under the selection closes the card rather than leaving a stale one.
+  const selected = useMemo(
+    () => pinned.find((p) => p.id === selectedId) || null,
+    [pinned, selectedId],
+  );
+  useEffect(() => {
+    if (selectedId && !selected) {
+      cardAnim.setValue(0);
+      setSelectedId(null);
+    }
+  }, [selectedId, selected, cardAnim]);
 
   const openPreview = useCallback((person) => {
-    setSelected(person);
+    setSelectedId(person.id);
     Animated.timing(cardAnim, {
       toValue: 1, duration: 250, useNativeDriver: true,
     }).start();
@@ -309,7 +152,7 @@ export default function PeopleMap({
   const closePreview = useCallback(() => {
     Animated.timing(cardAnim, {
       toValue: 0, duration: 200, useNativeDriver: true,
-    }).start(() => setSelected(null));
+    }).start(() => setSelectedId(null));
   }, [cardAnim]);
 
   const handleViewProfile = useCallback(() => {
@@ -359,7 +202,7 @@ export default function PeopleMap({
     );
   }
 
-  if (locating && !region) {
+  if (loading && !region) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="small" color={colors.accent} />
@@ -367,14 +210,6 @@ export default function PeopleMap({
       </View>
     );
   }
-
-  const selectedMeta = selected ? (() => {
-    const km = center && selected.coords ? distanceKm(center, selected.coords) : null;
-    const dist = Number.isFinite(km)
-      ? `${km < 10 ? km.toFixed(1) : Math.round(km)} km away`
-      : selected.city || null;
-    return [dist, selected.profession || selected.ethnicity].filter(Boolean).join(' · ');
-  })() : '';
 
   return (
     <View style={styles.container}>
@@ -404,7 +239,7 @@ export default function PeopleMap({
         onPanDrag={() => { if (selected) closePreview(); }}
         onPress={() => { if (selected) closePreview(); }}
       >
-        {visiblePeople.map((p) => (
+        {pinned.map((p) => (
           <Marker
             key={p.id}
             coordinate={p.coords}
@@ -419,15 +254,19 @@ export default function PeopleMap({
               testID={`map-pin-${p.id}`}
               accessibilityLabel={p.name}
             >
-              <Image source={imageSource(p.photos?.[0])} style={styles.pinPhoto} />
+              <Image
+                source={imageSource(p.photos?.[0] || p.images?.[0])}
+                style={styles.pinPhoto}
+              />
             </View>
           </Marker>
         ))}
       </MapView>
 
-      {/* "YOU" — pulsing accent dot dead-center. The map opens centered
-          on the caller's bucketed location, so the screen center IS the
-          user until they pan. */}
+      {/* "YOU" — pulsing gold dot dead-center with the label hung
+          beneath it (design: dot at the exact center, label translated
+          16px down). The map opens centered on the caller's bucketed
+          location, so the screen center IS the user until they pan. */}
       {region && !locationError ? (
         <View style={styles.youWrap} pointerEvents="none">
           <Animated.View
@@ -477,7 +316,10 @@ export default function PeopleMap({
           ]}
         >
           <Blueprint style={styles.card}>
-            <Image source={imageSource(selected.photos?.[0])} style={styles.cardPhoto} />
+            <Image
+              source={imageSource(selected.photos?.[0] || selected.images?.[0])}
+              style={styles.cardPhoto}
+            />
             <View style={styles.cardBody}>
               <View style={styles.cardNameRow}>
                 <Text style={styles.cardName} numberOfLines={1}>
@@ -492,7 +334,9 @@ export default function PeopleMap({
                   />
                 ) : null}
               </View>
-              <Text style={styles.cardMeta} numberOfLines={1}>{selectedMeta}</Text>
+              <Text style={styles.cardMeta} numberOfLines={1}>
+                {nearbyCardMeta(selected)}
+              </Text>
             </View>
             <TouchableOpacity
               style={styles.cardCta}
@@ -569,12 +413,15 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.cream,
   },
+  // Hung off the exact center so the dot itself stays on it — design
+  // translates the label 16px below the center point.
   youLabel: {
+    position: 'absolute',
+    marginTop: 32,
     fontFamily: FontFamily.headingBold,
     fontSize: 10.5,
     letterSpacing: 1.5,
     color: colors.ssGoldDark,
-    marginTop: 4,
   },
 
   recenterBtn: {
@@ -648,7 +495,6 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 12.5,
     color: colors.gray500,
-    marginTop: 2,
   },
   cardCta: {
     height: 38,

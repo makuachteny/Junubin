@@ -21,6 +21,7 @@ import {
   Alert,
   Animated,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -30,9 +31,9 @@ import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
-import { mockMatches, mockLikes } from '../data/__dev__/mockProfiles';
+import { mockConversations, mockRequestProfiles } from '../data/__dev__/mockProfiles';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
-import * as matchesService from '../api/services/matchesService';
+import * as conversationService from '../api/services/conversationService';
 import * as messageRequestService from '../api/services/messageRequestService';
 import { useRealtime } from '../api/hooks/useRealtime';
 import MessageListSkeleton from '../components/MessageListSkeleton';
@@ -40,6 +41,8 @@ import ThemedRefreshControl from '../components/ThemedRefreshControl';
 import Blueprint from '../components/Blueprint';
 import { hapticLight, hapticMedium } from '../utils/haptics';
 import { useAccessibilityPreferences } from '../accessibility';
+import { bottomTabInset, layoutForWidth } from '../theme/layout';
+import { useTabBarScrollVisibility } from '../navigation/TabBarVisibilityContext';
 
 // Demo-mode fallback. When DEMO_DATA_ENABLED is true (TestFlight
 // launch period), the inbox is seeded with mock data so testers have
@@ -47,14 +50,14 @@ import { useAccessibilityPreferences } from '../accessibility';
 // off in src/config/demoData.js before App Review submission.
 // Module-scope so the arrays are referentially stable — they sit in
 // fetchInbox's dependency chain.
-const DEMO_MATCHES = DEMO_DATA_ENABLED ? mockMatches : [];
+const DEMO_CONVERSATIONS = DEMO_DATA_ENABLED ? mockConversations : [];
 const DEMO_REQUEST_NOTES = [
   'Hey! We keep crossing paths in the community — would love to chat.',
   'Saw we speak the same languages. Coffee sometime?',
   'Your profile came up in the directory — can I say hi?',
 ];
 const DEMO_REQUESTS = DEMO_DATA_ENABLED
-  ? mockLikes.slice(0, 3).map((person, i) => ({
+  ? mockRequestProfiles.slice(0, 3).map((person, i) => ({
       id: `demo_req_${person.id}`,
       status: 'pending',
       from: person,
@@ -64,11 +67,13 @@ const DEMO_REQUESTS = DEMO_DATA_ENABLED
     }))
   : [];
 
-export default function MessagesScreen({ navigation }) {
+export default function MessagesScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { colors, isDark } = useTheme();
   const { prefs } = useAccessibilityPreferences();
-  const styles = useMemo(() => getStyles(colors, isDark, prefs), [colors, isDark, prefs]);
+  const layout = useMemo(() => layoutForWidth(width), [width]);
+  const styles = useMemo(() => getStyles(colors, isDark, prefs, layout, insets), [colors, isDark, prefs, layout, insets]);
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
   const { onInboxActivity } = useRealtime(currentUser?.id);
@@ -76,9 +81,10 @@ export default function MessagesScreen({ navigation }) {
   const rowAnimsRef = useRef([]);
   const hasAnimatedRef = useRef(false);
   const loadingTimeoutRef = useRef(null);
+  const tabBarScrollProps = useTabBarScrollVisibility();
 
   const [segment, setSegment] = useState('messages');
-  const [matches, setMatches] = useState([]);
+  const [conversations, setConversations] = useState([]);
   // Pending incoming message requests ({ id, from, message,
   // createdAt }), shown inline as the second segment.
   const [requests, setRequests] = useState([]);
@@ -87,6 +93,12 @@ export default function MessagesScreen({ navigation }) {
   // Ids currently mid-accept / mid-decline, so a double-tap can't
   // fire two accepts.
   const [busyIds, setBusyIds] = useState(() => new Set());
+
+  useEffect(() => {
+    if (route?.params?.segment === 'requests') {
+      setSegment('requests');
+    }
+  }, [route?.params?.segment]);
 
   const setBusy = useCallback((id, on) => {
     setBusyIds((prev) => {
@@ -99,20 +111,20 @@ export default function MessagesScreen({ navigation }) {
   const fetchInbox = useCallback(() => {
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     loadingTimeoutRef.current = setTimeout(() => {
-      setMatches((prev) => (prev.length ? prev : DEMO_MATCHES));
+      setConversations((prev) => (prev.length ? prev : DEMO_CONVERSATIONS));
       setRequests((prev) => (prev.length ? prev : DEMO_REQUESTS));
       setIsLoading(false);
     }, 600);
 
     if (!session) {
-      setMatches(DEMO_MATCHES);
+      setConversations(DEMO_CONVERSATIONS);
       setRequests(DEMO_REQUESTS);
       setIsLoading(false);
       return Promise.resolve();
     }
     return Promise.all([
-      matchesService.getMatches().then((apiMatches) => {
-        setMatches(apiMatches.length > 0 ? apiMatches : DEMO_MATCHES);
+      conversationService.getConversations().then((apiConversations) => {
+        setConversations(apiConversations.length > 0 ? apiConversations : DEMO_CONVERSATIONS);
       }),
       messageRequestService.getIncomingRequests().then((rows) => {
         const pending = (rows || []).filter((r) => r.status === 'pending' && r.from);
@@ -120,7 +132,7 @@ export default function MessagesScreen({ navigation }) {
       }),
     ]).catch((err) => {
       if (__DEV__) console.warn('Chats fetch failed:', err);
-      setMatches(DEMO_MATCHES);
+      setConversations(DEMO_CONVERSATIONS);
       setRequests(DEMO_REQUESTS);
     }).finally(() => {
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
@@ -164,11 +176,11 @@ export default function MessagesScreen({ navigation }) {
 
   const requestCount = requests.length;
   const unreadTotal = useMemo(
-    () => matches.reduce(
+    () => conversations.reduce(
       (acc, m) => acc + (typeof m.unreadCount === 'number' ? m.unreadCount : (m.unread ? 1 : 0)),
       0,
     ),
-    [matches],
+    [conversations],
   );
 
   // Tab-bar badge on the Chats tab: unread messages + pending requests.
@@ -180,8 +192,8 @@ export default function MessagesScreen({ navigation }) {
     });
   }, [navigation, unreadTotal, requestCount]);
 
-  const handleMatchPress = (match) => {
-    navigation.navigate('Chat', { match });
+  const handleConversationPress = (thread) => {
+    navigation.navigate('Chat', { thread });
   };
 
   const openProfile = useCallback((profile) => {
@@ -197,7 +209,7 @@ export default function MessagesScreen({ navigation }) {
     hapticMedium();
     if (request.__demo) {
       setRequests((prev) => prev.filter((r) => r.id !== request.id));
-      navigation.navigate('Chat', { match: request.from });
+      navigation.navigate('Chat', { peer: request.from });
       return;
     }
     setBusy(request.id, true);
@@ -208,7 +220,7 @@ export default function MessagesScreen({ navigation }) {
       setRequests((prev) => prev.filter((r) => r.id !== request.id));
       navigation.navigate('Chat', {
         conversationId,
-        match: { ...request.from, conversationId },
+        peer: { ...request.from, conversationId },
       });
     } catch (e) {
       Alert.alert('Could not accept', e?.message || 'Try again in a moment.');
@@ -249,13 +261,12 @@ export default function MessagesScreen({ navigation }) {
     );
   }, [busyIds, setBusy]);
 
-  // Conversations sort by recency. (The old mode-aware 'dating'/'social'
-  // float-to-top sort is dead post-pivot — the app has one mode now.)
+  // Conversations sort by recency.
   const conversationData = useMemo(
-    () => matches.slice().sort(
+    () => conversations.slice().sort(
       (a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime(),
     ),
-    [matches],
+    [conversations],
   );
 
   // Build row animation values when conversation data changes (only first render)
@@ -289,15 +300,17 @@ export default function MessagesScreen({ navigation }) {
     } : {};
 
     // Source of truth is the server-derived `unreadCount`
-    // (matchesService computes it from Message.readAt). The local
+    // (conversationService computes it from Message.readAt). The local
     // `unread` boolean stays as a fallback for unmigrated paths.
     const unreadCount = typeof item.unreadCount === 'number' ? item.unreadCount : (item.unread ? 1 : 0);
     const isUnread = unreadCount > 0 || !!item.unread;
     const badgeText = unreadCount > 99 ? '99+' : String(unreadCount);
     const isOnline = !!(item.online || item.isOnline);
     // "You: " prefix when the last message in the thread is mine.
-    // matchesService exposes `lastMessageMine`; absent (cached rows
+    // conversationService exposes `lastMessageMine`; absent (cached rows
     // from before the field existed) we just omit the prefix.
+    // A thread with no messages yet has no preview at all — the design
+    // has no placeholder line, so the row simply renders without one.
     const preview = item.lastMessage
       ? `${item.lastMessageMine ? 'You: ' : ''}${item.lastMessage}`
       : '';
@@ -306,27 +319,17 @@ export default function MessagesScreen({ navigation }) {
       <Animated.View style={animStyle}>
         <TouchableOpacity
           style={styles.messageRow}
-          onPress={() => handleMatchPress(item)}
+          onPress={() => handleConversationPress(item)}
           activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={prefs?.screenReaderHints ? `${item.name}, ${isUnread ? `${unreadCount || 1} unread message${(unreadCount || 1) === 1 ? '' : 's'}` : 'conversation'}` : item.name}
         >
-          {isUnread && <View style={styles.unreadBar} />}
-          <TouchableOpacity
-            style={styles.avatarWrap}
-            onPress={(e) => {
-              e.stopPropagation?.();
-              // Avatar tap opens the full profile rather than the thread,
-              // so users can review who they're about to talk to.
-              openProfile(item);
-            }}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${item.name}'s profile`}
-          >
+          {/* The whole row is one target — the design has no nested
+              avatar affordance; the profile is reachable from the thread. */}
+          <View style={styles.avatarWrap}>
             <Image source={imageSource(item.images?.[0])} style={styles.avatar} />
             {isOnline && <View style={styles.onlineDot} />}
-          </TouchableOpacity>
+          </View>
           <View style={styles.msgInfo}>
             <View style={styles.msgTopRow}>
               <Text style={styles.msgName} numberOfLines={1}>{item.name}</Text>
@@ -334,18 +337,14 @@ export default function MessagesScreen({ navigation }) {
                 <Text style={styles.msgTime}>{item.timestamp}</Text>
               ) : null}
             </View>
-            <Text
-              style={[
-                styles.msgPreview,
-                isUnread && styles.msgPreviewUnread,
-                // Italicize the placeholder so it's visually distinct
-                // from a real last-message preview.
-                !item.lastMessage && styles.msgPreviewPlaceholder,
-              ]}
-              numberOfLines={1}
-            >
-              {preview || 'Say hi 👋'}
-            </Text>
+            {preview ? (
+              <Text
+                style={[styles.msgPreview, isUnread && styles.msgPreviewUnread]}
+                numberOfLines={1}
+              >
+                {preview}
+              </Text>
+            ) : null}
           </View>
           {unreadCount > 0 && (
             <View style={styles.unreadPill}>
@@ -355,7 +354,7 @@ export default function MessagesScreen({ navigation }) {
         </TouchableOpacity>
       </Animated.View>
     );
-  }, [styles, prefs, openProfile]);
+  }, [styles, prefs]);
 
   // ─── Requests segment card ───
   const renderRequest = useCallback(({ item }) => {
@@ -382,7 +381,7 @@ export default function MessagesScreen({ navigation }) {
         </View>
 
         {item.message ? (
-          <Text style={styles.requestNote} numberOfLines={4}>&ldquo;{item.message}&rdquo;</Text>
+          <Text style={styles.requestNote}>&ldquo;{item.message}&rdquo;</Text>
         ) : null}
 
         <View style={styles.requestActions}>
@@ -433,10 +432,7 @@ export default function MessagesScreen({ navigation }) {
     </Text>
   );
 
-  // There is no in-app notifications feed service yet (delivery is
-  // push-only), so pending requests proxy for "unread notifications"
-  // on the bell — same signal the design's dot carries.
-  const hasNotifDot = requestCount > 0;
+  const hasNotifDot = unreadTotal + requestCount > 0;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -457,15 +453,6 @@ export default function MessagesScreen({ navigation }) {
       >
         <View style={styles.headerRow}>
           <View style={styles.headerLeft}>
-            <View style={styles.kickerRow}>
-              {/* Mini flag mark: ink / red / green stripes in a hairline frame. */}
-              <View style={styles.flagMark} accessible={false}>
-                <View style={styles.flagStripeInk} />
-                <View style={styles.flagStripeRed} />
-                <View style={styles.flagStripeGreen} />
-              </View>
-              <Text style={styles.kicker}>JUNUBIN</Text>
-            </View>
             <Text style={styles.headerTitle} accessibilityRole="header">Chats</Text>
           </View>
           <TouchableOpacity
@@ -502,8 +489,10 @@ export default function MessagesScreen({ navigation }) {
             accessibilityState={{ selected: segment === 'requests' }}
             accessibilityLabel={requestCount > 0 ? `Requests, ${requestCount} pending` : 'Requests'}
           >
+            {/* Suffix rule from the design: ' (n)' only while requests
+                are pending, otherwise the bare word. */}
             <Text style={[styles.segmentText, segment === 'requests' && styles.segmentTextActive]}>
-              {requestCount > 0 ? `Requests (${requestCount > 99 ? '99+' : requestCount})` : 'Requests'}
+              {requestCount > 0 ? `Requests (${requestCount})` : 'Requests'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -516,6 +505,7 @@ export default function MessagesScreen({ navigation }) {
         </View>
       ) : segment === 'messages' ? (
         <FlatList
+          {...tabBarScrollProps}
           style={styles.listTopBorder}
           data={conversationData}
           keyExtractor={(item) => item.id}
@@ -530,16 +520,13 @@ export default function MessagesScreen({ navigation }) {
           refreshControl={
             <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
-          ListEmptyComponent={
-            <View style={styles.emptyMessages}>
-              <Text style={styles.emptyText}>No conversations yet</Text>
-              <Text style={styles.emptySubtext}>Find people in the community and say hello.</Text>
-            </View>
-          }
+          // No separate empty state: the design's footer line is the
+          // empty-inbox affordance, and it renders in both cases.
           ListFooterComponent={footerHint}
         />
       ) : (
         <FlatList
+          {...tabBarScrollProps}
           style={styles.listTopBorder}
           data={requests}
           keyExtractor={(item) => item.id}
@@ -566,18 +553,21 @@ export default function MessagesScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
+const getStyles = (colors, isDark, prefs = {}, layout, insets) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
   },
 
   // ─── Header ───
+  // Design header block is 56px from the top of the frame; insets.top
+  // already covers the status bar, so the extra is the design's slack.
   headerBlock: {
-    paddingHorizontal: 18,
-    paddingTop: 8,
+    paddingHorizontal: layout.horizontal,
+    paddingTop: 10,
     paddingBottom: 12,
     gap: 12,
+    ...layout.centeredContent,
   },
   headerRow: {
     flexDirection: 'row',
@@ -586,43 +576,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   headerLeft: {
     flex: 1,
   },
-  kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  // 20×14 three-stripe flag mark; ink/red/green with hairline gaps in
-  // the screen background so the stripes read separated, like the mock.
-  flagMark: {
-    width: 20,
-    height: 14,
-    borderWidth: 1,
-    borderColor: colors.separator,
-  },
-  flagStripeInk: {
-    flex: 1,
-    backgroundColor: colors.ssInk,
-  },
-  flagStripeRed: {
-    flex: 1,
-    backgroundColor: colors.ssRed,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.cream,
-  },
-  flagStripeGreen: {
-    flex: 1,
-    backgroundColor: colors.ssGreen,
-  },
-  kicker: {
-    fontFamily: FontFamily.heading,
-    fontSize: 10.5,
-    fontWeight: '600',
-    letterSpacing: 2.7,
-    color: colors.accentDark,
-  },
   headerTitle: {
-    marginTop: 2,
     fontFamily: FontFamily.heading,
     fontSize: 31,
     lineHeight: 31,
@@ -661,7 +615,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     backgroundColor: 'transparent',
   },
   segmentBtnRight: {
-    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftWidth: 1,
     borderLeftColor: colors.separator,
   },
   segmentBtnActive: {
@@ -684,7 +638,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     borderTopColor: colors.separator,
   },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: bottomTabInset(insets.bottom),
     flexGrow: 1,
   },
 
@@ -693,20 +647,12 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 13,
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     paddingVertical: prefs?.largerTouchTargets ? 16 : 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.separator,
     position: 'relative',
-  },
-  // 3px flag-gold bar hugging the left edge of unread rows.
-  unreadBar: {
-    position: 'absolute',
-    left: 0,
-    top: 12,
-    bottom: 12,
-    width: 3,
-    backgroundColor: colors.ssGold,
+    ...layout.centeredList,
   },
   avatarWrap: {
     position: 'relative',
@@ -718,7 +664,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     height: 56,
     borderRadius: 0,
     backgroundColor: colors.gray300,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.separator,
   },
   onlineDot: {
@@ -766,12 +712,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     fontWeight: '600',
     fontFamily: FontFamily.semibold,
   },
-  // Italic + muted so the "Say hi" CTA reads as a placeholder, not a
-  // real message from the other person.
-  msgPreviewPlaceholder: {
-    fontStyle: 'italic',
-    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
-  },
   unreadPill: {
     minWidth: 20,
     height: 20,
@@ -792,30 +732,30 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   // ─── Footer hint ───
   footerHint: {
     paddingVertical: 16,
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     textAlign: 'center',
     fontSize: 12.5,
     fontFamily: FontFamily.regular,
-    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
+    color: prefs?.highContrast ? colors.gray600 : colors.gray400,
   },
+  // The design's anchor style: accent-700, no underline, no weight change.
   footerHintLink: {
     color: colors.accentDark,
-    fontFamily: FontFamily.semibold,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
   },
 
   // ─── Requests segment ───
   requestsContent: {
-    padding: 18,
-    paddingBottom: 40,
+    paddingTop: 14,
+    paddingHorizontal: layout.horizontal,
+    paddingBottom: bottomTabInset(insets.bottom),
     flexGrow: 1,
+    ...layout.centeredList,
   },
   requestsIntro: {
     fontSize: 12.5,
     lineHeight: 19,
     fontFamily: FontFamily.regular,
-    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
+    color: prefs?.highContrast ? colors.gray600 : colors.gray400,
     marginBottom: 14,
   },
   requestGap: {
@@ -836,7 +776,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     height: 46,
     borderRadius: 0,
     backgroundColor: colors.gray300,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.separator,
   },
   requestHeadText: {
@@ -852,7 +792,7 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
   requestMeta: {
     fontSize: 12,
     fontFamily: FontFamily.regular,
-    color: colors.gray600,
+    color: colors.gray500,
     marginTop: 1,
   },
   requestNote: {
@@ -860,9 +800,10 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     lineHeight: 20,
     fontFamily: FontFamily.regular,
     color: colors.black,
-    backgroundColor: colors.ssGoldTint,
-    borderLeftWidth: 3,
-    borderLeftColor: colors.ssGold,
+    backgroundColor: colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    borderRadius: 4,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -911,27 +852,6 @@ const getStyles = (colors, isDark, prefs = {}) => StyleSheet.create({
     fontSize: 13.5,
     lineHeight: 20,
     fontFamily: FontFamily.regular,
-    color: prefs?.highContrast ? colors.gray600 : colors.gray500,
-  },
-
-  // ─── Empty conversations ───
-  emptyMessages: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontFamily: FontFamily.heading,
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.black,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 13.5,
-    fontFamily: FontFamily.regular,
-    color: colors.gray500,
-    marginTop: 8,
+    color: prefs?.highContrast ? colors.gray600 : colors.gray400,
   },
 });

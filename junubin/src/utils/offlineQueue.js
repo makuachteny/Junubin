@@ -1,14 +1,15 @@
 // JuNubin — Offline Action Queue
 // Queues actions while offline, processes them when connectivity
-// returns. The queue is best-effort: dating actions that have lost
-// their context (the user got banned, the recipient blocked them, the
-// match was undone) shouldn't replay just because the queue knows how.
+// returns. The queue is best-effort: actions that have lost their
+// context (the user got banned, the recipient blocked them, or the
+// conversation was removed) should not replay just because the queue
+// knows how.
 //
 // The consumer of processQueue is expected to re-validate each action
 // before applying it. To make that possible *and* safe by default,
 // processQueue here:
 //   1. Drops anything older than MAX_AGE_MS (default 24h) — better to
-//      lose a swipe than to send one a day late.
+//      drop stale intent than send something a day late.
 //   2. Calls an optional `precheck(action)` before the handler. If
 //      precheck returns falsy, the action is dropped silently.
 //   3. Distinguishes "drop" from "fail-and-retry": handler-throwing
@@ -17,7 +18,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const QUEUE_KEY = '@junubin_offline_queue';
-const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — dating actions stale fast
+const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h — queued intent gets stale fast
 
 // Sentinel a handler returns to say "this action isn't mine — keep it
 // for a later drain". Without it, a handler that silently ignored an
@@ -46,8 +47,8 @@ export async function enqueueAction(action) {
   try {
     const raw = await AsyncStorage.getItem(QUEUE_KEY);
     const queue = raw ? JSON.parse(raw) : [];
-    // Dedupe on enqueue: a repeated retry of the same swipe / voice
-    // note shouldn't create three copies in the queue. Without this,
+    // Dedupe on enqueue: a repeated retry of the same action should
+    // not create three copies in the queue. Without this,
     // a flaky network that triggers three handler-throws produced
     // three identical replays on reconnect.
     const id = actionIdentity(action);

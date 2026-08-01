@@ -38,4 +38,41 @@ describe('useNotifications', () => {
     unmount();
     expect(removeFn).toHaveBeenCalledTimes(2);
   });
+
+  it('opens request notifications on the Requests segment', () => {
+    const navigate = jest.fn();
+    const navRef = { current: { navigate } };
+    renderHook(() => useNotifications(navRef));
+    const handler = mockAddResponseListener.mock.calls[0][0];
+
+    handler({
+      notification: {
+        request: {
+          content: { data: { type: 'message_request' } },
+        },
+      },
+    });
+
+    expect(navigate).toHaveBeenCalledWith('Main', {
+      screen: 'MessagesTab',
+      params: { segment: 'requests' },
+    });
+  });
+
+  it('opens accepted request pushes directly in chat when possible', () => {
+    const navigate = jest.fn();
+    const navRef = { current: { navigate } };
+    renderHook(() => useNotifications(navRef));
+    const handler = mockAddResponseListener.mock.calls[0][0];
+
+    handler({
+      notification: {
+        request: {
+          content: { data: { type: 'message_request_accepted', conversationId: 'conv-1' } },
+        },
+      },
+    });
+
+    expect(navigate).toHaveBeenCalledWith('Chat', { conversationId: 'conv-1' });
+  });
 });

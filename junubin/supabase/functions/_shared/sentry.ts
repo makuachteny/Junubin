@@ -13,10 +13,10 @@
  *   import { captureException, withSentry } from "../_shared/sentry.ts";
  *
  *   // Option A: wrap the whole handler
- *   Deno.serve(withSentry("stripe-webhook", async (req) => { ... }));
+ *   Deno.serve(withSentry("directory", async (req) => { ... }));
  *
  *   // Option B: capture inline
- *   try { ... } catch (err) { await captureException(err, { fn: "stripe-webhook" }); throw err; }
+ *   try { ... } catch (err) { await captureException(err, { fn: "directory" }); throw err; }
  */
 
 const SENTRY_DSN = Deno.env.get("SENTRY_DSN") || "";

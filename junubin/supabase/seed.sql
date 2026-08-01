@@ -18,9 +18,9 @@ VALUES ('seed-adau-profile', 'seed-adau', 'Braids queen & gold lover • That sm
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-adau-p1', 'seed-adau', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p1.jpg', 0, true),
-  ('seed-adau-p2', 'seed-adau', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p2.jpg', 1, false),
-  ('seed-adau-p3', 'seed-adau', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p7.jpg', 2, false)
+  ('seed-adau-p1', 'seed-adau', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p1.jpg', 0, true),
+  ('seed-adau-p2', 'seed-adau', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p2.jpg', 1, false),
+  ('seed-adau-p3', 'seed-adau', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p7.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Abuk
@@ -36,9 +36,9 @@ VALUES ('seed-abuk-profile', 'seed-abuk', 'Event planner • Orange top & big en
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-abuk-p1', 'seed-abuk', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p2.jpg', 0, true),
-  ('seed-abuk-p2', 'seed-abuk', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p1.jpg', 1, false),
-  ('seed-abuk-p3', 'seed-abuk', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p4.jpg', 2, false)
+  ('seed-abuk-p1', 'seed-abuk', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p2.jpg', 0, true),
+  ('seed-abuk-p2', 'seed-abuk', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p1.jpg', 1, false),
+  ('seed-abuk-p3', 'seed-abuk', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p4.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Nyirou
@@ -54,9 +54,9 @@ VALUES ('seed-nyirou-profile', 'seed-nyirou', 'Photographer • Lakeside soul, b
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-nyirou-p1', 'seed-nyirou', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p3.jpg', 0, true),
-  ('seed-nyirou-p2', 'seed-nyirou', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p5.jpg', 1, false),
-  ('seed-nyirou-p3', 'seed-nyirou', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p2.jpg', 2, false)
+  ('seed-nyirou-p1', 'seed-nyirou', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p3.jpg', 0, true),
+  ('seed-nyirou-p2', 'seed-nyirou', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p5.jpg', 1, false),
+  ('seed-nyirou-p3', 'seed-nyirou', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p2.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Athieng
@@ -72,9 +72,9 @@ VALUES ('seed-athieng-profile', 'seed-athieng', 'Fashion Designer • Green/purp
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-athieng-p1', 'seed-athieng', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p4.jpg', 0, true),
-  ('seed-athieng-p2', 'seed-athieng', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p3.jpg', 1, false),
-  ('seed-athieng-p3', 'seed-athieng', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p7.jpg', 2, false)
+  ('seed-athieng-p1', 'seed-athieng', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p4.jpg', 0, true),
+  ('seed-athieng-p2', 'seed-athieng', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p3.jpg', 1, false),
+  ('seed-athieng-p3', 'seed-athieng', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p7.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Yar
@@ -90,9 +90,9 @@ VALUES ('seed-yar-profile', 'seed-yar', 'Community Worker • White head wrap, v
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-yar-p1', 'seed-yar', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p5.jpg', 0, true),
-  ('seed-yar-p2', 'seed-yar', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p4.jpg', 1, false),
-  ('seed-yar-p3', 'seed-yar', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p1.jpg', 2, false)
+  ('seed-yar-p1', 'seed-yar', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p5.jpg', 0, true),
+  ('seed-yar-p2', 'seed-yar', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p4.jpg', 1, false),
+  ('seed-yar-p3', 'seed-yar', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p1.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Akech
@@ -108,9 +108,9 @@ VALUES ('seed-akech-profile', 'seed-akech', 'Personal Trainer • Festival seaso
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-akech-p1', 'seed-akech', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p6.jpg', 0, true),
-  ('seed-akech-p2', 'seed-akech', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p2.jpg', 1, false),
-  ('seed-akech-p3', 'seed-akech', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p3.jpg', 2, false)
+  ('seed-akech-p1', 'seed-akech', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p6.jpg', 0, true),
+  ('seed-akech-p2', 'seed-akech', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p2.jpg', 1, false),
+  ('seed-akech-p3', 'seed-akech', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p3.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Nyandeng
@@ -126,9 +126,9 @@ VALUES ('seed-nyandeng-profile', 'seed-nyandeng', 'Psychology Student • Cornro
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-nyandeng-p1', 'seed-nyandeng', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p7.jpg', 0, true),
-  ('seed-nyandeng-p2', 'seed-nyandeng', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p6.jpg', 1, false),
-  ('seed-nyandeng-p3', 'seed-nyandeng', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p5.jpg', 2, false)
+  ('seed-nyandeng-p1', 'seed-nyandeng', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p7.jpg', 0, true),
+  ('seed-nyandeng-p2', 'seed-nyandeng', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p6.jpg', 1, false),
+  ('seed-nyandeng-p3', 'seed-nyandeng', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p5.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Nyibol
@@ -144,9 +144,9 @@ VALUES ('seed-nyibol-profile', 'seed-nyibol', 'Model & Student • White tank to
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-nyibol-p1', 'seed-nyibol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p8.jpg', 0, true),
-  ('seed-nyibol-p2', 'seed-nyibol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p1.jpg', 1, false),
-  ('seed-nyibol-p3', 'seed-nyibol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p6.jpg', 2, false)
+  ('seed-nyibol-p1', 'seed-nyibol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p8.jpg', 0, true),
+  ('seed-nyibol-p2', 'seed-nyibol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p1.jpg', 1, false),
+  ('seed-nyibol-p3', 'seed-nyibol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p6.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Achol
@@ -162,9 +162,9 @@ VALUES ('seed-achol-profile', 'seed-achol', 'Model • Beach editorial, Sonia Tu
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-achol-p1', 'seed-achol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p9.jpg', 0, true),
-  ('seed-achol-p2', 'seed-achol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p3.jpg', 1, false),
-  ('seed-achol-p3', 'seed-achol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p8.jpg', 2, false)
+  ('seed-achol-p1', 'seed-achol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p9.jpg', 0, true),
+  ('seed-achol-p2', 'seed-achol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p3.jpg', 1, false),
+  ('seed-achol-p3', 'seed-achol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p8.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Akuol
@@ -180,9 +180,9 @@ VALUES ('seed-akuol-profile', 'seed-akuol', 'Model & MUA • Malaan Ajang glamou
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-akuol-p1', 'seed-akuol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p10.jpg', 0, true),
-  ('seed-akuol-p2', 'seed-akuol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p9.jpg', 1, false),
-  ('seed-akuol-p3', 'seed-akuol', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p7.jpg', 2, false)
+  ('seed-akuol-p1', 'seed-akuol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p10.jpg', 0, true),
+  ('seed-akuol-p2', 'seed-akuol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p9.jpg', 1, false),
+  ('seed-akuol-p3', 'seed-akuol', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p7.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Makuei
@@ -198,9 +198,9 @@ VALUES ('seed-makuei-profile', 'seed-makuei', 'Cultural Ambassador • Tradition
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-makuei-p1', 'seed-makuei', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p11.jpg', 0, true),
-  ('seed-makuei-p2', 'seed-makuei', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p12.jpg', 1, false),
-  ('seed-makuei-p3', 'seed-makuei', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p13.jpg', 2, false)
+  ('seed-makuei-p1', 'seed-makuei', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p11.jpg', 0, true),
+  ('seed-makuei-p2', 'seed-makuei', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p12.jpg', 1, false),
+  ('seed-makuei-p3', 'seed-makuei', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p13.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Atem
@@ -216,9 +216,9 @@ VALUES ('seed-atem-profile', 'seed-atem', 'Model & Music Producer • Yellow lea
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-atem-p1', 'seed-atem', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p12.jpg', 0, true),
-  ('seed-atem-p2', 'seed-atem', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p11.jpg', 1, false),
-  ('seed-atem-p3', 'seed-atem', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p13.jpg', 2, false)
+  ('seed-atem-p1', 'seed-atem', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p12.jpg', 0, true),
+  ('seed-atem-p2', 'seed-atem', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p11.jpg', 1, false),
+  ('seed-atem-p3', 'seed-atem', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p13.jpg', 2, false)
 ON CONFLICT DO NOTHING;
 
 -- Garang
@@ -234,7 +234,7 @@ VALUES ('seed-garang-profile', 'seed-garang', 'Software Engineer • Horseback, 
 ON CONFLICT ("userId") DO NOTHING;
 
 INSERT INTO "Photo" (id, "userId", url, "sortOrder", "isPrimary") VALUES
-  ('seed-garang-p1', 'seed-garang', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p13.jpg', 0, true),
-  ('seed-garang-p2', 'seed-garang', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p12.jpg', 1, false),
-  ('seed-garang-p3', 'seed-garang', 'https://res.cloudinary.com/placeholder/image/upload/junubin/seed/p11.jpg', 2, false)
+  ('seed-garang-p1', 'seed-garang', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p13.jpg', 0, true),
+  ('seed-garang-p2', 'seed-garang', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p12.jpg', 1, false),
+  ('seed-garang-p3', 'seed-garang', 'https://uvtyiytbgkasemabtznc.supabase.co/storage/v1/object/public/photos/seed/p11.jpg', 2, false)
 ON CONFLICT DO NOTHING;

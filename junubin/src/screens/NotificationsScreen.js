@@ -5,12 +5,10 @@
 // 44px square avatar, hairline dividers, unread rows tinted
 // accentTint08. Tapping a row opens the actor's profile.
 //
-// There is no in-app notification feed service yet — delivery is
-// push-only — so the list renders from an empty array and falls back
-// to the empty state. When the feed lands, rows are expected shaped
-// { id, actor: <profile>, actorName, text, timeAgo, unread }.
+// Feed is derived from existing server truth: unread conversations,
+// pending message requests, and accepted outgoing requests.
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -18,23 +16,84 @@ import {
   FlatList,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import EmptyState from '../components/EmptyState';
-
-// Feed placeholder until a notifications service exists. Kept empty —
-// we never invent data the backend can't produce.
-const NOTIFICATIONS = [];
+import ThemedRefreshControl from '../components/ThemedRefreshControl';
+import { useAuth } from '../auth';
+import { useCurrentUser } from '../hooks';
+import { useRealtime } from '../api/hooks/useRealtime';
+import * as notificationService from '../api/services/notificationService';
+import { layoutForWidth } from '../theme/layout';
 
 export default function NotificationsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { colors, isDark } = useTheme();
-  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+  const layout = useMemo(() => layoutForWidth(width), [width]);
+  const styles = useMemo(() => getStyles(colors, isDark, layout), [colors, isDark, layout]);
+  const { session } = useAuth();
+  const { currentUser } = useCurrentUser();
+  const { onInboxActivity } = useRealtime(currentUser?.id);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const openActor = useCallback((item) => {
+  const fetchNotifications = useCallback(() => {
+    if (!session) {
+      setItems([]);
+      setLoading(false);
+      return Promise.resolve();
+    }
+    return notificationService.getNotifications()
+      .then(setItems)
+      .catch((err) => {
+        if (__DEV__) console.warn('Notifications fetch failed:', err);
+        setItems([]);
+      })
+      .finally(() => setLoading(false));
+  }, [session]);
+
+  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+      return undefined;
+    }, [fetchNotifications]),
+  );
+
+  useEffect(() => {
+    if (!session) return undefined;
+    return onInboxActivity(() => {
+      fetchNotifications();
+    });
+  }, [session, onInboxActivity, fetchNotifications]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchNotifications().finally(() => setRefreshing(false));
+  }, [fetchNotifications]);
+
+  const openNotification = useCallback((item) => {
+    if (item?.type === 'message' && item.conversationId) {
+      navigation.navigate('Chat', { conversationId: item.conversationId, peer: item.actor });
+      return;
+    }
+    if (item?.type === 'message_request') {
+      navigation.navigate('Main', { screen: 'MessagesTab', params: { segment: 'requests' } });
+      return;
+    }
+    if (item?.type === 'message_request_accepted' && item.conversationId) {
+      navigation.navigate('Chat', { conversationId: item.conversationId, peer: item.actor });
+      return;
+    }
     if (!item?.actor) return;
     navigation.navigate('ProfileDetail', { profile: item.actor });
   }, [navigation]);
@@ -42,7 +101,7 @@ export default function NotificationsScreen({ navigation }) {
   const renderNotification = useCallback(({ item }) => (
     <TouchableOpacity
       style={[styles.row, item.unread && styles.rowUnread]}
-      onPress={() => openActor(item)}
+      onPress={() => openNotification(item)}
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={`${item.actorName} ${item.text} ${item.timeAgo || ''}`.trim()}
@@ -55,10 +114,10 @@ export default function NotificationsScreen({ navigation }) {
         {item.timeAgo ? <Text style={styles.time}>{item.timeAgo}</Text> : null}
       </View>
     </TouchableOpacity>
-  ), [styles, openActor]);
+  ), [styles, openNotification]);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 6 }]}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -72,24 +131,33 @@ export default function NotificationsScreen({ navigation }) {
       </View>
 
       <FlatList
-        data={NOTIFICATIONS}
+        data={items}
         keyExtractor={(item) => item.id}
         renderItem={renderNotification}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <ThemedRefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
         ListEmptyComponent={
-          <EmptyState
-            icon="notifications-outline"
-            title="Nothing yet"
-            subtitle="Follows, message requests and accepts land here. Push notifications keep working in the meantime."
-          />
+          loading ? (
+            <View style={styles.loading}>
+              <ActivityIndicator color={colors.accent} />
+            </View>
+          ) : (
+            <EmptyState
+              icon="notifications-outline"
+              title="Nothing yet"
+              subtitle="Unread chats, message requests and accepts land here."
+            />
+          )
         }
       />
     </View>
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, _isDark, layout) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -98,8 +166,9 @@ const getStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
+    paddingHorizontal: Math.max(10, layout.horizontal - 8),
     paddingBottom: 6,
+    ...layout.centeredContent,
   },
   backBtn: {
     width: 44,
@@ -114,6 +183,7 @@ const getStyles = (colors) => StyleSheet.create({
   },
   listContent: {
     flexGrow: 1,
+    ...layout.centeredContent,
   },
   row: {
     flexDirection: 'row',
@@ -132,7 +202,7 @@ const getStyles = (colors) => StyleSheet.create({
     height: 44,
     borderRadius: 0,
     backgroundColor: colors.gray300,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.separator,
   },
   rowText: {
@@ -154,5 +224,11 @@ const getStyles = (colors) => StyleSheet.create({
     fontFamily: FontFamily.regular,
     color: colors.gray400,
     marginTop: 2,
+  },
+  loading: {
+    flex: 1,
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

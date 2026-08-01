@@ -14,6 +14,8 @@
 //   * User.isActive AND User.moderationStatus = 'active'
 //   * caller excluded
 //   * Block excluded in both directions
+//   * locationVisibility = 'mutuals' (00049) reported as 'off' to
+//     anyone the person does not mutually follow
 //
 // Query params:
 //   q            free text over displayName / city / job / school
@@ -27,7 +29,7 @@
 // normalizeProfile over both.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders, getUser, errorResponse, jsonResponse } from "../_shared/utils.ts";
+import { corsHeaders, getUser, errorResponse, jsonResponse, getMutualFollowIds } from "../_shared/utils.ts";
 
 const DEFAULT_LIMIT = 24;
 const MAX_LIMIT = 50;
@@ -37,7 +39,7 @@ const MAX_LIMIT = 50;
 // columns the profile card renders.
 const USER_COLUMNS = `
   id, displayName, dateOfBirth, isVerified, gender, city, countryCode, lastActiveAt,
-  photos:Photo(id, url, sortOrder, isPrimary),
+  photos:Photo(id, url, sortOrder, isPrimary, moderationStatus),
   profile:Profile!inner(
     bio, lookingFor, datingIntentions, job, school, ethnicity, heightCm,
     pronouns, education, children, interests, stickers, currentlyInto,
@@ -83,6 +85,15 @@ function matchesAnyTerm(value: unknown, wanted: string[]): boolean {
   const have = toTermSet(value);
   if (have.size === 0) return false;
   return wanted.some((w) => have.has(w));
+}
+
+// Downgrade a 'mutuals' profile's advertised level to 'off' for a
+// caller who is not a mutual follow. See the comment at the call site;
+// every other level is passed through untouched.
+function maskLocationVisibility(profile: any, userId: string, mutualFollowIds: Set<string>): any {
+  if (!profile || profile.locationVisibility !== "mutuals") return profile;
+  if (mutualFollowIds.has(userId)) return profile;
+  return { ...profile, locationVisibility: "off" };
 }
 
 function matchesQuery(row: any, q: string): boolean {
@@ -197,6 +208,27 @@ Deno.serve(async (req: Request) => {
 
     const page = filtered.slice(0, limit);
 
+    // `locationVisibility` rides along in the profile payload so cards
+    // can render a "shares their area" affordance. For a 'mutuals'
+    // profile (00049) that affordance is only truthful for someone the
+    // owner mutually follows — everyone else would tap through to a map
+    // the person is deliberately absent from. Report 'off' to
+    // non-mutuals so the directory and discover-nearby agree about who
+    // is visible.
+    //
+    // The directory returns no coordinates at all, so this is a
+    // consistency measure, not the enforcement point; discover-nearby
+    // is where the area itself is withheld. `city` / `countryCode` are
+    // untouched: they are User columns the directory filters on for
+    // every level including 'off', and are not what locationVisibility
+    // governs.
+    const pageHasMutuals = page.some(
+      (row: any) => row?.profile?.locationVisibility === "mutuals",
+    );
+    const mutualFollowIds = pageHasMutuals
+      ? await getMutualFollowIds(supabase, userId)
+      : new Set<string>();
+
     // Two ways there's more to fetch: the page filled and matches
     // remain in this scan, or the scan itself hit its ceiling and
     // there are unscanned rows behind it. Either way the cursor is the
@@ -217,10 +249,14 @@ Deno.serve(async (req: Request) => {
       city: row.city,
       countryCode: row.countryCode,
       lastActiveAt: row.lastActiveAt,
+      // Rejected photos (00050) never leave the server. Rows with no
+      // moderationStatus are kept — see the note in discover-nearby.
       photos: (row.photos || [])
+        .filter((ph: any) => ph?.moderationStatus !== 'rejected')
         .slice()
-        .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
-      profile: row.profile,
+        .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map(({ moderationStatus, ...ph }: any) => ph),
+      profile: maskLocationVisibility(row.profile, row.id, mutualFollowIds),
     }));
 
     return jsonResponse({ people, nextCursor });

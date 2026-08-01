@@ -7,6 +7,7 @@ import SignupScreen from '../SignupScreen';
 const mockUseTheme = jest.fn();
 const mockStartOtp = jest.fn();
 const mockLoginWithOtp = jest.fn();
+const mockDevAuthBypassEnabled = jest.fn();
 
 jest.mock('../../theme', () => {
   const actual = jest.requireActual('../../theme');
@@ -20,6 +21,10 @@ jest.mock('../../auth', () => ({
 jest.mock('../../utils/analytics', () => ({
   trackEvent: jest.fn(),
   AnalyticsEvents: new Proxy({}, { get: (_, key) => String(key) }),
+}));
+
+jest.mock('../../config/devAuth', () => ({
+  devAuthBypassEnabled: () => mockDevAuthBypassEnabled(),
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -69,6 +74,7 @@ describe('SignupScreen — phone OTP flow (Industry redesign)', () => {
     mockUseTheme.mockReturnValue({ isDark: false, colors: COLORS });
     mockStartOtp.mockResolvedValue({ message: 'OTP sent' });
     mockLoginWithOtp.mockResolvedValue({ appUser: null });
+    mockDevAuthBypassEnabled.mockReturnValue(false);
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
@@ -129,6 +135,37 @@ describe('SignupScreen — phone OTP flow (Industry redesign)', () => {
     });
     // Brand-new account → profile setup.
     expect(nav.replace).toHaveBeenCalledWith('ProfileSetup');
+  });
+
+  it('dev auth bypass signs in immediately from SEND CODE', async () => {
+    mockDevAuthBypassEnabled.mockReturnValue(true);
+    const nav = makeNavigation();
+    const r = render(<SignupScreen navigation={nav} />);
+    await act(async () => {
+      fireEvent.press(r.getByText('SEND CODE'));
+    });
+    expect(mockStartOtp).toHaveBeenCalledWith({ phone: '+254000000000' });
+    expect(mockLoginWithOtp).toHaveBeenCalledWith({
+      phone: '+254000000000',
+      code: '000000',
+    });
+    expect(r.queryByText('Enter the code')).toBeNull();
+    expect(nav.replace).toHaveBeenCalledWith('ProfileSetup');
+  });
+
+  it('dev auth bypass still uses the typed phone when present', async () => {
+    mockDevAuthBypassEnabled.mockReturnValue(true);
+    const nav = makeNavigation();
+    const r = render(<SignupScreen navigation={nav} />);
+    fireEvent.changeText(r.getByPlaceholderText('912 345 678'), '0912 345 678');
+    await act(async () => {
+      fireEvent.press(r.getByText('SEND CODE'));
+    });
+    expect(mockStartOtp).toHaveBeenCalledWith({ phone: '+254912345678' });
+    expect(mockLoginWithOtp).toHaveBeenCalledWith({
+      phone: '+254912345678',
+      code: '000000',
+    });
   });
 
   it('returning user with a profile is not sent to ProfileSetup', async () => {

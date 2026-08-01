@@ -3,7 +3,7 @@
 // Covers the redesign's behavioral surface: the Messages | Requests
 // segmented control (count suffix only when pending requests exist),
 // inline request cards with Accept → Chat and silent Decline, the
-// "You: " preview prefix, and the Notifications header/empty state.
+// "You: " preview prefix, and the derived Notifications feed.
 
 import React from 'react';
 import { Alert } from 'react-native';
@@ -11,8 +11,9 @@ import { render, fireEvent, act } from '@testing-library/react-native';
 import MessagesScreen from '../MessagesScreen';
 import NotificationsScreen from '../NotificationsScreen';
 
-const mockGetMatches = jest.fn(async () => []);
+const mockGetConversations = jest.fn(async () => []);
 const mockGetIncomingRequests = jest.fn(async () => []);
+const mockGetOutgoingRequests = jest.fn(async () => []);
 const mockAcceptRequest = jest.fn(async () => ({ conversationId: 'conv-9' }));
 const mockDeclineRequest = jest.fn(async () => ({ success: true }));
 
@@ -46,12 +47,13 @@ jest.mock('../../api/hooks/useRealtime', () => ({
   useRealtime: () => ({ onInboxActivity: () => () => {} }),
 }));
 
-jest.mock('../../api/services/matchesService', () => ({
-  getMatches: (...args) => mockGetMatches(...args),
+jest.mock('../../api/services/conversationService', () => ({
+  getConversations: (...args) => mockGetConversations(...args),
 }));
 
 jest.mock('../../api/services/messageRequestService', () => ({
   getIncomingRequests: (...args) => mockGetIncomingRequests(...args),
+  getOutgoingRequests: (...args) => mockGetOutgoingRequests(...args),
   acceptMessageRequest: (...args) => mockAcceptRequest(...args),
   declineMessageRequest: (...args) => mockDeclineRequest(...args),
 }));
@@ -129,16 +131,16 @@ const REQUESTS = [
 describe('Chats home tab', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetMatches.mockImplementation(async () => CONVOS);
+    mockGetConversations.mockImplementation(async () => CONVOS);
     mockGetIncomingRequests.mockImplementation(async () => REQUESTS);
+    mockGetOutgoingRequests.mockImplementation(async () => []);
   });
 
-  it('renders the header, kicker and both segments with the request count', async () => {
+  it('renders the header and both segments with the request count', async () => {
     const navigation = makeNavigation();
     const { getByText } = render(<MessagesScreen navigation={navigation} />);
     await flush();
 
-    expect(getByText('JUNUBIN')).toBeTruthy();
     expect(getByText('Chats')).toBeTruthy();
     expect(getByText('Messages')).toBeTruthy();
     // Count suffix present because one request is pending.
@@ -167,13 +169,36 @@ describe('Chats home tab', () => {
     expect(getByText('3')).toBeTruthy();
   });
 
+  it('renders no preview line for a thread with no messages yet', async () => {
+    mockGetConversations.mockImplementation(async () => [
+      { ...CONVOS[0], lastMessage: '', lastMessageMine: false },
+    ]);
+    const navigation = makeNavigation();
+    const { getByText, queryByText } = render(<MessagesScreen navigation={navigation} />);
+    await flush();
+
+    expect(getByText('Nyah')).toBeTruthy();
+    // The design has no placeholder preview — the row just omits the line.
+    expect(queryByText(/Say hi/)).toBeNull();
+  });
+
+  it('has no separate empty-inbox state — the footer line carries it', async () => {
+    mockGetConversations.mockImplementation(async () => []);
+    const navigation = makeNavigation();
+    const { getByText, queryByText } = render(<MessagesScreen navigation={navigation} />);
+    await flush();
+
+    expect(queryByText('No conversations yet')).toBeNull();
+    expect(getByText('browse the Directory')).toBeTruthy();
+  });
+
   it('opens the Chat when a conversation row is tapped', async () => {
     const navigation = makeNavigation();
     const { getByText } = render(<MessagesScreen navigation={navigation} />);
     await flush();
 
     fireEvent.press(getByText('Nyah'));
-    expect(navigation.navigate).toHaveBeenCalledWith('Chat', { match: CONVOS[0] });
+    expect(navigation.navigate).toHaveBeenCalledWith('Chat', { thread: CONVOS[0] });
   });
 
   it('footer link switches to the Directory tab', async () => {
@@ -248,15 +273,58 @@ describe('Chats home tab', () => {
 });
 
 describe('Notifications screen', () => {
-  it('renders the header and empty state, and back goes back', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetConversations.mockImplementation(async () => []);
+    mockGetIncomingRequests.mockImplementation(async () => []);
+    mockGetOutgoingRequests.mockImplementation(async () => []);
+  });
+
+  it('renders the header and empty state, and back goes back', async () => {
     const navigation = makeNavigation();
     const { getByText, getByLabelText } = render(
       <NotificationsScreen navigation={navigation} />,
     );
+    await flush();
 
     expect(getByText('Notifications')).toBeTruthy();
     expect(getByText('Nothing yet')).toBeTruthy();
     fireEvent.press(getByLabelText('Back'));
     expect(navigation.goBack).toHaveBeenCalled();
+  });
+
+  it('renders unread chats and requests, then opens the right surface', async () => {
+    mockGetConversations.mockImplementation(async () => CONVOS);
+    mockGetIncomingRequests.mockImplementation(async () => REQUESTS);
+    mockGetOutgoingRequests.mockImplementation(async () => [{
+      id: 'r2',
+      status: 'accepted',
+      conversationId: 'conv-accepted',
+      respondedAt: '2026-07-31T11:00:00Z',
+      to: { id: 'u9', name: 'Bol', images: [] },
+    }]);
+    const navigation = makeNavigation();
+    const { getByLabelText, getByText } = render(
+      <NotificationsScreen navigation={navigation} />,
+    );
+    await flush();
+
+    expect(getByText('Majok')).toBeTruthy();
+    expect(getByText(/sent you 3 messages/)).toBeTruthy();
+    expect(getByText('Adut')).toBeTruthy();
+    expect(getByText(/sent you a message request/)).toBeTruthy();
+    expect(getByText('Bol')).toBeTruthy();
+    expect(getByText(/accepted your message request/)).toBeTruthy();
+
+    fireEvent.press(getByLabelText(/Majok sent you 3 messages/));
+    expect(navigation.navigate).toHaveBeenCalledWith('Chat', expect.objectContaining({
+      conversationId: 'c2',
+    }));
+
+    fireEvent.press(getByLabelText(/Adut sent you a message request/));
+    expect(navigation.navigate).toHaveBeenCalledWith('Main', {
+      screen: 'MessagesTab',
+      params: { segment: 'requests' },
+    });
   });
 });

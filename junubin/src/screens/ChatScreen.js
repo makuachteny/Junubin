@@ -32,7 +32,7 @@ import { useTheme, FontFamily } from '../theme';
 import { imageSource } from '../utils/imageSource';
 import { useAuth } from '../auth';
 import * as chatService from '../api/services/chatService';
-import * as matchesService from '../api/services/matchesService';
+import * as conversationService from '../api/services/conversationService';
 import * as safetyService from '../api/services/safetyService';
 import * as connectionService from '../api/services/connectionService';
 import { detectScamSignal } from '../api/services/safetyServiceExtras';
@@ -69,8 +69,8 @@ const dayLabel = (date) => {
 
 export default function ChatScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
-  const { colors } = useTheme();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { session, user: currentUser } = useAuth();
   const { isConnected } = useNetworkStatus();
   // Survey / restricted / banned nudge — renders so a restricted
@@ -81,38 +81,38 @@ export default function ChatScreen({ navigation, route }) {
   useScreenshotProtection();
 
   // Some entry points only know the conversationId (push notification
-  // taps in particular). When that's all we have, resolve the match
-  // record from matchesService so the header populates correctly.
-  const initialMatch = route.params?.match || null;
-  const [resolvedMatch, setResolvedMatch] = useState(initialMatch);
-  const match = resolvedMatch || {};
-  const matchId = match.id || route.params?.conversationId || 'match1';
+  // taps in particular). When that's all we have, resolve the peer
+  // record from conversationService so the header populates correctly.
+  const initialPeer = route.params?.peer || route.params?.thread || null;
+  const [resolvedPeer, setResolvedPeer] = useState(initialPeer);
+  const peer = resolvedPeer || {};
+  const threadId = peer.id || route.params?.conversationId || 'thread1';
 
-  // Top-level conversationId wins over the match-object copy, because
-  // fresh-connection overlays pass it alongside the (sometimes
-  // incomplete) match object.
-  const conversationId = route.params?.conversationId || match.conversationId;
+  // Top-level conversationId wins over the peer-object copy, because
+  // fresh-connection overlays pass it alongside the sometimes incomplete
+  // peer object.
+  const conversationId = route.params?.conversationId || peer.conversationId;
 
   // Demo conversations live client-side only: seed from mockMessages,
   // skip realtime, and short-circuit sends locally.
-  const demoUserId = match.userId || match.id;
+  const demoUserId = peer.userId || peer.id;
   const isDemoChat = typeof demoUserId === 'string'
-    && (demoUserId.startsWith('demo_') || (matchId && String(matchId).startsWith('demo_')));
+    && (demoUserId.startsWith('demo_') || (threadId && String(threadId).startsWith('demo_')));
 
   useEffect(() => {
-    if (resolvedMatch?.id) return;
+    if (resolvedPeer?.id) return;
     if (!conversationId) return;
     if (isDemoChat) return;
     let cancelled = false;
-    matchesService.getMatches()
+    conversationService.getConversations()
       .then((list) => {
         if (cancelled) return;
-        const found = (list || []).find((m) => m.conversationId === conversationId);
-        if (found) setResolvedMatch(found);
+        const found = (list || []).find((thread) => thread.conversationId === conversationId);
+        if (found) setResolvedPeer(found);
       })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [conversationId, resolvedMatch?.id, isDemoChat]);
+  }, [conversationId, resolvedPeer?.id, isDemoChat]);
 
   const [messages, setMessages] = useState(() => {
     if (!isDemoChat || !DEMO_DATA_ENABLED) return [];
@@ -382,7 +382,7 @@ export default function ChatScreen({ navigation, route }) {
   // Blocked-user handling and the safety flows live here; the design's
   // header is minimal but these must stay reachable from the thread.
   const handleHeaderMenu = useCallback(() => {
-    Alert.alert(match.name || 'Chat', null, [
+    Alert.alert(peer.name || 'Chat', null, [
       {
         text: 'Safety Center',
         onPress: () => navigation.navigate('SettingsInfo', { pageKey: 'safety' }),
@@ -391,7 +391,7 @@ export default function ChatScreen({ navigation, route }) {
         text: 'Remove connection',
         style: 'destructive',
         onPress: () => Alert.alert(
-          `Remove ${match.name || 'this person'} from your connections?`,
+          `Remove ${peer.name || 'this person'} from your connections?`,
           'You will stop following each other and this conversation will close. This is not the same as blocking — use Report & Block if they made you feel unsafe.',
           [
             { text: 'Cancel', style: 'cancel' },
@@ -404,7 +404,7 @@ export default function ChatScreen({ navigation, route }) {
                 //   2. safetyService.unmatchUser tears down the legacy
                 //      Match/Conversation row so the thread stops
                 //      appearing in either inbox.
-                const peerId = match.userId || match.id;
+                const peerId = peer.userId || peer.id;
                 if (!peerId) {
                   navigation.goBack();
                   return;
@@ -440,7 +440,7 @@ export default function ChatScreen({ navigation, route }) {
               text: 'Report',
               style: 'destructive',
               onPress: async () => {
-                const reportedId = match.userId || match.id;
+                const reportedId = peer.userId || peer.id;
                 if (!reportedId) {
                   Alert.alert('Reported', 'Thanks — our team will review this account.');
                   navigation.goBack();
@@ -464,7 +464,7 @@ export default function ChatScreen({ navigation, route }) {
       },
       { text: 'Cancel', style: 'cancel' },
     ]);
-  }, [match.name, match.userId, match.id, conversationId, navigation]);
+  }, [peer.name, peer.userId, peer.id, conversationId, navigation]);
 
   // Interleave day dividers into the message list, with the text-only
   // notice pinned under the first divider. An empty thread still shows
@@ -590,7 +590,7 @@ export default function ChatScreen({ navigation, route }) {
     );
   }, [colors, styles, navigation, handleRetryFailed]);
 
-  const statusText = isTyping ? 'typing…' : (match.online ? 'Active now' : 'Active recently');
+  const statusText = isTyping ? 'typing…' : (peer.online ? 'Active now' : 'Active recently');
 
   return (
     <View style={styles.container}>
@@ -614,24 +614,16 @@ export default function ChatScreen({ navigation, route }) {
           <TouchableOpacity
             style={styles.headerProfile}
             activeOpacity={0.7}
-            onPress={() => navigation.navigate('ProfileDetail', { profile: match })}
+            onPress={() => navigation.navigate('ProfileDetail', { profile: peer })}
             accessibilityRole="button"
-            accessibilityLabel={`Open ${match.name || 'profile'}`}
+            accessibilityLabel={`Open ${peer.name || 'profile'}`}
           >
-            <Image source={imageSource(match.images?.[0])} style={styles.headerAvatar} />
+            <Image source={imageSource(peer.images?.[0])} style={styles.headerAvatar} />
+            {/* Name over status only — the design's thread header
+                carries no verification badge; it lives on the person
+                detail this block opens. */}
             <View style={{ minWidth: 0, flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={styles.headerName} numberOfLines={1}>{match.name || 'Chat'}</Text>
-                {(match.verified || match.isVerified) && (
-                  <Ionicons
-                    name="shield-checkmark-outline"
-                    size={14}
-                    color={colors.accentDark}
-                    style={{ marginLeft: 4 }}
-                    accessibilityLabel="Verified profile"
-                  />
-                )}
-              </View>
+              <Text style={styles.headerName} numberOfLines={1}>{peer.name || 'Chat'}</Text>
               <Text style={styles.headerStatus}>{statusText}</Text>
             </View>
           </TouchableOpacity>
@@ -711,7 +703,7 @@ export default function ChatScreen({ navigation, route }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, isDark) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -764,10 +756,11 @@ const getStyles = (colors) => StyleSheet.create({
     justifyContent: 'center',
   },
 
+  // Design: padding 16px 14px, 8px between rows.
   messagesList: {
     paddingHorizontal: 14,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 16,
     gap: 8,
   },
 
@@ -813,22 +806,33 @@ const getStyles = (colors) => StyleSheet.create({
     alignSelf: 'flex-start',
     alignItems: 'flex-start',
   },
+  // --shadow-sm. The dark palette raises it to rgba(0,0,0,.35) —
+  // a 6% shadow is invisible against the dark page.
   bubble: {
     paddingVertical: 9,
     paddingHorizontal: 13,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
+    shadowOpacity: isDark ? 0.35 : 0.06,
     shadowRadius: 2,
     elevation: 1,
   },
+  // Both bubbles carry the same 1px border box (the design gives mine
+  // `border:1px solid transparent`) so a pair of bubbles with the same
+  // text measures the same width.
   myBubble: {
     backgroundColor: colors.ssInk,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'transparent',
     borderRadius: 9,
     borderBottomRightRadius: 2,
   },
+  // colors.creamDark is NOT the design's --color-surface in dark mode
+  // (#10161D, darker than the page) — inputBg is the token that holds
+  // #F4F1EA / #1F2833, which is what the design's surface resolves to
+  // in both palettes.
   theirBubble: {
-    backgroundColor: colors.creamDark,
+    backgroundColor: colors.inputBg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.separator,
     borderRadius: 9,

@@ -51,7 +51,6 @@ function awsConfigured(): boolean {
 
 /**
  * Resolve the authenticated User row from the Authorization header.
- * Same pattern stripe-create-checkout uses.
  */
 async function authenticatedUser(req: Request, supabase: any): Promise<{ authId: string; userId: string } | null> {
   const auth = req.headers.get("Authorization") || "";

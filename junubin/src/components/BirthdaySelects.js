@@ -14,7 +14,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, Typography, FontFamily } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 import WheelPicker from './WheelPicker';
 import {
   daysInMonth,
@@ -220,45 +220,57 @@ const getStyles = (colors, isDark) =>
     },
     sheet: {
       backgroundColor: isDark ? colors.surface : colors.cardBg,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingHorizontal: 16,
-      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.separator,
+      paddingHorizontal: 18,
+      paddingTop: 14,
     },
     sheetHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingBottom: 8,
+      minHeight: 48,
+      paddingBottom: 10,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.separator,
     },
     sheetTitle: {
-      ...Typography.bodySemibold,
+      fontFamily: FontFamily.heading,
+      fontSize: 18,
+      letterSpacing: 1.1,
       color: colors.black,
+      textTransform: 'uppercase',
     },
     cancelText: {
-      ...Typography.body,
+      fontFamily: FontFamily.semibold,
+      fontSize: 13.5,
       color: colors.gray500,
     },
     setText: {
-      ...Typography.bodySemibold,
-      color: colors.accent,
+      fontFamily: FontFamily.headingBold,
+      fontSize: 14,
+      letterSpacing: 1.1,
+      color: colors.gold || colors.accent,
+      textTransform: 'uppercase',
     },
     setTextDisabled: {
       color: colors.gray400,
     },
     wheels: {
       flexDirection: 'row',
-      paddingVertical: 8,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.separator,
     },
     ageHint: {
-      ...Typography.caption,
+      fontFamily: FontFamily.medium,
+      fontSize: 13,
+      lineHeight: 18,
       color: colors.gray500,
       textAlign: 'center',
-      paddingTop: 4,
+      paddingTop: 10,
     },
     ageHintWarn: {
-      color: colors.accent,
+      color: colors.error || colors.accent,
     },
   });

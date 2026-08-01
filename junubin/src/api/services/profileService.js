@@ -1,5 +1,6 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase } from '../../config/supabase';
+import { visiblePhotos } from '../../utils/visiblePhotos';
 
 function firstRelation(value) {
   if (Array.isArray(value)) return value[0] || null;
@@ -51,7 +52,7 @@ export async function getMyProfile() {
   return {
     ...data,
     profile: firstRelation(data?.profile),
-    photos: Array.isArray(data?.photos) ? data.photos : [],
+    photos: visiblePhotos(data?.photos),
   };
 }
 
@@ -73,9 +74,8 @@ export async function updateProfile(updates) {
   const USER_KEYS = ['displayName', 'countryCode', 'city', 'latitude', 'longitude', 'dateOfBirth', 'gender'];
   const PROFILE_KEYS = [
     'bio', 'lookingFor', 'interests', 'stickers', 'education', 'job', 'school',
-    'ethnicity', 'heightCm', 'pronouns', 'children', 'sexuality', 'datingIntentions',
-    'relationshipType', 'currentlyInto', 'promptQuestion', 'promptAnswer',
-    'minPreferredAge', 'maxPreferredAge', 'maxDistanceKm', 'showMe', 'lookingForGender',
+    'ethnicity', 'heightCm', 'pronouns',
+    'currentlyInto', 'promptQuestion', 'promptAnswer',
     'profileComplete', 'accountPurpose', 'eulaAcceptedAt', 'eulaVersion',
     // ── surveyCompletedAt — load-bearing for the eligibility gate ──
     // This was previously omitted from PROFILE_KEYS, which silently
@@ -83,7 +83,7 @@ export async function updateProfile(updates) {
     // "Tell us a little more" popup kept firing forever — the
     // eligibility check reads `profile?.surveyCompletedAt`, and
     // since the column never received the value, every subsequent
-    // dating action re-fired the survey nudge even though the user
+      // old action re-fired the survey nudge even though the user
     // had filled in everything. Audit fix: add the key here so the
     // ProfileSetup save actually persists the completion timestamp,
     // and the popup retires as soon as the user finishes the flow.
@@ -103,7 +103,10 @@ export async function updateProfile(updates) {
     // Social-pivot profile fields (00047). `locationVisibility`
     // supersedes `shareLocation` — the DB trigger keeps the two in
     // sync in whichever direction the client wrote, so an old build
-    // sending only `shareLocation` still works.
+    // sending only `shareLocation` still works. Accepted values are
+    // 'off' | 'city' | 'coarse' | 'mutuals' (00049); this is a
+    // pass-through allowlist, so the CHECK constraint is what rejects
+    // anything else.
     'languages', 'openTo', 'profession',
     'locationVisibility', 'locationVisibleUntil', 'directoryVisible',
   ];
@@ -160,7 +163,7 @@ export async function updateProfile(updates) {
   const normalized = {
     ...updated,
     profile: firstRelation(updated?.profile),
-    photos: Array.isArray(updated?.photos) ? updated.photos : [],
+    photos: visiblePhotos(updated?.photos),
   };
   const updatedProfile = normalized.profile;
   const missingPersistedFields = [];
@@ -468,7 +471,7 @@ export function normalizeProfile(apiUser) {
     verified: apiUser.isVerified || false,
     bio: profile.bio || '',
     about: profile.bio || '',
-    lookingFor: profile.lookingFor || profile.datingIntentions || '',
+    lookingFor: profile.lookingFor || '',
     job: profile.job || '',
     school: profile.school || '',
     images: photos,
@@ -477,24 +480,21 @@ export function normalizeProfile(apiUser) {
     currentlyInto: profile.currentlyInto || [],
     height,
     ethnicity: profile.ethnicity || '',
-    intention: profile.datingIntentions || '',
     pronouns: profile.pronouns || '',
     education: profile.education || '',
-    children: profile.children || '',
     gender: apiUser.gender,
-    // ── Social-pivot fields (00047) ──────────────────────────────────
-    // Purely additive — every field above keeps its existing meaning
-    // and nullability so the dating-era screens are untouched. The
-    // directory / connection surfaces read these.
     city: apiUser.city || '',
     countryCode: apiUser.countryCode || '',
     languages: Array.isArray(profile.languages) ? profile.languages : [],
     openTo: Array.isArray(profile.openTo) ? profile.openTo : [],
     profession: profile.profession || '',
     lastActiveAt: apiUser.lastActiveAt || null,
-    // 'off' | 'city' | 'coarse'. Defaults to 'off' when the row
-    // pre-dates the migration or the caller didn't select the column —
-    // failing closed is the right default for a location field.
+    // 'off' | 'city' | 'coarse' | 'mutuals' (00049). Defaults to 'off'
+    // when the row pre-dates the migration or the caller didn't select
+    // the column — failing closed is the right default for a location
+    // field. Note that `directory` reports 'mutuals' as 'off' to
+    // callers outside the mutual-follow audience, so this value is
+    // "what I may see", not necessarily the owner's raw setting.
     locationVisibility: profile.locationVisibility || 'off',
     _raw: apiUser,
   };

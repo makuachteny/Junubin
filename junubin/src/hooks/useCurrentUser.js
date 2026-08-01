@@ -10,9 +10,6 @@ const MODE_KEY = '@junubin_mode';
 // Neutral defaults for a brand-new account. Previously these came
 // from the deleted `mockCurrentUser` fixture; now they live here so
 // the hook has zero dependency on demo data.
-const DEFAULT_LOOKING_FOR = 'Everyone';
-const DEFAULT_AGE_RANGE   = [18, 99];
-const DEFAULT_DISTANCE_MI = 50; // ~80km
 const DEFAULT_AVATAR      = null;
 
 // Empty placeholder returned to consumers when no User row exists yet
@@ -27,37 +24,14 @@ const EMPTY_CURRENT_USER = Object.freeze({
   images: [],
   bio: '',
   preferences: Object.freeze({
-    mode: 'Social',
-    showMe: true,
-    lookingFor: DEFAULT_LOOKING_FOR,
-    ageRange: DEFAULT_AGE_RANGE,
-    distance: DEFAULT_DISTANCE_MI,
+    mode: 'Community',
   }),
-  boosts: 0,
-  superLikes: 0,
-  notes: 0,
 });
 
-// Resolve the user's preferred app mode (Dating vs Social).
-//
-// Source-of-truth order:
-//   1. Profile.appMode — explicit, cross-device, user-set in Settings.
-//   2. Profile.accountPurpose — set during ProfileSetup, also cross-device.
-//   3. AsyncStorage @junubin_mode — local fallback for legacy installs.
-//   4. 'Social' as a safe default.
-const resolveMode = (user, storedMode) => {
-  const appMode = user?.profile?.appMode;
-  if (appMode === 'social') return 'Social';
-  if (appMode === 'dating') return 'Dating';
-  const purpose = user?.profile?.accountPurpose;
-  if (purpose === 'socialize' || purpose === 'social') return 'Social';
-  if (purpose === 'dating' || purpose === 'date') return 'Dating';
-  if (purpose === 'both') {
-    return storedMode === 'Dating' || storedMode === 'Social' ? storedMode : 'Social';
-  }
-  if (storedMode === 'Social' || storedMode === 'Dating') return storedMode;
-  return 'Social';
-};
+// The product has one active community mode. Old stored mode values are
+// ignored once loaded; keeping the read path lets older installs migrate
+// without changing downstream currentUser shape.
+const resolveMode = () => 'Community';
 
 /**
  * Core hook replacing all direct `currentUser` imports.
@@ -68,8 +42,8 @@ export function useCurrentUser() {
   const { user, session, refreshUser: authRefresh } = useAuth();
   const [storedMode, setStoredMode] = useState(null);
 
-  // Read the persisted mode once on mount so HomeScreen reflects what
-  // the user chose during ProfileSetup.
+  // Read the old persisted mode key once so older installs keep the same
+  // currentUser shape while normalizing to Community.
   useEffect(() => {
     let cancelled = false;
     AsyncStorage.getItem(MODE_KEY).then((value) => {
@@ -94,23 +68,10 @@ export function useCurrentUser() {
     if (!session || !user) return null;
     const normalized = profileService.normalizeProfile(user);
     if (normalized) {
-      const p = user.profile || {};
       normalized.preferences = {
         mode: resolveMode(user, storedMode),
-        showMe: p.showMe ?? true,
-        lookingFor: p.lookingForGender || DEFAULT_LOOKING_FOR,
-        ageRange: [
-          p.minPreferredAge ?? DEFAULT_AGE_RANGE[0],
-          p.maxPreferredAge ?? DEFAULT_AGE_RANGE[1],
-        ],
-        distance: p.maxDistanceKm
-          ? Math.round(p.maxDistanceKm / 1.6)
-          : DEFAULT_DISTANCE_MI,
       };
       normalized.avatar = normalized.images?.[0] || DEFAULT_AVATAR;
-      normalized.boosts = 0;
-      normalized.superLikes = 0;
-      normalized.notes = 0;
     }
     return normalized;
   }, [user, session, storedMode]);

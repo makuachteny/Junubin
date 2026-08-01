@@ -1,483 +1,111 @@
 # JuNubin Social Platform Redesign Plan
 
-Date: 2026-07-31
+Date: 2026-08-01
 
 ## Goal
 
-Pivot JuNubin from a dating-first app into a lean South Sudanese connection platform where people can locate, discover, follow, and message each other across the diaspora.
+JuNubin is a free South Sudanese social networking app. It helps people locate,
+discover, follow, send message requests, and chat with other South Sudanese
+people across the diaspora.
 
-The new product should answer one clear question: "Where are my South Sudanese people near me or in the city I care about?"
+The product should answer one question:
 
-## Research Notes
+"Where are my South Sudanese people near me or in the city I care about?"
 
-- Supabase should remain the backend for auth, database, storage, realtime, and edge functions.
-- Supabase Postgres can support the lean product with the existing schema plus cleanup migrations for follows, message requests, text conversations, and location visibility.
-- Supabase Realtime should be used only for text messages, message request updates, presence, and notifications.
-- Google Play treats device location as personal and sensitive user data. Location collection requires clear disclosure, affirmative consent, secure handling, privacy policy coverage, Data Safety declarations, and account/data deletion.
-- Apple privacy labels distinguish precise location from coarse location. Apple says latitude/longitude with three or more decimals is precise location; if precise location is immediately coarsened before storage, disclose coarse location.
-- UNHCR reported 2,457,830 South Sudanese refugees and asylum-seekers as of 2026-06-30, concentrated in Uganda, Sudan, Ethiopia, Kenya, and DRC. That supports a diaspora/community discovery product with strong East Africa plus global diaspora assumptions.
+## Product Rules
 
-Sources:
+- The app is 100% free.
+- There are no premium tiers.
+- There are no paid subscriptions.
+- There are no paid consumables.
+- There are no boosts, coins, paid Super Likes, paid visibility, paid
+  verification, paid messaging gates, or checkout screens.
+- Stripe, RevenueCat, Flutterwave, App Store in-app purchases, and Google Play
+  billing are not launch requirements.
+- Any older payment material is retired historical context, not current product
+  direction.
 
-- Supabase Realtime: https://supabase.com/docs/guides/realtime
-- Supabase Row Level Security: https://supabase.com/docs/guides/database/postgres/row-level-security
-- Google Play User Data policy: https://support.google.com/googleplay/android-developer/answer/10144311
-- Apple App Privacy Details: https://developer.apple.com/app-store/app-privacy-details/
-- UNHCR South Sudan situation data: https://data.unhcr.org/en/situations/southsudan
+## Primary Surfaces
 
-## Current Codebase Read
+| Surface | Purpose |
+|---|---|
+| Nearby | Map/list of people who opted into location visibility. |
+| Directory | Search and filter the diaspora directory. |
+| Chats | Text conversations and message requests. |
+| Profile | Identity, photos, verification, privacy, and settings. |
 
-This is an Expo/React Native app backed by Supabase Auth, Supabase Postgres, Supabase Storage, Realtime, and Edge Functions.
-
-Useful pieces to keep:
-
-- Existing React Native shell, navigation, theme, auth context, offline cache, push notifications, reporting/blocking, profile photos, text messages, follow graph, and `PeopleMap`.
-- Existing `Follow` service, profile screens, chat screens, and map/discovery components. These are closer to the desired product than the swipe/match layer.
-- Existing moderation, block, account-delete, Sentry, PostHog hooks, and store submission docs.
-
-Dating pieces to remove or rewrite:
-
-- `Swipe`, `Match`, `Likes`, `Super Like`, `Rewind`, dating intent, sexual preference, "who do you want to date", "children", match celebration, match-only chat language, match missions, "see who likes you", daily like limits, and romance-scam copy that assumes dating.
-- The Home tab currently says "Connect" but is still a swipe deck. It should become a map/directory surface.
-- Payment products are still built around dating mechanics: Super Likes, Spotlights, likes visibility, unlimited likes, and whispers.
-- Posts, stories, reels, groups, games, and event-style community features are now out of scope and should be removed from primary navigation.
-- Calls, video, live rooms, Daily.co, voice notes, and audio/video chat features are now out of scope. Chat should be text-only.
-
-## Product Redesign
-
-### Primary Experience
-
-Replace the swipe deck with a location-first social home:
-
-- Map view: nearby South Sudanese users who opted in to visibility.
-- List view: the same results as cards for users who do not want a map.
-- City search: find people by city, state, country, university, workplace, or community hub.
-- Diaspora filters: country of residence, city, tribe/background, languages, interests, profession, school, faith/community org, arrival status, and verification.
-- Activity status: online, recently active, open to meeting, open to helping.
-
-### Connection Model
-
-Use social graph primitives instead of dating primitives:
-
-- Follow: one-way public connection.
-- Friend: mutual follow or accepted connection request.
-- Message request: a permissioned first contact path to reduce spam.
-- Introductions: allow trusted mutuals to introduce two people.
-
-### Key Screens
-
-- Home: map/list toggle, city search, nearby people.
-- Directory: searchable South Sudanese diaspora directory with privacy controls.
-- Messages: text conversations and message requests.
-- Profile: identity, city, background, languages, interests, "open to" badges, verification, privacy.
-- Settings: location visibility, blocked users, data deletion, notification controls, privacy choices.
-
-## Backend Direction For Supabase
-
-Recommended target architecture:
+## Current Architecture Direction
 
 - Mobile app: Expo/React Native.
 - Auth: Supabase Auth.
 - Database: Supabase Postgres.
 - Storage: Supabase Storage for profile photos.
-- Realtime: Supabase Realtime for text messages, message requests, presence, and notifications.
-- Edge Functions: keep Supabase Edge Functions for discovery, payments, moderation, push, account delete, and any server-only logic.
-
-Database changes:
-
-- Create `users`, `profiles`, `locations`, `location_visibility`, `follows`, `friend_requests`, `message_requests`, `conversations`, `conversation_members`, `messages`, `reports`, `blocks`, `subscriptions`, and `payments`.
-- Store raw location only when necessary and access-controlled. Public discovery should use coarse location buckets or city-level location.
-- Add audit fields: `created_at`, `updated_at`, `deleted_at`, `moderation_status`, `visibility`, `last_active_at`.
-
-Supabase changes:
-
-- Keep `src/config/supabase.js` as the client entry point.
-- Keep or simplify `discover` and `discover-nearby` Edge Functions for people finding.
-- Add a message-request table/RPC or Edge Function so strangers cannot spam direct text chats.
-- Remove or stop calling `daily-create-room`, call services, live room code, and voice/audio upload paths.
-- Stop deploying or using call/live Edge Functions.
-
-## Specific Code Changes To Plan
-
-High priority removals:
-
-- Remove `LikesScreen` from bottom tabs and replace it with `Directory`.
-- Remove or hide Community, Stories, Reels, Posts, Groups, Events, Interactivity Hub, and Games routes from primary navigation.
-- Remove or hide Call, live/video, Daily.co, voice-note, and audio-message routes/components/hooks from primary navigation and chat.
-- Remove swipe deck from `HomeScreen`; keep `PeopleMap` and redesign it as the first-class home surface.
-- Remove `ActionButtons`, `MatchCelebrationOverlay`, `HeartBurstOverlay`, `BoostPulseRing`, Super Like purchase surfaces, and dating-only profile fields.
-- Rename `matchesService` to `conversationService` and decouple conversations from `Match`.
-- Replace `recordSwipe()` with `followUser()`, `requestConnection()`, and `sendMessageRequest()`.
-- Replace `Match` and `Swipe` tables with social graph tables, or keep legacy tables read-only during migration and stop writing to them.
-
-High priority rewrites:
-
-- Rewrite onboarding to ask:
-  - name
-  - birthdate/18+ check
-  - gender optional
-  - country/city
-  - South Sudanese background/tribe optional
-  - languages
-  - interests
-  - "open to": friends, business, mentorship, housing help, student network, cultural connection
-  - location visibility opt-in
-- Rewrite chat gating:
-  - mutual friends can chat directly
-  - non-friends send message requests
-  - blocked/reported users cannot contact each other
-  - chat is text-only
-- Rewrite payments around social value, not dating advantage.
-
-## Monetization
-
-Avoid paywalling basic connection. The trust of the community matters more than squeezing first-contact mechanics.
-
-Better revenue options:
-
-- Premium member plan:
-  - advanced city/diaspora filters
-  - profile boost in directory
-  - "open to help" priority listing
-  - read receipts or enhanced inbox controls
-- Business/community directory:
-  - paid listings for South Sudanese-owned businesses
-  - verified professional profiles
-  - job/housing/roommate profile badges or directory filters
-- Donations:
-  - support community moderation
-  - sponsor free verification for students/refugees
-- Ads only if tightly controlled:
-  - local South Sudanese businesses and services
-  - no location-targeted ad resale or precise location sharing
-
-Payment features to remove or replace:
-
-- Remove Super Likes.
-- Remove unlimited likes.
-- Remove "see who likes you".
-- Replace Spotlights with "Featured profile" or "Featured business".
-- Replace Coins with credits only if they buy concrete discovery/chat utility, such as directory boosts.
-- Keep Stripe and RevenueCat, but rebuild product IDs and copy so app review sees a social networking product, not dating mechanics.
-
-## Privacy And Safety Requirements
-
-Location must be explicit opt-in.
-
-Required controls:
-
-- Appear on map: off by default.
-- City-only mode: show city but not map pin.
-- Coarse location mode: show approximate area only.
-- Temporary visibility: visible for 1 hour, 8 hours, or until manually disabled.
-- Hide from specific people.
-- Block, report, mute, and remove follower.
-- Account deletion in-app and from a web URL.
-- Clear disclosure before requesting location permission.
-
-Implementation rule:
-
-- Store the minimum viable location. Prefer city/geohash/coarse bucket for public discovery. Keep precise device location on-device unless a feature truly requires sending it.
-
-## Launch Plan
-
-Phase 1: Product pivot foundation
-
-- Freeze dating feature development.
-- Rename the product internally from dating/community to social/community.
-- Replace Home swipe deck with Map/List directory.
-- Replace Likes tab with Directory.
-- Remove or hide posts, stories, reels, groups, events, and games.
-- Update onboarding and profile fields.
-- Remove dating copy from README, docs, store metadata, privacy policy, and terms.
-
-Phase 2: Supabase cleanup
-
-- Keep Supabase as the backend.
-- Add cleanup migrations for the lean social model.
-- Keep or simplify Edge Functions for profiles, nearby search, follows, message requests, text chat, reports, payments, moderation, push, and account deletion.
-- Stop writing to dating tables.
-- Stop deploying or calling call/video/live functions.
-
-Phase 3: Payments
-
-- Redesign products around premium discovery, chat utility, and featured listings.
-- Remove Super Like/Super Like bundles from `products.js`, Stripe shared products, Flutterwave product maps, RevenueCat offerings, and UI.
-- Set real webhook secrets and redeploy payment webhooks.
-- Test every purchase grant before store submission.
-
-Phase 4: Launch readiness
-
-- Update app privacy labels and Google Data Safety for location, photos, messages, contacts if used, user content, payments, diagnostics, and account deletion.
-- Add location consent screen before requesting permissions.
-- Run full Jest suite and app smoke tests.
-- Submit first as "Social Networking", not dating.
-- Launch in focused cities first: Juba, Kampala, Nairobi, Kakuma/East Africa communities, Omaha, Dallas, Houston, Phoenix, Des Moines, Minneapolis, Melbourne, Calgary/Edmonton, London, and Cairo depending on known community density.
-
-## Biggest Gaps
-
-- The current database model is dating-centered. `Swipe`, `Match`, popularity-by-likes, and like limits are not the right foundation.
-- The current Home experience is still a dating deck despite existing social filters.
-- Existing chat and call code is coupled to matches.
-- Chat needs to become text-only and decoupled from matches.
-- Monetization is coupled to dating mechanics.
-- The app has extra feed/community surfaces such as posts, stories, reels, groups, events, and games that should be removed for the lean discovery/chat product.
-- The app has call/video/live/audio features that should be removed for the text-only product.
-- The app already requests and uses location, but the new concept makes location central, so consent, coarse storage, and privacy UX need to be first-class.
-- Existing launch docs need a full rewrite after the pivot because app category, privacy disclosures, payment SKUs, screenshots, and review narrative all change.
-
-## Recommended First Implementation Slice
-
-Build a non-dating MVP before attempting the whole migration:
-
-1. Keep Supabase temporarily.
-2. Remove dating mode from onboarding and navigation.
-3. Make `PeopleMap` plus list search the Home tab.
-4. Make Follow/Friend/Message Request the connection flow.
-5. Replace Likes tab with Directory.
-6. Remove posts, stories, reels, groups, events, games, calls, video, live rooms, voice notes, Super Likes, and swipe limits from UI.
-7. Update copy, privacy disclosure, and store category.
-8. Keep Supabase and add only the migrations/functions needed for discovery and text chat.
-
-This avoids combining a product redesign, backend migration, auth migration, and payment rebuild into one risky release.
-
----
-
-## Implementation Status — Phase 1 complete (2026-07-31)
-
-Phase 1 (the non-dating MVP on Supabase) is implemented. Supabase remains the
-backend; no Render/Postgres migration was started, per the revised direction.
-
-### Navigation
-
-Three tabs: **Nearby** (`HomeTab`), **Directory** (`DirectoryTab`), **Chats**
-(`MessagesTab`). `LikesTab` and `CommunityTab` are gone.
-
-Routes deliberately **not** registered — re-registering one is a product change,
-not a bug fix: `Community`, `CreatePost`, `PostDetail`, `CreateStory`,
-`StoriesView`, `VideoReels`, `CreateGroup`, `GroupDetail`, `InteractivityHub`,
-`GameSettings`, `Call`, `Likes`, `Elite`, `Boost`.
-
-`src/navigation/__tests__/routeTargets.test.js` fails the build if any code
-navigates to an unregistered route. That test is what keeps this list honest.
-
-### Deleted, not merely hidden
-
-Screens: Community, StoriesView, GroupDetail, InteractivityHub, CreatePost,
-PostDetail, CreateStory, CreateGroup, VideoReels, GameSettings, Call, Likes,
-Elite, Boost.
-
-Components: PostCard, StoriesRow, GameBubble/GamePickerSheet/GameResultOverlay,
-Gift{Picker,Bubble,Animation}, ChatAudioBubble, VoiceRecorder,
-VoicePrompt{Recorder,Player}, IncomingCallOverlay, MatchCelebrationOverlay,
-HeartBurstOverlay, BoostPulseRing, SpotlightCard.
-
-Services/hooks: callService, dailyService, likesService, postService,
-commentService, storyService, useIncomingCall, useDailyCall.
-
-Data/utils: games, gifts, postThemes, communityFilters, gameEngine, postComposer,
-mockStories. Edge function `daily-create-room`.
-
-### Backend (Supabase)
-
-`00047_social_pivot.sql` adds `Profile.languages / openTo / profession /
-locationVisibility / locationVisibleUntil / directoryVisible`, the
-`MessageRequest` table with RLS, and the `accept_message_request()` RPC. A
-trigger keeps the legacy `Profile.shareLocation` boolean in sync both ways so an
-older client can't silently break. New `directory` Edge Function;
-`discover-nearby` now filters on `locationVisibility`.
-
-The legacy `Swipe` and `Match` tables are intentionally **not** dropped —
-`matchesService` still reads `Match` to build the inbox, and
-`accept_message_request()` mints a `Match` row because `Conversation.matchId` is
-`NOT NULL`. Nothing writes a swipe. Decommissioning those tables is its own
-migration, after the inbox is ported off `Match`.
-
-### Monetization
-
-**None.** The app is free end to end. `PAYMENTS_ENABLED` and `SHOW_PAYMENTS_UI`
-are permanently `false`, entitlement helpers are shims returning `true`, and the
-retired product IDs live in `RETIRED_PRODUCT_IDS` so historical receipts still
-resolve. The Monetization section above is superseded and kept only as a record
-of what was considered.
-
-### Location privacy
-
-Three separate concepts, deliberately not collapsed: disclosure accepted
-(device flag) → OS permission → `Profile.locationVisibility` (`off` by default /
-`city` / `coarse`). `PeopleMap` renders `LocationDisclosure` and will not touch
-`expo-location` until consent is recorded; `city`-only members never get a map
-pin. Covered by `src/screens/__tests__/discoverySurfaces.test.js`.
-
-### Update 2026-07-31 (later): text-only chat completed
-
-- ChatScreen is text-only end to end: photo sending, stickers, emoji
-  reactions and the plus-button action row are gone (with
-  `ChatImageBubble` / `ChatReactionPicker` deleted, `MessageReaction`
-  realtime subscription removed). Legacy non-text rows render an
-  "Attachment no longer supported" placeholder via
-  `UNSUPPORTED_MESSAGE_TYPE` from chatService.
-- `expo-av` removed from package.json and plugins (nothing records or
-  plays audio). `expo-image-picker` remains for profile photos only,
-  with `microphonePermission: false`.
-- Permission posture locked in by `appConfig.platform.test.js`: no
-  NSMicrophoneUsageDescription, no RECORD_AUDIO, no
-  ACCESS_FINE_LOCATION (coarse only), UIBackgroundModes =
-  `['remote-notification']` only.
-- **Temporary visibility is implemented**: Settings shows
-  "Stay visible for" (1 hour / 8 hours / until I turn it off) whenever
-  visibility isn't Hidden; writes `Profile.locationVisibleUntil`. An
-  expired window is reconciled back to Hidden + null on next visit
-  (matching the server, which already hides expired windows). Covered
-  by `src/screens/__tests__/temporaryVisibility.test.js`.
-- `useRealtime` inbox subscription replaced the `Match` subscription
-  (`onInboxActivity`: Message inserts + MessageRequest insert/update);
-  the deprecated `onMatchCreated` alias is removed and MessagesScreen
-  migrated.
-
-### Update 2026-07-31 (later still): dating-leftover audit swept
-
-A full-source audit against this plan found and fixed:
-
-- **ProfileCard** was still the swipe-deck card — a horizontal flick on
-  ProfileView flung the card off-screen with no way back, and it
-  rendered LIKE/NOPE stamps, a SPOTLIGHT badge and a dating-intent
-  pill. Now a static tap-to-page/tap-to-expand card; pill fallback is
-  `status` → first `openTo` badge. Locked by
-  `src/components/__tests__/ProfileCard.test.js`.
-- **Dating fields off live surfaces**: ProfileDetail's intention /
-  "children" pills, EditProfile's Height picker (+ `heightCm` in the
-  save path), and `datingIntentions`/height in profileCompleteness
-  (weights redistributed to ethnicity/interests/openTo, which people
-  actually search on).
-- **Copy**: FAQ "How does matching work?" → follow/message-request
-  explanation; Terms/Privacy no longer promise posts, microphone,
-  precise location, payments processors or "finding a match";
-  Notifications, PreferenceSelect, FindFriends match-copy reworded.
-- **Chat scam banner** now routes to the Safety page (`pageKey`, not
-  the ignored `topic` param).
-- **Demo data**: roster stripped of `intention`/`lookingForGender`/
-  `children`; "we matched" chat lines reworded; `mockPosts`/
-  `mockComments`/likes-era fields deleted.
-- **Dead code deleted**: FilterBar (the last intact dating filter
-  taxonomy), ActionButtons, CoinPurchaseSheet, UpgradeLimitModal,
-  PaymentMethodSelector, Stripe/Flutterwave checkout components,
-  GraffitiSwipeCard, spotlightScheduler, discoverService's
-  swipe/like-limit exports, eligibility's DATING_ACTIONS/tier/balance
-  gates and their unreachable REASON_COPY, offlineQueue's swipe kind,
-  SWIPE/MATCH analytics events, dating steps in App.js deep-link
-  allow-list.
-
-### Not done / next
-
-- **Dating/Social mode axis** — a vestigial `mode`/`appMode` axis
-  still threads through PeopleMap (`mode` param), MessagesScreen
-  (mode-aware sort), useCurrentUser and AccessibilitySurveyScreen.
-  No UI sets it any more; collapse to single social mode in one
-  dedicated pass (touches the discover-nearby request contract).
-- **Hide from specific people** — not implemented.
-- **`matchesService` → `conversationService`** rename and decoupling from
-  `Match`, then dropping `Swipe`/`Match`.
-- **Store metadata**: `docs/app-store-submission.md` and
-  `docs/production-readiness-2026-05-27.md` still describe the dating product
-  (including a 17+ "dating app" age rating). Rewrite before submitting.
-- Verified-badge, saved-search and city-alert ideas are unbuilt and unfunded.
-
----
-
-## Industry redesign — COMPLETE (2026-08-01, full pass)
-
-Every screen in the claude.ai/design "JuNubin Redesign" prototype
-(`JuNubin Redesign.dc.html`) is now implemented, and every surface not in
-that prototype is deleted. Suite: 38 suites / 268 tests green; iOS bundle
-exports.
-
-**Foundation.** `theme/palettes.js` remapped to the design's warm-paper
-(`#FDFCFA` / `#F4F1EA`) and deep-ink (`#161D26` / `#1F2833`) grounds with
-the steel-blue accent (`#0F8FD6` / `#4DB4EF`), plus a flag token system:
-`ssInk / ssRed / ssGreen / ssGold / ssBlue`, their `…Tint` fills and
-`…Dark` readable-on-tint steps (which flip lighter in dark mode), and
-`onGold` / `onInk`. Tab bar is flag-ink in both themes with a gold active
-tab and red badge. `Button` variant `gold` is the primary CTA (gold,
-ink text, condensed caps, letterspaced) and lives inside a `Blueprint`
-frame wherever the design shows one.
-
-**Screens implemented:** Welcome (flag mark, gold-highlighted headline,
-bottom flag stripe) · Phone → SMS OTP (prefix cycler, six code boxes,
-in-app keypad, auto-verify) · 5-step onboarding (flag-colored segments,
-`BirthdaySelects`, truthful visibility cards) · Nearby (full-bleed map,
-floating chrome, gold pin/YOU markers, selected-pin card, list mode) ·
-Directory (blueprint cards, `NO. 01 — CITY` kickers, debounced search,
-facet chips) · Chats-as-home (flag kicker, Messages|Requests segments,
-gold unread bar, red count pill, inline request cards) · Person detail
-(340pt hero, follow/message two-state, OPEN TO, ABOUT grid,
-`selfPreview`) · Chat thread (ink/surface bubbles, day dividers,
-text-only notice, gold send) · Profile (gold-ringed avatar, strength
-card with tri-color bar, 5-item checklist) · Edit profile (background /
-languages / prompt + gold SAVE) · Settings (flattened, six in-screen
-sub-views) · Notifications feed.
-
-**Deleted (not in the design):** `FindFriendsScreen`, `FollowListScreen`,
-`ReferralScreen`, `AccessibilitySurveyScreen`, `ProfileViewScreen`,
-`MessageRequestsScreen` (requests are inline in Chats), `ProfileCard`,
-`SurveyNudgeModal`, `GraffitiAccents`, `referralService`, and the
-`modeFiltering` test for the long-gone swipe deck. Their routes, deep
-links (`message-requests`, `accessibility-survey`) and push-tap targets
-are scrubbed; `useEligibility` keeps a null `nudge` slot so call sites
-are unchanged. `EditProfileScreen` went from ~2,190 lines to the
-design's three fields; `profileCompleteness` now has exactly the
-design's five items at 20% each.
-
-### Known gaps after this pass
-
-- **Phone sign-in needs an SMS provider.** The flow is the design's
-  phone+OTP and AuthContext already supports Supabase's sms path, but
-  production sign-in requires a configured provider (e.g. Twilio) in the
-  Supabase project. Until then only the email path would work, and it
-  is no longer surfaced in the UI.
-- **Notifications feed has no data source.** No notifications table or
-  service exists (delivery is push-only), so the redesigned feed renders
-  its empty state and the bell dot proxies pending requests.
-- **Per-category notification prefs are device-local** (AsyncStorage);
-  nothing server-side reads them yet.
-- **Deliberate deviations from the prototype:** the ToS/Privacy
-  acceptance row stays on the phone step (Apple App Review requirement);
-  onboarding's middle visibility option is "City only" rather than the
-  prototype's unbacked "Mutual follows only"; background is single-select
-  because `Profile.ethnicity` is one column; Chat keeps its ⋯ safety
-  menu; Directory city chips are a static set (no facet endpoint).
-
-## Industry redesign — status (2026-08-01, first pass)
-
-Visual system from claude.ai/design "Comprehensive Mobile App Redesign"
-(Industry: Barlow/Barlow Condensed, steel-blue accent, square blueprint
-chrome). Landed: theme palette + bundled fonts + `Blueprint` component;
-4-tab nav (Nearby/Directory/**Chats = home**/Profile); Chats screen with
-inline Requests segment; full-bleed Nearby map with floating chrome +
-selected-pin card; Directory blueprint cards; Profile tab with strength
-checklist (profileCompleteness-driven); flattened Settings; new Welcome;
-chat-thread restyle; app-wide flag-color sweep (only `data/tribes.js`
-data colors and retired payments files keep old hexes).
-
-Not yet redesigned (screens work, inherit tokens/fonts, old layout):
-SignupScreen structure (steel colors applied), ProfileSetupScreen
-(still multi-step; design's 5-step grouping pending), ProfileDetail,
-Notifications, MessageRequests restyle.
-
-## Launch flow-review + fixes (2026-08-02)
-
-End-to-end review (2 reviewer agents + full pipeline) found and fixed:
-auth resilience (User-fetch retry w/ backoff, shared in-flight fetch,
-OTP network errors no longer count as attempts), deep-link `?step=`
-now reaches ProfileSetup, and the chat loop's closing arc —
-`get_or_create_direct_conversation` RPC (00048, deployed) so "Message"
-from any profile mints/reuses a real conversation; ChatScreen refuses
-conversationless sends; offline queue gained a KEEP contract (drains
-no longer delete other chats' pending sends) + stable dedupe identity;
-read receipts live end-to-end (load, ack, broadcast subscription);
-realtime echo dedupe; chat surfaces pass real user ids (was Match ids);
-verify checklist row → PhotoVerification; own-profile preview hides
-Follow/Message; fake "Clear Chat History" removed; unreachable
-Preferences/PreferenceSelect pair deleted with routes+tests.
-Suite: 36 suites / 228 tests green; expo-doctor 18/18; iOS+Android
-release bundles export; dev server serves a full bundle.
+- Realtime: Supabase Realtime for text messages, message requests, and
+  notifications.
+- Edge Functions: Supabase Edge Functions for discovery, moderation, push,
+  safety, and account deletion.
+
+## Keep
+
+- OTP auth.
+- Profile setup and edit profile.
+- One-photo profile support.
+- Photo verification.
+- PeopleMap.
+- Directory filters.
+- Follow graph.
+- Message requests.
+- Text chat.
+- Notifications.
+- Block, report, mute, remove follower, and account deletion.
+- Location disclosure before OS permission prompt.
+- Coarse/city-level location controls.
+
+## Do Not Reintroduce
+
+- Swipe deck.
+- Likes tab.
+- Match celebration.
+- Super Likes.
+- Rewind.
+- Daily like limits.
+- "See who likes you."
+- Dating intentions.
+- Sexuality/dating preference prompts.
+- Posts, stories, reels, groups, events, games, or feeds.
+- Voice calls, video calls, live rooms, voice notes, or audio/video chat.
+- Premium plans, paid filters, paid visibility, paid verification, coins,
+  checkout screens, subscriptions, or payment-provider setup.
+
+## Launch Priorities
+
+1. Keep navigation stable across tabs, deep links, and notification routes.
+2. Make profile editing work end to end.
+3. Make photo upload and photo verification clear and reliable.
+4. Make message requests and text chat work end to end.
+5. Make notifications route to the right place.
+6. Keep directory and nearby discovery symmetric and responsive on different
+   screen sizes.
+7. Keep all documentation aligned with the free-app model.
+
+## Launch Checklist
+
+- [ ] `npm test -- --runInBand` passes.
+- [ ] OTP sign-up works in production.
+- [ ] Profile setup works.
+- [ ] Edit profile persists all editable fields.
+- [ ] One photo is enough to use the app.
+- [ ] Photo verification can be submitted.
+- [ ] Nearby discovery works after location consent.
+- [ ] Directory filters work.
+- [ ] Message requests can be sent, accepted, rejected, and opened.
+- [ ] Chat sends and receives text messages.
+- [ ] Notifications update unread state and route correctly.
+- [ ] Block, report, and account deletion work.
+- [ ] Store docs say JuNubin is free with no in-app purchases.
+
+## Historical Note
+
+Earlier planning explored paid discovery, subscriptions, Stripe, RevenueCat, and
+Flutterwave. That direction is retired. Do not use those notes as implementation
+or launch guidance while JuNubin remains free.

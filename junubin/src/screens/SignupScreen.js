@@ -25,6 +25,7 @@ import { useTheme, FontFamily } from '../theme';
 import Blueprint from '../components/Blueprint';
 import { useAuth } from '../auth';
 import { validatePhoneDigits } from '../utils/validators';
+import { devAuthBypassEnabled } from '../config/devAuth';
 import { trackEvent, AnalyticsEvents } from '../utils/analytics';
 
 // Country prefixes from the design (Kenya default, then South Sudan,
@@ -115,24 +116,50 @@ const SignupScreen = ({ navigation }) => {
   const e164 = prefix + phone.replace(/\D/g, '').replace(/^0+/, '');
   const displayNumber = `${prefix} ${phone.trim() || ''}`.trim();
 
+  const finishLogin = useCallback((result) => {
+    trackEvent(AnalyticsEvents.SIGNUP_COMPLETE, { method: 'phone' });
+    // Returning user with any profile data → AppNavigator flips to Main
+    const appUser = result?.appUser;
+    const appProfile = appUser?.profile;
+    if (
+      appProfile?.profileComplete ||
+      appProfile?.accountPurpose ||
+      appProfile?.displayName ||
+      appUser?.displayName
+    ) {
+      return;
+    }
+    // Brand-new user → profile setup
+    navigation.replace('ProfileSetup');
+  }, [navigation]);
+
   const handlePhoneChange = (text) => {
     if (inputError) setInputError('');
     setPhone(text);
   };
 
   const handleSendCode = async () => {
-    const error = validatePhoneDigits(phone);
-    if (error) {
-      setInputError(error);
-      return;
+    const devBypass = devAuthBypassEnabled();
+    if (!devBypass) {
+      const error = validatePhoneDigits(phone);
+      if (error) {
+        setInputError(error);
+        return;
+      }
     }
     setInputError('');
     try {
       Keyboard.dismiss();
       setSending(true);
-      await startOtp({ phone: e164 });
+      const authPhone = phone.replace(/\D/g, '').length ? e164 : `${prefix}000000000`;
+      await startOtp({ phone: authPhone });
       setOtp('');
       setFailedAttempts(0);
+      if (devBypass) {
+        const result = await loginWithOtp({ phone: authPhone, code: '000000' });
+        finishLogin(result);
+        return;
+      }
       setStep('otp');
     } catch (err) {
       Alert.alert('Could not send code', formatAuthError(err));
@@ -147,20 +174,7 @@ const SignupScreen = ({ navigation }) => {
     try {
       const result = await loginWithOtp({ phone: e164, code });
       setFailedAttempts(0); // success — clear the retry guard
-      trackEvent(AnalyticsEvents.SIGNUP_COMPLETE, { method: 'phone' });
-      // Returning user with any profile data → AppNavigator flips to Main
-      const appUser = result?.appUser;
-      const appProfile = appUser?.profile;
-      if (
-        appProfile?.profileComplete ||
-        appProfile?.accountPurpose ||
-        appProfile?.displayName ||
-        appUser?.displayName
-      ) {
-        return;
-      }
-      // Brand-new user → profile setup
-      navigation.replace('ProfileSetup');
+      finishLogin(result);
     } catch (error) {
       // A network drop is NOT a wrong code — counting it toward the
       // attempt lockout froze the flow for users on flaky connections
@@ -192,7 +206,7 @@ const SignupScreen = ({ navigation }) => {
     } finally {
       setVerifying(false);
     }
-  }, [verifying, loginWithOtp, e164, failedAttempts, navigation]);
+  }, [verifying, loginWithOtp, e164, failedAttempts, finishLogin]);
 
   // Keypad entry — append/delete on the otp string; auto-verify the
   // moment the sixth digit lands (design's otpTap behavior).
@@ -245,6 +259,11 @@ const SignupScreen = ({ navigation }) => {
         </TouchableOpacity>
 
         <Text style={styles.h1} accessibilityRole="header">Enter the code</Text>
+        {devAuthBypassEnabled() ? (
+          <Text style={styles.devHint}>
+            DEV BYPASS — no SMS sent, any 6 digits sign you in.
+          </Text>
+        ) : null}
         <Text style={styles.sub}>
           Sent to {displayNumber} ·{' '}
           <Text
@@ -411,15 +430,15 @@ const SignupScreen = ({ navigation }) => {
         </Text>
       </TouchableOpacity>
 
-      <Blueprint>
+      <Blueprint style={styles.ctaFrame}>
         <TouchableOpacity
-          style={[styles.cta, (sending || !eulaAccepted) && styles.ctaDisabled]}
+          style={[styles.cta, (sending || (!devAuthBypassEnabled() && !eulaAccepted)) && styles.ctaDisabled]}
           onPress={handleSendCode}
-          disabled={sending || !eulaAccepted}
+          disabled={sending || (!devAuthBypassEnabled() && !eulaAccepted)}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel="Send code"
-          accessibilityState={{ disabled: sending || !eulaAccepted }}
+          accessibilityState={{ disabled: sending || (!devAuthBypassEnabled() && !eulaAccepted) }}
         >
           <Text style={styles.ctaText}>SEND CODE</Text>
         </TouchableOpacity>
@@ -549,6 +568,9 @@ const getStyles = (colors) => StyleSheet.create({
   },
 
   // Gold CTA in a Blueprint frame (design: 54px, condensed caps)
+  ctaFrame: {
+    marginBottom: 44,
+  },
   cta: {
     height: 54,
     backgroundColor: colors.gold,
@@ -566,6 +588,14 @@ const getStyles = (colors) => StyleSheet.create({
   },
 
   // ─── OTP step ───
+  // Dev-only banner (never renders in a build — see config/devAuth).
+  devHint: {
+    marginTop: 6,
+    fontSize: 12,
+    letterSpacing: 0.6,
+    fontFamily: FontFamily.headingBold,
+    color: colors.gold,
+  },
   otpRow: {
     flexDirection: 'row',
     gap: 8,

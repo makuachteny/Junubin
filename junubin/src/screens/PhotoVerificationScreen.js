@@ -17,6 +17,8 @@ import LivenessPromptOverlay from '../components/LivenessPromptOverlay';
 import * as ImagePicker from 'expo-image-picker';
 import { promptToOpenSettings } from '../utils/permissionAlert';
 import { supabase } from '../config/supabase';
+import { useAuth } from '../auth';
+import { devAuthBypassEnabled } from '../config/devAuth';
 
 const STEPS = ['Instructions', 'Liveness', 'Capture', 'Review', 'Submitted'];
 const LIVENESS_PROVIDER = process.env.EXPO_PUBLIC_LIVENESS_PROVIDER || 'none';
@@ -25,6 +27,7 @@ export default function PhotoVerificationScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => getStyles(colors), [colors]);
+  const { user: authUser, updateUser } = useAuth();
   const [step, setStep] = useState(0);
   const [photo, setPhoto] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +52,24 @@ export default function PhotoVerificationScreen({ navigation }) {
       );
     }
   }, [navigation]);
+
+  const handleContinue = useCallback(() => {
+    if (devAuthBypassEnabled()) {
+      updateUser({
+        ...(authUser || {}),
+        isVerified: true,
+        verified: true,
+      });
+      setStep(4);
+      return;
+    }
+    // Skip the liveness step entirely while the provider env var is
+    // unset AND no Amplify SDK is installed — keeps the flow on the
+    // legacy "selfie only" path so existing testers aren't blocked on
+    // the scaffold. Once you flip EXPO_PUBLIC_LIVENESS_PROVIDER, the
+    // step engages.
+    setStep(LIVENESS_PROVIDER === 'none' ? 2 : 1);
+  }, [authUser, updateUser]);
 
   const handleCapture = async () => {
     try {
@@ -171,15 +192,7 @@ export default function PhotoVerificationScreen({ navigation }) {
               variant="primary"
               size="lg"
               fullWidth
-              onPress={() => {
-                // Skip the liveness step entirely while the provider
-                // env var is unset AND no Amplify SDK is installed —
-                // keeps the flow on the legacy "selfie only" path so
-                // existing testers aren't blocked on the scaffold.
-                // Once you flip EXPO_PUBLIC_LIVENESS_PROVIDER, the
-                // step engages.
-                setStep(LIVENESS_PROVIDER === 'none' ? 2 : 1);
-              }}
+              onPress={handleContinue}
             />
           </View>
         );

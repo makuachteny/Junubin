@@ -1,8 +1,9 @@
 // JuNubin — Profile Completeness Calculator
 //
 // Drives the Profile tab's PROFILE STRENGTH card. The checklist is
-// exactly the five items from the redesign mock — each worth an equal
-// share, so the percent is always `done / 5`, the same math the design
+// exactly the SIX items from the redesign mock, in the mock's order —
+// each worth an equal share, so the percent is always `done / 6`, the
+// same `Math.round(strengthDone / strengthTotal * 100)` the design
 // prototype uses. ProfileScreen renders `missing` as the un-checked
 // rows, so the percent and the checks can never disagree.
 //
@@ -10,6 +11,8 @@
 // .isVerified) or the normalized shape from useCurrentUser (.images /
 // .verified) — each field's `get` resolves both, because callers pass
 // `currentUser._raw || currentUser`.
+const nonEmpty = (v) => typeof v === 'string' && v.trim().length > 0;
+
 const FIELDS = [
   {
     key: 'photos',
@@ -22,7 +25,7 @@ const FIELDS = [
     key: 'ethnicity',
     label: 'Add your background',
     step: 'ethnicity',
-    check: (v) => typeof v === 'string' && v.trim().length > 0,
+    check: nonEmpty,
   },
   {
     key: 'languages',
@@ -31,10 +34,23 @@ const FIELDS = [
     check: (v) => Array.isArray(v) && v.length >= 1,
   },
   {
+    // Design: `done: !!(s.meOcc.trim() || s.meSchool.trim())` — EITHER
+    // side satisfies the row. Profile.profession is occupation and
+    // Profile.education is school (see EditProfileScreen).
+    key: 'occupation',
+    label: 'Add occupation & school',
+    step: 'occupation',
+    get: (profile, user) => ({
+      profession: profile.profession ?? user.profession,
+      education: profile.education ?? user.education,
+    }),
+    check: (v) => nonEmpty(v.profession) || nonEmpty(v.education),
+  },
+  {
     key: 'promptAnswer',
     label: 'Answer a profile prompt',
     step: 'prompt',
-    check: (v) => typeof v === 'string' && v.trim().length > 0,
+    check: nonEmpty,
   },
   {
     key: 'verified',

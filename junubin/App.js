@@ -46,12 +46,11 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { StyleSheet, View, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, ActivityIndicator, Image } from 'react-native';
 import { useFonts } from 'expo-font';
 
 import { ThemeProvider, useTheme, fontAssets } from './src/theme';
 import { AccessibilityPreferencesProvider } from './src/accessibility';
-import { SubscriptionProvider, useSubscription } from './src/payments/SubscriptionContext';
 import { AuthProvider, useAuth } from './src/auth/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
 import SplashScreen from './src/screens/SplashScreen';
@@ -63,6 +62,8 @@ import { migrateLegacyStorageKeys } from './src/utils/migrateLegacyKeys';
 import { useAppStateRefresh } from './src/utils/useAppStateRefresh';
 import * as Linking from 'expo-linking';
 import * as pendingDeepLink from './src/utils/pendingDeepLink';
+
+const SPLASH_IMAGE = require('./assets/splash.png');
 
 // Deep-link map. Reachable as `junubin://<path>` (custom scheme set in
 // app.config.js → expo.scheme) and `https://junubin.app/<path>` (web /
@@ -118,6 +119,7 @@ const linkingConfig = {
     screens: {
       ProfileSetup:       { path: 'survey', parse: { step: sanitizeSurveyStep } },
       Chat:               { path: 'chat/:conversationId' },
+      MessageRequests:    'message-requests',
       Main: {
         screens: {
           HomeTab:      'home',
@@ -157,7 +159,6 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 function AppInner() {
   const { colors, isDark } = useTheme();
   const { ready: authReady, isAuthenticated, user, refreshUser } = useAuth();
-  const { refreshServerState } = useSubscription();
   const [showSplash, setShowSplash] = useState(true);
   const navigationRef = useRef(null);
   // Push notification deep-linking — only register once the user is signed in,
@@ -166,15 +167,13 @@ function AppInner() {
 
   // Multi-device staleness fix: when the app returns from background
   // after >60s, re-fetch the User row (catches profile edits made on
-  // another device, moderation status changes, etc.) and the
-  // subscription state (catches tier upgrades + consumable top-ups
-  // made on web). Cheap because both calls are single-row reads, and
+  // another device, moderation status changes, etc.). Cheap because
+  // the call is a single-row read, and
   // gated on a real idle threshold so quick context-switches don't
   // hit the network.
   useAppStateRefresh(() => {
     if (!isAuthenticated) return;
     refreshUser?.().catch(() => {});
-    refreshServerState?.().catch(() => {});
   });
 
   // The app-level incoming-call listener and its overlay were removed
@@ -218,8 +217,8 @@ function AppInner() {
 }
 
 // Kicked off at module load so the rename is in flight before React mounts;
-// providers that read AsyncStorage (SubscriptionProvider, ThemeContext, etc.)
-// only run inside <App>, which we gate on `migrationReady`.
+// providers that read AsyncStorage only run inside <App>, which we gate
+// on `migrationReady`.
 const legacyMigrationPromise = migrateLegacyStorageKeys();
 
 export default function App() {
@@ -233,7 +232,8 @@ export default function App() {
   if (!fontsLoaded || !migrationReady) {
     return (
       <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color="#FCCD12" />
+        <Image source={SPLASH_IMAGE} style={styles.loadingLogo} resizeMode="contain" />
+        <ActivityIndicator size="small" color="rgba(255,255,255,0.62)" style={styles.loadingSpinner} />
       </View>
     );
   }
@@ -244,15 +244,13 @@ export default function App() {
         <SafeAreaProvider>
           <ThemeProvider>
             <AccessibilityPreferencesProvider>
-              <SubscriptionProvider>
-                <AuthProvider>
-                  <NetworkProvider>
-                    <ScreenshotGuard>
-                      <AppInner />
-                    </ScreenshotGuard>
-                  </NetworkProvider>
-                </AuthProvider>
-              </SubscriptionProvider>
+              <AuthProvider>
+                <NetworkProvider>
+                  <ScreenshotGuard>
+                    <AppInner />
+                  </ScreenshotGuard>
+                </NetworkProvider>
+              </AuthProvider>
             </AccessibilityPreferencesProvider>
           </ThemeProvider>
         </SafeAreaProvider>
@@ -269,6 +267,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#060606',
+    backgroundColor: '#000000',
+  },
+  loadingLogo: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  loadingSpinner: {
+    position: 'absolute',
+    bottom: 84,
   },
 });

@@ -90,17 +90,12 @@ trust your instincts.
 
 ---
 
-## 6. Subscriptions and in-app purchases
+## 6. Free app; no in-app purchases
 
-[INSERT — pending payments launch. Currently SHOW_PAYMENTS_UI is off.]
-
-When in-app purchases are enabled, the following will apply:
-
-- Subscriptions auto-renew through Apple's billing system. Cancel from
-  your Apple ID → Subscriptions.
-- Refunds are governed by Apple's policy, not ours.
-- Boosts, super-likes, and whispers are consumable — once used, they
-  are not refundable.
+JuNubin is 100% free. There are no premium tiers, paid subscriptions, paid
+consumables, boosts, coins, Super Likes, paid messaging features, or in-app
+purchases. If this changes in the future, these Terms will be updated before
+any paid feature is offered.
 
 ---
 
@@ -112,7 +107,7 @@ these Terms, our Community Guidelines, or applicable law. We are not
 required to give you notice before terminating an account for a
 serious violation (e.g. illegal content, harassment, fraud).
 
-Upon termination, your profile is removed from match-making within
+Upon termination, your profile is removed from discovery within
 24 hours, and your data is deleted per our Privacy Policy.
 
 ---

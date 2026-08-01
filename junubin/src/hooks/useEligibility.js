@@ -6,10 +6,7 @@
 //   ...
 //   {nudge}    // <-- render at the bottom of the screen JSX (now null)
 //
-// Post-pivot only 'banned' and 'restricted' can block an action — the
-// dating-era reasons (survey/tier/balance/rate-limit) are gone with
-// swiping, calls and paid consumables. The survey-nudge modal and the
-// AccessibilitySurvey screen went with the redesign; `nudge` stays in
+// Only 'banned' and 'restricted' can block an action. `nudge` stays in
 // the return shape (as null) so call sites keep rendering `{nudge}`
 // without churn.
 

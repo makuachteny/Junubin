@@ -1,5 +1,5 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import React, { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import {
   View,
@@ -7,17 +7,20 @@ import {
   Platform,
   ActivityIndicator,
   Animated,
+  TouchableOpacity,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, FontFamily } from '../theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLinkTo } from '@react-navigation/native';
 import { hapticSelection } from '../utils/haptics';
 import * as pendingDeepLink from '../utils/pendingDeepLink';
 import { getProfileRecord } from '../utils/eligibility';
-import LogoMark from '../components/LogoMark';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { TabBarVisibilityProvider } from './TabBarVisibilityContext';
 // Tab-bar screens stay eager — they render immediately when the user lands on
 // `Main`. Auth-flow screens are eager too because Jest's CommonJS runtime
 // cannot resolve `import()` callbacks; React.lazy on these breaks our snapshot
@@ -52,8 +55,8 @@ const MessagesScreenSafe = withBoundary(MessagesScreen, 'messages');
 function LazyFallback() {
   return (
     <View style={styles.bootLoading}>
-      <LogoMark size={48} />
-      <ActivityIndicator size="small" color="rgba(255,255,255,0.4)" style={{ marginTop: 16 }} />
+      <Image source={SPLASH_IMAGE} style={styles.bootLogo} resizeMode="contain" />
+      <ActivityIndicator size="small" color="rgba(255,255,255,0.62)" style={styles.bootSpinner} />
     </View>
   );
 }
@@ -80,40 +83,90 @@ const SettingsInfoScreen = lazify(() => import('../screens/SettingsInfoScreen'))
 const PhotoVerificationScreen = lazify(() => import('../screens/PhotoVerificationScreen'));
 const WebViewScreen = lazify(() => import('../screens/WebViewScreen'));
 
-// ─── Routes deliberately NOT registered ───
-// JuNubin is a people-discovery + text-chat app. These screens still
-// exist on disk (some are referenced by tests, and deleting them is a
-// separate cleanup) but they are unreachable, which is the point:
-//
-//   Feed / community : CommunityScreen, CreatePost, PostDetail,
-//                      CreateStory, StoriesView, VideoReels,
-//                      CreateGroup, GroupDetail
-//   Games            : InteractivityHub, GameSettings
-//   Calls            : Call (voice/video), which is why there is no
-//                      `Call` route — chat is text-only
-//   Dating           : LikesScreen (the Likes tab is now Directory)
-//   Payments         : Elite, Boost — the app is free, nothing is sold
-//
-// If you re-register one of these, you are changing the product, not
-// fixing a bug. Talk to product first.
-
 const Tab = createBottomTabNavigator();
 const AuthStack = createStackNavigator();
 const MainStack = createStackNavigator();
+const SPLASH_IMAGE = require('../../assets/splash.png');
+
+function MessageRequestsRedirect({ navigation }) {
+  useEffect(() => {
+    navigation.replace('Main', {
+      screen: 'MessagesTab',
+      params: { segment: 'requests' },
+    });
+  }, [navigation]);
+
+  return <LazyFallback />;
+}
+
+function AutoHideTabBar(props) {
+  const { visible, reveal, ...tabBarProps } = props;
+
+  if (!visible) {
+    return (
+      <TouchableOpacity
+        style={styles.tabRevealZone}
+        onPress={reveal}
+        activeOpacity={1}
+        accessibilityRole="button"
+        accessibilityLabel="Show navigation"
+        testID="tab-reveal-zone"
+      />
+    );
+  }
+
+  return <BottomTabBar {...tabBarProps} />;
+}
 
 function HomeTabs() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const tabStyles = useMemo(() => getTabStyles(), []);
+  const [tabBarVisible, setTabBarVisible] = useState(true);
+  const restoreTimerRef = useRef(null);
   // Four tabs, one job each: find people near me, search for people
-  // anywhere, talk to the people I found, tend my own profile. Chats
-  // is the initial tab — the retention loop is conversations, so the
-  // app opens on them.
+  // anywhere, talk to the people I found, tend my own profile. Nearby
+  // (the map) is the initial tab — JuNubin's first job on open is
+  // "who is around me", and the map answers that before any list does.
   const TAB_NAMES = ['HomeTab', 'DirectoryTab', 'MessagesTab', 'ProfileTab'];
   const tabScales = useRef(TAB_NAMES.map(() => new Animated.Value(1))).current;
 
+  const showTabBar = useCallback(() => {
+    if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
+    setTabBarVisible(true);
+  }, []);
+
+  const revealTabBar = useCallback(() => {
+    hapticSelection();
+    showTabBar();
+  }, [showTabBar]);
+
+  const hideTabBarForScroll = useCallback(() => {
+    if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
+    setTabBarVisible(false);
+  }, []);
+
+  const showTabBarAfterScroll = useCallback(() => {
+    if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
+    restoreTimerRef.current = setTimeout(() => setTabBarVisible(true), 260);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (restoreTimerRef.current) clearTimeout(restoreTimerRef.current);
+    };
+  }, []);
+
   return (
+    <TabBarVisibilityProvider
+      hideForScroll={hideTabBarForScroll}
+      showAfterScroll={showTabBarAfterScroll}
+    >
       <Tab.Navigator
-        initialRouteName="MessagesTab"
+        initialRouteName="HomeTab"
+        tabBar={(props) => (
+          <AutoHideTabBar {...props} visible={tabBarVisible} reveal={revealTabBar} />
+        )}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarShowLabel: true,
@@ -127,13 +180,14 @@ function HomeTabs() {
           tabBarActiveTintColor: colors.tabActive,
           tabBarInactiveTintColor: colors.tabInactive,
           tabBarStyle: {
-            // The bar is flag-ink in both themes; the active tab reads
-            // in flag gold. No top hairline — the ink edge is the line.
             backgroundColor: colors.tabBarBg,
             borderTopWidth: 0,
-            height: Platform.OS === 'ios' ? 88 : 68,
-            paddingBottom: Platform.OS === 'ios' ? 22 : 12,
-            paddingTop: Platform.OS === 'ios' ? 10 : 12,
+            height: Platform.OS === 'ios' ? 76 : 64,
+            paddingBottom: Math.max(insets.bottom, Platform.OS === 'ios' ? 14 : 10),
+            paddingTop: 8,
+            elevation: 0,
+            shadowColor: '#000',
+            shadowOpacity: 0,
           },
           // Chats unread badge (set via navigation.setOptions from
           // MessagesScreen): small flag-red pill, white numeral.
@@ -206,6 +260,7 @@ function HomeTabs() {
             navigating to the stack route; both stay registered. */}
         <Tab.Screen name="ProfileTab" component={ProfileTabScreen} options={{ tabBarLabel: 'Profile' }} />
       </Tab.Navigator>
+    </TabBarVisibilityProvider>
   );
 }
 
@@ -265,6 +320,7 @@ function MainNavigator({ initialRouteName = 'Main' }) {
       <MainStack.Screen name="ProfileDetail" component={ProfileDetailScreen} options={{ presentation: 'modal', gestureEnabled: true }} />
       <MainStack.Screen name="Settings" component={SettingsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Chat" component={ChatScreen} />
+      <MainStack.Screen name="MessageRequests" component={MessageRequestsRedirect} />
       <MainStack.Screen name="EditProfile" component={EditProfileScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="Notifications" component={NotificationsScreen} options={{ presentation: 'modal' }} />
       <MainStack.Screen name="SettingsInfo" component={SettingsInfoScreen} options={{ presentation: 'modal' }} />
@@ -361,10 +417,21 @@ const getTabStyles = () => StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
+  tabRevealZone: {
+    height: 24,
+    backgroundColor: 'transparent',
+  },
   bootLoading: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0C0C0E',
+    backgroundColor: '#000000',
+  },
+  bootLogo: {
+    width: 128,
+    height: 128,
+  },
+  bootSpinner: {
+    marginTop: 20,
   },
 });

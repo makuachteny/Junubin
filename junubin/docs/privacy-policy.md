@@ -9,7 +9,7 @@
 > sure it resolves and matches what you submit in App Store Connect.
 
 JuNubin ("we", "our", "the app") helps people in the South Sudanese
-diaspora connect for dating, friendship, and community. This policy
+diaspora connect for friendship, community, and diaspora networking. This policy
 explains what data we collect, why, where it's stored, and what rights
 you have over it.
 
@@ -22,11 +22,10 @@ you have over it.
 - **Email address** — required to create an account. We use it to send
   one-time sign-in codes and account-related notifications.
 - **Profile information** — name, date of birth, gender, pronouns,
-  ethnicity, education, sexuality (if dating), dating preferences,
-  photos, prompt answers, and the bio you write.
+  background, education, languages, interests, photos, prompt answers,
+  "open to" preferences, city, and the bio you write.
 - **Photos** — every photo you upload, including verification selfies.
-- **Messages, posts, comments, stories, voice notes** — content you
-  create inside the app.
+- **Messages** — text content you create inside chats and message requests.
 - **Reports and blocks** — when you flag or block someone, we keep a
   record so our moderation team can act on it.
 
@@ -34,20 +33,17 @@ you have over it.
 
 - **Device information** — model, OS version, app version, and locale.
 - **Approximate location** — only when you allow it, used to surface
-  nearby matches and events. We do not track precise GPS in the
+  nearby people and city-based discovery. We do not track precise GPS in the
   background.
-- **Usage events** — which screens you opened, when you swiped,
-  matched, or messaged. We pseudonymise this by stripping personally
+- **Usage events** — which screens you opened and when you messaged or
+  updated your profile. We pseudonymise this by stripping personally
   identifying fields before logging.
-- **Contacts** — only if you grant permission and use the "Find
-  Friends" feature. We hash phone numbers locally and check them
-  against our user index. We do not store your contact list.
 
 ### 1.3 Information from third parties
 
-- **Apple / Google** — receipts when you make in-app purchases.
-- **Stripe / RevenueCat** — minimum payment metadata needed to process
-  subscriptions and creator payouts. We never see full card numbers.
+JuNubin does not collect payment data because the app is 100% free. We do not
+use Stripe, RevenueCat, Flutterwave, App Store in-app purchases, Google Play
+billing, subscriptions, paid consumables, or premium tiers.
 
 ---
 
@@ -57,10 +53,9 @@ you have over it.
 |---|---|
 | Authenticate you | Email, device id |
 | Show your profile to other users | Profile, photos |
-| Match-making algorithm | Profile, swipes, preferences, location |
+| People discovery | Profile, city, location visibility, interests, preferences |
 | Send notifications | Push token, account events |
 | Moderate the platform | Reports, blocks, content, verification photos |
-| Process payments | Purchase metadata |
 | Comply with the law | All of the above, when legally compelled |
 | Improve the app | Aggregated usage events |
 
@@ -76,8 +71,7 @@ authentication, and file storage. Supabase runs on AWS infrastructure
 in the [INSERT REGION, e.g. `us-east-1`] region. Your data may be
 processed in the United States.
 
-Payment data passes through [Stripe](https://stripe.com) and/or
-[RevenueCat](https://revenuecat.com) depending on the rail you used.
+JuNubin does not process payment data.
 
 ---
 
@@ -100,10 +94,9 @@ You can:
 - **View, edit, or download your profile** — from Settings → Edit
   Profile.
 - **Delete your account** — from Settings → Delete Account. Deletion
-  is permanent and removes your User row, Profile row, Photos, Posts,
-  Comments, Matches, Messages, and push token. Some records we are
-  legally required to keep (e.g. payment receipts for tax reporting)
-  are retained for as long as the law requires, then deleted.
+  is permanent and removes your User row, Profile row, Photos, Messages,
+  message requests, and push token. Records we are legally required to keep
+  are retained only as long as the law requires, then deleted.
 - **Withdraw consent** — turn off location, contacts, or push
   notification permissions from your phone's Settings app at any time.
 - **Request a copy of your data (GDPR/CCPA)** — email

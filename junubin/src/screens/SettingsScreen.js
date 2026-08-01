@@ -15,19 +15,20 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme, FontFamily } from '../theme';
+import { useTheme, FontFamily, getShadow } from '../theme';
 import Blueprint from '../components/Blueprint';
-import { useSubscription } from '../payments';
 import { useAuth } from '../auth';
 import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
 import * as safetyService from '../api/services/safetyService';
 import { supabase } from '../config/supabase';
 import { imageSource } from '../utils/imageSource';
+import { layoutForWidth } from '../theme/layout';
 import {
   promptForPushPermission,
   getNotificationPermissionStatus,
@@ -47,10 +48,21 @@ const NOTIF_TOGGLES = [
   { key: 'follows', label: 'New followers' },
   { key: 'nearby', label: 'People-nearby digest' },
 ];
-const NOTIF_DEFAULTS = { requests: true, messages: true, follows: true, nearby: true };
+const NOTIF_DEFAULTS = { requests: true, messages: true, follows: true, nearby: false };
 
-// The design's visibility copy, mapped onto the app's real
-// Profile.locationVisibility values ('coarse' | 'city' | 'off').
+// ── Location visibility ─────────────────────────────────────────────
+// The design's three levels, in the design's order, each pinned to the
+// value stored in `Profile.locationVisibility`. This list is the only
+// place the design copy ↔ stored value mapping lives; everything else
+// (radio cards, hydration, persistence) reads it.
+//
+// 'mutuals' is being added to the column's CHECK constraint and to
+// discover-nearby by the backend. Until that lands the DB rejects the
+// write, `setLocationVisibility` reverts, and the user is told — the
+// constraint is fail-closed, so nobody can be made visible under a
+// level the server does not yet enforce.
+const VISIBILITY_MUTUALS = 'mutuals';
+
 const VIS_OPTIONS = [
   {
     value: LOCATION_VISIBILITY.COARSE,
@@ -58,9 +70,9 @@ const VIS_OPTIONS = [
     sub: 'Your approximate area shows on the Nearby map.',
   },
   {
-    value: LOCATION_VISIBILITY.CITY,
-    label: 'City only',
-    sub: 'People see your city, never a map pin.',
+    value: VISIBILITY_MUTUALS,
+    label: 'Mutual follows only',
+    sub: 'Only people you both follow can see your area.',
   },
   {
     value: LOCATION_VISIBILITY.OFF,
@@ -68,6 +80,23 @@ const VIS_OPTIONS = [
     sub: 'You browse the map; you never appear on it.',
   },
 ];
+
+// 'city' predates the design's three levels but is still persisted for
+// anyone who picked it during onboarding. It is rendered only while it
+// IS the stored value, so the design's three cards are what everyone
+// else sees — and nobody's existing setting is silently rewritten or
+// mislabelled as a level it isn't. Ordered by exposure, so it sits
+// between "Everyone" and "Mutual follows only".
+const LEGACY_CITY_OPTION = {
+  value: LOCATION_VISIBILITY.CITY,
+  label: 'City only',
+  sub: 'People see your city, never a map pin.',
+};
+
+const KNOWN_VISIBILITY = new Set([
+  ...VIS_OPTIONS.map((o) => o.value),
+  LOCATION_VISIBILITY.CITY,
+]);
 
 const SUBVIEW_TITLES = {
   verify: 'Verify your photo',
@@ -91,7 +120,7 @@ const HELP_ROWS = [
 // per platform; the design's toggle is part of the visual language,
 // so it's drawn by hand. Purely visual — the row that contains it is
 // the switch for touch and screen readers.
-function TrackSwitch({ value, colors }) {
+function TrackSwitch({ value, colors, isDark }) {
   return (
     <View
       style={[
@@ -100,7 +129,13 @@ function TrackSwitch({ value, colors }) {
       ]}
       pointerEvents="none"
     >
-      <View style={[trackStyles.knob, { backgroundColor: colors.cream, left: value ? 21 : 3 }]} />
+      <View
+        style={[
+          trackStyles.knob,
+          getShadow('sm', isDark),
+          { backgroundColor: colors.cream, left: value ? 21 : 3 },
+        ]}
+      />
     </View>
   );
 }
@@ -122,14 +157,12 @@ const trackStyles = StyleSheet.create({
 
 export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { colors, isDark, toggleTheme } = useTheme();
   const { logout, session } = useAuth();
   const { currentUser } = useCurrentUser();
-  // Payments UI is permanently off — the only thing we still need from
-  // the subscription context is `reset()` so logout/delete clear any
-  // cached entitlement state.
-  const { reset } = useSubscription();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const layout = useMemo(() => layoutForWidth(width), [width]);
+  const styles = useMemo(() => getStyles(colors, layout), [colors, layout]);
 
   // null = main list; otherwise 'verify' | 'blocked' | 'notifs' |
   // 'help' | 'del'.
@@ -137,9 +170,9 @@ export default function SettingsScreen({ navigation }) {
 
   // ── Location visibility ─────────────────────────────────────────
   // Source of truth is `Profile.locationVisibility` (00047) — 'off' |
-  // 'city' | 'coarse', defaulting to 'off'. The legacy
-  // `Profile.shareLocation` boolean is kept in sync by a DB trigger,
-  // so we only ever write the new column from here.
+  // 'city' | 'coarse' (+ 'mutuals' once the backend lands), defaulting
+  // to 'off'. The legacy `Profile.shareLocation` boolean is kept in
+  // sync by a DB trigger, so we only ever write the new column here.
   const [locationVisibility, setLocationVisibilityState] = useState(LOCATION_VISIBILITY.OFF);
   // Temporary sharing window (`Profile.locationVisibleUntil`, 00047).
   // null = visible until manually disabled; a future ISO timestamp
@@ -171,10 +204,8 @@ export default function SettingsScreen({ navigation }) {
     }
     setVisibleUntilState(expired ? null : until);
 
-    if (stored === LOCATION_VISIBILITY.CITY || stored === LOCATION_VISIBILITY.COARSE) {
+    if (KNOWN_VISIBILITY.has(stored)) {
       setLocationVisibilityState(stored);
-    } else if (stored === LOCATION_VISIBILITY.OFF) {
-      setLocationVisibilityState(LOCATION_VISIBILITY.OFF);
     } else {
       setLocationVisibilityState(
         profile?.shareLocation ? LOCATION_VISIBILITY.COARSE : LOCATION_VISIBILITY.OFF,
@@ -200,7 +231,16 @@ export default function SettingsScreen({ navigation }) {
     } catch (e) {
       setLocationVisibilityState(previous);
       setVisibleUntilState(previousUntil);
-      Alert.alert('Could not update', e?.message || 'Try again when you have a connection.');
+      // The column's CHECK constraint is what tells us 'mutuals' has
+      // not shipped yet. Say so plainly instead of surfacing a Postgres
+      // constraint name.
+      const rejected = /constraint|check|invalid|violat/i.test(e?.message || '');
+      Alert.alert(
+        'Could not update',
+        next === VISIBILITY_MUTUALS && rejected
+          ? "Mutual-follows visibility isn't available yet — your setting hasn't changed."
+          : e?.message || 'Try again when you have a connection.',
+      );
     }
   }, [locationVisibility, visibleUntil]);
 
@@ -315,12 +355,11 @@ export default function SettingsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            await reset();
           },
         },
       ],
     );
-  }, [logout, reset]);
+  }, [logout]);
 
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
@@ -359,14 +398,30 @@ export default function SettingsScreen({ navigation }) {
               } catch {}
             }
             await logout();
-            await reset();
           },
         },
       ],
     );
-  }, [session, logout, reset]);
+  }, [session, logout]);
 
   const isVerified = !!(currentUser?.verified || currentUser?.profile?.isVerified);
+
+  // The design's three cards, plus the legacy 'city' card only while it
+  // is the value this account actually has stored.
+  const visOptions = useMemo(() => (
+    locationVisibility === LOCATION_VISIBILITY.CITY
+      ? [VIS_OPTIONS[0], LEGACY_CITY_OPTION, ...VIS_OPTIONS.slice(1)]
+      : VIS_OPTIONS
+  ), [locationVisibility]);
+
+  // Which duration chip is live. Derived from the stored timestamp
+  // rather than a separate piece of state, so it survives a reload and
+  // can't drift from what the server will actually enforce.
+  const activeWindowHours = useMemo(() => {
+    if (!visibleUntil) return null;
+    const hoursLeft = (new Date(visibleUntil).getTime() - Date.now()) / 3600_000;
+    return hoursLeft <= 1.05 ? 1 : 8;
+  }, [visibleUntil]);
 
   const accountRows = useMemo(() => [
     {
@@ -411,8 +466,8 @@ export default function SettingsScreen({ navigation }) {
           default. */}
       <View>
         <Text style={styles.sectionLabel}>LOCATION VISIBILITY</Text>
-        <View style={{ gap: 8 }}>
-          {VIS_OPTIONS.map((opt) => {
+        <View style={{ gap: 8 }} accessibilityRole="radiogroup">
+          {visOptions.map((opt) => {
             const selected = locationVisibility === opt.value;
             return (
               <TouchableOpacity
@@ -445,20 +500,21 @@ export default function SettingsScreen({ navigation }) {
         {locationVisibility !== LOCATION_VISIBILITY.OFF && (
           <View style={styles.visibleForBlock}>
             <Text style={styles.visibleForLabel}>STAY VISIBLE FOR</Text>
-            <View style={styles.visibleForRow}>
+            <View style={styles.visibleForRow} accessibilityRole="radiogroup">
               {[
                 { hours: 1, label: '1 hour' },
                 { hours: 8, label: '8 hours' },
                 { hours: null, label: 'Until I turn it off' },
               ].map((opt) => {
-                const selected = opt.hours === null ? !visibleUntil : false;
+                const selected = opt.hours === activeWindowHours;
                 return (
                   <TouchableOpacity
                     key={opt.label}
                     style={[styles.visibleForChip, selected && styles.visibleForChipActive]}
                     onPress={() => setTemporaryWindow(opt.hours)}
                     activeOpacity={0.85}
-                    accessibilityRole="button"
+                    hitSlop={{ top: 4, bottom: 4 }}
+                    accessibilityRole="radio"
                     accessibilityState={{ selected }}
                     accessibilityLabel={`Stay visible for ${opt.label}`}
                     testID={`visible-for-${opt.hours ?? 'unlimited'}`}
@@ -492,7 +548,7 @@ export default function SettingsScreen({ navigation }) {
           accessibilityLabel="Dark mode"
         >
           <Text style={styles.rowLabel}>Dark mode</Text>
-          <TrackSwitch value={isDark} colors={colors} />
+          <TrackSwitch value={isDark} colors={colors} isDark={isDark} />
         </TouchableOpacity>
       </View>
 
@@ -553,6 +609,9 @@ export default function SettingsScreen({ navigation }) {
               style={styles.unblockBtn}
               onPress={() => handleUnblock(row)}
               activeOpacity={0.7}
+              // Design draws this button 34pt tall; hitSlop restores the
+              // 44pt target without changing the drawing.
+              hitSlop={{ top: 5, bottom: 5, left: 4, right: 4 }}
               accessibilityRole="button"
               accessibilityLabel={`Unblock ${row.name}`}
             >
@@ -579,7 +638,7 @@ export default function SettingsScreen({ navigation }) {
             testID={`notif-${t.key}`}
           >
             <Text style={styles.rowLabel}>{t.label}</Text>
-            <TrackSwitch value={!!notifPrefs[t.key]} colors={colors} />
+            <TrackSwitch value={!!notifPrefs[t.key]} colors={colors} isDark={isDark} />
           </TouchableOpacity>
         ))}
       </View>
@@ -652,7 +711,7 @@ export default function SettingsScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, layout) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -663,6 +722,7 @@ const getStyles = (colors) => StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingBottom: 6,
+    ...layout.centeredContent,
   },
   backButton: {
     width: 44,
@@ -676,15 +736,16 @@ const getStyles = (colors) => StyleSheet.create({
     color: colors.black,
   },
   content: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     paddingTop: 6,
     paddingBottom: 30,
     gap: 22,
+    ...layout.centeredContent,
   },
   sectionLabel: {
     fontSize: 12,
     fontFamily: FontFamily.semibold,
-    letterSpacing: 1,
+    letterSpacing: 0.96, // design .08em
     color: colors.gray500,
     marginBottom: 9,
   },
@@ -695,7 +756,7 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
     paddingVertical: 12,
-    paddingHorizontal: 13,
+    paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: colors.separator,
     borderRadius: 4,
@@ -745,7 +806,7 @@ const getStyles = (colors) => StyleSheet.create({
   visibleForLabel: {
     fontSize: 10.5,
     fontFamily: FontFamily.semibold,
-    letterSpacing: 1,
+    letterSpacing: 0.84,
     color: colors.gray400,
   },
   visibleForRow: {
@@ -805,8 +866,11 @@ const getStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 50,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    // minHeight, not height — the design's 50pt row must grow rather
+    // than clip when the OS text size is turned up.
+    minHeight: 50,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
     borderBottomColor: colors.separator,
     paddingHorizontal: 2,
   },
@@ -825,10 +889,10 @@ const getStyles = (colors) => StyleSheet.create({
   verifyBody: {
     fontFamily: FontFamily.regular,
     fontSize: 14.5,
-    lineHeight: 22,
+    lineHeight: 22.5, // design 1.55
     color: colors.gray500,
     textAlign: 'center',
-    maxWidth: 300,
+    maxWidth: 260, // design 32ch
   },
   goldCta: {
     height: 52,
@@ -849,7 +913,7 @@ const getStyles = (colors) => StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 18,
     borderRadius: 4,
-    backgroundColor: colors.accentSurface,
+    backgroundColor: colors.roseTint12, // design: accent at 12%
   },
   verifiedChipText: {
     fontFamily: FontFamily.semibold,
@@ -872,14 +936,14 @@ const getStyles = (colors) => StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 1,
     borderBottomColor: colors.separator,
   },
   blockedAvatar: {
     width: 44,
     height: 44,
     borderRadius: 0,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.separator,
     backgroundColor: colors.creamDark,
   },
@@ -908,8 +972,9 @@ const getStyles = (colors) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 54,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 54,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
     borderBottomColor: colors.separator,
     paddingHorizontal: 2,
   },
@@ -929,13 +994,13 @@ const getStyles = (colors) => StyleSheet.create({
   deleteTitle: {
     fontFamily: FontFamily.headingBold,
     fontSize: 18,
-    letterSpacing: 0.5,
+    letterSpacing: 0.54, // design .03em
     color: colors.black,
   },
   deleteBody: {
     fontFamily: FontFamily.regular,
     fontSize: 13.5,
-    lineHeight: 21,
+    lineHeight: 21, // design 1.55
     color: colors.gray500,
   },
   deleteBtn: {

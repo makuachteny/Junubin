@@ -1,9 +1,10 @@
 // ProfileScreen — the "Profile" tab (claude.ai/design "JuNubin
-// Redesign", Profile screen). Header kicker (mini flag + JUNUBIN) over
-// a condensed h1, gold-ringed Blueprint avatar, a static follower
-// strip, the PROFILE STRENGTH checklist (five rows, driven by the
+// Redesign", Profile screen). Condensed h1, gold-ringed Blueprint avatar,
+// a static follower
+// strip, the PROFILE STRENGTH checklist (six rows, driven by the
 // profileCompleteness util so the percent and checks can't disagree),
-// OPEN TO / LANGUAGES chips, and the Edit / Preview / theme actions.
+// OPEN TO chips, the ABOUT fact grid, LANGUAGES chips, and the Edit /
+// Preview / theme actions.
 
 import React, { useMemo, useCallback, useState } from 'react';
 import {
@@ -14,6 +15,7 @@ import {
   Image,
   ScrollView,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
@@ -30,18 +32,22 @@ import * as profileService from '../api/services/profileService';
 import { calculateCompleteness } from '../utils/profileCompleteness';
 import { OPEN_TO_BY_KEY, normalizeOpenTo } from '../data/openTo';
 import { getCountryByCode } from '../data/countries';
+import { getEthnicIdentity } from '../utils/ethnicIdentity';
+import { bottomTabInset, layoutForWidth } from '../theme/layout';
+import { useTabBarScrollVisibility } from '../navigation/TabBarVisibilityContext';
 
-// The five checklist rows — keys mirror src/utils/profileCompleteness.js
-// FIELDS exactly (the util now tracks only these five, 20% each).
+// The six checklist rows — keys mirror src/utils/profileCompleteness.js
+// FIELDS exactly (the util tracks only these six, so each is 1/6).
 // `action` names which surface a tap opens: the photo row runs the
 // picker in place, verify is the PhotoVerification flow, everything
 // else edits in EditProfile.
 const STRENGTH_ROWS = [
-  { key: 'photos',       label: 'Add a profile photo',     action: 'photo' },
-  { key: 'ethnicity',    label: 'Add your background',     action: 'edit' },
-  { key: 'languages',    label: 'Add languages',           action: 'edit' },
-  { key: 'promptAnswer', label: 'Answer a profile prompt', action: 'edit' },
-  { key: 'verified',     label: 'Verify your photo',       action: 'verify' },
+  { key: 'photos',       label: 'Add a profile photo',      action: 'photo' },
+  { key: 'ethnicity',    label: 'Add your background',      action: 'edit' },
+  { key: 'languages',    label: 'Add languages',            action: 'edit' },
+  { key: 'occupation',   label: 'Add occupation & school',  action: 'edit' },
+  { key: 'promptAnswer', label: 'Answer a profile prompt',  action: 'edit' },
+  { key: 'verified',     label: 'Verify your photo',        action: 'verify' },
 ];
 
 // ss-tag chips cycle the four flag tint/dark pairs by index — the
@@ -54,10 +60,13 @@ const tagColors = (colors, index) => {
 
 export default function ProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { colors, isDark, toggleTheme } = useTheme();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const layout = useMemo(() => layoutForWidth(width), [width]);
+  const styles = useMemo(() => getStyles(colors, layout), [colors, layout]);
   const { currentUser, refreshUser } = useCurrentUser();
   const [uploading, setUploading] = useState(false);
+  const tabBarScrollProps = useTabBarScrollVisibility();
 
   // Re-pull the user every time Profile gains focus so edits made in
   // EditProfile / PhotoVerification are reflected on return — never a
@@ -140,24 +149,34 @@ export default function ProfileScreen({ navigation }) {
     .map((key) => OPEN_TO_BY_KEY[key]?.label || key);
   const languages = Array.isArray(displayUser?.languages) ? displayUser.languages : [];
 
+  // ABOUT grid — the design's `meFacts`. Unset cells keep the design's
+  // "Add …" placeholder in muted ink rather than collapsing, so the
+  // grid always reads as four (here three) equal cells.
+  //
+  // The design's HOMETOWN cell is omitted: Profile has no hometown
+  // column, and User.city is the person's CURRENT city (already shown
+  // in the header line), so filling HOMETOWN from it would put a
+  // different datum under the design's label. Blocked on a migration.
+  const facts = [
+    { k: 'OCCUPATION', v: displayUser?.profession, placeholder: 'Add occupation' },
+    { k: 'SCHOOL',     v: displayUser?.education,  placeholder: 'Add school' },
+    { k: 'BACKGROUND', v: displayUser?.ethnicity,  placeholder: 'Add background' },
+  ].map((f) => {
+    const value = typeof f.v === 'string' ? f.v.trim() : '';
+    return { k: f.k, v: value || f.placeholder, isSet: !!value };
+  });
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + 10 }]}>
       <ScrollView
+        {...tabBarScrollProps}
         style={styles.content}
-        contentContainerStyle={[styles.contentInner, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.contentInner, { paddingBottom: bottomTabInset(insets.bottom) }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header row: flag kicker + h1, gear ── */}
+        {/* ── Header row: h1 + gear ── */}
         <View style={styles.headerRow}>
           <View style={styles.headerBody}>
-            <View style={styles.kickerRow}>
-              <View style={styles.flagMark}>
-                <View style={[styles.flagStripe, { backgroundColor: colors.ssInk }]} />
-                <View style={[styles.flagStripe, styles.flagStripeMid, { backgroundColor: colors.ssRed }]} />
-                <View style={[styles.flagStripe, { backgroundColor: colors.ssGreen }]} />
-              </View>
-              <Text style={styles.kicker}>JUNUBIN</Text>
-            </View>
             <Text style={styles.headerTitle} accessibilityRole="header">Profile</Text>
           </View>
           <TouchableOpacity
@@ -275,6 +294,21 @@ export default function ProfileScreen({ navigation }) {
           </>
         ) : null}
 
+        {/* ── About ── */}
+        <Text style={[styles.sectionLabel, { marginTop: 18 }]}>ABOUT</Text>
+        <View style={styles.factGrid}>
+          {facts.map((fact) => (
+            <View key={fact.k} style={styles.factSlot}>
+              <View style={styles.factCell}>
+                <Text style={styles.factKey}>{fact.k}</Text>
+                <Text style={[styles.factValue, !fact.isSet && styles.factValueUnset]}>
+                  {fact.v}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+
         {/* ── Languages ── */}
         {languages.length > 0 ? (
           <>
@@ -323,7 +357,7 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, layout) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -332,7 +366,8 @@ const getStyles = (colors) => StyleSheet.create({
     flex: 1,
   },
   contentInner: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
+    ...layout.centeredContent,
   },
 
   // ── Header ──
@@ -342,31 +377,6 @@ const getStyles = (colors) => StyleSheet.create({
   },
   headerBody: {
     flex: 1,
-  },
-  kickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  flagMark: {
-    width: 20,
-    height: 14,
-    borderWidth: 1,
-    borderColor: colors.separator,
-  },
-  flagStripe: {
-    flex: 1,
-  },
-  flagStripeMid: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.cream,
-  },
-  kicker: {
-    fontFamily: FontFamily.heading,
-    fontSize: 10.5,
-    letterSpacing: 2.7,
-    color: colors.accentDark,
   },
   headerTitle: {
     fontFamily: FontFamily.heading,
@@ -545,6 +555,43 @@ const getStyles = (colors) => StyleSheet.create({
   tagChipText: {
     fontFamily: FontFamily.semibold,
     fontSize: 12,
+  },
+  // Design: `grid-template-columns:1fr 1fr; gap:10`. RN has no grid, so
+  // half-width slots with 5pt side padding (outdented by the same 5 on
+  // the container) give a true 10pt gutter at any screen width, and an
+  // odd cell out stays in the left column instead of stretching.
+  factGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    marginHorizontal: -5,
+    rowGap: 10,
+  },
+  factSlot: {
+    width: '50%',
+    paddingHorizontal: 5,
+  },
+  factCell: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    borderRadius: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  factKey: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 10.5,
+    letterSpacing: 1.05,
+    color: colors.gray400,
+  },
+  factValue: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13.5,
+    marginTop: 3,
+    color: colors.black,
+  },
+  factValueUnset: {
+    color: colors.gray400,
   },
   langChip: {
     paddingVertical: 5,

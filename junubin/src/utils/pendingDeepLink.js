@@ -23,6 +23,7 @@ const KEY = '@junubin/pending_deep_link_v1';
 // listed is considered safe to dispatch even when signed out.
 const AUTH_REQUIRED_TOP_LEVEL = new Set([
   'chat',
+  'message-requests',
   'survey',
 ]);
 
@@ -52,7 +53,7 @@ export function pathFromUrl(url) {
 export function urlRequiresAuth(url) {
   const path = pathFromUrl(url);
   if (!path) return false;
-  const top = path.split('/')[0].toLowerCase();
+  const top = path.split(/[/?]/)[0].toLowerCase();
   return AUTH_REQUIRED_TOP_LEVEL.has(top);
 }
 

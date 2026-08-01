@@ -1,6 +1,5 @@
 // "What are you open to?" — the multi-select vocabulary that replaced the
-// old Dating/Socialize purpose cards when JuNubin pivoted from a dating
-// app to a South Sudanese social/community platform.
+// purpose cards in the setup flow.
 //
 // Persisted to Profile.openTo as a JSONB array of `key` strings (NOT
 // labels — labels are display copy and may be reworded; keys are the

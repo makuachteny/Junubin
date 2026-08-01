@@ -149,8 +149,12 @@ const getStyles = (colors, isDark, itemHeight) =>
       position: 'absolute',
       left: 6,
       right: 6,
-      borderRadius: 10,
-      backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F1F4',
+      borderRadius: 4,
+      borderWidth: 1,
+      borderColor: colors.separator,
+      backgroundColor: (isDark ? colors.surfaceMuted : colors.inputBg)
+        || colors.cardBg
+        || colors.surface,
     },
     row: {
       alignItems: 'center',
@@ -158,14 +162,14 @@ const getStyles = (colors, isDark, itemHeight) =>
       paddingHorizontal: 8,
     },
     rowText: {
-      fontSize: 18,
-      fontFamily: FontFamily.semibold,
+      fontSize: 17,
+      fontFamily: FontFamily.heading,
       textAlign: 'center',
     },
     rowTextActive: {
       color: colors.black,
-      fontWeight: '700',
-      fontFamily: FontFamily.bold,
+      fontWeight: '600',
+      fontFamily: FontFamily.headingBold,
     },
     rowTextDim: {
       color: colors.gray400,

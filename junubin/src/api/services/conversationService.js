@@ -2,9 +2,9 @@ import { supabase } from '../../config/supabase';
 import { formatTimestamp } from '../../utils/formatTime';
 import { cacheGet, cacheSet } from '../../utils/offlineCache';
 
-const OFFLINE_MATCHES_TTL = 300_000; // 5 min
+const OFFLINE_CONVERSATIONS_TTL = 300_000; // 5 min
 
-export async function getMatches() {
+export async function getConversations() {
   const { data: { user: authUser } } = await supabase.auth.getUser();
   if (!authUser) throw new Error('Not authenticated');
 
@@ -18,10 +18,14 @@ export async function getMatches() {
   const userId = appUser.id;
 
   // We pull `readAt` and `senderId` on each message so we can derive
-  // `unreadCount` per match without a follow-up query — it's just a
+  // `unreadCount` per conversation without a follow-up query — it's just a
   // filter over the messages we're already loading for the last-message
-  // preview. Cheaper than firing N count queries (one per match).
-  const { data: matches, error } = await supabase
+  // preview. Cheaper than firing N count queries.
+  //
+  // The production schema still stores direct chat connections in the
+  // legacy Match table. Keep that detail inside this service so screens
+  // can use conversation/thread language.
+  const { data: rows, error } = await supabase
     .from('Match')
     .select(`
       id,
@@ -47,7 +51,7 @@ export async function getMatches() {
 
   if (error) throw error;
 
-  const result = (matches || []).map((m) => {
+  const result = (rows || []).map((m) => {
     const otherUser = m.userAId === userId ? m.userB : m.userA;
     const conv = m.conversation;
     const msgs = conv?.messages || [];
@@ -84,23 +88,20 @@ export async function getMatches() {
       unread: unreadCount > 0,
       unreadCount,
       userId: otherUser?.id,
-      // Mode the match originated in ('dating' | 'social'). Used by
-      // MessagesScreen to surface current-mode conversations first.
-      // Defaults to 'dating' for legacy rows that pre-date 00025.
-      mode: m.mode || 'dating',
-      // Keep the raw timestamp around so sortByMode() can do a proper
+      mode: m.mode || 'community',
+      // Keep the raw timestamp around so inbox sorting can do a proper
       // numeric comparison without re-parsing the localized string.
       updatedAt: lastMessage?.createdAt || m.updatedAt || m.createdAt,
     };
   });
 
-  cacheSet('matches', result, OFFLINE_MATCHES_TTL);
+  cacheSet('conversations', result, OFFLINE_CONVERSATIONS_TTL);
   return result;
 }
 
 /**
- * Returns cached matches when offline. Call getMatches() first.
+ * Returns cached conversations when offline. Call getConversations() first.
  */
-export async function getCachedMatches() {
-  return cacheGet('matches');
+export async function getCachedConversations() {
+  return cacheGet('conversations');
 }

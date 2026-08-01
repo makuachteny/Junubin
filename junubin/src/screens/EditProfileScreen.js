@@ -1,6 +1,6 @@
 // EditProfileScreen — the redesign's "Edit profile" overlay
-// (claude.ai/design "JuNubin Redesign"): exactly three sections —
-// BACKGROUND chips, LANGUAGES chips, and the single profile-prompt
+// (claude.ai/design "JuNubin Redesign"): BACKGROUND chips, LANGUAGES
+// chips, the OCCUPATION / SCHOOL pair, and the single profile-prompt
 // input — closed by a Blueprint-framed gold SAVE. Photos are managed
 // from the Profile tab's strength checklist, everything else identity-
 // shaped (name, DOB, gender) is set once during onboarding.
@@ -9,6 +9,10 @@
 // ProfileSetupScreen), so the BACKGROUND chips behave as a radio group
 // — tapping the current selection clears it. Languages are a true
 // multi-select persisted as an array of the exact option strings.
+//
+// The design's second input row (HOMETOWN — in South Sudan, FAITH —
+// optional) is NOT implemented: Profile has no column for either, and
+// writing them would silently drop on save. Needs a migration first.
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
@@ -22,6 +26,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,6 +37,8 @@ import { useCurrentUser } from '../hooks';
 import * as profileService from '../api/services/profileService';
 import { ALL_TRIBE_KEYS } from '../data/tribes';
 import { LANGUAGE_OPTIONS, normalizeLanguages } from '../data/languages';
+import { devAuthBypassEnabled } from '../config/devAuth';
+import { layoutForWidth } from '../theme/layout';
 
 // The design's one fixed prompt. Persisted as promptQuestion so the
 // detail view can caption the answer.
@@ -39,19 +46,39 @@ const PROMPT_QUESTION = 'What brought you to your city?';
 
 export default function EditProfileScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { colors } = useTheme();
-  const styles = useMemo(() => getStyles(colors), [colors]);
+  const layout = useMemo(() => layoutForWidth(width), [width]);
+  const styles = useMemo(() => getStyles(colors, layout), [colors, layout]);
   const { session, updateUser } = useAuth();
   const { currentUser, refreshUser } = useCurrentUser();
   const [saving, setSaving] = useState(false);
+  const rawUser = currentUser?._raw || currentUser || {};
+  const rawProfile = rawUser?.profile || {};
 
-  const [ethnicity, setEthnicity] = useState(currentUser?.ethnicity || '');
+  const [ethnicity, setEthnicity] = useState(currentUser?.ethnicity || rawProfile?.ethnicity || '');
   const [languages, setLanguages] = useState(() =>
-    normalizeLanguages(currentUser?.languages),
+    normalizeLanguages(currentUser?.languages || rawProfile?.languages),
   );
   const [promptAnswer, setPromptAnswer] = useState(
-    currentUser?._raw?.profile?.promptAnswer || '',
+    rawProfile?.promptAnswer || '',
   );
+  // Design OCCUPATION → Profile.profession, SCHOOL → Profile.education.
+  const [occupation, setOccupation] = useState(currentUser?.profession || rawProfile?.profession || '');
+  const [school, setSchool] = useState(currentUser?.education || rawProfile?.education || '');
+  const hydratedUserIdRef = useRef(null);
+
+  useEffect(() => {
+    const id = rawUser?.id || currentUser?.id;
+    if (!id || hydratedUserIdRef.current === id) return;
+    hydratedUserIdRef.current = id;
+    const profile = rawUser?.profile || {};
+    setEthnicity(currentUser?.ethnicity || profile.ethnicity || '');
+    setLanguages(normalizeLanguages(currentUser?.languages || profile.languages));
+    setPromptAnswer(profile.promptAnswer || '');
+    setOccupation(currentUser?.profession || profile.profession || '');
+    setSchool(currentUser?.education || profile.education || '');
+  }, [currentUser, rawUser]);
 
   const toggleLanguage = (lang) => {
     setLanguages((prev) => (
@@ -73,6 +100,10 @@ export default function EditProfileScreen({ navigation, route }) {
       ethnicity: 'background',
       background: 'background',
       languages: 'languages',
+      occupation: 'facts',
+      profession: 'facts',
+      school: 'facts',
+      education: 'facts',
       prompt: 'prompt',
       promptAnswer: 'prompt',
       prompts: 'prompt',
@@ -95,12 +126,29 @@ export default function EditProfileScreen({ navigation, route }) {
     }
     setSaving(true);
     try {
-      const savedUser = await profileService.updateProfile({
+      const updates = {
         ethnicity: ethnicity || null,
         languages,
+        profession: occupation.trim(),
+        education: school.trim(),
         promptQuestion: promptAnswer.trim() ? PROMPT_QUESTION : '',
         promptAnswer: promptAnswer.trim(),
-      });
+      };
+
+      if (devAuthBypassEnabled()) {
+        updateUser({
+          ...rawUser,
+          profile: {
+            ...rawProfile,
+            ...updates,
+          },
+        });
+        setSaving(false);
+        navigation.goBack();
+        return;
+      }
+
+      const savedUser = await profileService.updateProfile(updates);
       if (savedUser) updateUser(savedUser);
       await refreshUser();
       setSaving(false);
@@ -182,6 +230,38 @@ export default function EditProfileScreen({ navigation, route }) {
           </View>
         </View>
 
+        {/* ── Occupation / school ── */}
+        <View style={[styles.section, styles.fieldRow]} onLayout={recordOffset('facts')}>
+          <View style={styles.fieldCol}>
+            <Text style={styles.sectionLabel}>OCCUPATION</Text>
+            <TextInput
+              style={styles.fieldInput}
+              testID="edit-occupation"
+              value={occupation}
+              onChangeText={(t) => setOccupation(t.slice(0, 60))}
+              placeholder="e.g. Nurse"
+              placeholderTextColor={colors.gray400}
+              maxLength={60}
+              returnKeyType="done"
+              accessibilityLabel="Occupation"
+            />
+          </View>
+          <View style={styles.fieldCol}>
+            <Text style={styles.sectionLabel}>SCHOOL</Text>
+            <TextInput
+              style={styles.fieldInput}
+              testID="edit-school"
+              value={school}
+              onChangeText={(t) => setSchool(t.slice(0, 60))}
+              placeholder="e.g. Univ. of Nairobi"
+              placeholderTextColor={colors.gray400}
+              maxLength={60}
+              returnKeyType="done"
+              accessibilityLabel="School"
+            />
+          </View>
+        </View>
+
         {/* ── Profile prompt ── */}
         <View style={styles.section} onLayout={recordOffset('prompt')}>
           <Text style={styles.sectionLabel}>
@@ -225,7 +305,7 @@ export default function EditProfileScreen({ navigation, route }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors, layout) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.cream,
@@ -238,6 +318,7 @@ const getStyles = (colors) => StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingBottom: 6,
+    ...layout.centeredContent,
   },
   headerBtn: {
     width: 44,
@@ -257,8 +338,9 @@ const getStyles = (colors) => StyleSheet.create({
   },
   bodyInner: {
     paddingTop: 6,
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
     paddingBottom: 20,
+    ...layout.centeredContent,
   },
   section: {
     marginTop: 20,
@@ -298,9 +380,29 @@ const getStyles = (colors) => StyleSheet.create({
     fontFamily: FontFamily.regular,
     color: colors.black,
   },
+  // Design's `chip(sel)` recolors only — border, fill and ink. Bolding
+  // the label on select reflowed the chip grid on every tap.
   chipTextSelected: {
-    fontFamily: FontFamily.semibold,
     color: colors.accentDark,
+  },
+  // Design: `grid-template-columns:1fr 1fr; gap:10`.
+  fieldRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  fieldCol: {
+    flex: 1,
+  },
+  fieldInput: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: colors.inputBg,
+    borderRadius: 4,
+    paddingHorizontal: 12,
+    fontSize: 14.5,
+    fontFamily: FontFamily.regular,
+    color: colors.black,
   },
   promptInput: {
     height: 52,
@@ -316,7 +418,8 @@ const getStyles = (colors) => StyleSheet.create({
 
   // ── Footer CTA ──
   footer: {
-    paddingHorizontal: 18,
+    paddingHorizontal: layout.horizontal,
+    ...layout.centeredContent,
   },
   saveBtn: {
     height: 52,

@@ -196,7 +196,7 @@ Deno.serve(async (req: Request) => {
   try {
     const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
     const body = await req.json();
-    const { imageUrl, postId, kind } = body || {};
+    const { imageUrl, postId, photoId, kind } = body || {};
     if (!imageUrl || typeof imageUrl !== "string") {
       return errorResponse("imageUrl required");
     }
@@ -213,15 +213,45 @@ Deno.serve(async (req: Request) => {
       verdict = { verdict: "flagged", labels: [], reason: "provider_unavailable" };
     }
 
+    const checkedAt = new Date().toISOString();
+
     if (postId && kind === "post") {
       await supabase
         .from("Post")
         .update({
           moderationStatus: verdict.verdict === "approved" ? "approved" : verdict.verdict === "rejected" ? "rejected" : "pending",
           moderationVerdict: verdict,
-          moderationCheckedAt: new Date().toISOString(),
+          moderationCheckedAt: checkedAt,
         })
         .eq("id", postId);
+    }
+
+    // Profile photos (00050). Until this branch existed the caller in
+    // profileService.uploadPhoto fired the request and dropped the
+    // answer on the floor, so a rejected profile photo stayed live.
+    //
+    // Unlike Post, we keep the provider's own three-way verdict rather
+    // than collapsing flagged into pending: Photo's read paths hide
+    // 'rejected' only, and preserving 'flagged' is what makes the
+    // human-review queue (Photo_moderation_review_idx) meaningful.
+    if (photoId && kind === "photo") {
+      const { error: photoErr } = await supabase
+        .from("Photo")
+        .update({
+          moderationStatus: verdict.verdict,
+          moderationVerdict: verdict,
+          moderationCheckedAt: checkedAt,
+        })
+        .eq("id", photoId);
+      // Surface rather than swallow: a write failure here means a photo
+      // is live with no verdict recorded, which is exactly the silent
+      // gap this branch exists to close.
+      if (photoErr) {
+        console.error("[moderate-image] Photo verdict write failed", photoId, photoErr.message);
+        await captureException(new Error(`Photo verdict write failed: ${photoErr.message}`), {
+          fn: "moderate-image", photoId,
+        });
+      }
     }
 
     return jsonResponse(verdict);

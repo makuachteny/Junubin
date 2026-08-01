@@ -116,7 +116,8 @@ describe('ProfileDetailScreen (person detail)', () => {
   it('renders identity, city line, OPEN TO tags and ABOUT facts', async () => {
     const { findByText, getByText } = renderScreen();
     expect(await findByText('Nyah, 26')).toBeTruthy();
-    expect(getByText('Nairobi, Kenya · 2 mi')).toBeTruthy();
+    await waitFor(() => expect(mockGetConnectionState).toHaveBeenCalledWith('peer-1'));
+    expect(getByText('Nairobi, Kenya · 2.0 km')).toBeTruthy();
     // OPEN TO — canonical labels from the openTo vocabulary
     expect(getByText('OPEN TO')).toBeTruthy();
     expect(getByText('Community')).toBeTruthy();

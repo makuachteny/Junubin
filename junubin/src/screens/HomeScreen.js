@@ -1,15 +1,14 @@
 // HomeScreen — "Where are my South Sudanese people?"
 //
 // This is the location-first home of the app. It answers one question:
-// who is near me, or near the city I care about. It is deliberately NOT
-// a feed and NOT a swipe deck — there is no like, pass, super-like or
-// match anywhere on this screen.
+// who is near me, or near the city I care about.
 //
 // Industry redesign: the map is FULL-BLEED — it fills the entire tab
 // under the status bar, and all chrome floats on top of it:
 //   row 1 — a Blueprint city pill (city + visible count) and a Map|List
 //           segmented control
-//   row 2 — quick filter chips (Everyone / Verified / Active this week)
+// The city pill opens a dropdown with city search plus filters
+// (Everyone / Verified / Active this week).
 // List mode swaps the map for a full-screen list under the same
 // floating chrome.
 //
@@ -35,7 +34,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme, Typography, FontFamily } from '../theme';
+import { useTheme, FontFamily } from '../theme';
 import PeopleMap from '../components/PeopleMap';
 import Blueprint from '../components/Blueprint';
 import Button from '../components/Button';
@@ -53,6 +52,8 @@ import {
   setLocationDisclosureAccepted,
   locationVisibilityLabel,
 } from '../utils/locationConsent';
+import { bottomTabInset } from '../theme/layout';
+import { useTabBarScrollVisibility } from '../navigation/TabBarVisibilityContext';
 
 const VIEW_MODE_KEY = '@junubin/home_view_mode_v1';
 
@@ -68,8 +69,8 @@ const QUICK_FILTERS = [
 // excluding the safe-area inset and the optional city search row. The
 // list content and PeopleMap's own overlays pad by this so nothing
 // hides under the chrome.
-const CHROME_ROWS_H = 8 + 36 + 9 + 34 + 10;
-const SEARCH_ROW_H = 48;
+const CHROME_ROWS_H = 8 + 36 + 10;
+const LOCATION_DROPDOWN_H = 142;
 
 const isActiveThisWeek = (person) => {
   if (!person?.lastActiveAt) return false;
@@ -92,6 +93,7 @@ const HomeScreen = ({ navigation }) => {
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
   const { session } = useAuth();
   const { currentUser } = useCurrentUser();
+  const tabBarScrollProps = useTabBarScrollVisibility();
 
   // null = still reading AsyncStorage. We must not mount PeopleMap
   // before we know, because mounting it is what leads to the OS prompt.
@@ -268,7 +270,7 @@ const HomeScreen = ({ navigation }) => {
     currentUser?.locationVisibility || currentUser?.profile?.locationVisibility,
   ).toLowerCase();
 
-  const chromeH = insets.top + CHROME_ROWS_H + (searchOpen ? SEARCH_ROW_H : 0);
+  const chromeH = insets.top + CHROME_ROWS_H + (searchOpen ? LOCATION_DROPDOWN_H : 0);
 
   const renderRow = ({ item }) => {
     const following = followingIds.has(item.id);
@@ -325,12 +327,13 @@ const HomeScreen = ({ navigation }) => {
 
   const renderList = () => (
     <FlatList
+      {...tabBarScrollProps}
       data={visiblePeople}
       keyExtractor={(item) => String(item.id)}
       renderItem={renderRow}
       contentContainerStyle={visiblePeople.length === 0
-        ? [styles.listEmptyWrap, { paddingTop: chromeH }]
-        : [styles.listContent, { paddingTop: chromeH + 4 }]}
+        ? [styles.listEmptyWrap, { paddingTop: chromeH, paddingBottom: bottomTabInset(insets.bottom) }]
+        : [styles.listContent, { paddingTop: chromeH + 4, paddingBottom: bottomTabInset(insets.bottom) }]}
       onEndReachedThreshold={0.4}
       onEndReached={() => {
         if (!loading && cursorRef.current) loadPeople({ append: true });
@@ -377,22 +380,40 @@ const HomeScreen = ({ navigation }) => {
               ? 'Check your connection and try again.'
               : cityQuery
                 ? 'Try a nearby city, or search the full directory.'
-                : 'JuNubin is new in your area. Search the directory to find people anywhere in the diaspora.'}
+                : 'JuNubin is new in your area. Try the full diaspora directory.'}
           </Text>
           <View style={styles.emptyActions}>
             {loadError ? (
-              <Button title="Try again" variant="primary" size="md" fullWidth onPress={() => loadPeople()} />
+              <Button
+                title="Try again"
+                variant="primary"
+                size="sm"
+                fullWidth={false}
+                style={styles.emptyButton}
+                textStyle={styles.emptyButtonText}
+                onPress={() => loadPeople()}
+              />
             ) : (
               <Button
-                title="Search the directory"
+                title="Open directory"
                 variant="primary"
-                size="md"
-                fullWidth
+                size="sm"
+                fullWidth={false}
+                style={styles.emptyButton}
+                textStyle={styles.emptyButtonText}
                 onPress={() => navigation?.navigate?.('DirectoryTab')}
               />
             )}
             {cityQuery ? (
-              <Button title="Clear city" variant="outline" size="md" fullWidth onPress={clearCity} />
+              <Button
+                title="Clear city"
+                variant="outline"
+                size="sm"
+                fullWidth={false}
+                style={styles.emptySecondaryButton}
+                textStyle={styles.emptyButtonText}
+                onPress={clearCity}
+              />
             ) : null}
           </View>
         </View>
@@ -475,53 +496,58 @@ const HomeScreen = ({ navigation }) => {
           </View>
         </View>
 
-        <View style={styles.chipRow} pointerEvents="box-none">
-          {QUICK_FILTERS.map((f) => {
-            const selected = quickFilter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                style={[styles.chip, selected && styles.chipActive]}
-                onPress={() => setQuickFilter(f.key)}
-                hitSlop={{ top: 8, bottom: 8 }}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                accessibilityLabel={`Filter: ${f.label}`}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
         {searchOpen ? (
-          <View style={styles.searchRow}>
-            <Ionicons name="search" size={15} color={colors.gray500} />
-            <TextInput
-              style={styles.searchInput}
-              value={cityInput}
-              onChangeText={setCityInput}
-              onSubmitEditing={submitCity}
-              placeholder="Search a city"
-              placeholderTextColor={colors.gray400}
-              returnKeyType="search"
-              autoCorrect={false}
-              autoFocus
-              accessibilityLabel="Search people by city"
-              testID="home-city-search"
-            />
-            {cityInput.length > 0 ? (
-              <TouchableOpacity
-                onPress={clearCity}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="Clear city search"
-              >
-                <Ionicons name="close-circle" size={15} color={colors.gray400} />
-              </TouchableOpacity>
-            ) : null}
+          <View style={styles.locationDropdown}>
+            <View style={styles.searchRow}>
+              <Ionicons name="search" size={15} color={colors.gray500} />
+              <TextInput
+                style={styles.searchInput}
+                value={cityInput}
+                onChangeText={setCityInput}
+                onSubmitEditing={submitCity}
+                placeholder="Search a city"
+                placeholderTextColor={colors.gray400}
+                returnKeyType="search"
+                autoCorrect={false}
+                autoFocus
+                accessibilityLabel="Search people by city"
+                testID="home-city-search"
+              />
+              {cityInput.length > 0 ? (
+                <TouchableOpacity
+                  onPress={clearCity}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear city search"
+                >
+                  <Ionicons name="close-circle" size={15} color={colors.gray400} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <Text style={styles.dropdownLabel}>FILTER</Text>
+            <View style={styles.dropdownFilters}>
+              {QUICK_FILTERS.map((f) => {
+                const selected = quickFilter === f.key;
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    style={[styles.filterOption, selected && styles.filterOptionActive]}
+                    onPress={() => setQuickFilter(f.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={`Filter: ${f.label}`}
+                  >
+                    <Text style={[styles.filterOptionText, selected && styles.filterOptionTextActive]}>
+                      {f.label}
+                    </Text>
+                    {selected ? (
+                      <Ionicons name="checkmark" size={15} color={colors.cream} />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         ) : null}
       </View>
@@ -608,38 +634,18 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   segmentTextActive: {
     color: colors.cream,
   },
-  chipRow: {
-    flexDirection: 'row',
-    gap: 7,
-  },
-  // Quick chips over the map: selected is SOLID accent with cream text
-  // (stronger than the standard tinted chip — they sit on a busy map).
-  chip: {
-    height: 34,
-    paddingHorizontal: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 4,
+  locationDropdown: {
+    padding: 10,
+    gap: 10,
     borderWidth: 1,
     borderColor: colors.separator,
+    borderRadius: 4,
     backgroundColor: colors.cream,
     shadowColor: '#000',
     shadowOpacity: isDark ? 0.3 : 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 2,
-  },
-  chipActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accent,
-  },
-  chipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 12.5,
-    color: colors.black,
-  },
-  chipTextActive: {
-    color: colors.cream,
   },
   searchRow: {
     flexDirection: 'row',
@@ -650,12 +656,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.separator,
     borderRadius: 4,
-    backgroundColor: colors.cream,
-    shadowColor: '#000',
-    shadowOpacity: isDark ? 0.3 : 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    backgroundColor: colors.inputBg || colors.surfaceMuted,
   },
   searchInput: {
     flex: 1,
@@ -664,10 +665,44 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     color: colors.black,
     padding: 0,
   },
+  dropdownLabel: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 10.5,
+    letterSpacing: 1,
+    color: colors.gray500,
+  },
+  dropdownFilters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+  },
+  filterOption: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    backgroundColor: 'transparent',
+  },
+  filterOptionActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+  },
+  filterOptionText: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12.5,
+    color: colors.black,
+  },
+  filterOptionTextActive: {
+    color: colors.cream,
+  },
 
   // ─── List mode ───
   listContent: {
-    paddingBottom: 24,
   },
   listEmptyWrap: {
     flexGrow: 1,
@@ -754,34 +789,55 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 32,
+    paddingHorizontal: 38,
+    paddingBottom: 28,
   },
   emptyBox: {
-    width: 60,
-    height: 60,
+    width: 52,
+    height: 52,
     borderRadius: 0,
     backgroundColor: colors.accentTint10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.separator,
   },
   emptyTitle: {
-    ...Typography.h3,
+    fontFamily: FontFamily.headingBold,
+    fontSize: 24,
+    lineHeight: 28,
     color: colors.black,
     textAlign: 'center',
+    maxWidth: 300,
   },
   emptySub: {
     fontFamily: FontFamily.regular,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.gray600,
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.gray500,
     textAlign: 'center',
-    marginTop: 6,
+    marginTop: 8,
+    maxWidth: 280,
   },
   emptyActions: {
-    marginTop: 20,
-    width: '100%',
-    gap: 10,
+    marginTop: 18,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyButton: {
+    minWidth: 156,
+    height: 40,
+    paddingHorizontal: 18,
+  },
+  emptySecondaryButton: {
+    minWidth: 132,
+    height: 38,
+    paddingHorizontal: 16,
+  },
+  emptyButtonText: {
+    fontSize: 13,
+    letterSpacing: 0.2,
   },
 });
 

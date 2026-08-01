@@ -88,7 +88,7 @@ const INFO_PAGES = {
       },
       {
         heading: '6. Subscriptions & Auto-Renewal',
-        body: 'JuNubin does not sell subscriptions. There is nothing to renew, cancel, or refund. If you subscribed before JuNubin became free, manage or cancel that legacy subscription through the platform that processed it — your App Store or Google Play account settings, or the Stripe customer portal.',
+        body: 'JuNubin does not sell subscriptions. There is nothing to renew, cancel, or refund. If you subscribed before JuNubin became free, cancel through the platform that processed it, such as your App Store or Google Play account settings, or contact support@junubin.app for help with legacy billing records.',
       },
       {
         heading: '7. Virtual Items',
@@ -170,7 +170,7 @@ const INFO_PAGES = {
       },
       {
         heading: '12. Cookies and Web',
-        body: 'If you visit junubin.app on the web (e.g. for Stripe checkout or password reset), we use only essential cookies needed to operate the page — no advertising or third-party tracking cookies.',
+        body: 'If you visit junubin.app on the web (for example, to read support pages or reset access), we use only essential cookies needed to operate the page — no advertising or third-party tracking cookies.',
       },
       {
         heading: '13. Changes to This Policy',

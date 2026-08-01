@@ -9,7 +9,6 @@ import AppNavigator from '../../navigation/AppNavigator';
 
 const mockUseTheme = jest.fn();
 const mockUseAuth = jest.fn();
-const mockUseSubscription = jest.fn();
 const mockUseCurrentUser = jest.fn();
 
 jest.mock('../../theme', () => {
@@ -23,10 +22,6 @@ jest.mock('../../theme', () => {
 jest.mock('../../auth', () => ({
   useAuth: () => mockUseAuth(),
   useRequireAuth: () => (() => true),
-}));
-
-jest.mock('../../payments', () => ({
-  useSubscription: () => mockUseSubscription(),
 }));
 
 jest.mock('../../hooks', () => ({
@@ -148,34 +143,10 @@ describe('screen smoke tests', () => {
       logout: jest.fn(async () => {}),
     });
 
-    mockUseSubscription.mockReturnValue({
-      tier: 'free',
-      effectiveTier: 'free',
-      promoTier: null,
-      promoEndsAt: null,
-      spotlights: 0,
-      superLikes: 0,
-      coins: 100,
-      adsEnabled: true,
-      hasTier: () => false,
-      consumeCoins: () => true,
-      addCoins: jest.fn(),
-      addSpotlights: jest.fn(),
-      addSuperLikes: jest.fn(),
-      addWhispers: jest.fn(),
-      setAdsEnabled: jest.fn(),
-      grantPromoTier: jest.fn(),
-      restorePurchases: jest.fn(async () => ({ success: true })),
-      cancelSubscription: jest.fn(),
-      isSubscribed: () => false,
-      purchaseInProgress: false,
-      reset: jest.fn(async () => {}),
-    });
-
     mockUseCurrentUser.mockReturnValue({
       currentUser: {
         preferences: {
-          mode: 'Dating',
+          mode: 'Community',
           showMe: true,
           lookingFor: 'Women',
           ageRange: [21, 30],
@@ -207,7 +178,7 @@ describe('screen smoke tests', () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = {
       params: {
-        match: { id: 'm1', name: 'Asha', images: ['https://example.com/a.jpg'] },
+        peer: { id: 'u1', name: 'Asha', images: ['https://example.com/a.jpg'] },
       },
     };
     const { getByText, getByPlaceholderText } = render(
@@ -235,8 +206,8 @@ describe('screen smoke tests', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    // Chats (MessagesTab) is the initial tab — the retention loop is
-    // conversations, so the app opens on them.
-    expect(await findByText('Messages Screen')).toBeTruthy();
+    // Nearby (HomeTab, the map) is the initial tab — the app's first
+    // job on open is "who is around me".
+    expect(await findByText('Home Screen')).toBeTruthy();
   });
 });

@@ -13,7 +13,7 @@ const navigation = { navigate: mockNavigate, replace: jest.fn() };
 
 // Industry redesign Welcome screen (design.html): full-bleed photo +
 // scrim, flag mark + wordmark, gold-accent headline, Blueprint gold
-// CTA, flag stripe. These tests lock the new surface.
+// CTA. These tests lock the new surface.
 describe('OnboardingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -24,11 +24,11 @@ describe('OnboardingScreen', () => {
     expect(toJSON()).toBeTruthy();
   });
 
-  it('shows the wordmark, headline and non-dating positioning', () => {
+  it('shows the wordmark, headline and community positioning', () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     expect(getByText('JUNUBIN')).toBeTruthy();
     expect(getByText('Find your South Sudanese people.')).toBeTruthy();
-    expect(getByText(/not a dating app/)).toBeTruthy();
+    expect(getByText(/Free for the community/)).toBeTruthy();
   });
 
   it('shows the one-tap sign in caption', () => {
@@ -42,16 +42,16 @@ describe('OnboardingScreen', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Signup');
   });
 
-  it('renders all five flag stripe bands', () => {
+  it('renders no bottom flag stripe', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
-    // Design's exact band hexes (black, red, gold, green, blue).
-    ['#000000', '#D94A4A', '#F0B41F', '#0F9D58', '#0F8FD6'].forEach((hex) => {
-      expect(tree).toContain(hex);
+    // Stripe-only band hexes — the mini flag mark uses different ones.
+    ['#000000', '#D94A4A', '#0F9D58', '#0F8FD6'].forEach((hex) => {
+      expect(tree).not.toContain(hex);
     });
   });
 
-  it('carries no dating-era copy or warm-gold palette', () => {
+  it('carries no removed-product copy or warm-gold palette', () => {
     const { toJSON } = render(<OnboardingScreen navigation={navigation} />);
     const tree = JSON.stringify(toJSON());
     expect(tree).not.toContain('#F5B741');

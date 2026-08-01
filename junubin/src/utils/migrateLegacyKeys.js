@@ -4,8 +4,8 @@
 //
 // Why a runtime migration: the brand rename happened mid-flight; existing test
 // builds on devices have data under @haboba_*. Without this, those installs
-// would look like fresh users (lose subscription state, onboarding flag, etc.)
-// on the first launch after the rename ships.
+// would look like fresh users and lose onboarding/profile cache on the first
+// launch after the rename ships.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 

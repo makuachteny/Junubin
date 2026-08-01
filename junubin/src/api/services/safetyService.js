@@ -90,10 +90,9 @@ export async function reportAndBlock({ reportedId, reason = 'unspecified', detai
 }
 
 /**
- * Tear down a match: deletes Match + Conversation + ConversationMember
- * + Message rows in one transaction via the unmatch_user RPC. Argument
- * is the *peer's* User.id — the RPC looks up the corresponding Match by
- * the (me, other) pair so callers don't have to track the match row id.
+ * Tear down a connection: deletes the underlying Conversation,
+ * ConversationMember and Message rows in one transaction via the
+ * unmatch_user RPC. Argument is the *peer's* User.id.
  */
 export async function unmatchUser(otherUserId) {
   const { error } = await supabase.rpc('unmatch_user', { other_user_id: otherUserId });

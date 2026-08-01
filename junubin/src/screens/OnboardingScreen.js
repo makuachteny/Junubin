@@ -2,8 +2,8 @@
 // JuNubin — Welcome ("Industry" redesign, design.html Welcome screen)
 // Full-bleed photo under a dark scrim; bottom-anchored flag mark +
 // wordmark, 48pt condensed headline with the flag-gold accent span,
-// Blueprint-framed gold CTA, and the 5-band flag stripe pinned to the
-// very bottom edge. Hands off to the Signup screen (phone OTP).
+// and a Blueprint-framed gold CTA. Hands off to the Signup screen
+// (phone OTP).
 // ═══════════════════════════════════════════════════════════
 
 import React, { useCallback } from 'react';
@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontFamily } from '../theme';
 import Blueprint from '../components/Blueprint';
+import SouthSudanFlagMark from '../components/SouthSudanFlagMark';
 import { reportError } from '../utils/reportError';
 
 const ONBOARDED_KEY = '@junubin_onboarded';
@@ -40,10 +41,6 @@ const INK = {
   ctaInk: '#241B03',
   frame: 'rgba(236,242,248,0.4)',
 };
-
-// Bottom flag stripe — the five bands of the South Sudan flag, in the
-// design's exact order and hexes.
-const STRIPE = ['#000000', '#D94A4A', '#F0B41F', '#0F9D58', '#0F8FD6'];
 
 const OnboardingScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -75,27 +72,22 @@ const OnboardingScreen = ({ navigation }) => {
         style={StyleSheet.absoluteFill}
       />
 
-      {/* ── Bottom-anchored stack ── */}
-      <View style={[s.stack, { paddingBottom: insets.bottom + 44 }]}>
-        {/* Mini flag mark + letterspaced wordmark */}
+      {/* ── Bottom-anchored stack ──
+          Design pads 44px off the screen edge; on a device with a home
+          indicator the inset already accounts for most of that, so take
+          whichever is larger rather than stacking them. */}
+      <View style={[s.stack, { paddingBottom: Math.max(44, insets.bottom + 10) }]}>
+        {/* South Sudan flag mark + letterspaced wordmark */}
         <View style={s.brandRow}>
-          <View
-            style={s.flagMark}
-            accessibilityElementsHidden
-            importantForAccessibility="no"
-          >
-            <View style={[s.flagBand, { backgroundColor: '#111111' }]} />
-            <View style={[s.flagBand, s.flagBandRed]} />
-            <View style={[s.flagBand, { backgroundColor: '#1F9D55' }]} />
-          </View>
-          <Text style={s.wordmark} accessibilityRole="header">JUNUBIN</Text>
+          <SouthSudanFlagMark width={30} height={20} />
+          <Text style={s.wordmark}>JUNUBIN</Text>
         </View>
 
-        <Text style={s.headline}>
+        <Text style={s.headline} accessibilityRole="header">
           Find your <Text style={s.headlineGold}>South Sudanese</Text> people.
         </Text>
         <Text style={s.sub}>
-          Near you, or in the city you care about. Free — and not a dating app.
+          Near you, or in the city you care about. Free for the community.
         </Text>
 
         <Blueprint borderColor={INK.frame} markColor={INK.frame}>
@@ -113,12 +105,6 @@ const OnboardingScreen = ({ navigation }) => {
         <Text style={s.caption}>One-tap sign in. No passwords, ever.</Text>
       </View>
 
-      {/* ── Flag stripe pinned to the very bottom edge ── */}
-      <View style={s.stripe} pointerEvents="none">
-        {STRIPE.map((c) => (
-          <View key={c} style={{ flex: 1, backgroundColor: c }} />
-        ))}
-      </View>
     </View>
   );
 };
@@ -135,25 +121,11 @@ const s = StyleSheet.create({
     gap: 14,
   },
 
-  // ── Brand row: tricolor mark + wordmark ──
+  // ── Brand row: South Sudan flag mark + wordmark ──
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-  },
-  flagMark: {
-    width: 26,
-    height: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.4)',
-    flexDirection: 'column',
-  },
-  flagBand: { flex: 1 },
-  flagBandRed: {
-    backgroundColor: '#D64550',
-    borderTopWidth: 1.5,
-    borderBottomWidth: 1.5,
-    borderColor: '#FFFFFF',
   },
   wordmark: {
     fontFamily: FontFamily.heading,
@@ -175,7 +147,9 @@ const s = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: INK.sub,
-    maxWidth: 300,
+    // design: max-width 30ch — Barlow's digit advance is ~0.56em, so
+    // 30ch ≈ 268pt at 16pt.
+    maxWidth: 268,
     marginBottom: 8,
   },
 
@@ -189,7 +163,8 @@ const s = StyleSheet.create({
   ctaText: {
     fontFamily: FontFamily.headingBold,
     fontSize: 19,
-    letterSpacing: 1.5,
+    // design: letter-spacing .08em on 19px
+    letterSpacing: 1.52,
     color: INK.ctaInk,
   },
   caption: {
@@ -199,15 +174,6 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
 
-  // ── Flag stripe ──
-  stripe: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 5,
-    flexDirection: 'row',
-  },
 });
 
 export default OnboardingScreen;

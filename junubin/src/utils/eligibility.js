@@ -6,8 +6,8 @@
 //
 //   ban  →  restricted
 //
-// The dating-era gates that used to follow (survey, tier, balance,
-// rate-limit) went out with swiping, calls and paid consumables.
+// Old survey, tier, balance, and rate-limit gates are gone with the
+// removed paid mechanics. Moderation is the only hard action gate.
 
 
 // Things a restricted user can still do — fix their profile, leave the
@@ -36,7 +36,7 @@ export function getProfileRecord(userOrProfile) {
  *   { ok: false, reason, ...context }
  *
  * `user` shape:
- *   { id, moderationStatus, subscriptionTier, profile: { surveyCompletedAt, accountPurpose, ... } }
+ *   { id, moderationStatus, profile: { surveyCompletedAt, accountPurpose, ... } }
  *
  * Callers branch on `verdict.reason` to decide which UI to show:
  *   'banned'     → forceSignOut()
@@ -53,10 +53,7 @@ export function checkActionAllowed({ user, action }) {
     return { ok: false, reason: 'restricted' };
   }
 
-  // The dating-era gates (survey-before-swiping, tier-gated calls,
-  // consumable balances, daily like limits) are gone with those
-  // features — ban and restriction are the only things that block an
-  // action now.
+  // Ban and restriction are the only things that block an action now.
   return { ok: true };
 }
 
@@ -66,10 +63,9 @@ export function checkActionAllowed({ user, action }) {
 // returns a step the screen actually knows how to mount.
 
 const STEP_ORDER = [
-  // Open to — the multi-select that replaced the Dating/Socialize
-  // purpose cards in the community pivot. ProfileSetup still writes
-  // accountPurpose ('socialize') alongside the openTo array so every
-  // pre-pivot profile stays "complete" here; either satisfies the gate.
+  // Open to — the multi-select used by community discovery.
+  // ProfileSetup still writes accountPurpose for schema compatibility;
+  // either value satisfies the gate.
   { id: 'purpose',     test: (p) => !!p?.accountPurpose
                                      || (Array.isArray(p?.openTo) && p.openTo.length > 0) },
   { id: 'displayName', test: (p, u) => !!u?.displayName },
@@ -90,12 +86,6 @@ const STEP_ORDER = [
   // produces a nudge the user can't satisfy without detouring into
   // EditProfile — exactly the pattern the redesign removed. They stay
   // soft scores in profileCompleteness.js.
-  // NOTE: the dating-only steps (`interestedIn`, `datingIntentions`,
-  // `survey`) were removed in the community pivot along with the
-  // ProfileSetup steps that collected them. `onlyDating` is still
-  // honoured by the walkers below so re-introducing a mode-scoped step
-  // stays a one-line change — there just aren't any today.
-  //
   // languages / profession / city / locationVisibility are all
   // deliberately absent: every one of them is optional-skippable in
   // ProfileSetup, and gating an optional field here would nudge users
@@ -103,24 +93,12 @@ const STEP_ORDER = [
 ];
 
 /**
- * Returns the id of the first unanswered step, or null if the user is
- * fully set up for the requested mode.
- *
- * `opts.mode` ('dating' | 'social' | undefined): which mode to validate
- * against. When omitted, falls back to the user's stored accountPurpose
- * — the historic behavior. When passed explicitly (e.g. by the
- * eligibility helper for a dating action), it overrides accountPurpose
- * so a Social-onboarded user who toggles to Dating still gets gated on
- * the dating-only fields they haven't filled yet.
+ * Returns the id of the first unanswered setup step, or null if the
+ * user is ready for the current app.
  */
-export function nextIncompleteStep(profile, user, opts = {}) {
+export function nextIncompleteStep(profile, user) {
   if (!profile) return 'purpose';
-  const modeIsDating = opts.mode === 'dating'
-    || (!opts.mode && (
-      profile.accountPurpose === 'dating' || profile.accountPurpose === 'both'
-    ));
   for (const step of STEP_ORDER) {
-    if (step.onlyDating && !modeIsDating) continue;
     if (!step.test(profile, user)) return step.id;
   }
   return null; // fully complete
@@ -128,18 +106,12 @@ export function nextIncompleteStep(profile, user, opts = {}) {
 
 /**
  * Convenience: rough percent-complete for the profile completeness ring.
- * Counts only steps relevant to the user's chosen mode.
+ * Counts the setup steps still required by the current app.
  */
-export function profilePercentComplete(profile, user, opts = {}) {
+export function profilePercentComplete(profile, user) {
   if (!profile) return 0;
-  const modeIsDating = opts.mode === 'dating'
-    || (!opts.mode && (
-      profile.accountPurpose === 'dating' || profile.accountPurpose === 'both'
-    ));
-  const relevant = STEP_ORDER.filter((s) => !s.onlyDating || modeIsDating);
-  if (relevant.length === 0) return 0;
-  const done = relevant.filter((s) => s.test(profile, user)).length;
-  return Math.round((done / relevant.length) * 100);
+  const done = STEP_ORDER.filter((s) => s.test(profile, user)).length;
+  return Math.round((done / STEP_ORDER.length) * 100);
 }
 
 // Reason → short copy for toasts/nudges. Components can override per-action.

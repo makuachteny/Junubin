@@ -112,9 +112,8 @@ export function useRealtime(userId) {
   }, [joinConversation]);
 
   /**
-   * Listen for anything that should refresh the inbox. The dating-era
-   * `Match` subscription is gone — there are no matches — so the two
-   * events that actually change what the Messages tab shows are:
+   * Listen for anything that should refresh the inbox. The two events
+   * that change what the Messages tab shows are:
    *
    *   • a new `Message` row (a thread moves to the top / goes unread)
    *   • a `MessageRequest` INSERT or UPDATE (a stranger asked to talk,

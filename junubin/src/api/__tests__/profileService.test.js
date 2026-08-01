@@ -22,13 +22,11 @@ describe('normalizeProfile', () => {
         school: 'University',
         heightCm: 170,
         ethnicity: 'Dinka',
-        datingIntentions: 'Long-term',
         interests: ['music', 'travel'],
         stickers: [{ emoji: '🇸🇸', label: 'Junub' }],
         pronouns: 'she/her',
         education: 'Bachelors',
-        children: 'None',
-        lookingFor: 'Something serious',
+        lookingFor: 'Community',
       },
     };
 
