@@ -427,6 +427,9 @@ export default function MessagesScreen({ navigation }) {
     </Text>
   );
 
+  // There is no in-app notifications feed service yet (delivery is
+  // push-only), so pending requests proxy for "unread notifications"
+  // on the bell — same signal the design's dot carries.
   const hasNotifDot = requestCount > 0;
 
   return (
@@ -447,7 +450,18 @@ export default function MessagesScreen({ navigation }) {
         ]}
       >
         <View style={styles.headerRow}>
-          <Text style={styles.headerTitle}>Chats</Text>
+          <View style={styles.headerLeft}>
+            <View style={styles.kickerRow}>
+              {/* Mini flag mark: ink / red / green stripes in a hairline frame. */}
+              <View style={styles.flagMark} accessible={false}>
+                <View style={styles.flagStripeInk} />
+                <View style={styles.flagStripeRed} />
+                <View style={styles.flagStripeGreen} />
+              </View>
+              <Text style={styles.kicker}>JUNUBIN</Text>
+            </View>
+            <Text style={styles.headerTitle} accessibilityRole="header">Chats</Text>
+          </View>
           <TouchableOpacity
             style={styles.bellBtn}
             onPress={() => navigation.navigate('Notifications')}
@@ -455,7 +469,7 @@ export default function MessagesScreen({ navigation }) {
             accessibilityRole="button"
             accessibilityLabel={hasNotifDot ? 'Notifications, new activity' : 'Notifications'}
           >
-            <Ionicons name="notifications-outline" size={22} color={colors.black} />
+            <Ionicons name="notifications-outline" size={21} color={colors.black} />
             {hasNotifDot && <View style={styles.bellDot} />}
           </TouchableOpacity>
         </View>

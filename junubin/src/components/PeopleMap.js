@@ -647,7 +647,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   cardMeta: {
     fontFamily: FontFamily.regular,
     fontSize: 12.5,
-    color: colors.gray600,
+    color: colors.gray500,
     marginTop: 2,
   },
   cardCta: {
