@@ -179,7 +179,7 @@ describe('Onboarding / open-to flow', () => {
     expect(queryByText('What brings you here?')).toBeNull();
   });
 
-  it('authenticated user with complete profile goes to Main (Home)', async () => {
+  it('authenticated user with complete profile goes to Main (Chats is the home tab)', async () => {
     mockUseAuth.mockReturnValue({
       ready: true, isAuthenticated: true, session: { user: { id: '1' } },
       user: { profile: { profileComplete: true } },
@@ -191,7 +191,7 @@ describe('Onboarding / open-to flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(await findByText('Home Screen')).toBeTruthy();
+    expect(await findByText('Messages Screen')).toBeTruthy();
   });
 
   it('authenticated user with accountPurpose set goes to Main', async () => {
@@ -206,7 +206,7 @@ describe('Onboarding / open-to flow', () => {
         <AppNavigator />
       </NavigationContainer>
     );
-    expect(await findByText('Home Screen')).toBeTruthy();
+    expect(await findByText('Messages Screen')).toBeTruthy();
   });
 
   it('authenticated user without profile goes to ProfileSetup', async () => {
@@ -238,7 +238,7 @@ describe('Onboarding / open-to flow', () => {
     );
     // Onboarding landing now shows the Get Started CTA (Skip removed
      // when the multi-page flow collapsed to a single landing screen).
-    expect(await findByText('Get Started')).toBeTruthy();
+    expect(await findByText('GET STARTED')).toBeTruthy();
   });
 
   it('returning unauthenticated user skips landing and sees Signup', async () => {
@@ -254,6 +254,6 @@ describe('Onboarding / open-to flow', () => {
       </NavigationContainer>
     );
     expect(await findByText('JOIN THE COMMUNITY')).toBeTruthy();
-    expect(queryByText('Get Started')).toBeNull();
+    expect(queryByText('GET STARTED')).toBeNull();
   });
 });

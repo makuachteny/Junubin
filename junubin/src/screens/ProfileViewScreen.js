@@ -559,7 +559,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   // Warm flag-yellow for the primary conversation action.
   actionMessage: {
-    backgroundColor: '#FCCD12',
+    backgroundColor: colors.accent,
   },
   actionMore: {
     backgroundColor: '#262626',
@@ -590,7 +590,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   },
   // "Open to" chips are intent, not trivia — filled so they read first.
   metaChipStrong: {
-    backgroundColor: '#FCCD12',
+    backgroundColor: colors.accent,
     borderColor: 'transparent',
   },
   metaChipText: {

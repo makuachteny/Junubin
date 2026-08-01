@@ -1,7 +1,7 @@
 import React from 'react';
 import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 
-function GraffitiCrown({ size = 24, color = '#FCCD12', filled = false, style }) {
+function GraffitiCrown({ size = 24, color = '#2E7FD0', filled = false, style }) {
   const id = `crownGrad_${size}`;
   const id2 = `crownShine_${size}`;
 
@@ -33,7 +33,7 @@ function GraffitiCrown({ size = 24, color = '#FCCD12', filled = false, style }) 
       <Defs>
         <LinearGradient id={id} x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor="#FFE44D" />
-          <Stop offset="0.35" stopColor="#FCCD12" />
+          <Stop offset="0.35" stopColor="#6AA7E0" />
           <Stop offset="0.65" stopColor="#F5A623" />
           <Stop offset="1" stopColor="#D4880F" />
         </LinearGradient>
@@ -76,8 +76,8 @@ function GraffitiCrown({ size = 24, color = '#FCCD12', filled = false, style }) 
 
       {/* Band jewels */}
       <Circle cx="8" cy="18.2" r="0.8" fill="#E8383B" opacity={0.85} />
-      <Circle cx="12" cy="18.2" r="0.8" fill="#0047AB" opacity={0.85} />
-      <Circle cx="16" cy="18.2" r="0.8" fill="#009739" opacity={0.85} />
+      <Circle cx="12" cy="18.2" r="0.8" fill="#175A9E" opacity={0.85} />
+      <Circle cx="16" cy="18.2" r="0.8" fill="#2E7FD0" opacity={0.85} />
 
       {/* Outer stroke for crispness */}
       <Path

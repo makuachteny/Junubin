@@ -118,7 +118,7 @@ describe('Flow smoke tests', () => {
   it('onboarding get started navigates to Signup', () => {
     const navigation = { navigate: jest.fn() };
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
-    fireEvent.press(getByText('Get Started'));
+    fireEvent.press(getByText('GET STARTED'));
     expect(navigation.navigate).toHaveBeenCalledWith('Signup');
   });
 

@@ -141,13 +141,14 @@ beforeEach(() => {
 });
 
 describe('HomeScreen — people discovery', () => {
-  it('renders the Nearby header with a city search, not a swipe deck', async () => {
-    const { getByText, getByTestId, queryByTestId } = render(
+  // Industry redesign: the map is full-bleed with floating chrome — no
+  // "Nearby" title bar. The city pill + Map|List segment ARE the header.
+  it('renders the floating city pill and Map/List segment, not a swipe deck', async () => {
+    const { getByTestId, queryByTestId } = render(
       <HomeScreen navigation={navigation} route={{ params: {} }} />
     );
     await act(async () => {});
-    expect(getByText('Nearby')).toBeTruthy();
-    expect(getByTestId('home-city-search')).toBeTruthy();
+    expect(getByTestId('home-city-pill')).toBeTruthy();
     expect(getByTestId('home-view-map')).toBeTruthy();
     expect(getByTestId('home-view-list')).toBeTruthy();
     // No swipe-deck affordances survive on this screen.

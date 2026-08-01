@@ -51,7 +51,7 @@ export default function SurveyNudgeModal({
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.iconWrap}>
-            <Ionicons name="sparkles" size={20} color="#FCCD12" />
+            <Ionicons name="sparkles" size={20} color={colors.accent} />
           </View>
 
           <Text style={styles.title}>Tell us a little more</Text>
@@ -131,7 +131,7 @@ function makeStyles(colors, isDark) {
       marginBottom: 14,
     },
     primaryBtn: {
-      backgroundColor: '#FCCD12',
+      backgroundColor: colors.accent,
       borderRadius: 10,
       paddingVertical: 10,
       alignItems: 'center',

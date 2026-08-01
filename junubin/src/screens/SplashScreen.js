@@ -60,7 +60,7 @@ export default function SplashScreen({ onFinish, authReady }) {
       {/* Flag bar — grows from left */}
       <Animated.View style={[s.flagBar, { width: flagW }]}>
         <LinearGradient
-          colors={['#CE1126','#CE1126','#FCCD12','#009739','#0047AB']}
+          colors={['#175A9E','#2E7FD0','#6AA7E0']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           style={StyleSheet.absoluteFill}
         />

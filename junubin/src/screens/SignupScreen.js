@@ -32,12 +32,15 @@ const LANDING_IMAGE = require('../assets/landing.jpeg');
 // ── Warm earth-tone palette for the auth flow ──
 // Login feels welcoming/grounded — honey gold, burnt orange, warm brown ochre,
 // instead of the flag-red used elsewhere in the app.
+// Industry steel ramp — this screen is fixed-dark (photo/ink ground),
+// so the accent steps are deliberate literals from the redesign mock
+// rather than theme tokens that flip in light mode.
 const WARM = {
-  highlight: '#FFD56B',   // bright honey for italic accent words
-  primary:   '#F5B741',   // honey gold
-  mid:       '#E27D2C',   // burnt orange
-  deep:      '#8E5524',   // warm brown ochre
-  link:      '#FFC76B',   // warm gold for links / resend
+  highlight: '#B3D6FA',   // light steel for italic accent words
+  primary:   '#4F97E0',   // CTA steel (mock welcome button)
+  mid:       '#2E7FD0',   // base accent
+  deep:      '#175A9E',   // deep steel
+  link:      '#7FB5F0',   // links / resend
 };
 
 const SignupScreen = ({ navigation, route }) => {
@@ -760,7 +763,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     fontSize: 14,
     fontFamily: FontFamily.semibold,
     fontWeight: '600',
-    color: '#FCCD12',
+    color: '#6AA7E0',
   },
   input: {
     flex: 1,
@@ -810,8 +813,8 @@ const getStyles = (colors, isDark) => StyleSheet.create({
     marginTop: 2,
   },
   eulaBoxChecked: {
-    backgroundColor: '#FCCD12',
-    borderColor: '#FCCD12',
+    backgroundColor: '#4F97E0',
+    borderColor: '#4F97E0',
   },
   eulaText: {
     flex: 1,
@@ -874,7 +877,7 @@ const getStyles = (colors, isDark) => StyleSheet.create({
   attemptsLockedHint: {
     fontSize: 13,
     fontFamily: FontFamily.medium,
-    color: '#F5B741',
+    color: '#B3D6FA',
     textAlign: 'center',
     marginTop: -6,
     marginBottom: 14,

@@ -15,10 +15,10 @@ import { reportError } from '../utils/reportError';
 // its own reward here: a bigger community in your city. Milestones
 // stay as recognition only; none of them grant an entitlement.
 const REWARD_TIERS = [
-  { id: 'invite_1',  count: 1,  reward: 'First invite sent',        icon: 'paper-plane', color: '#0047AB' },
+  { id: 'invite_1',  count: 1,  reward: 'First invite sent',        icon: 'paper-plane', color: '#175A9E' },
   { id: 'invite_3',  count: 3,  reward: 'Community builder',        icon: 'people',      color: '#F59E0B' },
-  { id: 'invite_5',  count: 5,  reward: 'Connector',                icon: 'git-network', color: '#CE1126' },
-  { id: 'invite_10', count: 10, reward: 'Diaspora champion',        icon: 'ribbon',      color: '#009739' },
+  { id: 'invite_5',  count: 5,  reward: 'Connector',                icon: 'git-network', color: '#2E7FD0' },
+  { id: 'invite_10', count: 10, reward: 'Diaspora champion',        icon: 'ribbon',      color: '#6AA7E0' },
 ];
 
 export default function ReferralScreen({ navigation }) {
@@ -135,9 +135,9 @@ export default function ReferralScreen({ navigation }) {
               <Text style={styles.tierReward}>{tier.reward}</Text>
             </View>
             {claimed ? (
-              <Ionicons name="checkmark-circle" size={22} color="#CE1126" />
+              <Ionicons name="checkmark-circle" size={22} color="#2E7FD0" />
             ) : achieved ? (
-              <Ionicons name="checkmark-circle" size={22} color="#CE1126" />
+              <Ionicons name="checkmark-circle" size={22} color="#2E7FD0" />
             ) : (
               <Ionicons name="ellipse-outline" size={22} color={colors.gray300} />
             )}

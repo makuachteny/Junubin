@@ -1,6 +1,13 @@
 // PeopleMap — the map surface of the Home tab: South Sudanese people
 // near you who chose to be visible.
 //
+// Industry redesign: the map renders FULL-BLEED under HomeScreen's
+// floating chrome (city pill, Map|List segments, quick chips). This
+// component no longer draws its own filter row — HomeScreen passes the
+// active quick filter down via `quickFilter`. Pins are square photo
+// tiles; the current user is a pulsing accent dot dead-center; the
+// tapped pin's preview is a Blueprint card that rises from the bottom.
+//
 // Privacy contract (must stay in sync with 00032_share_location_optin.sql
 // and 00047_social_pivot.sql):
 //   1. Users are visible on the map only if they set
@@ -29,12 +36,8 @@ import {
   StyleSheet,
   Image,
   TouchableOpacity,
-  ScrollView,
   Animated,
   ActivityIndicator,
-  Modal,
-  Pressable,
-  useWindowDimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +47,7 @@ import { DEMO_ROSTER } from '../data/__dev__/demoRoster';
 import { DEMO_DATA_ENABLED } from '../config/demoData';
 import * as discoverService from '../api/services/discoverService';
 import LocationDisclosure from './LocationDisclosure';
+import Blueprint from './Blueprint';
 
 // `react-native-maps` ships a native module. When the JS bundle is
 // loaded by Expo Go (or by any client missing the linked native code —
@@ -104,10 +108,9 @@ const offsetCoord = (center, bearingDeg, distanceKm) => {
   return { latitude: (lat2 * 180) / Math.PI, longitude: (lng2 * 180) / Math.PI };
 };
 
-// Haversine — straight-line distance (km) between two coords. Used to
-// filter pins by the Nearby / 25mi / 50mi chips. Mirrors the formula
-// that the server-side discover function will use once we have real
-// location data.
+// Haversine — straight-line distance (km) between two coords. Used for
+// the "X km away" meta on the selected-pin card. Mirrors the formula
+// that the server-side discover function uses.
 const distanceKm = (a, b) => {
   if (!a || !b) return Infinity;
   const R = 6371;
@@ -120,22 +123,13 @@ const distanceKm = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-const KM_PER_MILE = 1.609344;
-
-// Height of the horizontal chip row, including its vertical padding.
-// The privacy strip is positioned directly beneath it, so the two must
-// agree — see the `banner` offset in the render below.
-const CHIP_ROW_HEIGHT = 38;
-
-// Distance filter presets. Values are radii in km; null = no cap.
-// Matches the Distance dropdown in the swipe-deck FilterBar so a user
-// who set "25 miles" there sees the same vocabulary on the map.
-const DISTANCE_FILTERS = [
-  { id: 'nearby', label: 'Nearby', maxKm: 5 * KM_PER_MILE },
-  { id: '25mi',   label: '25 mi',  maxKm: 25 * KM_PER_MILE },
-  { id: '50mi',   label: '50 mi',  maxKm: 50 * KM_PER_MILE },
-  { id: 'any',    label: 'Anywhere', maxKm: null },
-];
+// "Active this week" — matches HomeScreen's list-side definition so the
+// chip means the same thing on both surfaces.
+const isActiveThisWeek = (person) => {
+  if (!person?.lastActiveAt) return false;
+  const days = (Date.now() - new Date(person.lastActiveAt).getTime()) / 8.64e7;
+  return Number.isFinite(days) && days <= 7;
+};
 
 // Demo users are scattered around the caller's location instead of
 // pinned to their bio cities. Without this, a tester opening the map
@@ -144,9 +138,7 @@ const DISTANCE_FILTERS = [
 // gets a deterministic offset from `center` so the layout is stable
 // across re-renders — Adau is always 0.4km north-east of you, Abuk
 // is always 0.6km south, etc. — but the absolute position follows
-// wherever the tester actually is. Distance distribution intentionally
-// spans 0.3 → 60 km so the Nearby / 25mi / 50mi chips each reveal a
-// distinct subset of the roster.
+// wherever the tester actually is.
 //
 // `center === null` (location permission denied) falls back to the
 // roster's static city coords so the map at least shows the demo
@@ -160,9 +152,9 @@ const peopleForMode = (mode, center) => {
         if (!u.coords) return null;
         return u;
       }
-      // Stable per-user spread: even angle distribution (i * 36°),
-      // and a step of distance bands so the chip filters reveal
-      // genuinely different rosters: 0.3, 1.5, 6, 18, 45, 80km, ...
+      // Stable per-user spread: even angle distribution (i * 36°) and
+      // stepped distance bands so the roster fans out around the
+      // tester instead of stacking on one block.
       const angle = (i * 36) % 360;
       const bands = [0.3, 1.5, 6, 18, 45, 80, 140, 240, 400, 700];
       const dist = bands[i % bands.length];
@@ -177,7 +169,14 @@ export default function PeopleMap({
   // caller doesn't change behaviour unexpectedly.
   mode = null,
   onPersonPress,
+  // Height of the floating chrome HomeScreen draws over the map —
+  // overlays rendered here must clear it.
   topInset = 12,
+  // Quick filter from HomeScreen's floating chips:
+  // 'all' | 'verified' | 'active'.
+  quickFilter = 'all',
+  // Lets HomeScreen's city pill show "N visible".
+  onVisibleCountChange,
   // Location consent gate. Until this is true we render the in-app
   // disclosure and do NOT touch expo-location. See the privacy contract
   // at the top of this file.
@@ -190,26 +189,13 @@ export default function PeopleMap({
 }) {
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-  const { width: screenW } = useWindowDimensions();
   const mapRef = useRef(null);
-  const previewAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
   const [selected, setSelected] = useState(null);
-  // Screen-space pixel anchor of the tapped marker. Captured once when
-  // openPreview fires (via MapView.pointForCoordinate) so the preview
-  // card can render directly above the pin. The card is dismissed on
-  // region change so we don't need to re-project as the user pans.
-  const [previewAnchor, setPreviewAnchor] = useState(null);
   const [region, setRegion] = useState(null);
   const [locating, setLocating] = useState(true);
   const [locationError, setLocationError] = useState(null);
-  // Filter state: distance band + Active-now toggle. Both default to
-  // Anywhere / off so a fresh open shows the maximum roster.
-  const [distanceFilter, setDistanceFilter] = useState('any');
-  const [activeOnly, setActiveOnly] = useState(false);
-  // Customize sheet — secondary filters tucked behind a "More" icon so
-  // the chip row stays scannable. 'any' = no filter applied.
-  const [showMoreFilters, setShowMoreFilters] = useState(false);
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   // Pull the caller's current location once, but ONLY after the user
   // has accepted the in-app disclosure. If they decline the OS
@@ -262,6 +248,19 @@ export default function PeopleMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [disclosureAccepted]);
 
+  // The "YOU" dot pulses forever — a slow accent ring expanding out of
+  // the dot. Runs on the native driver; cheap.
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulseAnim]);
+
   // Resolve the offset center from the current region (caller's
   // device location once Location resolves). When region is still
   // null we feed `null` so the roster falls back to its static city
@@ -269,26 +268,15 @@ export default function PeopleMap({
   const center = region ? { latitude: region.latitude, longitude: region.longitude } : null;
 
   // Live opted-in users from the discover-nearby Edge Function.
-  // The list refreshes when center / mode / activeOnly changes —
-  // exact same trigger surface the chip row mutates, so a user
-  // toggling 'Active now' or pulling distance to 'Anywhere' hits
-  // the server. Failures (function not deployed, network) silently
-  // fall back to an empty list and the DEMO_ROSTER pattern takes
-  // over below.
+  // Failures (function not deployed, network) silently fall back to an
+  // empty list and the DEMO_ROSTER pattern takes over below.
   const [livePeople, setLivePeople] = useState([]);
   useEffect(() => {
     if (!center) return;
     let cancelled = false;
     discoverService.getNearbyUsers({
       center,
-      // Translate the chip filter into a real km cap. 'any' = use the
-      // function's default; the others map to the visible chip labels.
-      radiusKm: distanceFilter === 'nearby' ? 5 * KM_PER_MILE
-        : distanceFilter === '25mi'   ? 25 * KM_PER_MILE
-        : distanceFilter === '50mi'   ? 50 * KM_PER_MILE
-        : undefined,
       mode: mode === 'Dating' ? 'dating' : 'social',
-      activeOnly,
     }).then(({ users }) => {
       if (cancelled) return;
       setLivePeople(users || []);
@@ -296,7 +284,10 @@ export default function PeopleMap({
       if (!cancelled) setLivePeople([]);
     });
     return () => { cancelled = true; };
-  }, [center?.latitude, center?.longitude, distanceFilter, activeOnly, mode]);
+    // center is a fresh object each render so we depend on its
+    // primitive parts to avoid useless refetches.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [center?.latitude, center?.longitude, mode]);
 
   const allPeople = useMemo(() => {
     // Real users hide the demo roster entirely — same hide-when-real
@@ -307,15 +298,11 @@ export default function PeopleMap({
     if (livePeople.length > 0) return livePeople;
     return peopleForMode(mode, center);
   },
-    // center is a fresh object each render so we depend on its
-    // primitive parts to avoid useless recomputes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [mode, center?.latitude, center?.longitude, livePeople],
   );
 
-  // Apply chip filters. `Nearby` / `25mi` / `50mi` cap by haversine
-  // distance from the caller; `any` disables the cap. Active-now
-  // intersects with `activity === 'active'`.
+  // Apply the quick filter from HomeScreen's floating chips.
   //
   // City-only users are dropped here, not server-side. `discover-nearby`
   // returns everyone whose visibility is not 'off' so the list surfaces
@@ -323,53 +310,31 @@ export default function PeopleMap({
   // map" — putting one down anyway would break that promise even
   // though the coordinate is coarse. They still appear in the Home list
   // and the Directory, which is what they consented to.
-  const visiblePeople = useMemo(() => {
-    const cfg = DISTANCE_FILTERS.find((d) => d.id === distanceFilter) || DISTANCE_FILTERS[3];
-    return allPeople.filter((p) => {
-      if (p.locationVisibility === 'city') return false;
-      if (!p.coords) return false;
-      if (activeOnly && p.activity !== 'active') return false;
-      if (verifiedOnly && !p.verified) return false;
-      if (cfg.maxKm == null || !center) return true;
-      return distanceKm(center, p.coords) <= cfg.maxKm;
-    });
-  }, [allPeople, distanceFilter, activeOnly, verifiedOnly, center]);
+  const visiblePeople = useMemo(() => allPeople.filter((p) => {
+    if (p.locationVisibility === 'city') return false;
+    if (!p.coords) return false;
+    if (quickFilter === 'verified' && !p.verified) return false;
+    if (quickFilter === 'active' && !(p.activity === 'active' || isActiveThisWeek(p))) return false;
+    return true;
+  }), [allPeople, quickFilter]);
 
-  const moreFiltersActive = verifiedOnly;
+  useEffect(() => {
+    onVisibleCountChange?.(visiblePeople.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visiblePeople.length]);
 
-  const openPreview = useCallback(async (person) => {
+  const openPreview = useCallback((person) => {
     setSelected(person);
-    // Translate the tapped person's lat/lng into screen pixels so the
-    // preview card can render directly above the marker. If the map
-    // ref isn't ready or the projection fails (Android edge case),
-    // fall back to a centered bottom-sheet style anchor below.
-    if (mapRef.current && person?.coords) {
-      try {
-        const pt = await mapRef.current.pointForCoordinate(person.coords);
-        if (pt && Number.isFinite(pt.x) && Number.isFinite(pt.y)) {
-          setPreviewAnchor({ x: pt.x, y: pt.y });
-        } else {
-          setPreviewAnchor(null);
-        }
-      } catch {
-        setPreviewAnchor(null);
-      }
-    } else {
-      setPreviewAnchor(null);
-    }
-    Animated.spring(previewAnim, {
-      toValue: 1, useNativeDriver: true, tension: 80, friction: 9,
+    Animated.timing(cardAnim, {
+      toValue: 1, duration: 250, useNativeDriver: true,
     }).start();
-  }, [previewAnim]);
+  }, [cardAnim]);
 
   const closePreview = useCallback(() => {
-    Animated.timing(previewAnim, {
-      toValue: 0, duration: 180, useNativeDriver: true,
-    }).start(() => {
-      setSelected(null);
-      setPreviewAnchor(null);
-    });
-  }, [previewAnim]);
+    Animated.timing(cardAnim, {
+      toValue: 0, duration: 200, useNativeDriver: true,
+    }).start(() => setSelected(null));
+  }, [cardAnim]);
 
   const handleViewProfile = useCallback(() => {
     if (selected && onPersonPress) onPersonPress(selected);
@@ -381,120 +346,6 @@ export default function PeopleMap({
     mapRef.current.animateToRegion(region, 400);
   }, [region]);
 
-  // Filter chips render above the map so they're always reachable
-  // even when a marker is selected. Pulled into a sub-render so the
-  // fallback view can reuse it.
-  const renderFilters = () => (
-    <View style={[styles.filterBar, { top: topInset }]} pointerEvents="box-none">
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {DISTANCE_FILTERS.map((f) => {
-          const active = distanceFilter === f.id;
-          return (
-            <TouchableOpacity
-              key={f.id}
-              style={[styles.chip, active && styles.chipActive]}
-              onPress={() => setDistanceFilter(f.id)}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={`Filter ${f.label}`}
-              accessibilityState={{ selected: active }}
-            >
-              {f.id === 'nearby' && (
-                <Ionicons name="location" size={12} color={active ? '#FFF' : colors.black} style={{ marginRight: 4 }} />
-              )}
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-        <TouchableOpacity
-          style={[styles.chip, activeOnly && styles.chipActive]}
-          onPress={() => setActiveOnly((v) => !v)}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Active now"
-          accessibilityState={{ selected: activeOnly }}
-        >
-          <View style={[styles.activeDot, activeOnly && styles.activeDotOn]} />
-          <Text style={[styles.chipText, activeOnly && styles.chipTextActive]}>Active now</Text>
-        </TouchableOpacity>
-
-        {/* Customize sheet trigger — secondary filters (verified, gender)
-            live behind here so the visible chip row stays scannable.
-            Accent dot appears when one of the hidden filters is on. */}
-        <TouchableOpacity
-          style={styles.moreBtn}
-          onPress={() => setShowMoreFilters(true)}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Customize filters"
-        >
-          <Ionicons name="options-outline" size={16} color={colors.black} />
-          {moreFiltersActive && <View style={styles.moreDot} />}
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  );
-
-  const renderMoreFiltersSheet = () => (
-    <Modal
-      visible={showMoreFilters}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowMoreFilters(false)}
-    >
-      <Pressable style={styles.sheetOverlay} onPress={() => setShowMoreFilters(false)}>
-        <View style={styles.sheet} onStartShouldSetResponder={() => true}>
-          <View style={styles.sheetGrabber} />
-          <Text style={styles.sheetTitle}>Customize</Text>
-
-          {/* The gender filter that used to live here ("Show me: Men /
-              Women") was a dating affordance. In a community directory
-              it invites exactly the browsing behaviour we don't want,
-              so it's gone. Filter by background, language and what
-              someone is open to on the Directory tab instead. */}
-
-          <Text style={styles.sheetSection}>Trust</Text>
-          <TouchableOpacity
-            style={[styles.sheetRow, verifiedOnly && styles.sheetRowActive]}
-            onPress={() => setVerifiedOnly((v) => !v)}
-            activeOpacity={0.85}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: verifiedOnly }}
-          >
-            <Ionicons
-              name="shield-checkmark"
-              size={18}
-              color={verifiedOnly ? colors.accent : colors.gray500}
-            />
-            <Text style={styles.sheetRowText}>Verified profiles only</Text>
-            <View style={[styles.toggleDot, verifiedOnly && styles.toggleDotOn]} />
-          </TouchableOpacity>
-
-          <View style={styles.sheetActions}>
-            <TouchableOpacity
-              style={styles.sheetClearBtn}
-              onPress={() => setVerifiedOnly(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.sheetClearText}>Clear</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.sheetDoneBtn}
-              onPress={() => setShowMoreFilters(false)}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.sheetDoneText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Pressable>
-    </Modal>
-  );
-
   // ── Location disclosure gate ──
   // Rendered BEFORE anything that could touch expo-location. Until the
   // user accepts, we have not asked the OS for anything and we do not
@@ -502,7 +353,7 @@ export default function PeopleMap({
   // needs no location at all.
   if (!disclosureAccepted) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: topInset }]}>
         <LocationDisclosure
           onAccept={() => onDisclosureAccept?.()}
           onDecline={() => {
@@ -516,12 +367,11 @@ export default function PeopleMap({
   }
 
   // ── Fallback when react-native-maps native module is missing
-  // (Expo Go, broken dev client). Render the same chrome — privacy
-  // banner, filter chips, recenter shell — but with an explanatory
-  // surface instead of a real map.
+  // (Expo Go, broken dev client). HomeScreen's floating chrome still
+  // renders above this, so keep the explanation clear of it.
   if (!MapView) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: topInset }]}>
         <View style={styles.fallbackInner}>
           <Ionicons name="map-outline" size={48} color={colors.gray400} />
           <Text style={styles.fallbackTitle}>Map preview unavailable</Text>
@@ -529,14 +379,6 @@ export default function PeopleMap({
             The map needs a native build. Open this view in TestFlight or a custom dev client.
           </Text>
         </View>
-        <View style={[styles.banner, { top: topInset + CHIP_ROW_HEIGHT }]} pointerEvents="none">
-          <Ionicons name="shield-checkmark" size={12} color="#FFF" />
-          <Text style={styles.bannerText} numberOfLines={1}>
-            You&apos;re hidden by default · Settings → Privacy
-          </Text>
-        </View>
-        {renderFilters()}
-        {renderMoreFiltersSheet()}
       </View>
     );
   }
@@ -549,6 +391,14 @@ export default function PeopleMap({
       </View>
     );
   }
+
+  const selectedMeta = selected ? (() => {
+    const km = center && selected.coords ? distanceKm(center, selected.coords) : null;
+    const dist = Number.isFinite(km)
+      ? `${km < 10 ? km.toFixed(1) : Math.round(km)} km away`
+      : selected.city || null;
+    return [dist, selected.profession || selected.ethnicity].filter(Boolean).join(' · ');
+  })() : '';
 
   return (
     <View style={styles.container}>
@@ -564,61 +414,70 @@ export default function PeopleMap({
           latitude: 39.5, longitude: -98.5,
           latitudeDelta: 60, longitudeDelta: 60,
         }}
-        showsUserLocation
+        // We draw our own "YOU" marker dead-center; the OS blue dot
+        // would double it up.
+        showsUserLocation={false}
         showsCompass={false}
         showsScale={false}
         toolbarEnabled={false}
         rotateEnabled={false}
         pitchEnabled={false}
-        // Closing the preview only on user-initiated pan (not on the
-        // programmatic animateToRegion call we fire after openPreview)
-        // keeps the card stable while the map is fitting the marker.
-        // onPanDrag fires every time the user moves a finger on the
-        // map; onRegionChange would also fire on the initial layout
-        // and the openPreview-induced zoom, killing the card before
-        // the spring animation finishes.
+        // Close the card when the user pans away or taps empty map.
+        // onPanDrag (not onRegionChange) so the programmatic
+        // animateToRegion after recenter doesn't kill the card.
         onPanDrag={() => { if (selected) closePreview(); }}
+        onPress={() => { if (selected) closePreview(); }}
       >
         {visiblePeople.map((p) => (
           <Marker
             key={p.id}
             coordinate={p.coords}
-            // We render our own marker chrome — an Image inside a
-            // ring — so the iOS-default red pin doesn't stomp on the
-            // app's visual language.
-            tracksViewChanges={false}
+            // Rasterized markers (tracksViewChanges=false) are cheap but
+            // won't repaint the selection ring, so track only while a
+            // selection is in play.
+            tracksViewChanges={selected != null}
             onPress={() => openPreview(p)}
           >
-            <View style={styles.marker}>
-              <Image source={imageSource(p.photos?.[0])} style={styles.markerPhoto} />
-              {p.activity === 'active' && <View style={styles.markerActiveDot} />}
+            <View
+              style={[styles.pin, selected?.id === p.id && styles.pinSelected]}
+              testID={`map-pin-${p.id}`}
+              accessibilityLabel={p.name}
+            >
+              <Image source={imageSource(p.photos?.[0])} style={styles.pinPhoto} />
             </View>
           </Marker>
         ))}
       </MapView>
 
-      {renderFilters()}
-      {renderMoreFiltersSheet()}
-
-      {/* Privacy reminder + result count share one compact strip below
-          the chip row. This used to be a full-width banner pinned at
-          `top: 0` with no offset, which rendered *underneath* the chips
-          and made both unreadable. Keep the explicit offset in step
-          with CHIP_ROW_HEIGHT if the chips ever change size. */}
-      <View style={[styles.banner, { top: topInset + CHIP_ROW_HEIGHT }]} pointerEvents="none">
-        <Ionicons name="shield-checkmark" size={12} color="#FFF" />
-        <Text style={styles.bannerText} numberOfLines={1}>
-          You&apos;re hidden by default · Settings → Privacy
-        </Text>
-        <View style={styles.bannerCount}>
-          <Text style={styles.bannerCountText}>
-            {visiblePeople.length} {visiblePeople.length === 1 ? 'person' : 'people'}
-          </Text>
+      {/* "YOU" — pulsing accent dot dead-center. The map opens centered
+          on the caller's bucketed location, so the screen center IS the
+          user until they pan. */}
+      {region && !locationError ? (
+        <View style={styles.youWrap} pointerEvents="none">
+          <Animated.View
+            style={[
+              styles.youPulse,
+              {
+                opacity: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }),
+                transform: [{
+                  scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] }),
+                }],
+              },
+            ]}
+          />
+          <View style={styles.youDot} />
+          <Text style={styles.youLabel}>YOU</Text>
         </View>
-      </View>
+      ) : null}
 
-      {/* Recenter FAB — bottom-right, above the preview card slot. */}
-      <TouchableOpacity style={styles.recenterBtn} onPress={recenter} activeOpacity={0.8}>
+      {/* Recenter FAB — bottom-right; lifts above the selected card. */}
+      <TouchableOpacity
+        style={[styles.recenterBtn, selected && styles.recenterBtnRaised]}
+        onPress={recenter}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Recenter map on you"
+      >
         <Ionicons name="locate" size={20} color={colors.black} />
       </TouchableOpacity>
 
@@ -628,421 +487,208 @@ export default function PeopleMap({
         </View>
       ) : null}
 
-      {/* Tap-on-marker preview. Small card anchored just above the
-          tapped pin — name + distance + verify check, with a CTA
-          to open the full profile. Falls back to a centered bottom
-          sheet when pointForCoordinate fails (rare Android case). */}
-      {selected ? (() => {
-        // Anchor math: card sits above the pin with a small tail.
-        // The pin renders 44px tall, top-centered on the marker
-        // coordinate, so the card needs ~28px clearance to leave room
-        // for the avatar ring + the tail. Clamp left so the card
-        // never escapes the screen edge.
-        const CARD_W = 220;
-        const MARKER_HALF = 22;
-        const TAIL = 12;
-        const SIDE_PADDING = 10;
-        const anchored = !!previewAnchor;
-        const left = anchored
-          ? Math.max(SIDE_PADDING, Math.min(previewAnchor.x - CARD_W / 2, screenW - CARD_W - SIDE_PADDING))
-          : null;
-        return (
-          <Animated.View
-            pointerEvents="box-none"
-            style={[
-              anchored
-                ? [
-                    styles.previewAnchored,
-                    {
-                      left,
-                      // y - card height - marker half - tail margin.
-                      // The card height is dynamic; using a measured
-                      // `previewBox` would be cleaner, but a fixed 96
-                      // matches the compact layout below within a few
-                      // px and avoids a measurement round trip.
-                      top: previewAnchor.y - 96 - MARKER_HALF - TAIL,
-                      width: CARD_W,
-                    },
-                  ]
-                : styles.previewWrap,
-              {
-                opacity: previewAnim,
-                transform: [{
-                  translateY: previewAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: anchored ? [12, 0] : [80, 0],
-                  }),
-                }],
-              },
-            ]}
-          >
-            <View style={styles.previewCard}>
-              <Image source={imageSource(selected.photos?.[0])} style={styles.previewAvatar} />
-              <View style={{ flex: 1, minWidth: 0 }}>
-                <View style={styles.previewNameRow}>
-                  <Text style={styles.previewName} numberOfLines={1}>
-                    {selected.name}, {selected.age}
-                  </Text>
-                  {selected.verified ? (
-                    <Ionicons name="checkmark-circle" size={12} color={colors.accent} style={{ marginLeft: 3 }} />
-                  ) : null}
-                </View>
-                <Text style={styles.previewMeta} numberOfLines={1}>
-                  {center && selected.coords
-                    ? `${(distanceKm(center, selected.coords) / KM_PER_MILE).toFixed(1)} mi · ${selected.ethnicity || ''}`
-                    : (selected.city || selected.ethnicity || '')}
+      {/* Selected-pin card — Blueprint card rising from the bottom. */}
+      {selected ? (
+        <Animated.View
+          style={[
+            styles.cardWrap,
+            {
+              opacity: cardAnim,
+              transform: [{
+                translateY: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }),
+              }],
+            },
+          ]}
+        >
+          <Blueprint style={styles.card}>
+            <Image source={imageSource(selected.photos?.[0])} style={styles.cardPhoto} />
+            <View style={styles.cardBody}>
+              <View style={styles.cardNameRow}>
+                <Text style={styles.cardName} numberOfLines={1}>
+                  {selected.age ? `${selected.name}, ${selected.age}` : selected.name}
                 </Text>
+                {selected.verified ? (
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={15}
+                    color={colors.accentDark}
+                    accessibilityLabel="Verified"
+                  />
+                ) : null}
               </View>
-              <TouchableOpacity style={styles.previewClose} onPress={closePreview} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close" size={14} color={colors.gray500} />
-              </TouchableOpacity>
+              <Text style={styles.cardMeta} numberOfLines={1}>{selectedMeta}</Text>
             </View>
-            <TouchableOpacity style={styles.previewCta} onPress={handleViewProfile} activeOpacity={0.85}>
-              <Text style={styles.previewCtaText}>View profile</Text>
+            <TouchableOpacity
+              style={styles.cardCta}
+              onPress={handleViewProfile}
+              activeOpacity={0.85}
+              hitSlop={{ top: 6, bottom: 6 }}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${selected.name}'s profile`}
+              testID="map-card-view"
+            >
+              <Text style={styles.cardCtaText}>View</Text>
             </TouchableOpacity>
-            {anchored && (
-              // Downward tail — a rotated square pulled half its height
-              // out of the bottom of the card, centered over the pin.
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.previewTail,
-                  // Re-center the tail on the marker since the card
-                  // itself may have been clamped against the screen edge.
-                  { left: Math.max(8, Math.min(previewAnchor.x - left - 6, CARD_W - 20)) },
-                ]}
-              />
-            )}
-          </Animated.View>
-        );
-      })() : null}
+          </Blueprint>
+        </Animated.View>
+      ) : null}
     </View>
   );
 }
 
 const getStyles = (colors, isDark) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.surfaceMuted },
+  container: { flex: 1, backgroundColor: colors.creamDark },
   loading: {
     flex: 1,
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
+    backgroundColor: colors.creamDark,
     gap: 8,
   },
   loadingText: {
     ...Typography.caption,
     color: colors.gray500,
   },
-  banner: {
-    position: 'absolute',
-    left: 12, right: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 999,
-  },
-  bannerText: {
-    flex: 1,
-    color: '#FFF',
-    fontSize: 11,
-    lineHeight: 15,
-    fontFamily: FontFamily.medium,
-  },
-  bannerCount: {
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  bannerCountText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontFamily: FontFamily.semibold,
-  },
-  filterBar: {
-    position: 'absolute',
-    left: 0, right: 0,
-  },
-  filterRow: {
-    paddingHorizontal: 16,
-    gap: 8,
-    flexDirection: 'row',
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 999,
+
+  // ─── Pins — square 46px photo tiles ───
+  pin: {
+    width: 46,
+    height: 46,
+    borderRadius: 0,
+    borderWidth: 2,
+    borderColor: colors.cream,
+    backgroundColor: colors.cream,
     shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    shadowOpacity: isDark ? 0.4 : 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
   },
-  chipActive: {
-    backgroundColor: colors.accent,
+  pinSelected: {
+    borderColor: colors.accent,
   },
-  chipText: {
-    fontSize: 12,
-    color: colors.black,
-    fontFamily: FontFamily.semibold,
-  },
-  chipTextActive: {
-    color: '#FFF',
-  },
-  activeDot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: colors.gray400,
-    marginRight: 6,
-  },
-  activeDotOn: {
-    backgroundColor: '#22C55E',
-  },
-  moreBtn: {
-    width: 36,
-    height: 32,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
-  },
-  moreDot: {
-    position: 'absolute',
-    top: 4,
-    right: 6,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.accent,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
+  pinPhoto: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.gray300,
   },
 
-  // ─── Customize sheet ───
-  sheetOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.cardBg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 22,
-    paddingTop: 10,
-    paddingBottom: 32,
-  },
-  sheetGrabber: {
-    alignSelf: 'center',
-    width: 38,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gray300,
-    marginBottom: 12,
-  },
-  sheetTitle: {
-    ...Typography.h3,
-    color: colors.black,
-    marginBottom: 6,
-  },
-  sheetSection: {
-    fontSize: 13,
-    fontFamily: FontFamily.semibold,
-    color: colors.gray500,
-    marginTop: 14,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  sheetPillRow: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  sheetPill: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-  },
-  sheetPillActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  sheetPillText: {
-    fontSize: 13,
-    fontFamily: FontFamily.semibold,
-    color: colors.black,
-  },
-  sheetPillTextActive: {
-    color: '#FFFFFF',
-  },
-  sheetRow: {
-    flexDirection: 'row',
+  // ─── "YOU" — pulsing dot dead-center ───
+  youWrap: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: colors.surfaceMuted,
+    justifyContent: 'center',
   },
-  sheetRowActive: {
-    backgroundColor: isDark ? 'rgba(206,17,38,0.12)' : 'rgba(206,17,38,0.08)',
-  },
-  sheetRowText: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: FontFamily.semibold,
-    color: colors.black,
-  },
-  toggleDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.gray400,
-    backgroundColor: 'transparent',
-  },
-  toggleDotOn: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  sheetActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 20,
-  },
-  sheetClearBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: colors.surfaceMuted,
-    alignItems: 'center',
-  },
-  sheetClearText: {
-    fontSize: 14,
-    fontFamily: FontFamily.semibold,
-    color: colors.gray700 || colors.black,
-  },
-  sheetDoneBtn: {
-    flex: 2,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-  },
-  sheetDoneText: {
-    fontSize: 14,
-    fontFamily: FontFamily.bold,
-    color: '#FFFFFF',
-  },
-  marker: {
-    width: 44, height: 44, borderRadius: 22,
-    padding: 2,
-    backgroundColor: colors.accent,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  markerPhoto: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.gray300,
-  },
-  markerActiveDot: {
+  youPulse: {
     position: 'absolute',
-    bottom: 0, right: 0,
-    width: 12, height: 12, borderRadius: 6,
-    backgroundColor: '#22C55E',
-    borderWidth: 2, borderColor: '#FFF',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.accent,
   },
+  youDot: {
+    width: 15,
+    height: 15,
+    borderRadius: 8,
+    backgroundColor: colors.accentDark,
+    borderWidth: 3,
+    borderColor: colors.cream,
+  },
+  youLabel: {
+    fontFamily: FontFamily.heading,
+    fontSize: 10.5,
+    letterSpacing: 2,
+    color: colors.accentDark,
+    marginTop: 4,
+  },
+
   recenterBtn: {
     position: 'absolute',
     bottom: 24, right: 16,
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: '#FFF',
+    width: 44, height: 44,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.separator,
+    backgroundColor: colors.cream,
     alignItems: 'center', justifyContent: 'center',
     shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
+  recenterBtnRaised: {
+    bottom: 116,
+  },
   errorPill: {
     position: 'absolute',
     bottom: 96, alignSelf: 'center',
     paddingHorizontal: 14, paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.75)',
+    borderRadius: 4,
+    backgroundColor: colors.overlay,
   },
   errorPillText: {
-    color: '#FFF', fontSize: 12, fontFamily: FontFamily.medium,
+    color: colors.cream, fontSize: 12, fontFamily: FontFamily.medium,
   },
-  // Fallback: bottom-sheet style anchor used when pointForCoordinate
-  // didn't return a valid pixel. Still compact.
-  previewWrap: {
+
+  // ─── Selected-pin card ───
+  cardWrap: {
     position: 'absolute',
-    bottom: 80, left: 16, right: 16,
-    gap: 6,
+    left: 14,
+    right: 14,
+    bottom: 14,
   },
-  // Anchored above a specific marker via openPreview. Width is set
-  // inline (CARD_W = 220), position too.
-  previewAnchored: {
-    position: 'absolute',
-    gap: 6,
-  },
-  previewCard: {
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.cardBg,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 8,
-    shadowColor: '#000', shadowOpacity: 0.14, shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    gap: 12,
+    padding: 14,
+    backgroundColor: colors.cream,
+    shadowColor: '#000',
+    shadowOpacity: isDark ? 0.5 : 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
   },
-  previewAvatar: {
-    width: 36, height: 36, borderRadius: 18,
+  cardPhoto: {
+    width: 58,
+    height: 58,
+    borderRadius: 0,
     backgroundColor: colors.gray300,
   },
-  previewNameRow: {
-    flexDirection: 'row', alignItems: 'center',
+  cardBody: {
+    flex: 1,
+    minWidth: 0,
   },
-  previewName: {
-    fontSize: 13, fontFamily: FontFamily.semibold, color: colors.black,
+  cardNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardName: {
+    fontFamily: FontFamily.heading,
+    fontSize: 19,
+    color: colors.black,
     flexShrink: 1,
   },
-  previewMeta: {
-    fontSize: 11, fontFamily: FontFamily.medium, color: colors.gray500, marginTop: 1,
+  cardMeta: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12.5,
+    color: colors.gray600,
+    marginTop: 2,
   },
-  previewClose: {
-    padding: 2,
-  },
-  previewCta: {
-    backgroundColor: colors.accent,
-    paddingVertical: 8,
-    borderRadius: 10,
+  cardCta: {
+    height: 38,
+    paddingHorizontal: 14,
     alignItems: 'center',
-  },
-  previewCtaText: {
-    color: '#FFF', fontSize: 12, fontFamily: FontFamily.semibold,
-  },
-  previewTail: {
-    position: 'absolute',
-    // Sit half-buried at the bottom edge of the CTA so the diamond
-    // reads as a downward arrow pointing at the marker.
-    bottom: -5,
-    width: 12, height: 12,
+    justifyContent: 'center',
+    borderRadius: 4,
     backgroundColor: colors.accent,
-    transform: [{ rotate: '45deg' }],
-    borderRadius: 2,
   },
+  cardCtaText: {
+    fontFamily: FontFamily.semibold,
+    fontSize: 13.5,
+    color: colors.cream,
+  },
+
+  // ─── Native-module fallback ───
   fallbackInner: {
     flex: 1,
     alignItems: 'center',

@@ -382,3 +382,22 @@ A full-source audit against this plan found and fixed:
   `docs/production-readiness-2026-05-27.md` still describe the dating product
   (including a 17+ "dating app" age rating). Rewrite before submitting.
 - Verified-badge, saved-search and city-alert ideas are unbuilt and unfunded.
+
+---
+
+## Industry redesign — status (2026-08-01)
+
+Visual system from claude.ai/design "Comprehensive Mobile App Redesign"
+(Industry: Barlow/Barlow Condensed, steel-blue accent, square blueprint
+chrome). Landed: theme palette + bundled fonts + `Blueprint` component;
+4-tab nav (Nearby/Directory/**Chats = home**/Profile); Chats screen with
+inline Requests segment; full-bleed Nearby map with floating chrome +
+selected-pin card; Directory blueprint cards; Profile tab with strength
+checklist (profileCompleteness-driven); flattened Settings; new Welcome;
+chat-thread restyle; app-wide flag-color sweep (only `data/tribes.js`
+data colors and retired payments files keep old hexes).
+
+Not yet redesigned (screens work, inherit tokens/fonts, old layout):
+SignupScreen structure (steel colors applied), ProfileSetupScreen
+(still multi-step; design's 5-step grouping pending), ProfileDetail,
+Notifications, MessageRequests restyle.

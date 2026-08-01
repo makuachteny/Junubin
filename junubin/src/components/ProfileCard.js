@@ -143,7 +143,7 @@ const ProfileCard = ({ profile, onExpand, style, infoBottom = 96 }) => {
               {profile.name}, {profile.age} {getFlag(profile.country)}
             </Text>
             {profile.verified && (
-              <Ionicons name="checkmark-circle" size={20} color="#FCCD12" />
+              <Ionicons name="checkmark-circle" size={20} color={colors.accentDark} />
             )}
           </View>
         </View>
