@@ -12,8 +12,8 @@ const mockNavigate = jest.fn();
 const navigation = { navigate: mockNavigate, replace: jest.fn() };
 
 // Industry redesign Welcome screen (design.html): full-bleed photo +
-// scrim, flag mark + wordmark, gold-accent headline, Blueprint gold
-// CTA. These tests lock the new surface.
+// scrim, flag mark + wordmark, gold-accent headline, flat gold CTA.
+// These tests lock the new surface.
 describe('OnboardingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -24,11 +24,21 @@ describe('OnboardingScreen', () => {
     expect(toJSON()).toBeTruthy();
   });
 
-  it('shows the wordmark, headline and community positioning', () => {
+  it('shows the wordmark, headline and positioning', () => {
     const { getByText } = render(<OnboardingScreen navigation={navigation} />);
     expect(getByText('JUNUBIN')).toBeTruthy();
     expect(getByText('Find your South Sudanese people.')).toBeTruthy();
-    expect(getByText(/Free for the community/)).toBeTruthy();
+    expect(getByText(/Near you, or across the diaspora\./)).toBeTruthy();
+  });
+
+  it('breaks the sub-headline into two deliberate lines', () => {
+    // The second line is a positioning claim, not a continuation. If a
+    // future edit drops the explicit break, "Free" can wrap up onto the
+    // first line and stop reading as a statement of its own.
+    const { getByText } = render(<OnboardingScreen navigation={navigation} />);
+    expect(
+      getByText('Near you, or across the diaspora.\nFree — and not a dating app.'),
+    ).toBeTruthy();
   });
 
   it('shows the one-tap sign in caption', () => {

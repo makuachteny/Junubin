@@ -2,8 +2,7 @@
 // JuNubin — Welcome ("Industry" redesign, design.html Welcome screen)
 // Full-bleed photo under a dark scrim; bottom-anchored flag mark +
 // wordmark, 48pt condensed headline with the flag-gold accent span,
-// and a Blueprint-framed gold CTA. Hands off to the Signup screen
-// (phone OTP).
+// and a flat gold CTA. Hands off to the Signup screen (phone OTP).
 // ═══════════════════════════════════════════════════════════
 
 import React, { useCallback } from 'react';
@@ -18,7 +17,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontFamily } from '../theme';
-import Blueprint from '../components/Blueprint';
 import SouthSudanFlagMark from '../components/SouthSudanFlagMark';
 import { reportError } from '../utils/reportError';
 
@@ -39,7 +37,6 @@ const INK = {
   sub: 'rgba(236,242,248,0.85)',
   caption: 'rgba(236,242,248,0.6)',
   ctaInk: '#241B03',
-  frame: 'rgba(236,242,248,0.4)',
 };
 
 const OnboardingScreen = ({ navigation }) => {
@@ -86,21 +83,23 @@ const OnboardingScreen = ({ navigation }) => {
         <Text style={s.headline} accessibilityRole="header">
           Find your <Text style={s.headlineGold}>South Sudanese</Text> people.
         </Text>
+        {/* Two deliberate lines, broken explicitly rather than left to
+            wrap: the second line is a positioning claim, not a
+            continuation, and a soft wrap would sometimes pull "Free"
+            up onto the first line and bury it. */}
         <Text style={s.sub}>
-          Near you, or in the city you care about. Free for the community.
+          {'Near you, or across the diaspora.\nFree — and not a dating app.'}
         </Text>
 
-        <Blueprint borderColor={INK.frame} markColor={INK.frame}>
-          <TouchableOpacity
-            style={s.cta}
-            onPress={handleContinue}
-            activeOpacity={0.9}
-            accessibilityRole="button"
-            accessibilityLabel="Continue with phone"
-          >
-            <Text style={s.ctaText}>CONTINUE WITH PHONE</Text>
-          </TouchableOpacity>
-        </Blueprint>
+        <TouchableOpacity
+          style={s.cta}
+          onPress={handleContinue}
+          activeOpacity={0.9}
+          accessibilityRole="button"
+          accessibilityLabel="Continue with phone"
+        >
+          <Text style={s.ctaText}>CONTINUE WITH PHONE</Text>
+        </TouchableOpacity>
 
         <Text style={s.caption}>One-tap sign in. No passwords, ever.</Text>
       </View>
@@ -147,9 +146,11 @@ const s = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
     color: INK.sub,
-    // design: max-width 30ch — Barlow's digit advance is ~0.56em, so
-    // 30ch ≈ 268pt at 16pt.
-    maxWidth: 268,
+    // The design's 30ch measure (~268pt at 16pt) used to live here to
+    // force the wrap. The break is explicit now, and the first line
+    // sits close enough to that bound that keeping it risks a third
+    // line on a narrow device — which would defeat the break rather
+    // than support it. The copy is its own measure.
     marginBottom: 8,
   },
 
