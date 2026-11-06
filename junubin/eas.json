@@ -1,0 +1,61 @@
+{
+  "cli": {
+    "version": ">= 13.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "APP_VARIANT": "development"
+      }
+    },
+    "development-simulator": {
+      "developmentClient": true,
+      "channel": "development",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "APP_VARIANT": "development"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "env": {
+        "APP_VARIANT": "preview"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "APP_VARIANT": "production",
+        "EAS_PROJECT_ID": "1cc13a52-317c-470e-addb-ef68ae3bd0e4",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://uvtyiytbgkasemabtznc.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_olf_AVo7BtbNDGDS4MmVbQ_FOHwyld-",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "AIzaSyA9XKqU8w9ERle5CUJJ5p3HXr2bbAUj030",
+        "EXPO_PUBLIC_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "itsmakuach@gmail.com",
+        "ascAppId": "6766345463",
+        "appleTeamId": "7CW78SZQF9",
+        "ascApiKeyPath": "./.secrets/AuthKey_NSBB4VSS9R.p8",
+        "ascApiKeyId": "NSBB4VSS9R",
+        "ascApiKeyIssuerId": "45681e55-f9bd-4d83-8933-de3f93bc4266"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./.secrets/play-service-account.json",
+        "track": "internal"
+      }
+    }
+  }
+}
