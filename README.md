@@ -1,4 +1,4 @@
-# ss_junubin
+# Junubin
 
 South Sudanese Dating app
 
