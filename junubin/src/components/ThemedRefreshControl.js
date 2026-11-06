@@ -13,7 +13,11 @@ import Animated, {
 import LogoMark from './LogoMark';
 import { useTheme } from '../theme';
 
-export default function ThemedRefreshControl({ refreshing, onRefresh }) {
+// `...rest` must reach RefreshControl: on Android (and web) ScrollView
+// clones the refreshControl element and passes the list itself in as
+// `children`, plus the outer layout `style`. Dropping them renders an
+// empty list on those platforms.
+export default function ThemedRefreshControl({ refreshing, onRefresh, ...rest }) {
   const { colors } = useTheme();
   const rotation = useSharedValue(0);
 
@@ -32,6 +36,7 @@ export default function ThemedRefreshControl({ refreshing, onRefresh }) {
 
   return (
     <RefreshControl
+      {...rest}
       refreshing={refreshing}
       onRefresh={onRefresh}
       tintColor={colors.accent}
